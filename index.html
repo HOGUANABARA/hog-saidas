@@ -288,8 +288,9 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 </header>
 
 <div class="abas">
-  <div class="aba ativa" onclick="trocarAba('registro')">📋 Novo Registro</div>
-  <div class="aba" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+  <div class="aba ativa" id="aba-btn-registro" onclick="trocarAba('registro')">📋 Saída Cirúrgica</div>
+  <div class="aba" id="aba-btn-diversas" onclick="trocarAba('diversas')">📦 Saídas Diversas</div>
+  <div class="aba" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
 </div>
 
 <div class="container">
@@ -415,6 +416,69 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 
   </div>
 
+  <!-- ABA SAÍDAS DIVERSAS -->
+  <div id="aba-diversas" style="display:none">
+    <div class="card">
+      <div class="card-titulo">1. Dados da Saída</div>
+      <div class="grid-3">
+        <div class="campo">
+          <label>👤 Quem está registrando</label>
+          <select id="sel-registrante-div" onchange="localStorage.setItem('hog_registrante', this.value)">
+            <option value="">Selecione seu nome...</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label>Data</label>
+          <input type="date" id="inp-data-div" />
+        </div>
+        <div class="campo">
+          <label>Destino da Saída</label>
+          <select id="sel-destino-div">
+            <option value="">Selecione...</option>
+            <option value="CONSULTÓRIOS">🏥 Consultórios</option>
+            <option value="USO CC">🔧 Uso CC</option>
+            <option value="USO RPA">🛏️ Uso RPA</option>
+            <option value="USO CME">♻️ Uso CME</option>
+            <option value="PERDA">⚠️ Perda</option>
+            <option value="VENCIMENTO">📅 Vencimento</option>
+            <option value="EMPRESTIMO">🤝 Empréstimo</option>
+            <option value="AUTORREFRATOR">👁️ Autorrefrator</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">2. Materiais</div>
+      <div class="barra-busca">
+        <input type="text" id="busca-div" placeholder="🔍 Buscar material por nome..." oninput="filtrarDiversas()" />
+        <button class="btn btn-secundario btn-sm" onclick="limparBuscaDiv()">Limpar</button>
+      </div>
+      <div id="resultado-busca-div" style="display:none;border:1.5px solid var(--cinza-2);border-radius:var(--radius);margin-bottom:14px;max-height:200px;overflow-y:auto"></div>
+
+      <table class="tabela-materiais">
+        <thead>
+          <tr>
+            <th style="min-width:220px">Material</th>
+            <th style="text-align:center;min-width:100px">Quantidade</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-div">
+          <tr><td colspan="3"><div class="empty"><p>Use a busca acima para adicionar materiais.</p></div></td></tr>
+        </tbody>
+      </table>
+
+      <div class="rodape-form">
+        <div class="resumo-qtd"><strong id="cnt-div">0</strong> itens adicionados</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-secundario" onclick="limparFormDiv()">Cancelar</button>
+          <button class="btn btn-verde" onclick="enviarDiversas()">Enviar para Aprovação →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ABA APROVAÇÃO -->
   <div id="aba-aprovacao" style="display:none">
     <div class="card">
@@ -500,8 +564,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-  url: 'https://uewfqkvjfdhnugvjrilr.supabase.co', 
-  key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -548,9 +612,36 @@ function salvarConfig() {
   testarConexao();
 }
 
+let catalogoMateriais = []; // [{id, nome}]
+
+function normNome(s) {
+  return (s||'').toUpperCase()
+    .replace(/[()\[\]]/g,'')
+    .replace(/,/g,'.')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function resolverMaterial(nome) {
+  // 1. Match exato
+  let m = catalogoMateriais.find(c => c.nome === nome);
+  if (m) return m;
+  // 2. Match normalizado
+  const alvo = normNome(nome);
+  m = catalogoMateriais.find(c => normNome(c.nome) === alvo);
+  if (m) return m;
+  // 3. Match por inclusão (um contém o outro)
+  m = catalogoMateriais.find(c => {
+    const cn = normNome(c.nome);
+    return cn.includes(alvo) || alvo.includes(cn);
+  });
+  return m || null;
+}
+
 async function testarConexao() {
   try {
-    const r = await sbFetch('materiais?select=nome&limit=200');
+    const r = await sbFetch('materiais?select=id,nome&limit=1000');
+    catalogoMateriais = r;
     todosOsMateriais = r.map(m => m.nome);
     document.getElementById('status-cx').textContent = `✅ Conectado — ${todosOsMateriais.length} materiais`;
     document.getElementById('config-box').style.borderColor = '#A9DFBF';
@@ -784,17 +875,17 @@ async function carregarTodosOsMateriais() {
   // (garante que itens essenciais apareçam mesmo se o histórico estiver incompleto)
   for (const t of tipos) {
     for (const item of getDemoMateriais(medico, t.tipo)) {
-      // Usar nome exato do catálogo se existir (case-insensitive)
-      const nomeExato = todosOsMateriais.find(n => n.toUpperCase() === item.toUpperCase()) || item;
-      todosNomes.add(nomeExato);
+      // Usar nome exato do catálogo (match normalizado)
+      const mat = resolverMaterial(item);
+      todosNomes.add(mat ? mat.nome : item);
     }
   }
 
   // Adicionar itens de protocolo que ainda não estão na lista
   const itensProto = itensDeProtocolo(tipos);
   for (const item of itensProto) {
-    const nomeExato = todosOsMateriais.find(n => n.toUpperCase() === item.toUpperCase()) || item;
-    todosNomes.add(nomeExato);
+    const mat = resolverMaterial(item);
+    todosNomes.add(mat ? mat.nome : item);
   }
 
   // Montar lista e ordenar por categoria
@@ -828,14 +919,14 @@ async function carregarTodosOsMateriais() {
 
 // Materiais realmente consumidos por tipo de cirurgia (Jun+Jul/26 — extraído do formulário)
 const CONSUMO_REAL = {
-  'ANGIOGRAFIA': ['AGULHA 40X12 ROSA','FLUORESCEÍNA 10%','GAZE ESTÉRIL 7,5X7,5','SCALPE __23__','SCALPE __25__','SERINGA 10ML','SWAB ÁLCOOL'],
-  'APLICAÇÃO': ['AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVASTIN 0,10','AVASTIN 0,15','AVENTAL ESTÉRIL','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','ESCOVA CLOREX','GAZE ESTÉRIL 7,5X7,5','LUVA 7','LUVA 7.5','SACO FECHADO','SERINGA 0,5ML C/AG','SERINGA 1ML S/AG'],
-  'ESTRABISMO': ['AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO VICRYL 6-0 BI PGA','FIO VICRYL 7-0 BI','GAZE ESTÉRIL 7,5X7,5','HIALURONIDASE','JELCO 24 NEO','JELCO __24__','LUVA 7','LUVA 7.5','MIDAZOLAM/DORMONID','NAUSEDRON','PROPOFOL _10MG/ML___','ROPIVACAÍNA 10MG','SERINGA 0,5ML C/AG','SERINGA 10ML','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','SWAB ÁLCOOL'],
-  'FACECTOMIA': ['ADRENALINA','AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 30X8 VERDE','AGULHA 40X12 ROSA','AVASTIN 0,15','AVENTAL ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CARBACOL','CARTUCHO ALCON __C__','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO FENILEFRINA','COLÍRIO IODOPOVIDONA','COLÍRIO MYDRIACYL','COLÍRIO OFTALMOX','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA','DIAZEPAM 10MG','DIPIRONA','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','EXTRA - CANETA MARCAÇÃO','FIO NYLON 10-0 BI','GAZE ESTÉRIL 7,5X7,5','GENTAMICINA','HIALURONIDASE','JELCO 24 NEO','JELCO __22__','JELCO __24__','LUVA 7','LUVA 7.5','MEROCEL','METIL 2%','METIL 4%','MICROPORE','NAUSEDRON','PERFLUOCTANO','PONTEIRA IA ESTERILENO','REGENCEL POMADA','RINGER C/LACTATO','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 20ML S/AG','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','XYLO C/VASO','XYLO PESADA','ÓLEO SILICONE 5000'],
-  'PLÁSTICA': ['AGULHA 13X3 AMARELA','AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO BINOCULAR 100X120','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLA ABERTA (ESTERILENO)','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA','DIAZEPAM 10MG','DIPIRONA','ELETRODO','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 7-0 BI','GAZE ESTÉRIL 7,5X7,5','JELCO __24__','LENÇOL COM ELASTICO','LUVA 7','LUVA 7.5','LÂMINA 11','LÂMINA 15','MÁSCARA DESCARTÁVEL','NAUSEDRON','PROPOFOL _10MG/ML___','REGENCEL POMADA','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML C/AG','SERINGA 1ML S/AG','SERINGA 5ML','SOFT TIP __25__','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','XYLO C/VASO','XYLO GEL'],
-  'SONDAGEM': ['AGULHA 13X3 AMARELA','AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO MESA G','CAMPO MESA P','FIO NYLON 6-0 MONO','FIO VICRYL 8-0 BI PGA','GAZE ESTÉRIL 7,5X7,5','LUVA 7','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SORO 0,9% AMP 10ML','XYLO C/VASO'],
-  'TREC': ['AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','BISTURI 15','BISTURI CRESCENT','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CARBACOL','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OFTALMOX','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO NYLON 10-0 BI','FIO SEDA 6-0 BI','GAZE ESTÉRIL 7,5X7,5','HIALURONIDASE','JELCO 24 NEO','LUVA 7','LUVA 7.5','LUVA __8__','LÂMINA 11','METIL 2%','METIL 4%','MIDAZOLAM/DORMONID','MITOMICINA INJ.','NAUSEDRON','PROPOFOL _10MG/ML___','RINGER C/LACTATO','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','XYLO C/VASO','XYLO PESADA'],
-  'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 NACIONAL','BSS PLÁSTICO','BSS VITRE VIDRO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO ALGODÃO 2-0','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GAZE ESTÉRIL 7,5X7,5','GENTAMICINA','HIALURONIDASE','JELCO 24 NEO','JELCO __24__','KIT VITRECTOMIA 25G','LUVA 7','LUVA 7.5','LÂMINA 15','METIL 2%','METIL 4%','MIDAZOLAM/DORMONID','NAUSEDRON','PERFLUOCTANO','PNEU _279___','PNEU _287___','PONTEIRA IA ESTERILENO','PROPOFOL _10MG/ML___','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 0,5ML C/AG','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SOFT TIP __25__','SONDA ENDOLASER ____','SORO 0,9% 100ML','SORO 0,9% 250ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','TRANSOFIX','XYLO C/VASO','XYLO PESADA','ÁLCOOL 70 100 ML','ÓLEO SILICONE 5000'],
+  'ANGIOGRAFIA': ['AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','FLUORESCEÍNA 10%','SCALPE 23','SCALPE 25','SERINGA 10 ML L. LOCK','SWAB ÁLCOOL ISOPROPÍLICO'],
+  'APLICAÇÃO': ['AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVASTIN 0,010','AVASTIN 0,015','AVENTAL CIRÚRGICO ESTÉRIL','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','ESCOVA CLOROHEX','LUVA 7.0','LUVA 7.5','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA'],
+  'ESTRABISMO': ['AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO COM BAG FACO 120X100','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO VICRYL 6-0 BI PGA','FIO VICRYL 7-0 BI PGLA90','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LUVA 7.0','LUVA 7.5','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO'],
+  'FACECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVASTIN 0,015','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (ESTERILENO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON C','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO FENILEFRINA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FIO NYLON 10-0 BI','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LUVA 7.0','LUVA 7.5','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO'],
+  'PLÁSTICA': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','COLA BASTÃO','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 7-0 BI PGLA90','JELCO ABOCATH 24','LAMINA 11','LAMINA 15','LENÇOL COM ELASTICO','LUVA 7.0','LUVA 7.5','MÁSCARA DESCARTÁVEL','NAUSEDRON 2 MG/ML','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PROPOFOL 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','XYLESTESIN (XYLO) COM VASO','XYLO GEL','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO'],
+  'SONDAGEM': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO MESA G','CAMPO MESA P','FIO NYLON 6-0 MONO','FIO VICRYL 8-0 BI PGA','LUVA 7.0','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO AMPOLA 10 ML','XYLESTESIN (XYLO) COM VASO'],
+  'TREC': ['AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','BISTURI 15','BISTURI CRESCENT','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CARBACOL','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO NYLON 10-0 BI','FIO SEDA 6-0 BI','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24 NEO','LAMINA 11','LUVA 7.0','LUVA 7.5','LUVA 8.0','METIL 2%','METIL 4%','MITOMICINA INJETÁVEL','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','XYLESTESIN (XYLO) COM VASO','XYLO PESADA'],
+  'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KIT VITRECTOMIA 25 GAUGE (ESTERILENO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 15','LUVA 7.0','LUVA 7.5','METIL 2%','METIL 4%','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','PNEU 279','PNEU 287','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','TRANSOFIX','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
 };
 
 function getDemoMateriais(medico, tipo) {
@@ -965,67 +1056,24 @@ function limparBusca() {
 
 // ── CATEGORIAS E ORDEM DOS MATERIAIS ─────────────────────────
 const CATEGORIAS_ORDEM = [
-  { label: 'ESTÉREIS / CAMPOS / LUVAS', itens: [
-    'AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO BINOCULAR 100X120','CAMPO FENESTRADO',
-    'CAMPO MESA G','CAMPO MESA P','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P',
-    'COTONETE ESTÉRIL','ESCOVA CLOREX','GAZE ESTÉRIL 7,5X7,5',
-    'LUVA 7','LUVA 7.5','LUVA __8__'
-  ]},
-  { label: 'AGULHAS / SERINGAS / ACESSOS', itens: [
-    'AGULHA 13X3 AMARELA','AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 30X8 VERDE',
-    'AGULHA 40X12 ROSA','CATÉTER O2','ELETRODO','EQUIPO MULTIVIAS','EQUIPO SIMPLES',
-    'JELCO 24 NEO','JELCO __24__','JELCO __22__','SCALPE __23__','SCALPE __25__',
-    'SERINGA 0,5ML C/AG','SERINGA 10ML','SERINGA 1ML C/AG','SERINGA 1ML S/AG',
-    'SERINGA 20ML S/AG','SERINGA 5ML'
-  ]},
-  { label: 'PLÁSTICA', itens: [
-    'COLA ABERTA (ESTERILENO)','COLA NOVA'
-  ]},
-  { label: 'ESTERILENO', itens: [
-    'CARTUCHO ALCON __C__','CARTUCHO ALCON __B__','KIT INF/RET ÓLEO',
-    'KIT VITRECTOMIA 25G','PONTEIRA IA ESTERILENO','SOFT TIP __25__','SONDA ENDOLASER ____'
-  ]},
-  { label: 'FACO / BISTURI / FIOS', itens: [
-    'BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BISTURI 15',
-    'FIO ALGODÃO 2-0','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO',
-    'FIO NYLON 6-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 6-0 BI PGA',
-    'FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI','FIO VICRYL 8-0 BI PGA',
-    'LÂMINA 11','LÂMINA 15','MEROCEL','SACO ABERTO','SACO FECHADO'
-  ]},
-  { label: 'COLÍRIOS / CORANTES', itens: [
-    'AZUL DE TRYPAN','CARBACOL','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA',
-    'COLÍRIO IODOPOVIDONA','COLÍRIO MITOMICINA','COLÍRIO MYDRIACYL',
-    'COLÍRIO OFTALMOX','COLÍRIO OXINEST'
-  ]},
-  { label: 'RETINA / VÍTREO', itens: [
-    'AVASTIN 0,10','AVASTIN 0,15','AZUL BRILHANTE','GÁS C3F8',
-    'PERFLUOCTANO','PNEU _279___','PNEU _287___','ÓLEO SILICONE 5000'
-  ]},
-  { label: 'MEDICAMENTOS / ANESTÉSICOS', itens: [
-    'ADRENALINA','CETOPROFENO','DEXAMETASONA','DIAZEPAM 10MG','DIPIRONA',
-    'FENTANILA','FLUORESCEÍNA 10%','GENTAMICINA','HIALURONIDASE',
-    'METIL 2%','METIL 4%','MIDAZOLAM/DORMONID','MITOMICINA INJ.',
-    'NAUSEDRON','PROPOFOL _10MG/ML___','REGENCEL POMADA','ROPIVACAÍNA 10MG',
-    'XYLO C/VASO','XYLO PESADA','XYLO S/VASO'
-  ]},
-  { label: 'SOLUÇÕES / BSS', itens: [
-    'BSS PLÁSTICO','BSS VITRE VIDRO','CLOREXIDINA 0,2%','RINGER C/LACTATO',
-    'SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','SWAB ÁLCOOL','ÁGUA DEST. ____'
-  ]},
+  { label: 'ESTÉREIS / CAMPOS / LUVAS', itens: ['AVENTAL CIRÚRGICO ESTÉRIL','CAMPO COM BAG FACO 120X100','CAMPO BINOCULAR 100X120','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','ESCOVA CLOROHEX','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','LUVA 7.0','LUVA 7.5','LUVA 8.0'] },
+  { label: 'AGULHAS / SERINGAS / ACESSOS', itens: ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','CATÉTER O2','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','JELCO ABOCATH 24 NEO','JELCO ABOCATH 24','JELCO ABOCATH 22','SCALPE 23','SCALPE 25','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','TORNEIRA TRÊS VIAS'] },
+  { label: 'PLÁSTICA', itens: ['COLA BASTÃO','COLA NOVA'] },
+  { label: 'ESTERILENO', itens: ['CARTUCHO ALCON C','CARTUCHO ALCON __B__','KIT INF/RET ÓLEO','KIT VITRECTOMIA 25 GAUGE (NOVO)','KIT VITRECTOMIA 25 GAUGE (ESTERILENO)','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA'] },
+  { label: 'FACO / BISTURI / FIOS', itens: ['BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BISTURI 15','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','LAMINA 11','LAMINA 15','MEROCEL','SACO ABERTO','SACO FECHADO'] },
+  { label: 'COLÍRIOS / CORANTES', itens: ['AZUL DE TRYPAN','CARBACOL','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MITOMICINA','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)'] },
+  { label: 'RETINA / VÍTREO', itens: ['AVASTIN 0,010','AVASTIN 0,015','AZUL BRILHANTE','GÁS C3F8','PERFLUOCTANO','PNEU 279','PNEU 287','OLEO 5000'] },
+  { label: 'MEDICAMENTOS / ANESTÉSICOS', itens: ['ADRENALINA','CETOPROFENO','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','FENTANILA AMPOLA (FENTANEST)','FLUORESCEÍNA 10%','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','METIL 2%','METIL 4%','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','MITOMICINA INJETÁVEL','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','ROPIVACAÍNA 10 MG/ML','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','XYLO S/VASO'] },
+  { label: 'SOLUÇÕES / BSS', itens: ['BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CLOREXIDINA 0,2% AQUOSA 100 ML','RINGER COM LACTATO','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','ÁGUA DEST. ____'] },
   { label: 'INSUMO', itens: ['LENTE TERAPÊUTICA'] },
-  { label: 'EXTRAS', itens: [] }, // itens extras vão aqui
+  { label: 'EXTRAS', itens: [] },
 ];
 
 // Itens por protocolo
 const PROTOCOLO_ITENS = {
-  'BLOQUEIO SIMPLES': ['HIALURONIDASE','XYLO PESADA','XYLO C/VASO','ROPIVACAÍNA 10MG'],
-  'KIT CONFORTO':     ['HIALURONIDASE','XYLO PESADA','XYLO C/VASO','ROPIVACAÍNA 10MG',
-                       'CATÉTER O2','JELCO 24 NEO','SORO 0,9% 250ML','DIPIRONA',
-                       'CETOPROFENO','NAUSEDRON','DEXAMETASONA'],
-  'SEDAÇÃO COMPLETA': ['HIALURONIDASE','XYLO PESADA','XYLO C/VASO','ROPIVACAÍNA 10MG',
-                       'CATÉTER O2','JELCO 24 NEO','SORO 0,9% 250ML','DIPIRONA',
-                       'CETOPROFENO','NAUSEDRON','DEXAMETASONA',
-                       'ELETRODO','MIDAZOLAM/DORMONID','PROPOFOL _10MG/ML___','FENTANILA'],
+  'BLOQUEIO SIMPLES': ['HYALOZIMA (HIALURONIDASE)','XYLO PESADA','XYLESTESIN (XYLO) COM VASO','ROPIVACAÍNA 10 MG/ML'],
+  'KIT CONFORTO': ['HYALOZIMA (HIALURONIDASE)','XYLO PESADA','XYLESTESIN (XYLO) COM VASO','ROPIVACAÍNA 10 MG/ML','CATÉTER O2','JELCO ABOCATH 24 NEO','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','DIPIRONA','CETOPROFENO','NAUSEDRON 2 MG/ML','DEXAMETASONA DECADRON 4 MG/ML'],
+  'SEDAÇÃO COMPLETA': ['HYALOZIMA (HIALURONIDASE)','XYLO PESADA','XYLESTESIN (XYLO) COM VASO','ROPIVACAÍNA 10 MG/ML','CATÉTER O2','JELCO ABOCATH 24 NEO','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','DIPIRONA','CETOPROFENO','NAUSEDRON 2 MG/ML','DEXAMETASONA DECADRON 4 MG/ML','ELETRODO','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','PROPOFOL 10 MG/ML','FENTANILA AMPOLA (FENTANEST)'],
 };
 
 function ordenarMateriais(lista) {
@@ -1256,15 +1304,24 @@ async function enviarSupabase(reg) {
     for (const item of reg.itens) {
       const qtd = parseFloat(item.qtds[j]);
       if (!qtd || qtd <= 0) continue;
-      const matRows = await sbFetch(`materiais?select=id&nome=eq.${encodeURIComponent(item.nome)}&limit=1`);
-      if (!matRows?.length) continue;
+      const mat = resolverMaterial(item.nome);
+      if (!mat) {
+        if (!reg.naoEncontrados) reg.naoEncontrados = [];
+        if (!reg.naoEncontrados.includes(item.nome)) reg.naoEncontrados.push(item.nome);
+        continue;
+      }
       await sbFetch('movimentacoes', 'POST', {
         tipo: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
-        material_id: matRows[0].id, local_id: localId,
+        material_id: mat.id, local_id: localId,
         qtd: -qtd, periodo_cirurgico_id: periodoId,
         aprovado: false, registrado_por: document.getElementById('sel-registrante').value || 'Equipe CC',
       });
     }
+  }
+  if (reg.naoEncontrados && reg.naoEncontrados.length) {
+    alert('⚠️ ATENÇÃO — ' + reg.naoEncontrados.length + ' item(ns) NÃO foram enviados porque não existem no catálogo do banco:\n\n' +
+      reg.naoEncontrados.join('\n') +
+      '\n\nCadastre esses materiais no banco ou informe a gestora.');
   }
 }
 
@@ -1281,14 +1338,20 @@ async function carregarSaldos() {
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,materiais(nome),periodos_cirurgicos(data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
       const pc = m.periodos_cirurgicos;
-      if (!pc) continue;
-      const key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
-      if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], ids: [] };
+      let key;
+      if (pc) {
+        key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
+        if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], ids: [] };
+      } else if (m.tipo === 'SAIDA_GERAL') {
+        // Saída diversa — agrupar por destino + observação
+        key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
+        if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao, itens: [], ids: [] };
+      } else { continue; }
       grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
       if (m.registrado_por) grupos[key].registrado_por = m.registrado_por;
       grupos[key].ids.push(m.id);
@@ -1316,9 +1379,10 @@ function renderizarPendentes() {
   }
 
   div.innerHTML = pendentes.map((p, i) => {
-    const medico = p.periodo?.medicos?.nome || p.medico || '—';
-    const tipos  = p.tipos ? p.tipos.map(t => t.tipo).join(' + ') : p.periodo?.tipos_cirurgia?.nome || '—';
-    const data   = p.periodo?.data || p.data || '—';
+    const ehDiversa = !p.periodo && p.destino;
+    const medico = ehDiversa ? `📦 Saída Diversa — ${p.destino}` : (p.periodo?.medicos?.nome || p.medico || '—');
+    const tipos  = ehDiversa ? (p.obs || '') : (p.tipos ? p.tipos.map(t => t.tipo).join(' + ') : p.periodo?.tipos_cirurgia?.nome || '—');
+    const data   = ehDiversa ? '' : (p.periodo?.data || p.data || '—');
 
     // Linhas com separadores de categoria (padrão da planilha)
     let ultimaCat = null;
@@ -1349,8 +1413,8 @@ function renderizarPendentes() {
     return `
     <div class="item-pendente">
       <div>
-        <div class="info-periodo">🏥 ${medico} — ${tipos}</div>
-        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || 'Equipe CC'} &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
+        <div class="info-periodo">${ehDiversa ? medico : '🏥 ' + medico + ' — ' + tipos}</div>
+        <div class="info-meta">${ehDiversa ? (tipos || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || 'Equipe CC'} &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
         <table class="mini-tabela">
           <tr style="background:var(--cinza-1)">
             <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Material</td>
@@ -1401,13 +1465,18 @@ let aprovadas = [];
 async function carregarAprovadas() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&registrado_por=neq.MIGRAÇÃO&order=aprovado_em.desc&limit=300');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&registrado_por=neq.MIGRAÇÃO&order=aprovado_em.desc&limit=300');
     const grupos = {};
     for (const m of movs || []) {
       const pc = m.periodos_cirurgicos;
-      if (!pc) continue;
-      const key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
-      if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por };
+      let key;
+      if (pc) {
+        key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
+        if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por };
+      } else if (m.tipo === 'SAIDA_GERAL') {
+        key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
+        if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao, itens: [], registrado_por: m.registrado_por };
+      } else { continue; }
       grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), qtdOriginal: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
     }
     aprovadas = Object.values(grupos).slice(0, 15);
@@ -1426,9 +1495,10 @@ function renderizarAprovadas() {
     for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
   }
   div.innerHTML = aprovadas.map((p, i) => {
-    const medico = p.periodo?.medicos?.nome || '—';
-    const tipo   = p.periodo?.tipos_cirurgia?.nome || '—';
-    const data   = p.periodo?.data || '—';
+    const ehDiversa = !p.periodo && p.destino;
+    const medico = ehDiversa ? `📦 Saída Diversa — ${p.destino}` : (p.periodo?.medicos?.nome || '—');
+    const tipo   = ehDiversa ? (p.obs || '') : (p.periodo?.tipos_cirurgia?.nome || '—');
+    const data   = ehDiversa ? '' : (p.periodo?.data || '—');
     let ultimaCat = null, linhas = '';
     p.itens.forEach((it, k) => {
       const cat = ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
@@ -1449,8 +1519,8 @@ function renderizarAprovadas() {
     return `
     <div class="item-pendente" style="border-left:4px solid var(--verde)">
       <div>
-        <div class="info-periodo" style="color:var(--verde)">✅ ${medico} — ${tipo}</div>
-        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
+        <div class="info-periodo" style="color:var(--verde)">✅ ${ehDiversa ? medico : medico + ' — ' + tipo}</div>
+        <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
         <table class="mini-tabela">${linhas}</table>
       </div>
       <div class="acoes" style="flex-direction:column">
@@ -1500,25 +1570,34 @@ async function salvarAjustesAprovada(i) {
 
 function imprimirGrupo(i) {
   const p = aprovadas[i];
-  const pc = p.periodo;
+  const pc = p.periodo || {};
+  const ehDiversa = !p.periodo && p.destino;
   const registrante = p.registrado_por || '—';
 
   document.getElementById('comp-datahora').textContent =
     'Emitido em: ' + new Date().toLocaleString('pt-BR') + ' — registrado por ' + registrante;
 
   const dataFmt = (pc.data||'').split('-').reverse().join('/');
-  document.getElementById('comp-periodo').innerHTML = `
-    <div><div class="comp-campo-label">Médico</div><div class="comp-campo-valor">${pc.medicos?.nome || '—'}</div></div>
-    <div><div class="comp-campo-label">Data</div><div class="comp-campo-valor">${dataFmt}</div></div>
-    <div><div class="comp-campo-label">Fellow</div><div class="comp-campo-valor">${pc.fellow ? 'Sim' : 'Não'}</div></div>`;
-
-  document.getElementById('comp-tipos').innerHTML = `
-    <tr>
-      <td class="col-tipo-1">${pc.tipos_cirurgia?.nome || '—'}</td>
-      <td>${pc.modalidade || '—'}</td>
-      <td class="centro">${pc.qtd_pacientes || '—'}</td>
-      <td>${pc.protocolo || '—'}</td>
-    </tr>`;
+  if (ehDiversa) {
+    document.getElementById('comp-periodo').innerHTML = `
+      <div><div class="comp-campo-label">Tipo</div><div class="comp-campo-valor">📦 Saída Diversa</div></div>
+      <div><div class="comp-campo-label">Destino</div><div class="comp-campo-valor">${p.destino}</div></div>
+      <div><div class="comp-campo-label">Observação</div><div class="comp-campo-valor" style="font-size:12px">${p.obs || '—'}</div></div>`;
+    document.getElementById('comp-tipos').innerHTML = `
+      <tr><td colspan="4" style="color:var(--cinza-4)">Saída não vinculada a período cirúrgico</td></tr>`;
+  } else {
+    document.getElementById('comp-periodo').innerHTML = `
+      <div><div class="comp-campo-label">Médico</div><div class="comp-campo-valor">${pc.medicos?.nome || '—'}</div></div>
+      <div><div class="comp-campo-label">Data</div><div class="comp-campo-valor">${dataFmt}</div></div>
+      <div><div class="comp-campo-label">Fellow</div><div class="comp-campo-valor">${pc.fellow ? 'Sim' : 'Não'}</div></div>`;
+    document.getElementById('comp-tipos').innerHTML = `
+      <tr>
+        <td class="col-tipo-1">${pc.tipos_cirurgia?.nome || '—'}</td>
+        <td>${pc.modalidade || '—'}</td>
+        <td class="centro">${pc.qtd_pacientes || '—'}</td>
+        <td>${pc.protocolo || '—'}</td>
+      </tr>`;
+  }
 
   document.getElementById('comp-thead-mat').innerHTML = `<tr>
     <th style="min-width:220px">Material</th>
@@ -1558,6 +1637,105 @@ function atualizarBadge() {
   b.style.display = pendentes.length ? 'inline' : 'none';
 }
 
+// ── SAÍDAS DIVERSAS ───────────────────────────────────────────
+let itensDiversas = []; // [{nome, qtd}]
+
+function filtrarDiversas() {
+  const termo = document.getElementById('busca-div').value.trim().toLowerCase();
+  const div = document.getElementById('resultado-busca-div');
+  if (!termo || termo.length < 2) { div.style.display = 'none'; return; }
+  const jaAdd = new Set(itensDiversas.map(m => m.nome));
+  let lista = (todosOsMateriais.length ? todosOsMateriais : [])
+    .filter(n => n.toLowerCase().includes(termo) && !jaAdd.has(n)).slice(0, 10);
+  if (!lista.length) {
+    div.innerHTML = '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
+  } else {
+    div.innerHTML = lista.map(n =>
+      `<div class="busca-item" onclick="addDiversa('${n.replace(/'/g,"\\'")}')">${n}</div>`
+    ).join('');
+  }
+  div.style.display = '';
+}
+
+function addDiversa(nome) {
+  itensDiversas.push({ nome, qtd: '' });
+  renderizarDiversas();
+  limparBuscaDiv();
+}
+
+function limparBuscaDiv() {
+  document.getElementById('busca-div').value = '';
+  document.getElementById('resultado-busca-div').style.display = 'none';
+}
+
+function renderizarDiversas() {
+  const tbody = document.getElementById('tbody-div');
+  if (!itensDiversas.length) {
+    tbody.innerHTML = '<tr><td colspan="3"><div class="empty"><p>Use a busca acima para adicionar materiais.</p></div></td></tr>';
+    document.getElementById('cnt-div').textContent = '0';
+    return;
+  }
+  tbody.innerHTML = itensDiversas.map((m,i) => `
+    <tr>
+      <td>${m.nome}</td>
+      <td style="text-align:center">
+        <input type="number" class="input-qtd" min="0" value="${m.qtd}"
+          onchange="itensDiversas[${i}].qtd=this.value" oninput="itensDiversas[${i}].qtd=this.value" />
+      </td>
+      <td style="text-align:center"><button class="btn-rem-mat" onclick="itensDiversas.splice(${i},1);renderizarDiversas()">✕</button></td>
+    </tr>`).join('');
+  document.getElementById('cnt-div').textContent = itensDiversas.length;
+}
+
+function limparFormDiv() {
+  itensDiversas = [];
+  document.getElementById('sel-destino-div').value = '';
+  document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
+  renderizarDiversas();
+  limparBuscaDiv();
+}
+
+async function enviarDiversas() {
+  const registrante = document.getElementById('sel-registrante-div').value;
+  const data    = document.getElementById('inp-data-div').value;
+  const destino = document.getElementById('sel-destino-div').value;
+  const itens   = itensDiversas.filter(m => parseFloat(m.qtd) > 0);
+
+  if (!registrante) { toast('Selecione quem está registrando.', 'erro'); return; }
+  if (!data)        { toast('Informe a data.', 'erro'); return; }
+  if (!destino)     { toast('Selecione o destino da saída.', 'erro'); return; }
+  if (!itens.length){ toast('Adicione pelo menos um material com quantidade.', 'erro'); return; }
+
+  if (!confirm(`Enviar ${itens.length} item(ns) para aprovação?\nDestino: ${destino} — Data: ${data.split('-').reverse().join('/')}`)) return;
+
+  try {
+    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
+    const localId = localRows[0].id;
+    const naoEnc = [];
+    for (const item of itens) {
+      const mat = resolverMaterial(item.nome);
+      if (!mat) { naoEnc.push(item.nome); continue; }
+      await sbFetch('movimentacoes', 'POST', {
+        tipo: 'SAIDA_GERAL',
+        material_id: mat.id,
+        local_id: localId,
+        qtd: -parseFloat(item.qtd),
+        destino_saida_geral: destino,
+        aprovado: false,
+        registrado_por: registrante,
+        observacao: 'Saída diversa — ' + destino + ' — ' + data,
+      });
+    }
+    if (naoEnc.length) {
+      alert('⚠️ ' + naoEnc.length + ' item(ns) não enviados (fora do catálogo):\n' + naoEnc.join('\n'));
+    }
+    toast(`${itens.length - naoEnc.length} itens enviados para aprovação! ✓`, 'sucesso');
+    limparFormDiv();
+  } catch(e) {
+    toast('Erro ao enviar: ' + e.message, 'erro');
+  }
+}
+
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
   // Aba Aprovação protegida por senha (liberada uma vez por dispositivo)
@@ -1568,10 +1746,11 @@ function trocarAba(aba) {
     localStorage.setItem('hog_aprov_ok', '1');
     toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
   }
-  document.querySelectorAll('.aba').forEach((el,i) => {
-    el.classList.toggle('ativa', (i===0&&aba==='registro')||(i===1&&aba==='aprovacao'));
-  });
+  document.getElementById('aba-btn-registro').classList.toggle('ativa', aba==='registro');
+  document.getElementById('aba-btn-diversas').classList.toggle('ativa', aba==='diversas');
+  document.getElementById('aba-btn-aprovacao').classList.toggle('ativa', aba==='aprovacao');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
+  document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
 }
@@ -1604,9 +1783,16 @@ window.addEventListener('load', () => {
     opt.value = nome; opt.textContent = nome;
     selReg.appendChild(opt);
   }
+  const selRegDiv = document.getElementById('sel-registrante-div');
+  for (const nome of EQUIPE) {
+    const opt = document.createElement('option');
+    opt.value = nome; opt.textContent = nome;
+    selRegDiv.appendChild(opt);
+  }
   // Restaurar último nome usado neste dispositivo
   const ultimoNome = localStorage.getItem('hog_registrante');
-  if (ultimoNome && EQUIPE.includes(ultimoNome)) selReg.value = ultimoNome;
+  if (ultimoNome && EQUIPE.includes(ultimoNome)) { selReg.value = ultimoNome; selRegDiv.value = ultimoNome; }
+  document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
 
   // Prioridade 1: configuração fixa embutida no código
   if (CONFIG_FIXA.url && CONFIG_FIXA.key) {
