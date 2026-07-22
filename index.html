@@ -1938,9 +1938,9 @@ window.addEventListener('load', () => {
   document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
   renderizarTipos();
 });
-  
-</script>
-  // ═══ ABA COMPRAR (ALERTA) — reaproveita sbFetch/toast/sbUrl/sbKey do app ═══
+
+  <script>
+// ═══ ABA COMPRAR (ALERTA) — reaproveita sbFetch/toast/sbUrl/sbKey do app ═══
 let acAlerta = [];
 let acManuais = [];
 let acResultados = [];
@@ -1964,7 +1964,7 @@ function acSit(saldo,minimo,alerta){
 function acMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function acData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
 function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLocaleString('pt-BR',{maximumFractionDigits:0}); }
- 
+
 async function acCarregar(){
   try{
     const rows = await sbFetch('vw_alerta_compras?select=*&order=material.asc&limit=1000');
@@ -2067,6 +2067,7 @@ async function acIncluir(idx){
   toast(m.nome+' incluído na compra ✓','sucesso');
 }
 </script>
+
       
 </body>
 </html>
