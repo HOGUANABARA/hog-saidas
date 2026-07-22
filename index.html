@@ -267,12 +267,29 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 
 /* IMPRESSÃO */
 @media print {
+  html, body { height: auto !important; overflow: visible !important; }
   body * { visibility: hidden; }
   .modal-overlay, .modal-overlay * { visibility: visible; }
   .modal-acoes { display: none !important; }
-  .modal-overlay { position: absolute; inset: 0; padding: 0; background: white; }
-  .modal-box { box-shadow: none; border-radius: 0; }
-  .comprovante { padding: 20px 24px; }
+  /* Expande o conteúdo rolável — imprime SEMPRE do topo, com logo */
+  .modal-overlay {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0; background: white;
+  }
+  .modal-box {
+    box-shadow: none; border-radius: 0;
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+  .comprovante { padding: 10px 8px; }
+  /* Garante cores do cabeçalho da tabela e categorias no papel */
+  .comp-tabela thead tr, .comp-tabela th {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .comp-header img { display: block !important; }
 }
 
 </style>
@@ -566,10 +583,9 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // ── CONFIGURAÇÃO FIXA ─────────────────────────────────────────
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
-
-  const CONFIG_FIXA = {
-  url: 'https://uewfqkvjfdhnugvjrilr.supabase.co', 
-  key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+const CONFIG_FIXA = {
+url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
+key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -582,6 +598,7 @@ const EQUIPE = [
   'Técnica Talita',
   'Lucas (Adm)',
   'Bethânia (Fin)',
+  'Recepção',
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────
@@ -1027,23 +1044,26 @@ function limparMateriais() {
 
 // ── BUSCA EXTRA ───────────────────────────────────────────────
 async function filtrarExtras() {
-  const termo = document.getElementById('busca-extra').value.trim().toLowerCase();
+  const termo = document.getElementById('busca-extra').value.trim();
   const div = document.getElementById('resultado-busca');
   if (!termo || termo.length < 2) { div.style.display = 'none'; return; }
 
-  let lista = todosOsMateriais.length
-    ? todosOsMateriais.filter(n => n.toLowerCase().includes(termo))
-    : getDemoMateriais('','').filter(n => n.toLowerCase().includes(termo));
-
+  const termoN = normNome(termo);
+  const fonte = todosOsMateriais.length ? todosOsMateriais : getDemoMateriais('','');
   const jaAdicionados = new Set(materiaisTabela.map(m => m.nome));
-  lista = lista.filter(n => !jaAdicionados.has(n)).slice(0, 10);
 
-  if (!lista.length) {
+  // Busca normalizada (ignora parênteses, vírgulas, espaços múltiplos)
+  const achados = fonte.filter(n => normNome(n).includes(termoN)).slice(0, 12);
+
+  if (!achados.length) {
     div.innerHTML = '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
   } else {
-    div.innerHTML = lista.map(n =>
-      `<div class="busca-item" onclick="adicionarExtra('${n.replace(/'/g,"\\'")}')">${n}</div>`
-    ).join('');
+    div.innerHTML = achados.map(n => {
+      if (jaAdicionados.has(n)) {
+        return `<div class="busca-item" style="color:var(--cinza-3);cursor:default">${n} <span style="font-size:11px">— já está na lista ✓</span></div>`;
+      }
+      return `<div class="busca-item" onclick="adicionarExtra('${n.replace(/'/g,"\\'")}')">${n}</div>`;
+    }).join('');
   }
   div.style.display = 'block';
 }
@@ -1051,11 +1071,14 @@ async function filtrarExtras() {
 function adicionarExtra(nome) {
   const tipos = tiposCirurgia.filter(t => t.tipo);
   materiaisTabela.push({ nome, origem: 'extra', qtds: tipos.map(() => '') });
+  // Reordenar para manter o padrão do formulário (item entra na categoria certa)
+  materiaisTabela = ordenarMateriais(materiaisTabela);
   renderizarTabela();
   limparBusca();
-  const idx = materiaisTabela.length - 1;
+  // Focar no item recém-adicionado (na nova posição)
+  const idx = materiaisTabela.findIndex(m => m.nome === nome);
   const inp = document.getElementById(`qtd-${idx}-0`);
-  if (inp) inp.focus();
+  if (inp) { inp.focus(); inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
 }
 
 function limparBusca() {
@@ -1171,7 +1194,7 @@ function abrirRevisao() {
   const medico = document.getElementById('sel-medico').value;
   const data   = document.getElementById('inp-data').value;
   const tipos  = tiposCirurgia.filter(t => t.tipo);
-  const itens  = materiaisTabela.filter(m => m.qtds.some(q => parseFloat(q) > 0));
+  let itens  = materiaisTabela.filter(m => m.qtds.some(q => parseFloat(q) > 0));
 
   if (!medico || !data)  { toast('Preencha médico e data.', 'erro'); return; }
   if (!tipos.length)     { toast('Adicione pelo menos um tipo de cirurgia.', 'erro'); return; }
@@ -1206,7 +1229,8 @@ function abrirRevisao() {
     ${tipos.map((t,i) => `<th class="centro ${coresTipo[i]}">${t.tipo}<br><span style="font-weight:400;font-size:10px">${t.pacientes} pac.</span></th>`).join('')}
   </tr>`;
 
-  // Corpo tabela materiais com separadores de categoria
+  // Corpo tabela materiais com separadores de categoria (ordenado pelo padrão do formulário)
+  itens = ordenarMateriais(itens);
   const ordemCatComp = {};
   for (const cat of CATEGORIAS_ORDEM) {
     for (const item of cat.itens) ordemCatComp[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
@@ -1710,6 +1734,7 @@ function filtrarDiversas() {
 
 function addDiversa(nome) {
   itensDiversas.push({ nome, qtd: '' });
+  itensDiversas = ordenarMateriais(itensDiversas);
   renderizarDiversas();
   limparBuscaDiv();
 }
