@@ -267,24 +267,29 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 
 /* IMPRESSÃO */
 @media print {
-  html, body { height: auto !important; overflow: visible !important; }
+  html, body { height: auto !important; overflow: visible !important; margin: 0; }
   body * { visibility: hidden; }
   .modal-overlay, .modal-overlay * { visibility: visible; }
   .modal-acoes { display: none !important; }
-  /* Expande o conteúdo rolável — imprime SEMPRE do topo, com logo */
+  /* Modal fixado no topo absoluto da página, fora do fluxo do documento —
+     evita colisão com elementos ocultos que ainda ocupam espaço (visibility:hidden) */
   .modal-overlay {
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
     display: block !important;
     overflow: visible !important;
     height: auto !important;
-    padding: 0; background: white;
+    margin: 0; padding: 0; background: white;
   }
   .modal-box {
     box-shadow: none; border-radius: 0;
     overflow: visible !important;
     max-width: 100% !important;
+    width: 100% !important;
+    margin: 0;
   }
-  .comprovante { padding: 10px 8px; }
+  .comprovante { padding: 10px 16px; }
   /* Garante cores do cabeçalho da tabela e categorias no papel */
   .comp-tabela thead tr, .comp-tabela th {
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
