@@ -418,9 +418,16 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <!-- ABA APROVAÇÃO -->
   <div id="aba-aprovacao" style="display:none">
     <div class="card">
-      <div class="card-titulo">Registros Aguardando Aprovação</div>
+      <div class="card-titulo">⏳ Registros Aguardando Aprovação</div>
       <div id="lista-pend">
         <div class="empty"><p>Nenhum registro pendente.</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-titulo">✅ Saídas Aprovadas Recentes</div>
+      <p style="font-size:12px;color:var(--cinza-4);margin-bottom:14px">Últimos períodos aprovados — é possível imprimir o comprovante ou ajustar quantidades (o saldo do estoque será corrigido automaticamente).</p>
+      <div id="lista-aprovadas">
+        <div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>
       </div>
     </div>
   </div>
@@ -481,7 +488,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
     <div class="modal-acoes">
       <button class="btn btn-secundario" onclick="fecharRevisao()">← Voltar e Editar</button>
       <button class="btn btn-primario" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-      <button class="btn btn-verde" onclick="confirmarEnvio()">✓ Confirmar e Enviar</button>
+      <button class="btn btn-verde" id="btn-confirmar-envio" onclick="confirmarEnvio()">✓ Confirmar e Enviar</button>
     </div>
   </div>
 </div>
@@ -1184,6 +1191,7 @@ function abrirRevisao() {
     secaoGerais.style.display = 'none';
   }
 
+  document.getElementById('btn-confirmar-envio').style.display = '';
   document.getElementById('modal-revisao').classList.add('visivel');
 }
 
@@ -1385,6 +1393,155 @@ async function aprovar(i) {
   toast('Saída aprovada — estoque atualizado! ✓', 'sucesso');
 }
 
+let aprovadas = [];
+
+async function carregarAprovadas() {
+  if (!sbUrl || !sbKey) return;
+  try {
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&registrado_por=neq.MIGRAÇÃO&order=aprovado_em.desc&limit=300');
+    const grupos = {};
+    for (const m of movs || []) {
+      const pc = m.periodos_cirurgicos;
+      if (!pc) continue;
+      const key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
+      if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por };
+      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), qtdOriginal: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
+    }
+    aprovadas = Object.values(grupos).slice(0, 15);
+    for (const g of aprovadas) g.itens = ordenarMateriais(g.itens);
+    renderizarAprovadas();
+  } catch(e) {}
+}
+
+function renderizarAprovadas() {
+  const div = document.getElementById('lista-aprovadas');
+  if (!aprovadas.length) {
+    div.innerHTML = '<div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>'; return;
+  }
+  const ordemCat = {};
+  for (const cat of CATEGORIAS_ORDEM) {
+    for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
+  }
+  div.innerHTML = aprovadas.map((p, i) => {
+    const medico = p.periodo?.medicos?.nome || '—';
+    const tipo   = p.periodo?.tipos_cirurgia?.nome || '—';
+    const data   = p.periodo?.data || '—';
+    let ultimaCat = null, linhas = '';
+    p.itens.forEach((it, k) => {
+      const cat = ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
+      if (cat !== ultimaCat) {
+        linhas += `<tr><td colspan="2" style="background:#EAF7EF;padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1E8449">## ${cat}</td></tr>`;
+        ultimaCat = cat;
+      }
+      linhas += `<tr>
+        <td>${it.nome}</td>
+        <td style="text-align:right">
+          <input type="number" min="0" value="${it.qtd}"
+            style="width:70px;border:1.5px solid var(--cinza-2);border-radius:5px;padding:4px 6px;font-size:13px;text-align:center;outline:none;font-family:var(--fonte)"
+            onchange="editarQtdAprovada(${i},${k},this.value)" />
+        </td>
+      </tr>`;
+    });
+    const temEdicao = p.itens.some(it => it.editado);
+    return `
+    <div class="item-pendente" style="border-left:4px solid var(--verde)">
+      <div>
+        <div class="info-periodo" style="color:var(--verde)">✅ ${medico} — ${tipo}</div>
+        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
+        <table class="mini-tabela">${linhas}</table>
+      </div>
+      <div class="acoes" style="flex-direction:column">
+        <button class="btn btn-primario btn-sm" onclick="imprimirGrupo(${i})">🖨️ Imprimir</button>
+        <button class="btn btn-verde btn-sm" onclick="salvarAjustesAprovada(${i})" ${temEdicao ? '' : ''}>💾 Salvar ajustes</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function editarQtdAprovada(i, k, val) {
+  const qtd = parseFloat(val);
+  if (isNaN(qtd) || qtd < 0) return;
+  aprovadas[i].itens[k].qtd = qtd;
+  aprovadas[i].itens[k].editado = true;
+}
+
+async function salvarAjustesAprovada(i) {
+  const p = aprovadas[i];
+  const editados = p.itens.filter(it => it.editado && it.qtd !== it.qtdOriginal);
+  if (!editados.length) { toast('Nenhuma alteração para salvar.', ''); return; }
+  if (!confirm(`Salvar ${editados.length} ajuste(s)? O saldo do estoque será corrigido.`)) return;
+  try {
+    for (const it of editados) {
+      const delta = it.qtd - it.qtdOriginal; // positivo = saiu mais → reduz saldo
+      // 1. Atualiza a movimentação
+      await sbFetch(`movimentacoes?id=eq.${it.id}`, 'PATCH', {
+        qtd: -Math.abs(it.qtd),
+        observacao: 'Qtd ajustada após aprovação em ' + new Date().toLocaleString('pt-BR'),
+      });
+      // 2. Corrige o saldo do estoque
+      const est = await sbFetch(`estoque?select=id,saldo&material_id=eq.${it.material_id}&local_id=eq.${it.local_id}&limit=1`);
+      if (est && est.length) {
+        await sbFetch(`estoque?id=eq.${est[0].id}`, 'PATCH', {
+          saldo: parseFloat(est[0].saldo) - delta,
+        });
+      }
+      it.qtdOriginal = it.qtd;
+      it.editado = false;
+    }
+    toast('Ajustes salvos — estoque corrigido! ✓', 'sucesso');
+    carregarSaldos();
+  } catch(e) {
+    toast('Erro ao salvar ajustes: ' + e.message, 'erro');
+  }
+}
+
+function imprimirGrupo(i) {
+  const p = aprovadas[i];
+  const pc = p.periodo;
+  const registrante = p.registrado_por || '—';
+
+  document.getElementById('comp-datahora').textContent =
+    'Emitido em: ' + new Date().toLocaleString('pt-BR') + ' — registrado por ' + registrante;
+
+  const dataFmt = (pc.data||'').split('-').reverse().join('/');
+  document.getElementById('comp-periodo').innerHTML = `
+    <div><div class="comp-campo-label">Médico</div><div class="comp-campo-valor">${pc.medicos?.nome || '—'}</div></div>
+    <div><div class="comp-campo-label">Data</div><div class="comp-campo-valor">${dataFmt}</div></div>
+    <div><div class="comp-campo-label">Fellow</div><div class="comp-campo-valor">${pc.fellow ? 'Sim' : 'Não'}</div></div>`;
+
+  document.getElementById('comp-tipos').innerHTML = `
+    <tr>
+      <td class="col-tipo-1">${pc.tipos_cirurgia?.nome || '—'}</td>
+      <td>${pc.modalidade || '—'}</td>
+      <td class="centro">${pc.qtd_pacientes || '—'}</td>
+      <td>${pc.protocolo || '—'}</td>
+    </tr>`;
+
+  document.getElementById('comp-thead-mat').innerHTML = `<tr>
+    <th style="min-width:220px">Material</th>
+    <th class="centro">Quantidade</th>
+  </tr>`;
+
+  const ordemCatComp2 = {};
+  for (const cat of CATEGORIAS_ORDEM) {
+    for (const item of cat.itens) ordemCatComp2[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
+  }
+  let ultimaCat = null, rows = '';
+  for (const it of p.itens) {
+    const cat = ordemCatComp2[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
+    if (cat !== ultimaCat) {
+      rows += `<tr><td colspan="2" style="background:#EBF5FB;padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
+      ultimaCat = cat;
+    }
+    rows += `<tr><td>${it.nome}</td><td class="centro">${it.qtd}</td></tr>`;
+  }
+  document.getElementById('comp-tbody-mat').innerHTML = rows;
+
+  document.getElementById('comp-gerais-secao').style.display = 'none';
+  document.getElementById('btn-confirmar-envio').style.display = 'none';
+  document.getElementById('modal-revisao').classList.add('visivel');
+}
+
 function rejeitar(i) {
   if (!confirm('Rejeitar este registro?')) return;
   pendentes.splice(i, 1);
@@ -1405,7 +1562,7 @@ function trocarAba(aba) {
   });
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
-  if (aba==='aprovacao') carregarPendentes();
+  if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
 }
 
 function limparForm() {
