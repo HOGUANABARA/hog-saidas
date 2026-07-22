@@ -488,7 +488,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
       </div>
     </div>
     <div class="card">
-      <div class="card-titulo">✅ Saídas Aprovadas Recentes</div>
+      <div class="card-titulo" style="display:flex;justify-content:space-between;align-items:center">
+        <span>✅ Saídas Aprovadas Recentes</span>
+        <button class="btn btn-secundario btn-sm" onclick="carregarAprovadas()">🔄 Atualizar</button>
+      </div>
       <p style="font-size:12px;color:var(--cinza-4);margin-bottom:14px">Últimos períodos aprovados — é possível imprimir o comprovante ou ajustar quantidades (o saldo do estoque será corrigido automaticamente).</p>
       <div id="lista-aprovadas">
         <div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>
@@ -578,7 +581,7 @@ const EQUIPE = [
   'Técnica Talita',
   'Lucas (Adm)',
   'Bethânia (Fin)',
-  'Recepção'
+  'Recepção',
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────
@@ -744,6 +747,7 @@ function renderizarTipos() {
             <option value="FACECTOMIA" ${t.tipo==='FACECTOMIA'&&!t.modalidade?'selected':''}>FACECTOMIA — Nacional</option>
             <option value="FACECTOMIA_IMPORT" ${t.tipo==='FACECTOMIA'&&t.modalidade==='IMPORT'?'selected':''}>FACECTOMIA — Import</option>
             <option value="VITRECTOMIA" ${t.tipo==='VITRECTOMIA'?'selected':''}>VITRECTOMIA</option>
+            <option value="RETIRADA DE ÓLEO" ${t.tipo==='RETIRADA DE ÓLEO'?'selected':''}>RETIRADA DE ÓLEO</option>
             <option value="PLÁSTICA" ${t.tipo==='PLÁSTICA'?'selected':''}>PLÁSTICA</option>
             <option value="ESTRABISMO" ${t.tipo==='ESTRABISMO'?'selected':''}>ESTRABISMO</option>
             <option value="TREC" ${t.tipo==='TREC'?'selected':''}>TREC</option>
@@ -1470,6 +1474,8 @@ async function aprovar(i) {
   pendentes.splice(i, 1);
   atualizarBadge(); renderizarPendentes();
   toast('Saída aprovada — estoque atualizado! ✓', 'sucesso');
+  carregarAprovadas();
+  carregarSaldos();
 }
 
 let aprovadas = [];
@@ -1477,7 +1483,9 @@ let aprovadas = [];
 async function carregarAprovadas() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&registrado_por=neq.MIGRAÇÃO&order=aprovado_em.desc&limit=300');
+    let movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=aprovado_em.desc.nullslast&limit=300');
+    // Filtrar registros da migração no cliente (evita acentos na URL)
+    movs = (movs || []).filter(m => m.registrado_por !== 'MIGRAÇÃO');
     const grupos = {};
     for (const m of movs || []) {
       const pc = m.periodos_cirurgicos;
@@ -1494,7 +1502,10 @@ async function carregarAprovadas() {
     aprovadas = Object.values(grupos).slice(0, 15);
     for (const g of aprovadas) g.itens = ordenarMateriais(g.itens);
     renderizarAprovadas();
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('lista-aprovadas').innerHTML =
+      '<div class="empty"><p style="color:var(--vermelho)">Erro ao carregar aprovadas: ' + e.message + '</p></div>';
+  }
 }
 
 function renderizarAprovadas() {
@@ -1641,19 +1652,30 @@ async function rejeitar(i) {
   if (!confirm('Rejeitar este registro?\n\nAs movimentações pendentes serão EXCLUÍDAS do banco.')) return;
   if (sbUrl && sbKey && p.ids?.length) {
     try {
-      // 1. Exclui as movimentações pendentes (policy só permite aprovado=false)
+      // Exclui verificando o retorno — RLS pode bloquear silenciosamente (0 linhas)
+      let excluidas = 0;
       for (const id of p.ids) {
-        await sbFetch(`movimentacoes?id=eq.${id}&aprovado=eq.false`, 'DELETE');
+        const res = await fetch(`${sbUrl}/rest/v1/movimentacoes?id=eq.${id}&aprovado=eq.false`, {
+          method: 'DELETE',
+          headers: { 'apikey': sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        excluidas += (rows || []).length;
       }
-      // 2. Tenta excluir o período se ficou órfão (FK bloqueia se houver outras movimentações — ok)
+      if (excluidas === 0) {
+        toast('⚠️ Nada foi excluído — falta permissão DELETE no banco. Rode o SQL de GRANT/policy.', 'erro');
+        return;
+      }
+      // Tenta excluir o período se ficou órfão (FK bloqueia se houver outras movimentações — ok)
       if (p.periodo?.id) {
         try { await sbFetch(`periodos_cirurgicos?id=eq.${p.periodo.id}`, 'DELETE'); } catch(e) {}
       }
+      toast(`Rejeitado — ${excluidas} movimentação(ões) excluída(s) do banco. ✓`, 'sucesso');
     } catch(e) { toast('Erro ao rejeitar: ' + e.message, 'erro'); return; }
   }
   pendentes.splice(i, 1);
   atualizarBadge(); renderizarPendentes();
-  toast('Registro rejeitado e excluído do banco.', '');
 }
 
 function atualizarBadge() {
