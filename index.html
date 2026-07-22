@@ -347,6 +347,14 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
           </select>
         </div>
       </div>
+      <div class="grid-3" style="margin-top:16px">
+        <div class="campo">
+          <label>👤 Quem está registrando</label>
+          <select id="sel-registrante" onchange="localStorage.setItem('hog_registrante', this.value)">
+            <option value="">Selecione seu nome...</option>
+          </select>
+        </div>
+      </div>
       <!-- Campo nome médico externo -->
       <div class="campo-medico-externo" id="campo-ext">
         <div class="campo">
@@ -481,6 +489,22 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 <div class="toast" id="toast"></div>
 
 <script>
+// ── CONFIGURAÇÃO FIXA ─────────────────────────────────────────
+// Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
+// Deixe como está ('') para mostrar a caixa de configuração manual.
+const CONFIG_FIXA = {
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
+};
+
+// Equipe do Centro Cirúrgico — edite os nomes conforme necessário
+const EQUIPE = [
+  'Evelise (Gestora)',
+  'Técnica 1',
+  'Técnica 2',
+  'Técnica 3',
+];
+
 // ── ESTADO ────────────────────────────────────────────────────
 let sbUrl = '', sbKey = '';
 let todosOsMateriais = [];
@@ -791,62 +815,21 @@ async function carregarTodosOsMateriais() {
   renderizarSaidasGerais();
 }
 
+// Materiais realmente consumidos por tipo de cirurgia (Jun+Jul/26 — extraído do formulário)
+const CONSUMO_REAL = {
+  'ANGIOGRAFIA': ['AGULHA 40X12 ROSA','FLUORESCEÍNA 10%','GAZE ESTÉRIL 7,5X7,5','SCALPE __23__','SCALPE __25__','SERINGA 10ML','SWAB ÁLCOOL'],
+  'APLICAÇÃO': ['AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVASTIN 0,10','AVASTIN 0,15','AVENTAL ESTÉRIL','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','ESCOVA CLOREX','GAZE ESTÉRIL 7,5X7,5','LUVA 7','LUVA 7.5','SACO FECHADO','SERINGA 0,5ML C/AG','SERINGA 1ML S/AG'],
+  'ESTRABISMO': ['AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO VICRYL 6-0 BI PGA','FIO VICRYL 7-0 BI','GAZE ESTÉRIL 7,5X7,5','HIALURONIDASE','JELCO 24 NEO','JELCO __24__','LUVA 7','LUVA 7.5','MIDAZOLAM/DORMONID','NAUSEDRON','PROPOFOL _10MG/ML___','ROPIVACAÍNA 10MG','SERINGA 0,5ML C/AG','SERINGA 10ML','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','SWAB ÁLCOOL'],
+  'FACECTOMIA': ['ADRENALINA','AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 30X8 VERDE','AGULHA 40X12 ROSA','AVASTIN 0,15','AVENTAL ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CARBACOL','CARTUCHO ALCON __C__','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO FENILEFRINA','COLÍRIO IODOPOVIDONA','COLÍRIO MYDRIACYL','COLÍRIO OFTALMOX','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA','DIAZEPAM 10MG','DIPIRONA','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','EXTRA - CANETA MARCAÇÃO','FIO NYLON 10-0 BI','GAZE ESTÉRIL 7,5X7,5','GENTAMICINA','HIALURONIDASE','JELCO 24 NEO','JELCO __22__','JELCO __24__','LUVA 7','LUVA 7.5','MEROCEL','METIL 2%','METIL 4%','MICROPORE','NAUSEDRON','PERFLUOCTANO','PONTEIRA IA ESTERILENO','REGENCEL POMADA','RINGER C/LACTATO','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 20ML S/AG','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','XYLO C/VASO','XYLO PESADA','ÓLEO SILICONE 5000'],
+  'PLÁSTICA': ['AGULHA 13X3 AMARELA','AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO BINOCULAR 100X120','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLA ABERTA (ESTERILENO)','COLÍRIO OXINEST','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA','DIAZEPAM 10MG','DIPIRONA','ELETRODO','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 7-0 BI','GAZE ESTÉRIL 7,5X7,5','JELCO __24__','LENÇOL COM ELASTICO','LUVA 7','LUVA 7.5','LÂMINA 11','LÂMINA 15','MÁSCARA DESCARTÁVEL','NAUSEDRON','PROPOFOL _10MG/ML___','REGENCEL POMADA','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML C/AG','SERINGA 1ML S/AG','SERINGA 5ML','SOFT TIP __25__','SORO 0,9% 100ML','SORO 0,9% 250ML','SORO 0,9% AMP 10ML','XYLO C/VASO','XYLO GEL'],
+  'SONDAGEM': ['AGULHA 13X3 AMARELA','AGULHA 13X4 INSULINA','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO MESA G','CAMPO MESA P','FIO NYLON 6-0 MONO','FIO VICRYL 8-0 BI PGA','GAZE ESTÉRIL 7,5X7,5','LUVA 7','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SORO 0,9% AMP 10ML','XYLO C/VASO'],
+  'TREC': ['AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','BISTURI 15','BISTURI CRESCENT','BSS PLÁSTICO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CARBACOL','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OFTALMOX','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO NYLON 10-0 BI','FIO SEDA 6-0 BI','GAZE ESTÉRIL 7,5X7,5','HIALURONIDASE','JELCO 24 NEO','LUVA 7','LUVA 7.5','LUVA __8__','LÂMINA 11','METIL 2%','METIL 4%','MIDAZOLAM/DORMONID','MITOMICINA INJ.','NAUSEDRON','PROPOFOL _10MG/ML___','RINGER C/LACTATO','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SORO 0,9% 100ML','SORO 0,9% 250ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','XYLO C/VASO','XYLO PESADA'],
+  'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA','AVENTAL ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 NACIONAL','BSS PLÁSTICO','BSS VITRE VIDRO','CAMPO BAG FACO','CAMPO FENESTRADO','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2%','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA','DIPIRONA','ELETRODO','EQUIPO MULTIVIAS','EQUIPO SIMPLES','ESCOVA CLOREX','FENTANILA','FIO ALGODÃO 2-0','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GAZE ESTÉRIL 7,5X7,5','GENTAMICINA','HIALURONIDASE','JELCO 24 NEO','JELCO __24__','KIT VITRECTOMIA 25G','LUVA 7','LUVA 7.5','LÂMINA 15','METIL 2%','METIL 4%','MIDAZOLAM/DORMONID','NAUSEDRON','PERFLUOCTANO','PNEU _279___','PNEU _287___','PONTEIRA IA ESTERILENO','PROPOFOL _10MG/ML___','ROPIVACAÍNA 10MG','SACO ABERTO','SACO FECHADO','SERINGA 0,5ML C/AG','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML','SOFT TIP __25__','SONDA ENDOLASER ____','SORO 0,9% 100ML','SORO 0,9% 250ML','SWAB ÁLCOOL','TORNEIRA 3 VIAS','TRANSOFIX','XYLO C/VASO','XYLO PESADA','ÁLCOOL 70 100 ML','ÓLEO SILICONE 5000'],
+};
+
 function getDemoMateriais(medico, tipo) {
-  const base = [
-    'AVENTAL ESTÉRIL','CAMPO BAG FACO','CAMPO MESA G','CAMPO MESA P',
-    'COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','ESCOVA CLOREX',
-    'GAZE ESTÉRIL 7,5X7,5','LUVA 7','LUVA 7.5',
-    'AGULHA 13X4 INSULINA','AGULHA 25X6 AZUL','AGULHA 40X12 ROSA',
-    'EQUIPO SIMPLES','SERINGA 10ML','SERINGA 1ML S/AG','SERINGA 5ML',
-    'COLÍRIO IODOPOVIDONA','COLÍRIO MYDRIACYL','SWAB ÁLCOOL',
-  ];
-  if (tipo === 'FACECTOMIA') base.push(
-    'BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL',
-    'CARTUCHO ALCON __B__','CARTUCHO ALCON __C__',
-    'METIL 2%','METIL 4%','AZUL DE TRYPAN',
-    'BSS PLÁSTICO','RINGER C/LACTATO',
-    'SORO 0,9% AMP 10ML','AGULHA 13X3 AMARELA',
-    'SERINGA 1ML C/AG','SERINGA 20ML S/AG',
-  );
-  if (tipo === 'VITRECTOMIA') base.push(
-    'KIT VITRECTOMIA 25G','SOFT TIP __25__','SONDA ENDOLASER ____',
-    'KIT INF/RET ÓLEO','PONTEIRA IA ESTERILENO',
-    'BSS VITRE VIDRO','RINGER C/LACTATO',
-    'GÁS C3F8','ÓLEO SILICONE 5000','PERFLUOCTANO',
-    'AZUL BRILHANTE','BISTURI 2.75 IMPORT',
-    'SERINGA 1ML C/AG','SERINGA 20ML S/AG',
-  );
-  if (tipo === 'PLÁSTICA') base.push(
-    'COLA NOVA','COLA ABERTA (ESTERILENO)',
-    'FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA',
-    'FIO NYLON 10-0 BI','FIO NYLON 6-0 MONO',
-    'LÂMINA 11','LÂMINA 15','MEROCEL',
-    'SACO ABERTO','SACO FECHADO',
-    'COLÍRIO MITOMICINA','RINGER C/LACTATO',
-  );
-  if (tipo === 'TREC') base.push(
-    'BISTURI CRESCENT','BISTURI 15',
-    'FIO NYLON 10-0 BI','FIO VICRYL 8-0 BI PGA',
-    'COLÍRIO MITOMICINA','RINGER C/LACTATO',
-    'SERINGA 1ML C/AG',
-  );
-  if (tipo === 'ESTRABISMO') base.push(
-    'FIO VICRYL 6-0 BI PGA','FIO MERSILENE 5-0 BI',
-    'RINGER C/LACTATO','LÂMINA 15',
-  );
-  if (tipo === 'ANGIOGRAFIA') base.push(
-    'COLÍRIO FLUORESCEÍNA','FLUORESCEÍNA 10%',
-    'SORO 0,9% 100ML',
-  );
-  if (tipo === 'APLICAÇÃO') base.push(
-    'AVASTIN 0,10','AVASTIN 0,15',
-    'SERINGA 1ML C/AG','AGULHA 13X3 AMARELA',
-    'SORO 0,9% AMP 10ML',
-  );
-  if (tipo === 'SONDAGEM') base.push(
-    'RINGER C/LACTATO','LÂMINA 11',
-  );
-  return [...new Set(base)];
+  // Retorna a lista REAL de materiais consumidos (Jun+Jul/26) para o tipo
+  return CONSUMO_REAL[tipo] ? [...CONSUMO_REAL[tipo]] : [];
 }
 
 function renderizarTabela() {
@@ -1125,10 +1108,12 @@ function abrirRevisao() {
   if (!medico || !data)  { toast('Preencha médico e data.', 'erro'); return; }
   if (!tipos.length)     { toast('Adicione pelo menos um tipo de cirurgia.', 'erro'); return; }
   if (!itens.length)     { toast('Informe a quantidade de pelo menos um material.', 'erro'); return; }
+  if (!document.getElementById('sel-registrante').value) { toast('Selecione quem está registrando.', 'erro'); return; }
 
-  // Data/hora
+  // Data/hora + responsável
+  const registrante = document.getElementById('sel-registrante').value;
   document.getElementById('comp-datahora').textContent =
-    'Emitido em: ' + new Date().toLocaleString('pt-BR');
+    'Emitido em: ' + new Date().toLocaleString('pt-BR') + ' — por ' + registrante;
 
   // Período
   const dataFmt = data.split('-').reverse().join('/');
@@ -1265,24 +1250,35 @@ async function enviarSupabase(reg) {
         tipo: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
         material_id: matRows[0].id, local_id: localId,
         qtd: -qtd, periodo_cirurgico_id: periodoId,
-        aprovado: false, registrado_por: 'Equipe CC',
+        aprovado: false, registrado_por: document.getElementById('sel-registrante').value || 'Equipe CC',
       });
     }
   }
 }
 
 // ── APROVAÇÃO ─────────────────────────────────────────────────
+let saldosCache = {};
+async function carregarSaldos() {
+  try {
+    const rows = await sbFetch('vw_saldo_consolidado?select=material,saldo_total&limit=500');
+    saldosCache = {};
+    for (const r of rows || []) saldosCache[(r.material||'').toUpperCase()] = r.saldo_total;
+  } catch(e) { saldosCache = {}; }
+}
+
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,materiais(nome),periodos_cirurgicos(data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,materiais(nome),periodos_cirurgicos(data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&order=created_at.desc');
+    await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
       const pc = m.periodos_cirurgicos;
       if (!pc) continue;
       const key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
       if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], ids: [] };
-      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), editado: false });
+      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
+      if (m.registrado_por) grupos[key].registrado_por = m.registrado_por;
       grupos[key].ids.push(m.id);
     }
     // Ordenar itens de cada grupo pela ordem do formulário (categorias)
@@ -1318,12 +1314,16 @@ function renderizarPendentes() {
     p.itens.forEach((it, k) => {
       const cat = ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
       if (cat !== ultimaCat) {
-        linhas += `<tr><td colspan="2" style="background:#EBF5FB;padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
+        linhas += `<tr><td colspan="3" style="background:#EBF5FB;padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
         ultimaCat = cat;
       }
+      const saldo = saldosCache[(it.nome||'').toUpperCase()];
+      const saldoTxt = (saldo === undefined || saldo === null) ? '—' : saldo;
+      const saldoCor = (saldo !== undefined && saldo !== null && saldo < it.qtd) ? 'color:#922B21;font-weight:700' : 'color:var(--cinza-4)';
       linhas += `
         <tr>
           <td>${it.nome}</td>
+          <td style="text-align:center;font-size:12px;${saldoCor}" title="Saldo atual em estoque">${saldoTxt}</td>
           <td style="text-align:right">
             <input type="number" min="0" value="${it.qtd}"
               style="width:70px;border:1.5px solid var(--cinza-2);border-radius:5px;padding:4px 6px;font-size:13px;text-align:center;outline:none;font-family:var(--fonte)"
@@ -1338,8 +1338,14 @@ function renderizarPendentes() {
     <div class="item-pendente">
       <div>
         <div class="info-periodo">🏥 ${medico} — ${tipos}</div>
-        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; Equipe CC &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
-        <table class="mini-tabela">${linhas}</table>
+        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || 'Equipe CC'} &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
+        <table class="mini-tabela">
+          <tr style="background:var(--cinza-1)">
+            <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Material</td>
+            <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4);text-align:center">Saldo atual</td>
+            <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4);text-align:right">Qtd saída</td>
+          </tr>
+          ${linhas}</table>
       </div>
       <div class="acoes">
         <button class="btn btn-aprovar btn-sm" onclick="aprovar(${i})">✓ Aprovar</button>
@@ -1422,13 +1428,33 @@ function toast(msg, tipo) {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  const url = localStorage.getItem('hog_sb_url');
-  const key = localStorage.getItem('hog_sb_key');
-  if (url && key) {
-    document.getElementById('sb-url').value = url;
-    document.getElementById('sb-key').value = key;
-    sbUrl = url; sbKey = key;
+  // Popular lista da equipe
+  const selReg = document.getElementById('sel-registrante');
+  for (const nome of EQUIPE) {
+    const opt = document.createElement('option');
+    opt.value = nome; opt.textContent = nome;
+    selReg.appendChild(opt);
+  }
+  // Restaurar último nome usado neste dispositivo
+  const ultimoNome = localStorage.getItem('hog_registrante');
+  if (ultimoNome && EQUIPE.includes(ultimoNome)) selReg.value = ultimoNome;
+
+  // Prioridade 1: configuração fixa embutida no código
+  if (CONFIG_FIXA.url && CONFIG_FIXA.key) {
+    sbUrl = CONFIG_FIXA.url.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+    sbKey = CONFIG_FIXA.key;
+    document.getElementById('config-box').style.display = 'none';
     testarConexao();
+  } else {
+    // Prioridade 2: configuração salva no navegador
+    const url = localStorage.getItem('hog_sb_url');
+    const key = localStorage.getItem('hog_sb_key');
+    if (url && key) {
+      document.getElementById('sb-url').value = url;
+      document.getElementById('sb-key').value = key;
+      sbUrl = url; sbKey = key;
+      testarConexao();
+    }
   }
   document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
   renderizarTipos();
