@@ -528,21 +528,13 @@ async function testarConexao() {
 async function sbFetch(ep, method='GET', body=null) {
   const baseUrl = sbUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
   const isNewKey = sbKey.startsWith('sb_');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-  };
 
-  if (isNewKey) {
-    headers['Authorization'] = 'Bearer ' + sbKey;
-    headers['apikey'] = sbKey;
-  } else {
-    headers['apikey'] = sbKey;
-    headers['Authorization'] = 'Bearer ' + sbKey;
-  }
+  const headers = { 'Content-Type': 'application/json' };
+  headers['apikey'] = sbKey;
+  // Chave nova (sb_publishable_) NÃO é JWT — não pode ir no Authorization
+  if (!isNewKey) headers['Authorization'] = 'Bearer ' + sbKey;
 
-  if (method === 'POST') headers['Prefer'] = 'return=representation';
-  if (method === 'PATCH') headers['Prefer'] = 'return=representation';
+  if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
 
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
