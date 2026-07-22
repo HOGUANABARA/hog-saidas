@@ -502,7 +502,9 @@ const protocoloPadrao = {
 
 // ── CONFIG SUPABASE ───────────────────────────────────────────
 function salvarConfig() {
-  sbUrl = document.getElementById('sb-url').value.trim().replace(/\/$/, '');
+  sbUrl = document.getElementById('sb-url').value.trim()
+    .replace(/\/rest\/v1\/?$/, '')
+    .replace(/\/$/, '');
   sbKey = document.getElementById('sb-key').value.trim();
   if (!sbUrl || !sbKey) { toast('Preencha URL e chave.', 'erro'); return; }
   localStorage.setItem('hog_sb_url', sbUrl);
@@ -519,22 +521,37 @@ async function testarConexao() {
     document.getElementById('config-box').style.borderColor = '#A9DFBF';
     carregarPendentes();
   } catch(e) {
-    document.getElementById('status-cx').textContent = '❌ Erro de conexão';
+    document.getElementById('status-cx').textContent = `❌ Erro: ${e.message}`;
   }
 }
 
 async function sbFetch(ep, method='GET', body=null) {
-  const opts = {
-    method,
-    headers: {
-      'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey,
-      'Content-Type': 'application/json',
-      'Prefer': method === 'POST' ? 'return=representation' : '',
-    }
+  const baseUrl = sbUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+  const isNewKey = sbKey.startsWith('sb_');
+  
+  const headers = {
+    'Content-Type': 'application/json',
   };
+
+  if (isNewKey) {
+    headers['Authorization'] = 'Bearer ' + sbKey;
+    headers['apikey'] = sbKey;
+  } else {
+    headers['apikey'] = sbKey;
+    headers['Authorization'] = 'Bearer ' + sbKey;
+  }
+
+  if (method === 'POST') headers['Prefer'] = 'return=representation';
+  if (method === 'PATCH') headers['Prefer'] = 'return=representation';
+
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${sbUrl}/rest/v1/${ep}`, opts);
-  if (!res.ok) throw new Error(await res.text());
+
+  const res = await fetch(`${baseUrl}/rest/v1/${ep}`, opts);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`${res.status}: ${errText}`);
+  }
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 }
