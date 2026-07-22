@@ -271,10 +271,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   body * { visibility: hidden; }
   .modal-overlay, .modal-overlay * { visibility: visible; }
   .modal-acoes { display: none !important; }
-  /* Modal fixado no topo absoluto da página, fora do fluxo do documento —
-     evita colisão com elementos ocultos que ainda ocupam espaço (visibility:hidden) */
+  /* Modal fixado por PÁGINA (não por documento) — evita páginas em branco
+     causadas pela altura enorme do documento com elementos ocultos */
   .modal-overlay {
-    position: absolute !important;
+    position: fixed !important;
     top: 0 !important; left: 0 !important;
     width: 100% !important;
     display: block !important;
