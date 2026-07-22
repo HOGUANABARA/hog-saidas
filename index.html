@@ -567,8 +567,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-  url: 'https://uewfqkvjfdhnugvjrilr.supabase.co', 
-  key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -581,7 +581,6 @@ const EQUIPE = [
   'Técnica Talita',
   'Lucas (Adm)',
   'Bethânia (Fin)',
-  'Recepção',
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────
@@ -934,9 +933,13 @@ const CONSUMO_REAL = {
   'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KIT VITRECTOMIA 25 GAUGE (ESTERILENO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 15','LUVA 7.0','LUVA 7.5','METIL 2%','METIL 4%','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','PNEU 279','PNEU 287','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','TRANSOFIX','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
 };
 
+// Kit base — itens presentes na maioria dos tipos (calculado do consumo real Jun+Jul/26)
+const ITENS_BASE = ['AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO COM BAG FACO 120X100','CAMPO MESA G','CAMPO MESA P','COTONETE ESTÉRIL','ESCOVA CLOROHEX','LUVA 7.0','LUVA 7.5','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK'];
+
 function getDemoMateriais(medico, tipo) {
-  // Retorna a lista REAL de materiais consumidos (Jun+Jul/26) para o tipo
-  return CONSUMO_REAL[tipo] ? [...CONSUMO_REAL[tipo]] : [];
+  // Retorna a lista REAL de materiais consumidos (Jun+Jul/26) para o tipo.
+  // Tipos novos (sem consumo mapeado) recebem o kit base automaticamente.
+  return CONSUMO_REAL[tipo] ? [...CONSUMO_REAL[tipo]] : [...ITENS_BASE];
 }
 
 function renderizarTabela() {
@@ -1041,7 +1044,7 @@ async function filtrarExtras() {
       `<div class="busca-item" onclick="adicionarExtra('${n.replace(/'/g,"\\'")}')">${n}</div>`
     ).join('');
   }
-  div.style.display = '';
+  div.style.display = 'block';
 }
 
 function adicionarExtra(nome) {
@@ -1701,7 +1704,7 @@ function filtrarDiversas() {
       `<div class="busca-item" onclick="addDiversa('${n.replace(/'/g,"\\'")}')">${n}</div>`
     ).join('');
   }
-  div.style.display = '';
+  div.style.display = 'block';
 }
 
 function addDiversa(nome) {
