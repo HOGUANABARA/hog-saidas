@@ -289,7 +289,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 
 <div class="abas">
   <div class="aba ativa" onclick="trocarAba('registro')">📋 Novo Registro</div>
-  <div class="aba" onclick="trocarAba('aprovacao')">✅ Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+  <div class="aba" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
 </div>
 
 <div class="container">
@@ -503,6 +503,9 @@ const CONFIG_FIXA = {
   url: 'https://uewfqkvjfdhnugvjrilr.supabase.co', 
   key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 };
+
+// Senha da aba Aprovação — troque por uma senha sua
+const SENHA_APROVACAO = 'hog2026';
 
 // Equipe do Centro Cirúrgico — edite os nomes conforme necessário
 const EQUIPE = [
@@ -1557,6 +1560,14 @@ function atualizarBadge() {
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
+  // Aba Aprovação protegida por senha (liberada uma vez por dispositivo)
+  if (aba === 'aprovacao' && localStorage.getItem('hog_aprov_ok') !== '1') {
+    const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
+    if (s === null) return; // cancelou
+    if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
+    localStorage.setItem('hog_aprov_ok', '1');
+    toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
+  }
   document.querySelectorAll('.aba').forEach((el,i) => {
     el.classList.toggle('ativa', (i===0&&aba==='registro')||(i===1&&aba==='aprovacao'));
   });
