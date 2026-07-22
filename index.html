@@ -282,7 +282,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais</div>
+    <div class="sub">Registro de Saídas de Materiais — v2.1</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -1269,7 +1269,7 @@ async function enviarAprovacao() {
   if (!itens.length)          { toast('Informe a quantidade de pelo menos um material.', 'erro'); return; }
 
   const tiposComProto = tipos.map(t => ({ ...t, protocolosLabel: (t.protocolos||[]).join(' + ') || '—' }));
-  const reg = { id: Date.now(), medico, data, tipos: tiposComProto, itens, registrado_em: new Date().toLocaleString('pt-BR'), status: 'pendente' };
+  const reg = { id: Date.now(), medico, data, fellow: document.getElementById('sel-fellow').value, tipos: tiposComProto, itens, registrado_em: new Date().toLocaleString('pt-BR'), status: 'pendente' };
   pendentes.push(reg);
   atualizarBadge();
 
@@ -1293,13 +1293,24 @@ async function enviarSupabase(reg) {
     const t = reg.tipos[j];
     const tipoRows = await sbFetch(`tipos_cirurgia?select=id&nome=eq.${encodeURIComponent(t.tipo)}&limit=1`);
     if (!tipoRows?.length) continue;
-    const periodoArr = await sbFetch('periodos_cirurgicos', 'POST', {
-      data: reg.data, medico_id: medicoId, tipo_cirurgia_id: tipoRows[0].id,
-      qtd_pacientes: t.pacientes, fellow: false,
-      modalidade: t.modalidade || null,
-      protocolo: (t.protocolos && t.protocolos.length) ? t.protocolos[0] : null,
-    });
-    const periodoId = Array.isArray(periodoArr) ? periodoArr[0].id : periodoArr.id;
+
+    // Verificar se já existe período para mesma data + médico + tipo + modalidade (evita duplicar em reenvios)
+    let qExiste = `periodos_cirurgicos?select=id&data=eq.${reg.data}&medico_id=eq.${medicoId}&tipo_cirurgia_id=eq.${tipoRows[0].id}`;
+    qExiste += t.modalidade ? `&modalidade=eq.${t.modalidade}` : `&modalidade=is.null`;
+    const existentes = await sbFetch(qExiste);
+
+    let periodoId;
+    if (existentes && existentes.length) {
+      periodoId = existentes[0].id;  // reutiliza o período existente
+    } else {
+      const periodoArr = await sbFetch('periodos_cirurgicos', 'POST', {
+        data: reg.data, medico_id: medicoId, tipo_cirurgia_id: tipoRows[0].id,
+        qtd_pacientes: t.pacientes, fellow: reg.fellow === 'true' || reg.fellow === true,
+        modalidade: t.modalidade || null,
+        protocolo: (t.protocolos && t.protocolos.length) ? t.protocolos[0] : null,
+      });
+      periodoId = Array.isArray(periodoArr) ? periodoArr[0].id : periodoArr.id;
+    }
 
     for (const item of reg.itens) {
       const qtd = parseFloat(item.qtds[j]);
@@ -1338,14 +1349,14 @@ async function carregarSaldos() {
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
       const pc = m.periodos_cirurgicos;
       let key;
       if (pc) {
-        key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
+        key = `PC_${pc.id}`;
         if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], ids: [] };
       } else if (m.tipo === 'SAIDA_GERAL') {
         // Saída diversa — agrupar por destino + observação
@@ -1471,7 +1482,7 @@ async function carregarAprovadas() {
       const pc = m.periodos_cirurgicos;
       let key;
       if (pc) {
-        key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
+        key = `PC_${pc.id}`;
         if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por };
       } else if (m.tipo === 'SAIDA_GERAL') {
         key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
@@ -1624,11 +1635,24 @@ function imprimirGrupo(i) {
   document.getElementById('modal-revisao').classList.add('visivel');
 }
 
-function rejeitar(i) {
-  if (!confirm('Rejeitar este registro?')) return;
+async function rejeitar(i) {
+  const p = pendentes[i];
+  if (!confirm('Rejeitar este registro?\n\nAs movimentações pendentes serão EXCLUÍDAS do banco.')) return;
+  if (sbUrl && sbKey && p.ids?.length) {
+    try {
+      // 1. Exclui as movimentações pendentes (policy só permite aprovado=false)
+      for (const id of p.ids) {
+        await sbFetch(`movimentacoes?id=eq.${id}&aprovado=eq.false`, 'DELETE');
+      }
+      // 2. Tenta excluir o período se ficou órfão (FK bloqueia se houver outras movimentações — ok)
+      if (p.periodo?.id) {
+        try { await sbFetch(`periodos_cirurgicos?id=eq.${p.periodo.id}`, 'DELETE'); } catch(e) {}
+      }
+    } catch(e) { toast('Erro ao rejeitar: ' + e.message, 'erro'); return; }
+  }
   pendentes.splice(i, 1);
   atualizarBadge(); renderizarPendentes();
-  toast('Registro rejeitado.', '');
+  toast('Registro rejeitado e excluído do banco.', '');
 }
 
 function atualizarBadge() {
