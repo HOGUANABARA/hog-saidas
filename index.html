@@ -745,23 +745,42 @@ async function carregarTodosOsMateriais() {
   const todosNomes = new Set();
   for (const s of matsPorTipo) s.forEach(n => todosNomes.add(n));
 
+  // SEMPRE incluir os itens padrão do formulário para cada tipo
+  // (garante que itens essenciais apareçam mesmo se o histórico estiver incompleto)
+  for (const t of tipos) {
+    for (const item of getDemoMateriais(medico, t.tipo)) {
+      // Usar nome exato do catálogo se existir (case-insensitive)
+      const nomeExato = todosOsMateriais.find(n => n.toUpperCase() === item.toUpperCase()) || item;
+      todosNomes.add(nomeExato);
+    }
+  }
+
   // Adicionar itens de protocolo que ainda não estão na lista
   const itensProto = itensDeProtocolo(tipos);
   for (const item of itensProto) {
-    // Buscar nome exato no catálogo (case-insensitive)
     const nomeExato = todosOsMateriais.find(n => n.toUpperCase() === item.toUpperCase()) || item;
     todosNomes.add(nomeExato);
   }
 
   // Montar lista e ordenar por categoria
+  // Deduplicar por nome normalizado (remove parênteses, espaços extras)
+  const norm = s => s.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
+  const dedup = {};
+  for (const nome of todosNomes) {
+    const chave = norm(nome);
+    // Priorizar o nome que existe no catálogo do banco
+    const existeNoCatalogo = todosOsMateriais.includes(nome);
+    if (!dedup[chave] || existeNoCatalogo) dedup[chave] = nome;
+  }
+
   // Preservar quantidades já preenchidas
   const qtdsAntes = {};
   for (const m of materiaisTabela) {
-    if (m.qtds.some(q => parseFloat(q) > 0)) qtdsAntes[m.nome] = [...m.qtds];
+    if (m.qtds.some(q => parseFloat(q) > 0)) qtdsAntes[norm(m.nome)] = [...m.qtds];
   }
 
-  const listaBruta = [...todosNomes].map(nome => {
-    const qtdsExistentes = qtdsAntes[nome];
+  const listaBruta = Object.values(dedup).map(nome => {
+    const qtdsExistentes = qtdsAntes[norm(nome)];
     return { nome, origem: 'historico', qtds: qtdsExistentes || tipos.map(() => '') };
   });
   materiaisTabela = ordenarMateriais(listaBruta);
@@ -861,7 +880,7 @@ function renderizarTabela() {
   const ordemCat = {};
   let catPos = 0;
   for (const cat of CATEGORIAS_ORDEM) {
-    for (const item of cat.itens) ordemCat[item.toUpperCase()] = cat.label;
+    for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
     catPos++;
   }
 
@@ -869,7 +888,7 @@ function renderizarTabela() {
   let rows = '';
   for (let i = 0; i < materiaisTabela.length; i++) {
     const m = materiaisTabela[i];
-    const cat = ordemCat[m.nome.toUpperCase()] || 'EXTRAS';
+    const cat = ordemCat[m.nome.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
     if (cat !== ultimaCat) {
       rows += `<tr><td colspan="${2 + tipos.length}" style="background:var(--cinza-1);padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">## ${cat}</td></tr>`;
       ultimaCat = cat;
@@ -1016,17 +1035,18 @@ const PROTOCOLO_ITENS = {
 };
 
 function ordenarMateriais(lista) {
-  // Monta índice de posição por categoria
+  const normO = s => (s||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
+  // Monta índice de posição por categoria (nome normalizado)
   const ordem = {};
   let pos = 0;
   for (const cat of CATEGORIAS_ORDEM) {
     for (const item of cat.itens) {
-      ordem[item.toUpperCase()] = pos++;
+      ordem[normO(item)] = pos++;
     }
   }
   return [...lista].sort((a, b) => {
-    const ia = ordem[a.nome.toUpperCase()] ?? 9999;
-    const ib = ordem[b.nome.toUpperCase()] ?? 9999;
+    const ia = ordem[normO(a.nome)] ?? 9999;
+    const ib = ordem[normO(b.nome)] ?? 9999;
     if (ia !== ib) return ia - ib;
     return a.nome.localeCompare(b.nome);
   });
@@ -1136,12 +1156,12 @@ function abrirRevisao() {
   // Corpo tabela materiais com separadores de categoria
   const ordemCatComp = {};
   for (const cat of CATEGORIAS_ORDEM) {
-    for (const item of cat.itens) ordemCatComp[item.toUpperCase()] = cat.label;
+    for (const item of cat.itens) ordemCatComp[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
   }
   let ultimaCatComp = null;
   let rowsComp = '';
   for (const m of itens) {
-    const cat = ordemCatComp[m.nome.toUpperCase()] || 'EXTRAS';
+    const cat = ordemCatComp[m.nome.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
     if (cat !== ultimaCatComp) {
       rowsComp += `<tr><td colspan="${1+tipos.length}" style="background:#EBF5FB;padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
       ultimaCatComp = cat;
@@ -1262,10 +1282,14 @@ async function carregarPendentes() {
       if (!pc) continue;
       const key = `${pc.data}_${pc.medicos?.nome}_${pc.tipos_cirurgia?.nome}`;
       if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], ids: [] };
-      grupos[key].itens.push({ nome: m.materiais?.nome, qtd: Math.abs(m.qtd) });
+      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), editado: false });
       grupos[key].ids.push(m.id);
     }
+    // Ordenar itens de cada grupo pela ordem do formulário (categorias)
     pendentes = Object.values(grupos);
+    for (const g of pendentes) {
+      g.itens = ordenarMateriais(g.itens);
+    }
     atualizarBadge();
     renderizarPendentes();
   } catch(e) {}
@@ -1276,19 +1300,46 @@ function renderizarPendentes() {
   if (!pendentes.length) {
     div.innerHTML = '<div class="empty"><p>Nenhum registro pendente de aprovação. ✓</p></div>'; return;
   }
+
+  // Índice categoria por material (padrão do formulário)
+  const ordemCat = {};
+  for (const cat of CATEGORIAS_ORDEM) {
+    for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
+  }
+
   div.innerHTML = pendentes.map((p, i) => {
     const medico = p.periodo?.medicos?.nome || p.medico || '—';
     const tipos  = p.tipos ? p.tipos.map(t => t.tipo).join(' + ') : p.periodo?.tipos_cirurgia?.nome || '—';
     const data   = p.periodo?.data || p.data || '—';
+
+    // Linhas com separadores de categoria (padrão da planilha)
+    let ultimaCat = null;
+    let linhas = '';
+    p.itens.forEach((it, k) => {
+      const cat = ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
+      if (cat !== ultimaCat) {
+        linhas += `<tr><td colspan="2" style="background:#EBF5FB;padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
+        ultimaCat = cat;
+      }
+      linhas += `
+        <tr>
+          <td>${it.nome}</td>
+          <td style="text-align:right">
+            <input type="number" min="0" value="${it.qtd}"
+              style="width:70px;border:1.5px solid var(--cinza-2);border-radius:5px;padding:4px 6px;font-size:13px;text-align:center;outline:none;font-family:var(--fonte)"
+              onchange="editarQtdPendente(${i},${k},this.value)"
+              onfocus="this.style.borderColor='var(--azul-medio)'"
+              onblur="this.style.borderColor='var(--cinza-2)'" />
+          </td>
+        </tr>`;
+    });
+
     return `
     <div class="item-pendente">
       <div>
         <div class="info-periodo">🏥 ${medico} — ${tipos}</div>
-        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; Equipe CC</div>
-        <table class="mini-tabela">
-          ${p.itens.slice(0,6).map(it => `<tr><td>${it.nome}</td><td style="text-align:right">${it.qtd}</td></tr>`).join('')}
-          ${p.itens.length > 6 ? `<tr><td colspan="2" style="color:var(--cinza-4);font-size:11px">+ ${p.itens.length-6} itens...</td></tr>` : ''}
-        </table>
+        <div class="info-meta">📅 ${data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; Equipe CC &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
+        <table class="mini-tabela">${linhas}</table>
       </div>
       <div class="acoes">
         <button class="btn btn-aprovar btn-sm" onclick="aprovar(${i})">✓ Aprovar</button>
@@ -1298,16 +1349,29 @@ function renderizarPendentes() {
   }).join('');
 }
 
+function editarQtdPendente(i, k, val) {
+  const qtd = parseFloat(val);
+  if (isNaN(qtd) || qtd < 0) return;
+  pendentes[i].itens[k].qtd = qtd;
+  pendentes[i].itens[k].editado = true;
+}
+
 async function aprovar(i) {
   const p = pendentes[i];
-  if (sbUrl && sbKey && p.ids?.length) {
+  if (sbUrl && sbKey && p.itens?.length) {
     try {
-      for (const id of p.ids) {
-        await sbFetch(`movimentacoes?id=eq.${id}`, 'PATCH', {
+      for (const it of p.itens) {
+        const patch = {
           aprovado: true, aprovado_por: 'Gestora', aprovado_em: new Date().toISOString(),
-        });
+        };
+        // Se a quantidade foi editada na aprovação, salvar o novo valor (negativo = saída)
+        if (it.editado) {
+          patch.qtd = -Math.abs(it.qtd);
+          patch.observacao = 'Qtd ajustada na aprovação';
+        }
+        await sbFetch(`movimentacoes?id=eq.${it.id}`, 'PATCH', patch);
       }
-    } catch(e) { toast('Erro ao aprovar.', 'erro'); return; }
+    } catch(e) { toast('Erro ao aprovar: ' + e.message, 'erro'); return; }
   }
   pendentes.splice(i, 1);
   atualizarBadge(); renderizarPendentes();
