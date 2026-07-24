@@ -314,6 +314,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-diversas" onclick="trocarAba('diversas')">📦 Saídas Diversas</div>
   <div class="aba" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
   <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
+  <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
 </div>
 
 <div class="container">
@@ -568,6 +569,56 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div id="ac-lista"><div class="ac-empty">Carregando alerta…</div></div>
 </div>
 
+<!-- ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) ═══ -->
+<style>
+  #aba-cotacao .co-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px}
+  #aba-cotacao .co-bar .co-status{font-size:12px;color:var(--cinza-4);font-weight:700;margin-right:auto}
+  #aba-cotacao .co-bar button{font-size:12px;font-weight:700;font-family:var(--fonte);padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+  #aba-cotacao .co-b1{background:var(--azul-medio);color:#fff} #aba-cotacao .co-b2{background:var(--azul-claro);color:var(--azul)}
+  #aba-cotacao .co-b3{background:var(--verde);color:#fff} #aba-cotacao .co-b4{background:var(--cinza-2);color:var(--cinza-4)}
+  #aba-cotacao .co-search{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px;position:relative}
+  #aba-cotacao .co-search label{font-size:11px;font-weight:700;color:var(--cinza-4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px}
+  #aba-cotacao .co-search input{width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);outline:none}
+  #aba-cotacao .co-res{position:absolute;left:14px;right:14px;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:260px;overflow:auto;z-index:9;display:none}
+  #aba-cotacao .co-res div{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--cinza-1);cursor:pointer;display:flex;justify-content:space-between;gap:12px}
+  #aba-cotacao .co-res div:hover{background:var(--azul-claro)} #aba-cotacao .co-meta{color:var(--cinza-4);font-size:11px;white-space:nowrap}
+  #aba-cotacao .co-item{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:14px;overflow:hidden}
+  #aba-cotacao .co-ihead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2)}
+  #aba-cotacao .co-inome{font-size:14px;font-weight:700} #aba-cotacao .co-imeta{font-size:11px;color:var(--cinza-4);margin-top:2px}
+  #aba-cotacao .co-iqtd{font-size:11px;color:var(--cinza-4);font-weight:700;display:flex;align-items:center;gap:8px;white-space:nowrap}
+  #aba-cotacao .co-ops{display:flex;flex-wrap:wrap;gap:10px;padding:12px 14px;align-items:flex-start}
+  #aba-cotacao .co-op{flex:1 1 180px;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px;background:#fcfdfe}
+  #aba-cotacao .co-op.co-melhor{border-color:var(--verde);background:var(--verde-claro)}
+  #aba-cotacao .co-op-top{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);margin-bottom:6px;display:flex;justify-content:space-between}
+  #aba-cotacao .co-op select,#aba-cotacao .co-op input{width:100%;border:1px solid var(--cinza-2);border-radius:6px;padding:6px 7px;font-size:12px;font-family:var(--fonte);margin-bottom:5px;outline:none}
+  #aba-cotacao .co-op-row{display:flex;gap:5px} #aba-cotacao .co-op-row input{width:50%}
+  #aba-cotacao .co-nn{text-align:right}
+  #aba-cotacao .co-unit{font-size:11px;color:var(--cinza-4)} #aba-cotacao .co-unit b{color:var(--verde);font-size:13px}
+  #aba-cotacao .co-addop{flex:0 0 auto;align-self:center;background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-cotacao .co-x{background:none;border:none;color:var(--vermelho);cursor:pointer;font-size:11px;font-weight:700}
+  #aba-cotacao .co-empty{text-align:center;padding:34px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-cotacao .co-wa{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:12px}
+  #aba-cotacao .co-wa-head{font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  #aba-cotacao .co-wa-head button{background:var(--verde);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-cotacao .co-wa textarea{width:100%;border:1px solid var(--cinza-2);border-radius:8px;padding:9px;font-size:12px;font-family:var(--fonte);resize:vertical}
+</style>
+<div id="aba-cotacao" class="container" style="display:none">
+  <div class="co-bar">
+    <span class="co-status" id="co-status">Rascunho</span>
+    <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens do alerta</button>
+    <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
+    <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
+    <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
+  </div>
+  <div class="co-search">
+    <label>Incluir item no orçamento (busca no catálogo)</label>
+    <input id="co-busca" placeholder="buscar por nome… ex: xylo, propofol, colírio">
+    <div class="co-res" id="co-busca-res"></div>
+  </div>
+  <div id="co-corpo"><div class="co-empty">Carregando…</div></div>
+  <div id="co-wa-box" style="margin-top:16px"></div>
+</div>
+
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
   <div class="modal-box">
@@ -633,10 +684,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
-  
+
 // Senha da aba Aprovação — troque por uma senha sua
 const SENHA_APROVACAO = 'hog2026';
 
@@ -1863,8 +1914,8 @@ async function enviarDiversas() {
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
-  // Abas Aprovação e Comprar protegidas por senha (liberadas uma vez por dispositivo)
-  if ((aba === 'aprovacao' || aba === 'comprar') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  // Abas Aprovação, Comprar e Cotação protegidas por senha (liberadas uma vez por dispositivo)
+  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
@@ -1875,12 +1926,15 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-diversas').classList.toggle('ativa', aba==='diversas');
   document.getElementById('aba-btn-aprovacao').classList.toggle('ativa', aba==='aprovacao');
   document.getElementById('aba-btn-comprar').classList.toggle('ativa', aba==='comprar');
+  document.getElementById('aba-btn-cotacao').classList.toggle('ativa', aba==='cotacao');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
   document.getElementById('aba-comprar').style.display   = aba==='comprar'   ? '' : 'none';
+  document.getElementById('aba-cotacao').style.display   = aba==='cotacao'   ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
+  if (aba==='cotacao')   { coCarregar(); }
 }
 
 function limparForm() {
@@ -2088,6 +2142,263 @@ async function acIncluir(idx){
   acManuais.push(full); acRender();
   document.getElementById('ac-busca').value=''; document.getElementById('ac-res').style.display='none';
   toast(m.nome+' incluído na compra ✓','sucesso');
+}
+</script>
+
+<script>
+// ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) — reaproveita sbFetch/toast do app ═══
+let coCotacaoId = null;      // id da cotação aberta (null = rascunho não salvo)
+let coItens = [];            // itens em tela
+let coFornecedores = [];     // catálogo de fornecedores {id,nome}
+let coBuscaTimer = null;
+let coBuscaRes = [];
+
+function coMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+function coNum(v){ const n=parseFloat((''+v).replace(',','.')); return isNaN(n)?null:n; }
+
+async function coCarregar(){
+  try{
+    if(!coFornecedores.length){
+      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    }
+    // se ainda não carregou, tenta abrir a última cotação "aberta"
+    if(coCotacaoId===null && !coItens.length){
+      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta&order=id.desc&limit=1');
+      if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
+    }
+    coRender();
+  }catch(e){
+    document.getElementById('co-corpo').innerHTML =
+      '<div class="co-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+
+async function coAbrir(id){
+  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes(*)&cotacao_id=eq.${id}&order=id.asc`);
+  coCotacaoId = id;
+  coItens = (its||[]).map(it=>({
+    id: it.id,
+    material_id: it.material_id,
+    material_nome: it.material_nome,
+    qtd_desejada: it.qtd_desejada,
+    saldo: it.saldo_no_momento,
+    minimo: it.estoque_minimo,
+    opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
+  }));
+  coGaranteSlots();
+  coRender();
+  toast('Cotação #'+id+' carregada.','sucesso');
+}
+function coOpMap(o){
+  return { id:o.id, slot:o.slot, fornecedor_id:o.fornecedor_id, fornecedor_nome:o.fornecedor_nome||'',
+           marca:o.marca||'', apresentacao:o.apresentacao||'', qtd_embalagem:o.qtd_embalagem,
+           preco_total:o.preco_total, escolhida:!!o.escolhida };
+}
+function coOpVazia(slot){
+  return { slot, fornecedor_id:null, fornecedor_nome:'', marca:'', apresentacao:'',
+           qtd_embalagem:null, preco_total:null, escolhida:false };
+}
+function coGaranteSlots(){
+  // garante no mínimo 3 opções por item
+  for(const it of coItens){
+    while(it.opcoes.length<3) it.opcoes.push(coOpVazia(it.opcoes.length+1));
+  }
+}
+
+function coNova(){
+  if(coItens.length && !confirm('Isto vai limpar a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
+  coCotacaoId=null; coItens=[]; coRender();
+  toast('Nova cotação (rascunho). Puxe os itens do alerta ou busque no catálogo.','');
+}
+
+async function coPuxarAlerta(){
+  try{
+    const rows = await sbFetch("vw_alerta_compras?select=material_id,material,saldo_total,estoque_minimo,fornecedor_padrao_id,fornecedor_padrao,marca&alerta_compra=not.is.null&order=material.asc&limit=1000");
+    let add=0;
+    for(const r of (rows||[])){
+      if(coItens.find(x=>x.material_id===r.material_id)) continue;
+      const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
+      const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
+      const op1=coOpVazia(1);
+      if(r.fornecedor_padrao_id){ op1.fornecedor_id=r.fornecedor_padrao_id; }
+      if(r.marca){ op1.marca=r.marca; }
+      coItens.push({ id:null, material_id:r.material_id, material_nome:r.material,
+        qtd_desejada:sug>0?sug:null, saldo:saldo, minimo:minimo,
+        opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
+      add++;
+    }
+    coRender();
+    toast(add?(add+' item(ns) adicionado(s) do alerta.'):'Nenhum item novo do alerta.', add?'sucesso':'');
+  }catch(e){ toast('Erro ao puxar alerta: '+e.message,'erro'); }
+}
+
+// busca no catálogo p/ incluir item manual
+(function(){
+  const box=document.getElementById('co-busca'), res=document.getElementById('co-busca-res');
+  if(!box) return;
+  box.addEventListener('input',function(){
+    const q=this.value.trim(); if(q.length<2){ res.style.display='none'; return; }
+    clearTimeout(coBuscaTimer); coBuscaTimer=setTimeout(async()=>{
+      try{
+        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,marca,fornecedor_padrao_id&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
+        coBuscaRes=rows||[];
+        res.innerHTML=(!rows||!rows.length)?'<div class="co-meta" style="justify-content:center">nada encontrado</div>'
+          : rows.map((r,i)=>`<div onclick="coAddBusca(${i})"><span>${r.nome}</span><span class="co-meta">mín ${r.estoque_minimo??'—'}</span></div>`).join('');
+        res.style.display='block';
+      }catch(e){ res.innerHTML='<div class="co-meta">erro: '+e.message+'</div>'; res.style.display='block'; }
+    },250);
+  });
+  document.addEventListener('click',e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.style.display='none'; });
+})();
+function coAddBusca(idx){
+  const m=coBuscaRes[idx]; if(!m) return;
+  if(coItens.find(x=>x.material_id===m.id)){ toast('Item já está na cotação.',''); return; }
+  const op1=coOpVazia(1); if(m.fornecedor_padrao_id) op1.fornecedor_id=m.fornecedor_padrao_id; if(m.marca) op1.marca=m.marca;
+  coItens.push({ id:null, material_id:m.id, material_nome:m.nome, qtd_desejada:null,
+    saldo:null, minimo:m.estoque_minimo, opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
+  document.getElementById('co-busca').value=''; document.getElementById('co-busca-res').style.display='none';
+  coRender(); toast(m.nome+' adicionado.','sucesso');
+}
+
+function coRemoveItem(i){ coItens.splice(i,1); coRender(); }
+function coAddOpcao(i){ coItens[i].opcoes.push(coOpVazia(coItens[i].opcoes.length+1)); coRender(); }
+function coRemoveOpcao(i,j){ if(coItens[i].opcoes.length<=1) return; coItens[i].opcoes.splice(j,1);
+  coItens[i].opcoes.forEach((o,k)=>o.slot=k+1); coRender(); }
+
+// atualiza um campo da opção a partir do input
+function coSet(i,j,campo,val){
+  const o=coItens[i].opcoes[j];
+  if(campo==='fornecedor_id'){ o.fornecedor_id = val?Number(val):null; }
+  else if(campo==='qtd_embalagem'||campo==='preco_total'){ o[campo]=coNum(val); coAtualizaUnit(i); }
+  else { o[campo]=val; }
+}
+function coAtualizaUnit(i){
+  // recalcula e destaca o menor preço unitário do item
+  const box=document.getElementById('co-item-'+i); if(!box) return;
+  let melhor=Infinity, melhorJ=-1;
+  coItens[i].opcoes.forEach((o,j)=>{
+    const u=(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null;
+    const el=document.getElementById(`co-unit-${i}-${j}`); if(el) el.textContent=(u!=null)?coMoney(u):'—';
+    if(u!=null && u<melhor){ melhor=u; melhorJ=j; }
+  });
+  coItens[i].opcoes.forEach((o,j)=>{
+    const card=document.getElementById(`co-op-${i}-${j}`);
+    if(card) card.classList.toggle('co-melhor', j===melhorJ && melhorJ>=0);
+  });
+}
+
+function coFornOptions(sel){
+  let h='<option value="">— fornecedor —</option>';
+  for(const f of coFornecedores){ h+=`<option value="${f.id}" ${sel===f.id?'selected':''}>${f.nome}</option>`; }
+  return h;
+}
+function coCardOpcao(i,j,o){
+  const u=(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null;
+  return `<div class="co-op" id="co-op-${i}-${j}">
+    <div class="co-op-top">Fornecedor ${j+1}${coItens[i].opcoes.length>3?` <button class="co-x" onclick="coRemoveOpcao(${i},${j})" title="remover opção">✕</button>`:''}</div>
+    <select onchange="coSet(${i},${j},'fornecedor_id',this.value)">${coFornOptions(o.fornecedor_id)}</select>
+    <input placeholder="ou fornecedor novo" value="${o.fornecedor_nome||''}" oninput="coSet(${i},${j},'fornecedor_nome',this.value)">
+    <input placeholder="marca" value="${o.marca||''}" oninput="coSet(${i},${j},'marca',this.value)">
+    <input placeholder="apresentação (ex: cx 50 amp)" value="${o.apresentacao||''}" oninput="coSet(${i},${j},'apresentacao',this.value)">
+    <div class="co-op-row">
+      <input class="co-nn" type="number" step="any" placeholder="un/emb" value="${o.qtd_embalagem??''}" oninput="coSet(${i},${j},'qtd_embalagem',this.value)">
+      <input class="co-nn" type="number" step="any" placeholder="preço total" value="${o.preco_total??''}" oninput="coSet(${i},${j},'preco_total',this.value)">
+    </div>
+    <div class="co-unit">unitário: <b id="co-unit-${i}-${j}">${u!=null?coMoney(u):'—'}</b></div>
+  </div>`;
+}
+function coCardItem(i,it){
+  const ops=it.opcoes.map((o,j)=>coCardOpcao(i,j,o)).join('');
+  const info=[];
+  if(it.saldo!=null) info.push('saldo '+it.saldo);
+  if(it.minimo!=null) info.push('mín '+it.minimo);
+  return `<div class="co-item" id="co-item-${i}">
+    <div class="co-ihead">
+      <div><div class="co-inome">${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}</div></div>
+      <div class="co-iqtd">Qtd desejada <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coItens[${i}].qtd_desejada=coNum(this.value)">
+        <button class="co-x" onclick="coRemoveItem(${i})" title="remover item">✕ item</button></div>
+    </div>
+    <div class="co-ops">${ops}<button class="co-addop" onclick="coAddOpcao(${i})">+ opção</button></div>
+  </div>`;
+}
+function coRender(){
+  coGaranteSlots();
+  const head=document.getElementById('co-status');
+  head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
+  const corpo=document.getElementById('co-corpo');
+  if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use “Puxar itens do alerta” ou a busca acima.</div>'; return; }
+  corpo.innerHTML=coItens.map((it,i)=>coCardItem(i,it)).join('');
+  coItens.forEach((it,i)=>coAtualizaUnit(i));
+}
+
+async function coSalvar(){
+  if(!coItens.length){ toast('Nada para salvar.',''); return; }
+  try{
+    // cria a cotação se ainda for rascunho
+    if(coCotacaoId===null){
+      const nome=(document.getElementById('sel-registrante')||{}).value||'';
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome});
+      if(!c||!c.length) throw new Error('não retornou a cotação criada');
+      coCotacaoId=c[0].id;
+    } else {
+      // regrava do zero: apaga itens antigos (cascade apaga opções) e reinsere
+      await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}`,'DELETE');
+    }
+    for(const it of coItens){
+      const ins=await sbFetch('cotacao_itens','POST',{
+        cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
+        qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo });
+      const itemId=ins&&ins[0]&&ins[0].id;
+      it.id=itemId;
+      const ops=it.opcoes
+        .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null)
+        .map(o=>({ cotacao_item_id:itemId, slot:o.slot, fornecedor_id:o.fornecedor_id,
+          fornecedor_nome:o.fornecedor_nome||null, marca:o.marca||null, apresentacao:o.apresentacao||null,
+          qtd_embalagem:o.qtd_embalagem, preco_total:o.preco_total,
+          preco_unitario:(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null,
+          escolhida:o.escolhida }));
+      if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
+    }
+    coRender();
+    toast('Cotação #'+coCotacaoId+' salva ✓','sucesso');
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
+}
+
+function coFornNome(op){
+  if(op.fornecedor_nome) return op.fornecedor_nome;
+  const f=coFornecedores.find(x=>x.id===op.fornecedor_id); return f?f.nome:null;
+}
+function coWhatsapp(){
+  // agrupa itens por fornecedor (qualquer opção que tenha fornecedor definido)
+  const grupos={};
+  for(const it of coItens){
+    for(const o of it.opcoes){
+      const nome=coFornNome(o); if(!nome) continue;
+      (grupos[nome]=grupos[nome]||[]).push({it,o});
+    }
+  }
+  const nomes=Object.keys(grupos);
+  if(!nomes.length){ toast('Defina ao menos um fornecedor nas opções para gerar os textos.',''); return; }
+  let html='';
+  for(const nome of nomes){
+    const linhas=grupos[nome].map(({it,o})=>{
+      const q=it.qtd_desejada?`${it.qtd_desejada}x `:'';
+      const marca=o.marca?` (${o.marca})`:'';
+      const apr=o.apresentacao?` – ${o.apresentacao}`:'';
+      return `• ${q}${it.material_nome}${marca}${apr}`;
+    }).join('\n');
+    const texto=`Olá, ${nome}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!`;
+    const id='co-wa-'+nomes.indexOf(nome);
+    html+=`<div class="co-wa"><div class="co-wa-head">${nome} <button onclick="coCopiar('${id}')">copiar</button></div><textarea id="${id}" rows="${grupos[nome].length+6}">${texto}</textarea></div>`;
+  }
+  document.getElementById('co-wa-box').innerHTML=html;
+  document.getElementById('co-wa-box').scrollIntoView({behavior:'smooth'});
+}
+function coCopiar(id){
+  const ta=document.getElementById(id); if(!ta) return;
+  ta.select();
+  try{ document.execCommand('copy'); toast('Texto copiado ✓','sucesso'); }
+  catch(e){ if(navigator.clipboard){ navigator.clipboard.writeText(ta.value); toast('Texto copiado ✓','sucesso'); } }
 }
 </script>
 
