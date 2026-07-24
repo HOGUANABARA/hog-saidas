@@ -556,6 +556,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-comprar .ac-rowact button{font-size:11px;font-weight:600;padding:5px 9px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
   #aba-comprar .ac-orcar{background:var(--azul-claro);color:var(--azul)} #aba-comprar .ac-adiar{background:var(--cinza-2);color:var(--cinza-4)}
   #aba-comprar .ac-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px}
+  #aba-comprar .ac-forn-sel{margin-top:5px;font-size:11px;border:1.5px dashed var(--azul-medio);border-radius:6px;padding:3px 6px;background:#fff;color:var(--azul);font-family:var(--fonte);max-width:180px}
+  #aba-comprar .ac-forn-sel:focus{outline:none;border-style:solid}
 </style>
 <div id="aba-comprar" class="container" style="display:none">
   <div class="ac-search">
@@ -631,8 +633,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -1946,6 +1948,7 @@ window.addEventListener('load', () => {
 let acAlerta = [];
 let acManuais = [];
 let acResultados = [];
+let acFornecedores = [];
 function acMesLabels(){
   const d=new Date(); const ant=new Date(d.getFullYear(), d.getMonth()-1, 1);
   const f=x=>x.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
@@ -1969,6 +1972,9 @@ function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLoc
 
 async function acCarregar(){
   try{
+    if(!acFornecedores.length){
+      try{ acFornecedores = await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=300'); }catch(e){}
+    }
     const rows = await sbFetch('vw_alerta_compras?select=*&order=material.asc&limit=1000');
     acAlerta = rows||[];
     acRender();
@@ -1976,7 +1982,7 @@ async function acCarregar(){
     document.getElementById('ac-lista').innerHTML='<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
-function acLinha(r, manual){
+function acLinha(r, manual, semForn){
   const [txt,cls]=acSit(Number(r.saldo_total),Number(r.estoque_minimo),r.alerta_compra);
   const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
   const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
@@ -1987,8 +1993,12 @@ function acLinha(r, manual){
     uc=`<span class="${c2}">${acData(r.uc_data)} · ${r.uc_fornecedor||'—'} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
   } else uc='<span class="ac-none">nenhuma compra registrada</span>';
   const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
+  const seletorForn = semForn ? `<br><select class="ac-forn-sel" onchange="acSalvarFornecedor(${r.material_id}, this.value)">
+      <option value="">📌 definir fornecedor...</option>
+      ${acFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
+    </select>` : '';
   return `<tr data-mid="${r.material_id}" data-saldo="${saldo}">
-    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}</td>
+    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}${seletorForn}</td>
     <td class="num"><input class="ac-min" value="${minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
     <td class="num ac-saldo ${baixo}">${acN0(saldo)}</td>
     <td class="num">${acN0(r.consumo_mes_anterior)}</td>
@@ -2000,7 +2010,7 @@ function acLinha(r, manual){
 }
 function acGrupo(nome,itens,tipo){
   const cls=tipo==='manual'?'ac-fhead manual':(tipo==='cotar'?'ac-fhead cotar':'ac-fhead');
-  const trs=itens.map(r=>acLinha(r,tipo==='manual')).join('');
+  const trs=itens.map(r=>acLinha(r,tipo==='manual',tipo==='cotar')).join('');
   return `<div class="ac-forn"><div class="${cls}"><div class="ac-fnome">${nome} <span class="ac-count">${itens.length} ${itens.length>1?'itens':'item'}</span></div></div>
     <table><thead><tr><th>Item</th><th class="num">Mín ✎</th><th class="num">Saldo</th>
     <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
@@ -2025,6 +2035,17 @@ function acRender(){
     else { tr.style.opacity='0.4'; toast('Item adiado (visual).',''); }
   }));
 }
+async function acSalvarFornecedor(materialId, fornecedorId){
+  if(!fornecedorId){ return; }
+  try{
+    const r = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', { fornecedor_padrao_id: parseInt(fornecedorId) });
+    if(!r || !r.length){ toast('⚠ Sem permissão para gravar o fornecedor (RLS). Rode o GRANT da coluna fornecedor_padrao_id.', 'erro'); return; }
+    const nomeForn = (acFornecedores.find(f => f.id === parseInt(fornecedorId)) || {}).nome || '';
+    toast('Fornecedor definido: ' + nomeForn + ' ✓', 'sucesso');
+    acCarregar(); // recarrega para reagrupar o item no fornecedor certo
+  }catch(e){ toast('Erro ao salvar fornecedor: ' + e.message, 'erro'); }
+}
+
 async function acSalvarMinimo(materialId, inp){
   const novo=parseFloat((''+inp.value).replace(',','.'));
   if(isNaN(novo)||novo<0){ toast('Valor de mínimo inválido.','erro'); return; }
