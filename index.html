@@ -605,15 +605,32 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .ac-criterio{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;cursor:pointer;user-select:none;margin-top:3px}
   #aba-comprar .ac-criterio-minimo{background:var(--cinza-2);color:var(--cinza-4)}
   #aba-comprar .ac-criterio-consumo{background:#EBF5FB;color:#1B4F72;border:1px solid #AED6F1}
+  #aba-comprar .ac-pill{font-family:var(--fonte);font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-4);cursor:pointer}
+  #aba-comprar .ac-pill:hover{border-color:var(--azul-medio)}
+  #aba-comprar .ac-pill.ativa{background:var(--cinza-5);color:#fff;border-color:var(--cinza-5)}
+  #aba-comprar .ac-pill.ativa[data-status="URGENTE"]{background:var(--vermelho);border-color:var(--vermelho)}
+  #aba-comprar .ac-pill.ativa[data-status="COMPRAR"]{background:#B7950B;border-color:#B7950B}
+  #aba-comprar .ac-pill.ativa[data-status="ATENÇÃO"]{background:var(--azul-medio);border-color:var(--azul-medio)}
+  #aba-comprar .ac-btn-novo{white-space:nowrap;font-family:var(--fonte);font-size:12px;font-weight:700;padding:9px 14px;border-radius:8px;border:1.5px dashed var(--verde);background:var(--verde-claro);color:var(--verde);cursor:pointer}
+  #aba-comprar .ac-btn-novo:hover{background:var(--verde);color:#fff}
 </style>
 <div id="aba-comprar" class="container" style="display:none">
   <div class="ac-search" style="margin-bottom:10px">
     <label>🔍 Localizar item nesta lista <span id="ac-filtro-count" style="font-weight:400;text-transform:none;color:var(--cinza-3)"></span></label>
     <input id="ac-filtro" placeholder="digite o nome do item… ex: xylo, dipirona, luva" oninput="acFiltrar()">
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="ac-pill" data-status="" onclick="acFiltrarStatus('')">Todos</button>
+      <button class="ac-pill" data-status="URGENTE" onclick="acFiltrarStatus('URGENTE')">🔴 Urgente</button>
+      <button class="ac-pill" data-status="COMPRAR" onclick="acFiltrarStatus('COMPRAR')">🟡 Comprar</button>
+      <button class="ac-pill" data-status="ATENÇÃO" onclick="acFiltrarStatus('ATENÇÃO')">🟠 Atenção</button>
+    </div>
   </div>
   <div class="ac-search">
     <label>➕ Incluir item na compra (fora da regra do mínimo)</label>
-    <input id="ac-busca" placeholder="buscar no catálogo por nome… ex: xylo, fio nylon, metil">
+    <div style="display:flex;gap:8px">
+      <input id="ac-busca" style="flex:1" placeholder="buscar no catálogo por nome… ex: xylo, fio nylon, metil">
+      <button class="ac-btn-novo" onclick="acCadastrarNovoMaterial()">➕ Não encontrou? Cadastrar novo</button>
+    </div>
     <div class="ac-res" id="ac-res"></div>
   </div>
   <div id="ac-lista"><div class="ac-empty">Carregando alerta…</div></div>
@@ -2462,6 +2479,16 @@ function acGrupoCategoria(nomeCategoria, itens){
 }
 
 // Localiza item na lista já carregada (filtra sem recarregar do banco)
+let acStatusAtivo = ''; // '' = todos, ou 'URGENTE'/'COMPRAR'/'ATENÇÃO'
+
+function acFiltrarStatus(status){
+  acStatusAtivo = status;
+  document.querySelectorAll('#aba-comprar .ac-pill').forEach(b => {
+    b.classList.toggle('ativa', b.dataset.status === status);
+  });
+  acFiltrar();
+}
+
 function acFiltrar(){
   const campo = document.getElementById('ac-filtro');
   const contador = document.getElementById('ac-filtro-count');
@@ -2472,16 +2499,21 @@ function acFiltrar(){
   linhas.forEach(tr => {
     const nomeEl = tr.querySelector('.ac-item');
     const texto = nomeEl ? normNome(nomeEl.textContent) : '';
-    const bate = !termo || texto.includes(termo);
+    const bateTexto = !termo || texto.includes(termo);
+    const badgeEl = tr.querySelector('.ac-badge');
+    const statusItem = badgeEl ? badgeEl.textContent.trim() : '';
+    const bateStatus = !acStatusAtivo || statusItem === acStatusAtivo;
+    const bate = bateTexto && bateStatus;
     tr.style.display = bate ? '' : 'none';
     if (bate) visiveis++;
   });
   // Esconde o bloco da categoria inteira se nenhum item dela estiver visível
+  const filtroAtivo = termo || acStatusAtivo;
   document.querySelectorAll('#ac-lista .ac-forn').forEach(grupo => {
     const temVisivel = [...grupo.querySelectorAll('tr[data-mid]')].some(tr => tr.style.display !== 'none');
-    grupo.style.display = (termo && !temVisivel) ? 'none' : '';
+    grupo.style.display = (filtroAtivo && !temVisivel) ? 'none' : '';
   });
-  contador.textContent = termo ? `— ${visiveis} encontrado(s)` : '';
+  contador.textContent = filtroAtivo ? `— ${visiveis} encontrado(s)` : '';
 }
 
 function acRender(){
@@ -2578,6 +2610,31 @@ async function acSalvarFornecedor(materialId, fornecedorId){
 
 // Alterna o critério de alerta do item: por mínimo cadastrado (padrão) ou por consumo do mês anterior
 // (útil para itens de uso irregular, onde comparar com o mínimo fixo não faz sentido)
+// Cadastra um material que ainda não existe no catálogo, direto da aba Comprar
+// (mesma lógica da aba Inventário, só que mais rápida — via prompts)
+async function acCadastrarNovoMaterial(){
+  const nome = prompt('Nome do novo material:');
+  if(!nome || !nome.trim()) return;
+  const minimoStr = prompt('Estoque mínimo (pode deixar em branco e ajustar depois):', '0');
+  const minimo = parseFloat(minimoStr) || 0;
+  try{
+    const r = await sbFetch('materiais','POST',{
+      nome: nome.trim(), estoque_minimo: minimo, ativo:true, exibir_dashboard:true,
+    });
+    if(!r || !r.length){ toast('⚠ Sem permissão para cadastrar (RLS). Rode o GRANT INSERT em materiais.','erro'); return; }
+    catalogoMateriais.push({id:r[0].id, nome:nome.trim()});
+    todosOsMateriais.push(nome.trim());
+    // Adiciona à lista visível como "incluído manualmente", com saldo 0 (recém-cadastrado, sem estoque ainda)
+    acManuais.push({
+      material_id: r[0].id, material: nome.trim(), saldo_total: 0, estoque_minimo: minimo,
+      alerta_compra: minimo>0 ? 'URGENTE' : '', consumo_mes_atual:0, consumo_mes_anterior:0,
+      fornecedor_padrao:null, uc_data:null,
+    });
+    acRender();
+    toast(nome.trim() + ' cadastrado e adicionado à lista ✓','sucesso');
+  }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
+}
+
 async function acAlternarCriterio(materialId, atualEraPorConsumo){
   const novoValor = !atualEraPorConsumo;
   try{
