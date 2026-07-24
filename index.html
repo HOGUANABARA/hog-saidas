@@ -316,6 +316,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
   <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
   <div class="aba" id="aba-btn-decisao" onclick="trocarAba('decisao')">📋 Decisão</div>
+  <div class="aba" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
 </div>
 
 <div class="container">
@@ -679,6 +680,29 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   </div>
 </div>
 
+<!-- ═══ ABA HISTÓRICO (COTAÇÕES FECHADAS) ═══ -->
+<style>
+  #aba-historico .hi-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:12px;overflow:hidden}
+  #aba-historico .hi-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;background:var(--cinza-1)}
+  #aba-historico .hi-head:hover{background:var(--azul-claro)}
+  #aba-historico .hi-titulo{font-size:14px;font-weight:700;color:var(--cinza-5)}
+  #aba-historico .hi-meta{font-size:11px;color:var(--cinza-4);margin-top:3px}
+  #aba-historico .hi-seta{font-size:12px;color:var(--cinza-4);transition:transform .2s}
+  #aba-historico .hi-head.aberto .hi-seta{transform:rotate(90deg)}
+  #aba-historico .hi-corpo{display:none;padding:14px 16px}
+  #aba-historico .hi-corpo.aberto{display:block}
+  #aba-historico table{width:100%;border-collapse:collapse;font-size:12px}
+  #aba-historico thead th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)}
+  #aba-historico tbody td{padding:6px 8px;border-bottom:1px solid var(--cinza-1)}
+  #aba-historico .hi-forn{font-weight:600;color:var(--verde)}
+  #aba-historico .hi-total{text-align:right;font-weight:700;font-size:13px;margin-top:10px;color:var(--cinza-5)}
+  #aba-historico .hi-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-historico .hi-sem{color:var(--cinza-3);font-style:italic;font-size:11px}
+</style>
+<div id="aba-historico" class="container" style="display:none">
+  <div id="hi-lista"><div class="hi-empty">Carregando histórico...</div></div>
+</div>
+
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
   <div class="modal-box">
@@ -744,8 +768,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -1975,7 +1999,7 @@ async function enviarDiversas() {
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
   // Abas Aprovação, Comprar e Cotação protegidas por senha (liberadas uma vez por dispositivo)
-  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
@@ -1988,16 +2012,19 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-comprar').classList.toggle('ativa', aba==='comprar');
   document.getElementById('aba-btn-cotacao').classList.toggle('ativa', aba==='cotacao');
   document.getElementById('aba-btn-decisao').classList.toggle('ativa', aba==='decisao');
+  document.getElementById('aba-btn-historico').classList.toggle('ativa', aba==='historico');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
   document.getElementById('aba-comprar').style.display   = aba==='comprar'   ? '' : 'none';
   document.getElementById('aba-cotacao').style.display   = aba==='cotacao'   ? '' : 'none';
   document.getElementById('aba-decisao').style.display   = aba==='decisao'   ? '' : 'none';
+  document.getElementById('aba-historico').style.display  = aba==='historico'  ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='cotacao')   { coCarregar(); }
   if (aba==='decisao')   { deCarregar(); }
+  if (aba==='historico') { hiCarregarLista(); }
 }
 
 function limparForm() {
@@ -2770,12 +2797,102 @@ async function deConfirmarCompra(){
       });
       // marca a opção escolhida e o item decidido (histórico)
       await sbFetch(`cotacao_opcoes?id=eq.${o.id}`,'PATCH',{ escolhida:true });
-      await sbFetch(`cotacao_itens?id=eq.${it.item_id}`,'PATCH',{ opcao_escolhida_id:o.id });
+      await sbFetch(`cotacao_itens?id=eq.${it.item_id}`,'PATCH',{ opcao_escolhida_id:o.id, qtd_desejada: it.qtdComprar });
     }
     await sbFetch(`cotacoes?id=eq.${deCotacaoId}`,'PATCH',{ status:'fechada' });
     toast(`Compra confirmada — ${escolhidos.length} ordem(ns) de compra criada(s) ✓`,'sucesso');
     deCarregar();
   }catch(e){ toast('Erro ao confirmar compra: '+e.message,'erro'); }
+}
+</script>
+
+<script>
+// ═══ ABA HISTÓRICO — cotações fechadas, só leitura (nada aqui pode ser apagado) ═══
+let hiCotacoes = [];
+let hiDetalhes = {}; // cotacao_id -> itens carregados
+
+function hiData(d){ if(!d) return '—'; return new Date(d).toLocaleString('pt-BR'); }
+function hiMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+
+async function hiCarregarLista(){
+  document.getElementById('hi-lista').innerHTML = '<div class="hi-empty">Carregando histórico...</div>';
+  try{
+    const rows = await sbFetch("cotacoes?select=id,criado_por,created_at,updated_at&status=eq.fechada&order=id.desc&limit=100");
+    hiCotacoes = rows || [];
+    hiRenderizarLista();
+  }catch(e){
+    document.getElementById('hi-lista').innerHTML = '<div class="hi-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+
+function hiRenderizarLista(){
+  const div = document.getElementById('hi-lista');
+  if(!hiCotacoes.length){
+    div.innerHTML = '<div class="hi-empty">Nenhuma cotação fechada ainda. Cotações confirmadas na aba Decisão aparecem aqui.</div>';
+    return;
+  }
+  div.innerHTML = hiCotacoes.map(c => `
+    <div class="hi-card">
+      <div class="hi-head" id="hi-head-${c.id}" onclick="hiToggle(${c.id})">
+        <div>
+          <div class="hi-titulo">Cotação #${c.id} — ${c.criado_por || 'sem nome'}</div>
+          <div class="hi-meta">Fechada em: ${hiData(c.updated_at || c.created_at)}</div>
+        </div>
+        <span class="hi-seta">▶</span>
+      </div>
+      <div class="hi-corpo" id="hi-corpo-${c.id}"><div class="hi-empty" style="padding:16px">Carregando itens...</div></div>
+    </div>
+  `).join('');
+}
+
+async function hiToggle(id){
+  const head = document.getElementById('hi-head-'+id);
+  const corpo = document.getElementById('hi-corpo-'+id);
+  const abrindo = !corpo.classList.contains('aberto');
+  head.classList.toggle('aberto', abrindo);
+  corpo.classList.toggle('aberto', abrindo);
+  if(abrindo && !hiDetalhes[id]) await hiCarregarDetalhe(id);
+}
+
+async function hiCarregarDetalhe(id){
+  const corpo = document.getElementById('hi-corpo-'+id);
+  try{
+    const its = await sbFetch(`cotacao_itens?select=id,material_nome,qtd_desejada,opcao_escolhida_id,cotacao_opcoes(*)&cotacao_id=eq.${id}&order=id.asc`);
+    hiDetalhes[id] = its || [];
+    hiRenderizarDetalhe(id);
+  }catch(e){
+    corpo.innerHTML = '<div class="hi-empty" style="color:var(--vermelho)">Erro ao carregar itens: '+e.message+'</div>';
+  }
+}
+
+function hiRenderizarDetalhe(id){
+  const corpo = document.getElementById('hi-corpo-'+id);
+  const its = hiDetalhes[id] || [];
+  if(!its.length){ corpo.innerHTML = '<div class="hi-empty">Sem itens registrados.</div>'; return; }
+
+  let total = 0;
+  const linhas = its.map(it => {
+    const escolhida = (it.cotacao_opcoes||[]).find(o => o.id === it.opcao_escolhida_id);
+    const fornNome = escolhida ? (escolhida.fornecedor_nome || '—') : null;
+    const unit = (escolhida && escolhida.preco_total!=null && escolhida.qtd_embalagem) ? escolhida.preco_total/escolhida.qtd_embalagem : (escolhida?.preco_unitario ?? null);
+    const sub = (unit!=null && it.qtd_desejada) ? unit * it.qtd_desejada : null;
+    if(sub) total += sub;
+    return `<tr>
+      <td>${it.material_nome}</td>
+      <td>${it.qtd_desejada ?? '—'}</td>
+      <td>${escolhida ? `<span class="hi-forn">${fornNome}</span>${escolhida.marca?' · '+escolhida.marca:''}` : '<span class="hi-sem">nenhuma opção escolhida</span>'}</td>
+      <td>${unit!=null ? hiMoney(unit)+'/un' : '—'}</td>
+      <td style="text-align:right;font-weight:600">${sub!=null ? hiMoney(sub) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  corpo.innerHTML = `
+    <table>
+      <thead><tr><th>Item</th><th>Qtd</th><th>Fornecedor escolhido</th><th>Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div class="hi-total">Total da cotação: ${hiMoney(total)}</div>
+  `;
 }
 </script>
 
