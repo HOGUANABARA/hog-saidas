@@ -35,7 +35,8 @@ header h1 { font-size: 18px; font-weight: 600; }
 header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .badge-perfil { background: rgba(255,255,255,0.15); border-radius: 20px; padding: 6px 14px; font-size: 13px; }
 
-.abas { background: var(--branco); border-bottom: 2px solid var(--cinza-2); display: flex; padding: 0 32px; }
+.abas { background: var(--branco); border-bottom: 2px solid var(--cinza-2); display: flex; padding: 0 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.abas .aba { flex-shrink: 0; }
 .aba { padding: 14px 20px; font-size: 14px; font-weight: 500; color: var(--cinza-4); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
 .aba.ativa { color: var(--azul); border-bottom-color: var(--azul); }
 
@@ -297,6 +298,38 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   .comp-header img { display: block !important; }
 }
 
+/* ═══ RESPONSIVIDADE MOBILE ═══ */
+@media (max-width: 760px) {
+  header { padding: 12px 16px; }
+  header h1 { font-size: 15px; }
+  .abas { padding: 0 8px; }
+  .aba { padding: 12px 14px; font-size: 13px; }
+  .container { padding: 16px 10px; }
+  .card { padding: 16px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .tipo-row .grid-3 { grid-template-columns: 1fr; }
+  .comp-periodo { grid-template-columns: 1fr; }
+  .comp-gerais-grid { grid-template-columns: 1fr 1fr; }
+  .saidas-gerais-grid { grid-template-columns: 1fr 1fr; }
+  .modal-box { max-width: 100%; }
+  .rodape-form { flex-direction: column; align-items: stretch; gap: 10px; }
+  .rodape-form > div { width: 100%; }
+  .rodape-form button { width: 100%; }
+  /* Tabelas com muitas colunas ganham rolagem lateral própria, sem estourar a tela */
+  .ac-forn, .co-item, .de-item, .rc-grupo, .hi-card, #ac-lista, #co-corpo, #de-corpo {
+    overflow-x: auto;
+  }
+  #aba-comprar table, #aba-cotacao table, #aba-decisao table, #aba-receber table, #aba-historico table {
+    min-width: 480px;
+  }
+  .co-ops, .de-ops { grid-template-columns: 1fr !important; }
+  .ac-search input, .co-search input { font-size: 16px; } /* evita zoom automático no iOS */
+  .item-pendente { grid-template-columns: 1fr; }
+  .item-pendente .acoes { flex-direction: row; margin-top: 10px; }
+  .co-bar, .de-bar, .rc-topo, .ac-search { flex-direction: column; align-items: stretch; }
+  .co-bar button, .de-bar button { width: 100%; }
+}
+
 </style>
 </head>
 <body>
@@ -317,6 +350,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
   <div class="aba" id="aba-btn-decisao" onclick="trocarAba('decisao')">📋 Decisão</div>
   <div class="aba" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
+  <div class="aba" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
 </div>
 
 <div class="container">
@@ -615,6 +649,12 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 <div id="aba-cotacao" class="container" style="display:none">
   <div class="co-bar">
     <span class="co-status" id="co-status">Rascunho</span>
+    <span style="font-size:12px;color:var(--cinza-4);font-weight:700;display:flex;align-items:center;gap:6px">
+      👤 Responsável pelo orçamento:
+      <select id="co-criado-por" style="font-size:12px;font-weight:700;font-family:var(--fonte);padding:5px 8px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul)" onchange="localStorage.setItem('hog_cotacao_criador', this.value)">
+        <option value="">Selecione...</option>
+      </select>
+    </span>
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
     <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens do alerta</button>
@@ -703,6 +743,52 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div id="hi-lista"><div class="hi-empty">Carregando histórico...</div></div>
 </div>
 
+<!-- ═══ ABA RECEBER NF (ENTRADA NO ESTOQUE) ═══ -->
+<style>
+  #aba-receber .rc-topo{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #aba-receber .rc-topo label{font-size:12px;font-weight:700;color:var(--cinza-4)}
+  #aba-receber .rc-topo select{font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)}
+  #aba-receber .rc-grupo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-receber .rc-ghead{padding:12px 16px;background:var(--cinza-5);color:#fff;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  #aba-receber .rc-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+  #aba-receber .rc-nfform{padding:12px 16px;background:var(--azul-claro);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+  #aba-receber .rc-nfform .campo label{font-size:10px}
+  #aba-receber .rc-nfform .campo input{padding:6px 8px;font-size:12px}
+  #aba-receber table{width:100%;border-collapse:collapse;font-size:12px}
+  #aba-receber thead th{text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-receber tbody td{padding:7px 10px;border-bottom:1px solid var(--cinza-1);vertical-align:middle}
+  #aba-receber .rc-qtd,#aba-receber .rc-val{width:75px;border:1.5px solid var(--cinza-2);border-radius:5px;padding:5px 6px;font-size:12px;text-align:right}
+  #aba-receber .rc-check{width:16px;height:16px}
+  #aba-receber .rc-rodape{padding:12px 16px;display:flex;justify-content:flex-end}
+  #aba-receber .rc-confirmar{background:var(--verde);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-receber .rc-confirmar:hover{background:#155f33}
+  #aba-receber .rc-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-receber .rc-nfs-recentes{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px 18px;margin-top:20px}
+  #aba-receber .rc-nfs-recentes h3{font-size:14px;margin-bottom:10px}
+  #aba-receber .rc-status-entregue{color:var(--verde);font-weight:700}
+  #aba-receber .rc-status-aguardando{color:#B7950B;font-weight:700}
+  #aba-receber .rc-btn-problema{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer}
+  #aba-receber .rc-btn-reabrir{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-receber .rc-btn-devolver{background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-receber .rc-pausados{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:4px 16px 12px;margin-top:10px}
+  #aba-receber .rc-pausados summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:700;color:var(--cinza-4)}
+  #aba-receber .rc-count-pausados{background:var(--cinza-2);border-radius:20px;padding:1px 8px;font-size:11px;margin-left:6px}
+</style>
+<div id="aba-receber" class="container" style="display:none">
+  <div class="rc-topo">
+    <label>👤 Registrado por</label>
+    <select id="rc-registrado-por" onchange="localStorage.setItem('hog_rc_registrante', this.value)">
+      <option value="">Selecione...</option>
+    </select>
+    <button onclick="rcRegistrarExtravio()" style="margin-left:auto;background:#FDEDEC;color:var(--vermelho);border:1.5px solid var(--vermelho);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">⚠️ Registrar extravio/perda</button>
+  </div>
+  <div id="rc-corpo"><div class="rc-empty">Carregando pedidos pendentes...</div></div>
+  <div class="rc-nfs-recentes">
+    <h3>📄 Notas fiscais recentes</h3>
+    <div id="rc-nfs-lista"><div class="rc-empty" style="padding:20px">Carregando...</div></div>
+  </div>
+</div>
+
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
   <div class="modal-box">
@@ -768,8 +854,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -1999,7 +2085,7 @@ async function enviarDiversas() {
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
   // Abas Aprovação, Comprar e Cotação protegidas por senha (liberadas uma vez por dispositivo)
-  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'receber') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
@@ -2013,6 +2099,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-cotacao').classList.toggle('ativa', aba==='cotacao');
   document.getElementById('aba-btn-decisao').classList.toggle('ativa', aba==='decisao');
   document.getElementById('aba-btn-historico').classList.toggle('ativa', aba==='historico');
+  document.getElementById('aba-btn-receber').classList.toggle('ativa', aba==='receber');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
@@ -2020,11 +2107,13 @@ function trocarAba(aba) {
   document.getElementById('aba-cotacao').style.display   = aba==='cotacao'   ? '' : 'none';
   document.getElementById('aba-decisao').style.display   = aba==='decisao'   ? '' : 'none';
   document.getElementById('aba-historico').style.display  = aba==='historico'  ? '' : 'none';
+  document.getElementById('aba-receber').style.display    = aba==='receber'    ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='cotacao')   { coCarregar(); }
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
+  if (aba==='receber')   { rcCarregar(); }
 }
 
 function limparForm() {
@@ -2065,6 +2154,30 @@ window.addEventListener('load', () => {
   const ultimoNome = localStorage.getItem('hog_registrante');
   if (ultimoNome && EQUIPE.includes(ultimoNome)) { selReg.value = ultimoNome; selRegDiv.value = ultimoNome; }
   document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
+
+  // Campo próprio da aba Cotação — separado do "quem está registrando" das saídas
+  const selCotCriador = document.getElementById('co-criado-por');
+  if (selCotCriador) {
+    for (const nome of EQUIPE) {
+      const opt = document.createElement('option');
+      opt.value = nome; opt.textContent = nome;
+      selCotCriador.appendChild(opt);
+    }
+    const ultimoCriador = localStorage.getItem('hog_cotacao_criador');
+    if (ultimoCriador && EQUIPE.includes(ultimoCriador)) selCotCriador.value = ultimoCriador;
+  }
+
+  // Campo próprio da aba Receber NF — também separado, evita repetir o bug do nome errado
+  const selRcReg = document.getElementById('rc-registrado-por');
+  if (selRcReg) {
+    for (const nome of EQUIPE) {
+      const opt = document.createElement('option');
+      opt.value = nome; opt.textContent = nome;
+      selRcReg.appendChild(opt);
+    }
+    const ultimoRc = localStorage.getItem('hog_rc_registrante');
+    if (ultimoRc && EQUIPE.includes(ultimoRc)) selRcReg.value = ultimoRc;
+  }
 
   // Prioridade 1: configuração fixa embutida no código
   if (CONFIG_FIXA.url && CONFIG_FIXA.key) {
@@ -2536,7 +2649,7 @@ async function coSalvar(){
   try{
     // cria a cotação se ainda for rascunho
     if(coCotacaoId===null){
-      const nome=(document.getElementById('sel-registrante')||{}).value||'';
+      const nome=(document.getElementById('co-criado-por')||{}).value||'';
       const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome});
       if(!c||!c.length) throw new Error('não retornou a cotação criada');
       coCotacaoId=c[0].id;
@@ -2608,6 +2721,7 @@ function coCopiar(id){
 let deCotacaoId = null;
 let deItens = [];          // [{item_id, material_id, nome, qtd_desejada, opcoes:[...], escolhidaSlot, qtdComprar}]
 let deReferencias = {};    // material_id -> linha fresca da vw_alerta_compras (saldo, última compra...)
+let deErroSaldos = null;   // mensagem de erro visível se a busca de saldo falhar (nunca falha em silêncio)
 
 function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function deData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
@@ -2656,10 +2770,14 @@ async function deAtualizarSaldos(silencioso){
     const rows = await sbFetch(`vw_alerta_compras?select=material_id,material,saldo_total,estoque_minimo,uc_data,uc_fornecedor,uc_valor_unitario,uc_qtd,uc_dentro_2meses&material_id=in.(${ids})`);
     deReferencias = {};
     for(const r of (rows||[])) deReferencias[r.material_id] = r;
+    deErroSaldos = null;
     deRenderizar();
     if(!silencioso) toast('Saldos atualizados agora ✓','sucesso');
   }catch(e){
-    if(!silencioso) toast('Erro ao atualizar saldos: '+e.message,'erro');
+    // Não trava a tela: mostra os itens mesmo sem saldo fresco, com aviso visível do erro real
+    deErroSaldos = e.message;
+    deRenderizar();
+    toast('⚠️ Erro ao buscar saldo: ' + e.message, 'erro');
   }
 }
 
@@ -2713,6 +2831,15 @@ function deRenderizar(){
   const corpo = document.getElementById('de-corpo');
   if(!deItens.length){ corpo.innerHTML = '<div class="de-empty">Nenhum item nesta cotação.</div>'; document.getElementById('de-resumo-box').style.display='none'; return; }
 
+  let html = '';
+  if(deErroSaldos){
+    html += `<div style="background:#FDEDEC;border:1.5px solid var(--vermelho);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--vermelho)">
+      ⚠️ <b>Não foi possível buscar o saldo atualizado.</b> Os itens abaixo são mostrados sem saldo/referência de compra.<br>
+      <span style="font-size:11px;font-family:monospace">${deErroSaldos}</span><br>
+      <span style="font-size:11px">Provável causa: falta rodar o SQL que adiciona <code>uc_qtd</code> à view <code>vw_alerta_compras</code>.</span>
+    </div>`;
+  }
+
   // Agrupar visualmente por "grupo de orçamento" (mesmos grupos definidos na aba Cotação)
   const ordemGrupos = [];
   const porGrupo = {};
@@ -2721,7 +2848,6 @@ function deRenderizar(){
     if(!porGrupo[g]){ porGrupo[g]=[]; ordemGrupos.push(g); }
     porGrupo[g].push(it);
   }
-  let html = '';
   for(const g of ordemGrupos){
     html += `<div class="co-grupo-head" style="background:var(--azul-medio)"><span>🗂️ ${g}</span><span class="co-grupo-count">${porGrupo[g].length} item(ns)</span></div>`;
     html += porGrupo[g].map(deCardItem).join('');
@@ -2893,6 +3019,325 @@ function hiRenderizarDetalhe(id){
     </table>
     <div class="hi-total">Total da cotação: ${hiMoney(total)}</div>
   `;
+}
+</script>
+
+<script>
+// ═══ ABA RECEBER NF — fecha o ciclo: ordem pendente -> NF -> sobe estoque ═══
+let rcOrdens = [];       // ordens_compra com situacao='PENDENTE'
+let rcNfsRecentes = [];
+
+function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
+function rcNomeFornecedor(id){ if(!id) return '(sem fornecedor)'; const f = coFornecedores.find(x=>x.id===id); return f ? f.nome : ('fornecedor #'+id); }
+function rcMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+function rcMesRef(dataStr){
+  if(!dataStr) return '';
+  const d = new Date(dataStr+'T12:00:00');
+  const mes = d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase();
+  return mes + '/' + String(d.getFullYear()).slice(2);
+}
+
+async function rcCarregar(){
+  document.getElementById('rc-corpo').innerHTML = '<div class="rc-empty">Carregando pedidos pendentes...</div>';
+  try{
+    if(!catalogoMateriais.length){
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+      todosOsMateriais = catalogoMateriais.map(m=>m.nome);
+    }
+    if(!coFornecedores.length){
+      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    }
+    rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&order=id.desc")) || [];
+    rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
+    rcRenderizar();
+    rcCarregarNfsRecentes();
+  }catch(e){
+    document.getElementById('rc-corpo').innerHTML = '<div class="rc-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+
+let rcPausados = [];
+
+function rcRenderizar(){
+  const corpo = document.getElementById('rc-corpo');
+  if(!rcOrdens.length){
+    corpo.innerHTML = '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de confirmados na aba 📋 Decisão.</span></div>';
+    corpo.innerHTML += rcHtmlPausados();
+    return;
+  }
+  // Agrupar por fornecedor (usa fornecedor_compra_id, cai para fornecedor_id se vazio)
+  const grupos = {};
+  for(const o of rcOrdens){
+    const fid = o.fornecedor_compra_id || o.fornecedor_id || 0;
+    (grupos[fid] = grupos[fid] || []).push(o);
+  }
+  corpo.innerHTML = Object.keys(grupos).map(fid => {
+    const itens = grupos[fid];
+    const nomeForn = rcNomeFornecedor(Number(fid) || null);
+    const linhas = itens.map(o => {
+      const qtdPadrao = o.qtd_comprada ?? o.qtd_a_comprar ?? '';
+      const valPadrao = o.valor_unitario ?? o.ultimo_valor_pago ?? '';
+      return `<tr data-ordem="${o.id}">
+        <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}"></td>
+        <td>${rcNomeMaterial(o.material_id)}</td>
+        <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
+        <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd"></td>
+        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un"></td>
+        <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="rc-grupo" data-forn="${fid}">
+      <div class="rc-ghead">${nomeForn} <span class="rc-count">${itens.length} pedido(s)</span></div>
+      <div class="rc-nfform">
+        <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${fid}"></div>
+        <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${fid}"></div>
+        <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${fid}" value="${new Date().toISOString().split('T')[0]}"></div>
+        <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${fid}" value="0"></div>
+        <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${fid}"></div>
+      </div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th></th><th>Material</th><th style="text-align:center">Saldo</th><th>Qtd recebida</th><th>Valor unit.</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      </div>
+      <div class="rc-rodape">
+        <button class="rc-confirmar" onclick="rcConfirmarNF('${fid}')">✔ Confirmar recebimento desta NF</button>
+      </div>
+    </div>`;
+  }).join('') + rcHtmlPausados();
+}
+
+function rcHtmlPausados(){
+  if(!rcPausados.length) return '';
+  const linhas = rcPausados.map(o => `<tr>
+    <td>${rcNomeMaterial(o.material_id)}</td>
+    <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
+    <td style="font-size:11px;color:var(--cinza-4)">${o.observacao||'—'}</td>
+    <td><button class="rc-btn-reabrir" onclick="rcReabrirPedido(${o.id})">↻ Reabrir</button></td>
+  </tr>`).join('');
+  return `<details class="rc-pausados">
+    <summary>⏸️ Pedidos pausados / cancelados <span class="rc-count-pausados">${rcPausados.length}</span></summary>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Material</th><th>Fornecedor</th><th>Motivo</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table></div>
+  </details>`;
+}
+
+async function rcMarcarProblema(ordemId){
+  const motivo = prompt('Motivo (ex: fornecedor não entregou, cancelado, item descontinuado):');
+  if(motivo === null) return;
+  if(!motivo.trim()){ toast('Informe um motivo.','erro'); return; }
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
+      situacao: 'NAO COMPRAR AGORA',
+      observacao: motivo.trim(),
+    });
+    toast('Pedido marcado e removido da lista de pendentes.','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rcReabrirPedido(ordemId){
+  if(!confirm('Reabrir este pedido? Ele volta para a lista de pendentes, aguardando NF.')) return;
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{ situacao: 'PENDENTE', observacao: null });
+    toast('Pedido reaberto.','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rcConfirmarNF(fid){
+  const registrante = document.getElementById('rc-registrado-por').value;
+  if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
+
+  const grupo = document.querySelector(`.rc-grupo[data-forn="${fid}"]`);
+  const linhasMarcadas = [...grupo.querySelectorAll('tr[data-ordem]')].filter(tr => {
+    const chk = tr.querySelector('.rc-check'); return chk && chk.checked;
+  });
+  if(!linhasMarcadas.length){ toast('Marque ao menos um item recebido nesta NF.','erro'); return; }
+
+  const numeroNf = document.getElementById(`rc-nf-num-${fid}`).value.trim();
+  const dataEmissao = document.getElementById(`rc-nf-emissao-${fid}`).value || null;
+  const dataEntrega = document.getElementById(`rc-nf-entrega-${fid}`).value || null;
+  const frete = parseFloat(document.getElementById(`rc-nf-frete-${fid}`).value) || 0;
+  const obs = document.getElementById(`rc-nf-obs-${fid}`).value.trim();
+
+  const itensParaGravar = [];
+  let valorTotal = 0;
+  for(const tr of linhasMarcadas){
+    const ordemId = Number(tr.dataset.ordem);
+    const ordem = rcOrdens.find(o=>o.id===ordemId);
+    const qtd = parseFloat(document.getElementById(`rc-qtd-${ordemId}`).value);
+    const val = parseFloat(document.getElementById(`rc-val-${ordemId}`).value);
+    if(!qtd || qtd<=0){ toast('Informe a quantidade recebida de todos os itens marcados.','erro'); return; }
+    if(isNaN(val) || val<0){ toast('Informe o valor unitário de todos os itens marcados.','erro'); return; }
+    const item = qtd*val;
+    valorTotal += item;
+    itensParaGravar.push({ ordem, qtd, val, item });
+  }
+  valorTotal += frete;
+
+  if(!confirm(`Confirmar recebimento de ${itensParaGravar.length} item(ns) — NF ${numeroNf||'(sem número)'} — total ${rcMoney(valorTotal)}?`)) return;
+
+  try{
+    // 1. Cabeçalho da NF
+    const nfArr = await sbFetch('notas_fiscais','POST',{
+      fornecedor_id: Number(fid) || null,
+      numero_nf: numeroNf || null,
+      mes_referencia: rcMesRef(dataEntrega || dataEmissao),
+      data_emissao: dataEmissao,
+      data_entrega: dataEntrega,
+      valor_total: valorTotal,
+      frete: frete,
+      vencimentos_obs: obs || null,
+      status: dataEntrega ? 'ENTREGUE' : 'AGUARDANDO ENTREGA',
+    });
+    const nfId = nfArr && nfArr[0] && nfArr[0].id;
+    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
+    const localId = localRows[0].id;
+
+    // 2. Item por item: nf_itens -> movimentacao (pendente -> aprovada, sobe estoque) -> atualiza ordem
+    for(const {ordem, qtd, val, item} of itensParaGravar){
+      const itemArr = await sbFetch('nf_itens','POST',{
+        nota_fiscal_id: nfId, material_id: ordem.material_id,
+        qtd: qtd, valor_unitario: val, valor_item: item,
+      });
+      const nfItemId = itemArr && itemArr[0] && itemArr[0].id;
+
+      const movArr = await sbFetch('movimentacoes','POST',{
+        tipo: 'ENTRADA_COMPRA', material_id: ordem.material_id, local_id: localId,
+        qtd: qtd, valor_unitario: val, nf_item_id: nfItemId,
+        fornecedor_id: Number(fid) || null,
+        aprovado: false, registrado_por: registrante,
+        observacao: 'Recebimento NF ' + (numeroNf||'—'),
+      });
+      const movId = movArr && movArr[0] && movArr[0].id;
+      // Aprova em seguida — só a mudança de aprovado (via UPDATE) dispara o trigger que soma o estoque
+      await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+
+      // Recebimento parcial: se veio menos do que foi pedido, separa o restante como novo pedido pendente
+      const qtdPedidaOriginal = ordem.qtd_a_comprar ?? ordem.qtd_comprada ?? qtd;
+      const restante = qtdPedidaOriginal - qtd;
+      if (restante > 0.001) {
+        await sbFetch('ordens_compra','POST',{
+          material_id: ordem.material_id, fornecedor_id: ordem.fornecedor_id, fornecedor_compra_id: ordem.fornecedor_compra_id,
+          status: ordem.status, situacao: 'PENDENTE',
+          saldo_no_momento: ordem.saldo_no_momento, estoque_minimo: ordem.estoque_minimo,
+          qtd_a_comprar: restante, valor_unitario: val, ultimo_valor_pago: val,
+          observacao: 'Saldo remanescente — NF ' + (numeroNf||'—') + ' entregou apenas ' + qtd + ' de ' + qtdPedidaOriginal,
+        });
+      }
+
+      await sbFetch(`ordens_compra?id=eq.${ordem.id}`,'PATCH',{
+        situacao: 'NF EMITIDA', qtd_comprada: qtd, valor_unitario: val, data_pedido: dataEntrega || dataEmissao,
+      });
+    }
+
+    toast(`NF registrada — ${itensParaGravar.length} item(ns) receb​ido(s), estoque atualizado ✓`,'sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro ao registrar NF: '+e.message,'erro'); }
+}
+
+async function rcCarregarNfsRecentes(){
+  try{
+    rcNfsRecentes = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=15')) || [];
+    const div = document.getElementById('rc-nfs-lista');
+    if(!rcNfsRecentes.length){ div.innerHTML = '<div class="rc-empty" style="padding:20px">Nenhuma NF registrada ainda.</div>'; return; }
+    div.innerHTML = `<div style="overflow-x:auto"><table>
+      <thead><tr><th>NF</th><th>Fornecedor</th><th>Emissão</th><th>Entrega</th><th style="text-align:right">Valor</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rcNfsRecentes.map(nf => `<tr>
+        <td>${nf.numero_nf||'—'}</td>
+        <td>${rcNomeFornecedor(nf.fornecedor_id)}</td>
+        <td>${nf.data_emissao ? nf.data_emissao.split('-').reverse().join('/') : '—'}</td>
+        <td>${nf.data_entrega ? nf.data_entrega.split('-').reverse().join('/') : '—'}</td>
+        <td style="text-align:right">${rcMoney(nf.valor_total)}</td>
+        <td class="${nf.status==='ENTREGUE'?'rc-status-entregue':'rc-status-aguardando'}">${nf.status}</td>
+        <td>${nf.status!=='DEVOLVIDO' ? `<button class="rc-btn-devolver" onclick="rcAbrirDevolucao(${nf.id})">↩️ Devolução</button>` : '<span style="color:var(--vermelho);font-size:11px">devolvida</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }catch(e){
+    document.getElementById('rc-nfs-lista').innerHTML = '<div class="rc-empty" style="color:var(--vermelho)">Erro: '+e.message+'</div>';
+  }
+}
+
+// ── DEVOLUÇÃO AO FORNECEDOR ────────────────────────────────────
+async function rcAbrirDevolucao(nfId){
+  try{
+    const itens = await sbFetch(`nf_itens?select=id,material_id,qtd,valor_unitario&nota_fiscal_id=eq.${nfId}`);
+    if(!itens || !itens.length){ toast('Esta NF não tem itens registrados.','erro'); return; }
+    const opcoes = itens.map((it,i) => `${i+1}) ${rcNomeMaterial(it.material_id)} — recebido: ${it.qtd}`).join('\\n');
+    const escolha = prompt(`Devolver qual item?\\n\\n${opcoes}\\n\\nDigite o número do item:`);
+    if(escolha === null) return;
+    const idx = parseInt(escolha) - 1;
+    if(isNaN(idx) || !itens[idx]){ toast('Item inválido.','erro'); return; }
+    const item = itens[idx];
+    const qtdDevolverStr = prompt(`Quantidade a devolver (recebido: ${item.qtd}):`, item.qtd);
+    if(qtdDevolverStr === null) return;
+    const qtdDevolver = parseFloat(qtdDevolverStr);
+    if(!qtdDevolver || qtdDevolver <= 0 || qtdDevolver > item.qtd){ toast('Quantidade inválida.','erro'); return; }
+    const motivo = prompt('Motivo da devolução:') || '';
+
+    const registrante = document.getElementById('rc-registrado-por').value;
+    if(!registrante){ toast('Selecione "Registrado por" no topo da aba antes de continuar.','erro'); return; }
+
+    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
+    const localId = localRows[0].id;
+    const movArr = await sbFetch('movimentacoes','POST',{
+      tipo: 'DEVOLUCAO', material_id: item.material_id, local_id: localId,
+      qtd: -qtdDevolver, valor_unitario: item.valor_unitario, nf_item_id: item.id,
+      aprovado: false, registrado_por: registrante,
+      observacao: 'Devolução — NF #'+nfId+(motivo?(' — '+motivo):''),
+    });
+    const movId = movArr && movArr[0] && movArr[0].id;
+    await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+
+    // Se devolveu tudo que veio nessa NF (considerando devoluções anteriores), marca a nota como devolvida
+    if (qtdDevolver >= item.qtd) {
+      await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status:'DEVOLVIDO' });
+    }
+    toast('Devolução registrada — estoque ajustado ✓','sucesso');
+    rcCarregarNfsRecentes();
+  }catch(e){ toast('Erro ao registrar devolução: '+e.message,'erro'); }
+}
+
+// ── EXTRAVIO / PERDA (ajuste avulso, sem precisar de NF) ───────
+async function rcRegistrarExtravio(){
+  const registrante = document.getElementById('rc-registrado-por').value;
+  if(!registrante){ toast('Selecione "Registrado por" no topo da aba primeiro.','erro'); return; }
+  const termo = prompt('Nome do material extraviado/perdido (busca):');
+  if(!termo) return;
+  const achados = (todosOsMateriais||[]).filter(n => normNome(n).includes(normNome(termo))).slice(0,10);
+  if(!achados.length){ toast('Nenhum material encontrado com esse nome.','erro'); return; }
+  let escolhaTxt = achados.map((n,i)=>`${i+1}) ${n}`).join('\\n');
+  const escolha = prompt(`Qual item?\\n\\n${escolhaTxt}\\n\\nDigite o número:`);
+  if(escolha === null) return;
+  const idx = parseInt(escolha) - 1;
+  if(isNaN(idx) || !achados[idx]){ toast('Escolha inválida.','erro'); return; }
+  const nomeMat = achados[idx];
+  const mat = resolverMaterial(nomeMat);
+  if(!mat){ toast('Material não encontrado no catálogo.','erro'); return; }
+  const qtdStr = prompt('Quantidade extraviada/perdida:');
+  if(qtdStr === null) return;
+  const qtd = parseFloat(qtdStr);
+  if(!qtd || qtd<=0){ toast('Quantidade inválida.','erro'); return; }
+  const motivo = prompt('Motivo (extravio, quebra, vencimento não detectado, etc.):') || 'não informado';
+
+  if(!confirm(`Confirmar baixa de ${qtd}x ${nomeMat} — motivo: ${motivo}?`)) return;
+  try{
+    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
+    const localId = localRows[0].id;
+    const movArr = await sbFetch('movimentacoes','POST',{
+      tipo: 'AJUSTE_INVENTARIO', material_id: mat.id, local_id: localId,
+      qtd: -qtd, aprovado: false, registrado_por: registrante,
+      observacao: 'Extravio/perda — ' + motivo,
+    });
+    const movId = movArr && movArr[0] && movArr[0].id;
+    await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+    toast('Baixa por extravio registrada — estoque ajustado ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 </script>
 
