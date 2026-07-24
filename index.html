@@ -349,6 +349,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
   <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
   <div class="aba" id="aba-btn-decisao" onclick="trocarAba('decisao')">📋 Decisão</div>
+  <div class="aba" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')">🔏 Aprovar Pedido</div>
   <div class="aba" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
   <div class="aba" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
 </div>
@@ -768,6 +769,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-receber .rc-status-entregue{color:var(--verde);font-weight:700}
   #aba-receber .rc-status-aguardando{color:#B7950B;font-weight:700}
   #aba-receber .rc-btn-problema{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer}
+  #aba-receber .rc-btn-editar{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer;font-family:var(--fonte);margin-left:4px}
   #aba-receber .rc-btn-reabrir{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-receber .rc-btn-devolver{background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-receber .rc-pausados{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:4px 16px 12px;margin-top:10px}
@@ -787,6 +789,25 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
     <h3>📄 Notas fiscais recentes</h3>
     <div id="rc-nfs-lista"><div class="rc-empty" style="padding:20px">Carregando...</div></div>
   </div>
+</div>
+
+<!-- ═══ ABA APROVAR PEDIDO (SEGUNDA CAMADA, ANTES DE ENTRAR NO ESTOQUE) ═══ -->
+<style>
+  #aba-aprovarpedido .ap-grupo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-aprovarpedido .ap-ghead{padding:12px 16px;background:#6f42c1;color:#fff;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  #aba-aprovarpedido .ap-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+  #aba-aprovarpedido table{width:100%;border-collapse:collapse;font-size:12px}
+  #aba-aprovarpedido thead th{text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-aprovarpedido tbody td{padding:8px 10px;border-bottom:1px solid var(--cinza-1);vertical-align:middle}
+  #aba-aprovarpedido .ap-btn-aprovar{background:var(--verde);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-aprovarpedido .ap-btn-editar{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;font-family:var(--fonte);margin-right:4px}
+  #aba-aprovarpedido .ap-btn-rejeitar{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;font-family:var(--fonte)}
+  #aba-aprovarpedido .ap-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-aprovarpedido .ap-obs{font-size:10px;color:var(--cinza-4);display:block;margin-top:2px}
+</style>
+<div id="aba-aprovarpedido" class="container" style="display:none">
+  <p style="font-size:12px;color:var(--cinza-4);margin-bottom:14px">🔏 Pedidos decididos que ainda não foram aprovados formalmente. Aprovar aqui libera o pedido para a etapa de Receber NF.</p>
+  <div id="ap-corpo"><div class="ap-empty">Carregando pedidos...</div></div>
 </div>
 
 <!-- MODAL REVISÃO -->
@@ -854,12 +875,15 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
 const SENHA_APROVACAO = 'hog2026';
+
+// Senha DIFERENTE para a aba Receber NF — só ela mexe no saldo de verdade (entrada de estoque)
+const SENHA_ENTRADA = 'hog2026entrada';
 
 // Equipe do Centro Cirúrgico — edite os nomes conforme necessário
 const EQUIPE = [
@@ -2084,12 +2108,20 @@ async function enviarDiversas() {
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
-  // Abas Aprovação, Comprar e Cotação protegidas por senha (liberadas uma vez por dispositivo)
-  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'receber') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  // Abas de compra (Comprar/Cotação/Decisão/Aprovar Pedido/Histórico) usam a senha de gestão
+  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'aprovarpedido') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
     localStorage.setItem('hog_aprov_ok', '1');
+    toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
+  }
+  // Receber NF usa senha PRÓPRIA e diferente — é a única etapa que efetivamente move o saldo
+  if (aba === 'receber' && localStorage.getItem('hog_entrada_ok') !== '1') {
+    const s = prompt('🔒 Área restrita — Entrada de Estoque.\n\nEsta etapa move o saldo real. Digite a senha de entrada:');
+    if (s === null) return;
+    if (s !== SENHA_ENTRADA) { toast('Senha incorreta.', 'erro'); return; }
+    localStorage.setItem('hog_entrada_ok', '1');
     toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
   }
   document.getElementById('aba-btn-registro').classList.toggle('ativa', aba==='registro');
@@ -2098,6 +2130,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-comprar').classList.toggle('ativa', aba==='comprar');
   document.getElementById('aba-btn-cotacao').classList.toggle('ativa', aba==='cotacao');
   document.getElementById('aba-btn-decisao').classList.toggle('ativa', aba==='decisao');
+  document.getElementById('aba-btn-aprovarpedido').classList.toggle('ativa', aba==='aprovarpedido');
   document.getElementById('aba-btn-historico').classList.toggle('ativa', aba==='historico');
   document.getElementById('aba-btn-receber').classList.toggle('ativa', aba==='receber');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
@@ -2106,10 +2139,12 @@ function trocarAba(aba) {
   document.getElementById('aba-comprar').style.display   = aba==='comprar'   ? '' : 'none';
   document.getElementById('aba-cotacao').style.display   = aba==='cotacao'   ? '' : 'none';
   document.getElementById('aba-decisao').style.display   = aba==='decisao'   ? '' : 'none';
+  document.getElementById('aba-aprovarpedido').style.display = aba==='aprovarpedido' ? '' : 'none';
   document.getElementById('aba-historico').style.display  = aba==='historico'  ? '' : 'none';
   document.getElementById('aba-receber').style.display    = aba==='receber'    ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
+  if (aba==='aprovarpedido') { apCarregar(); }
   if (aba==='cotacao')   { coCarregar(); }
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
@@ -2913,6 +2948,7 @@ async function deConfirmarCompra(){
         fornecedor_compra_id: o.fornecedor_id || null,
         status: 'COMPRAR',
         situacao: 'PENDENTE',
+        aprovado_pedido: false,
         saldo_no_momento: ref.saldo_total ?? null,
         estoque_minimo: ref.estoque_minimo ?? null,
         qtd_a_comprar: it.qtdComprar,
@@ -3047,7 +3083,7 @@ async function rcCarregar(){
     if(!coFornecedores.length){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
-    rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&order=id.desc")) || [];
+    rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
     rcRenderizar();
     rcCarregarNfsRecentes();
@@ -3083,7 +3119,8 @@ function rcRenderizar(){
         <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd"></td>
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un"></td>
-        <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button></td>
+        <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
+        <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
       </tr>`;
     }).join('');
 
@@ -3337,6 +3374,106 @@ async function rcRegistrarExtravio(){
     const movId = movArr && movArr[0] && movArr[0].id;
     await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
     toast('Baixa por extravio registrada — estoque ajustado ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+</script>
+
+<script>
+// ═══ ABA APROVAR PEDIDO — segunda camada antes de liberar para Receber NF ═══
+let apOrdens = [];
+
+// Editar quantidade/valor de um pedido pendente — usa em Aprovar Pedido E em Receber NF
+// (resolve o caso "fornecedor avisou que não vai conseguir entregar a quantidade combinada")
+async function ordemEditarQtd(ordemId, recarregarFn){
+  const ordem = (apOrdens.find(o=>o.id===ordemId)) || (typeof rcOrdens!=='undefined' ? rcOrdens.find(o=>o.id===ordemId) : null);
+  if(!ordem){ toast('Pedido não encontrado.','erro'); return; }
+  const qtdAtual = ordem.qtd_a_comprar ?? ordem.qtd_comprada ?? '';
+  const novaQtdStr = prompt('Nova quantidade para "'+rcNomeMaterial(ordem.material_id)+'":', qtdAtual);
+  if(novaQtdStr === null) return;
+  const novaQtd = parseFloat(novaQtdStr);
+  if(!novaQtd || novaQtd<=0){ toast('Quantidade inválida.','erro'); return; }
+  const valAtual = ordem.valor_unitario ?? '';
+  const novoValStr = prompt('Valor unitário (deixe igual se não mudou):', valAtual);
+  const novoVal = novoValStr!==null && novoValStr!=='' ? parseFloat(novoValStr) : ordem.valor_unitario;
+  const motivo = prompt('Motivo do ajuste (ex: fornecedor só tem 60 em estoque):') || '';
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
+      qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
+      observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
+    });
+    toast('Pedido ajustado ✓','sucesso');
+    if(typeof recarregarFn === 'function') recarregarFn();
+  }catch(e){ toast('Erro ao ajustar: '+e.message,'erro'); }
+}
+
+async function apCarregar(){
+  document.getElementById('ap-corpo').innerHTML = '<div class="ap-empty">Carregando pedidos...</div>';
+  try{
+    if(!catalogoMateriais.length){
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+      todosOsMateriais = catalogoMateriais.map(m=>m.nome);
+    }
+    if(!coFornecedores.length){
+      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    }
+    apOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc")) || [];
+    apRenderizar();
+  }catch(e){
+    document.getElementById('ap-corpo').innerHTML = '<div class="ap-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+
+function apRenderizar(){
+  const corpo = document.getElementById('ap-corpo');
+  if(!apOrdens.length){
+    corpo.innerHTML = '<div class="ap-empty">Nenhum pedido aguardando aprovação. ✓<br><span style="font-size:12px">Pedidos aparecem aqui assim que confirmados na aba 📋 Decisão.</span></div>';
+    return;
+  }
+  const grupos = {};
+  for(const o of apOrdens){
+    const fid = o.fornecedor_compra_id || o.fornecedor_id || 0;
+    (grupos[fid] = grupos[fid] || []).push(o);
+  }
+  corpo.innerHTML = Object.keys(grupos).map(fid => {
+    const itens = grupos[fid];
+    const nomeForn = rcNomeFornecedor(Number(fid) || null);
+    const linhas = itens.map(o => `<tr>
+      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
+      <td style="text-align:center">${o.qtd_a_comprar ?? '—'}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
+      <td style="text-align:right;font-weight:600">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
+      <td style="white-space:nowrap">
+        <button class="ap-btn-editar" onclick="ordemEditarQtd(${o.id}, apCarregar)">✎</button>
+        <button class="ap-btn-aprovar" onclick="apAprovar(${o.id})">✔ Aprovar</button>
+        <button class="ap-btn-rejeitar" onclick="apRejeitar(${o.id})">🚫</button>
+      </td>
+    </tr>`).join('');
+    return `<div class="ap-grupo">
+      <div class="ap-ghead">${nomeForn} <span class="ap-count">${itens.length} pedido(s)</span></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Material</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+}
+
+async function apAprovar(ordemId){
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{ aprovado_pedido:true });
+    toast('Pedido aprovado — liberado para Receber NF ✓','sucesso');
+    apCarregar();
+  }catch(e){ toast('Erro ao aprovar: '+e.message,'erro'); }
+}
+
+async function apRejeitar(ordemId){
+  const motivo = prompt('Motivo da rejeição:');
+  if(motivo===null) return;
+  if(!motivo.trim()){ toast('Informe um motivo.','erro'); return; }
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{ situacao:'NAO COMPRAR AGORA', observacao: motivo.trim() });
+    toast('Pedido rejeitado.','sucesso');
+    apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 </script>
