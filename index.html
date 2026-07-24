@@ -331,6 +331,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 }
 
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -352,6 +353,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')">🔏 Aprovar Pedido</div>
   <div class="aba" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
   <div class="aba" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
+  <div class="aba" id="aba-btn-inventario" onclick="trocarAba('inventario')">📐 Inventário</div>
 </div>
 
 <div class="container">
@@ -814,6 +816,110 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div id="ap-corpo"><div class="ap-empty">Carregando pedidos...</div></div>
 </div>
 
+<!-- ═══ ABA INVENTÁRIO / AJUSTES (MOVE SALDO — SENHA PRÓPRIA) ═══ -->
+<style>
+  #aba-inventario .inv-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px 18px;margin-bottom:18px}
+  #aba-inventario .inv-card h3{font-size:14px;margin-bottom:4px}
+  #aba-inventario .inv-sub{font-size:12px;color:var(--cinza-4);margin-bottom:14px}
+  #aba-inventario .inv-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  #aba-inventario .inv-campo{display:flex;flex-direction:column;gap:5px}
+  #aba-inventario .inv-campo label{font-size:11px;font-weight:700;color:var(--cinza-4);text-transform:uppercase}
+  #aba-inventario .inv-campo select,#aba-inventario .inv-campo input{border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)}
+  #aba-inventario .inv-btn{background:var(--azul-medio);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-inventario .inv-btn.verde{background:var(--verde)}
+  #aba-inventario .inv-btn.roxo{background:#6f42c1}
+  #aba-inventario .inv-btn:hover{opacity:.9}
+  #aba-inventario .inv-file{border:2px dashed var(--cinza-3);border-radius:8px;padding:16px;text-align:center;font-size:13px;color:var(--cinza-4);cursor:pointer}
+  #aba-inventario table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+  #aba-inventario thead th{text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-inventario tbody td{padding:6px 9px;border-bottom:1px solid var(--cinza-1)}
+  #aba-inventario .inv-loc-head{background:#EBF5FB;color:#1B4F72;font-weight:700;padding:6px 9px;font-size:11px;text-transform:uppercase}
+  #aba-inventario .inv-delta-pos{color:var(--verde);font-weight:700}
+  #aba-inventario .inv-delta-neg{color:var(--vermelho);font-weight:700}
+  #aba-inventario .inv-empty{text-align:center;padding:20px;color:var(--cinza-4);font-size:13px}
+</style>
+<div id="aba-inventario" class="container" style="display:none">
+
+  <div class="inv-card">
+    <label style="font-size:12px;font-weight:700;color:var(--cinza-4)">👤 Registrado por</label>
+    <select id="inv-registrado-por" style="margin-left:8px;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)" onchange="localStorage.setItem('hog_inv_registrante', this.value)">
+      <option value="">Selecione...</option>
+    </select>
+  </div>
+
+  <!-- AJUSTE AVULSO -->
+  <div class="inv-card">
+    <h3>🔧 Ajuste avulso de saldo</h3>
+    <div class="inv-sub">Corrige um item pontual — ex: erro de contagem, quebra não registrada.</div>
+    <div class="inv-row">
+      <div class="inv-campo" style="flex:2;min-width:220px;position:relative">
+        <label>Material</label>
+        <input type="text" id="inv-busca-material" placeholder="buscar por nome..." oninput="invFiltrarMaterial()">
+        <div id="inv-busca-res" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;z-index:9"></div>
+      </div>
+      <div class="inv-campo">
+        <label>Local</label>
+        <select id="inv-ajuste-local"></select>
+      </div>
+      <div class="inv-campo">
+        <label>Novo saldo</label>
+        <input type="number" id="inv-ajuste-novo-saldo" style="width:100px">
+      </div>
+      <div class="inv-campo" style="flex:2;min-width:180px">
+        <label>Motivo</label>
+        <input type="text" id="inv-ajuste-motivo" placeholder="ex: erro de contagem">
+      </div>
+      <button class="inv-btn" onclick="invAplicarAjusteAvulso()">✔ Aplicar ajuste</button>
+    </div>
+    <div id="inv-material-selecionado" style="font-size:12px;color:var(--cinza-4);margin-top:8px"></div>
+  </div>
+
+  <!-- NOVO MATERIAL -->
+  <div class="inv-card">
+    <h3>➕ Cadastrar novo material</h3>
+    <div class="inv-sub">Para itens que ainda não existem no catálogo.</div>
+    <div class="inv-row">
+      <div class="inv-campo" style="flex:2;min-width:200px"><label>Nome</label><input type="text" id="inv-novo-nome"></div>
+      <div class="inv-campo"><label>Marca</label><input type="text" id="inv-novo-marca"></div>
+      <div class="inv-campo"><label>Unidade</label><input type="text" id="inv-novo-unidade" placeholder="CAIXA, UNIDADE..."></div>
+      <div class="inv-campo"><label>Qtd/kit</label><input type="number" id="inv-novo-qtdkit" style="width:80px"></div>
+      <div class="inv-campo"><label>Estoque mínimo</label><input type="number" id="inv-novo-minimo" style="width:100px"></div>
+      <div class="inv-campo" style="flex:2;min-width:180px"><label>Fornecedor padrão</label><select id="inv-novo-fornecedor"><option value="">— nenhum —</option></select></div>
+      <button class="inv-btn verde" onclick="invCadastrarMaterial()">✔ Cadastrar</button>
+    </div>
+  </div>
+
+  <!-- INVENTÁRIO POR LOCAL -->
+  <div class="inv-card">
+    <h3>📋 Inventário físico por local</h3>
+    <div class="inv-sub">Exporta a lista para contagem, e depois importa a planilha preenchida para calcular os ajustes.</div>
+    <div class="inv-row">
+      <div class="inv-campo">
+        <label>Local</label>
+        <select id="inv-export-local"><option value="">Todos os locais (uma aba por local)</option></select>
+      </div>
+      <button class="inv-btn roxo" onclick="invExportar()">📤 Exportar planilha de contagem</button>
+    </div>
+    <div style="margin-top:16px">
+      <label style="font-size:11px;font-weight:700;color:var(--cinza-4);text-transform:uppercase;display:block;margin-bottom:6px">Importar planilha preenchida</label>
+      <div class="inv-file" onclick="document.getElementById('inv-file-input').click()">📥 Clique para escolher o arquivo Excel preenchido</div>
+      <input type="file" id="inv-file-input" accept=".xlsx,.xls" style="display:none" onchange="invImportar(this.files[0])">
+    </div>
+  </div>
+
+  <div id="inv-revisao-box" style="display:none">
+    <div class="inv-card">
+      <h3>🔍 Revisão dos ajustes encontrados</h3>
+      <div class="inv-sub">Confira antes de aplicar — desmarque o que não quiser ajustar agora.</div>
+      <div id="inv-revisao-corpo"></div>
+      <div style="margin-top:14px;text-align:right">
+        <button class="inv-btn verde" onclick="invAplicarAjustesImportados()">✔ Aplicar ajustes marcados</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
   <div class="modal-box">
@@ -964,6 +1070,8 @@ async function testarConexao() {
     todosOsMateriais = r.map(m => m.nome);
     document.getElementById('status-cx').textContent = `✅ Conectado — ${todosOsMateriais.length} materiais`;
     document.getElementById('config-box').style.borderColor = '#A9DFBF';
+    await carregarTiposCirurgia();
+    renderizarTipos(); // atualiza o formulário caso já estivesse aberto sem os tipos carregados
     carregarPendentes();
   } catch(e) {
     document.getElementById('status-cx').textContent = `❌ Erro: ${e.message}`;
@@ -1045,6 +1153,29 @@ function removerTipo(i) {
   carregarTodosOsMateriais();
 }
 
+// Tipos de cirurgia — carregados do banco (assim, um tipo novo cadastrado na tabela
+// tipos_cirurgia aparece sozinho no formulário, sem precisar editar o código)
+let tiposCirurgiaCache = [];
+async function carregarTiposCirurgia(){
+  try{
+    tiposCirurgiaCache = (await sbFetch('tipos_cirurgia?select=id,nome&order=nome.asc')) || [];
+  }catch(e){
+    // Sem conexão ainda — mantém lista vazia, o formulário funciona só com FACECTOMIA até conectar
+    tiposCirurgiaCache = [];
+  }
+}
+function gerarOpcoesTipo(t){
+  let html = '<option value="">Selecione...</option>';
+  html += `<option value="FACECTOMIA" ${t.tipo==='FACECTOMIA'&&!t.modalidade?'selected':''}>FACECTOMIA — Nacional</option>`;
+  html += `<option value="FACECTOMIA_IMPORT" ${t.tipo==='FACECTOMIA'&&t.modalidade==='IMPORT'?'selected':''}>FACECTOMIA — Import</option>`;
+  // Demais tipos vêm direto da tabela tipos_cirurgia (FACECTOMIA fica de fora, já tratada acima)
+  const outros = tiposCirurgiaCache.filter(x => x.nome !== 'FACECTOMIA');
+  for(const x of outros){
+    html += `<option value="${x.nome}" ${t.tipo===x.nome?'selected':''}>${x.nome}</option>`;
+  }
+  return html;
+}
+
 function renderizarTipos() {
   const cont = document.getElementById('tipos-container');
   const cores = ['tipo-1','tipo-2','tipo-3'];
@@ -1058,17 +1189,7 @@ function renderizarTipos() {
         <div class="campo">
           <label>Tipo de Cirurgia</label>
           <select onchange="onTipoChange(${i}, this.value)">
-            <option value="">Selecione...</option>
-            <option value="FACECTOMIA" ${t.tipo==='FACECTOMIA'&&!t.modalidade?'selected':''}>FACECTOMIA — Nacional</option>
-            <option value="FACECTOMIA_IMPORT" ${t.tipo==='FACECTOMIA'&&t.modalidade==='IMPORT'?'selected':''}>FACECTOMIA — Import</option>
-            <option value="VITRECTOMIA" ${t.tipo==='VITRECTOMIA'?'selected':''}>VITRECTOMIA</option>
-            <option value="RETIRADA DE ÓLEO" ${t.tipo==='RETIRADA DE ÓLEO'?'selected':''}>RETIRADA DE ÓLEO</option>
-            <option value="PLÁSTICA" ${t.tipo==='PLÁSTICA'?'selected':''}>PLÁSTICA</option>
-            <option value="ESTRABISMO" ${t.tipo==='ESTRABISMO'?'selected':''}>ESTRABISMO</option>
-            <option value="TREC" ${t.tipo==='TREC'?'selected':''}>TREC</option>
-            <option value="ANGIOGRAFIA" ${t.tipo==='ANGIOGRAFIA'?'selected':''}>ANGIOGRAFIA</option>
-            <option value="APLICAÇÃO" ${t.tipo==='APLICAÇÃO'?'selected':''}>APLICAÇÃO</option>
-            <option value="SONDAGEM" ${t.tipo==='SONDAGEM'?'selected':''}>SONDAGEM</option>
+            ${gerarOpcoesTipo(t)}
           </select>
         </div>
         <div class="campo">
@@ -2120,8 +2241,8 @@ function trocarAba(aba) {
     localStorage.setItem('hog_aprov_ok', '1');
     toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
   }
-  // Receber NF usa senha PRÓPRIA e diferente — é a única etapa que efetivamente move o saldo
-  if (aba === 'receber' && localStorage.getItem('hog_entrada_ok') !== '1') {
+  // Receber NF e Inventário usam senha PRÓPRIA e diferente — únicas etapas que efetivamente movem o saldo
+  if ((aba === 'receber' || aba === 'inventario') && localStorage.getItem('hog_entrada_ok') !== '1') {
     const s = prompt('🔒 Área restrita — Entrada de Estoque.\n\nEsta etapa move o saldo real. Digite a senha de entrada:');
     if (s === null) return;
     if (s !== SENHA_ENTRADA) { toast('Senha incorreta.', 'erro'); return; }
@@ -2137,6 +2258,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-aprovarpedido').classList.toggle('ativa', aba==='aprovarpedido');
   document.getElementById('aba-btn-historico').classList.toggle('ativa', aba==='historico');
   document.getElementById('aba-btn-receber').classList.toggle('ativa', aba==='receber');
+  document.getElementById('aba-btn-inventario').classList.toggle('ativa', aba==='inventario');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
@@ -2146,6 +2268,7 @@ function trocarAba(aba) {
   document.getElementById('aba-aprovarpedido').style.display = aba==='aprovarpedido' ? '' : 'none';
   document.getElementById('aba-historico').style.display  = aba==='historico'  ? '' : 'none';
   document.getElementById('aba-receber').style.display    = aba==='receber'    ? '' : 'none';
+  document.getElementById('aba-inventario').style.display = aba==='inventario' ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='aprovarpedido') { apCarregar(); }
@@ -2153,6 +2276,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
+  if (aba==='inventario'){ invCarregar(); }
 }
 
 function limparForm() {
@@ -3534,6 +3658,247 @@ async function apRejeitar(ordemId){
     toast('Pedido rejeitado.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+</script>
+
+<script>
+// ═══ ABA INVENTÁRIO / AJUSTES — move saldo, senha própria ═══
+let invLocais = [];
+let invBuscaRes = [];
+let invMaterialSelecionado = null;
+let invPendentesImport = []; // [{material_id, local_id, nome, localNome, saldoAtual, contagem, delta, incluir}]
+
+async function invCarregar(){
+  if(!invLocais.length){
+    invLocais = (await sbFetch('locais?select=id,nome&order=nome.asc')) || [];
+    const selAjuste = document.getElementById('inv-ajuste-local');
+    const selExport = document.getElementById('inv-export-local');
+    for(const l of invLocais){
+      selAjuste.innerHTML += `<option value="${l.id}">${l.nome}</option>`;
+      selExport.innerHTML += `<option value="${l.id}">${l.nome}</option>`;
+    }
+  }
+  if(!coFornecedores.length){
+    coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+  }
+  const selForn = document.getElementById('inv-novo-fornecedor');
+  if(selForn.options.length<=1){
+    for(const f of coFornecedores) selForn.innerHTML += `<option value="${f.id}">${f.nome}</option>`;
+  }
+  if(!catalogoMateriais.length){
+    catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+    todosOsMateriais = catalogoMateriais.map(m=>m.nome);
+  }
+  const selReg = document.getElementById('inv-registrado-por');
+  if(selReg.options.length<=1){
+    for(const nome of EQUIPE) selReg.innerHTML += `<option value="${nome}">${nome}</option>`;
+    const ultimo = localStorage.getItem('hog_inv_registrante');
+    if(ultimo && EQUIPE.includes(ultimo)) selReg.value = ultimo;
+  }
+}
+
+// ── AJUSTE AVULSO ──────────────────────────────────────────────
+function invFiltrarMaterial(){
+  const termo = document.getElementById('inv-busca-material').value.trim();
+  const div = document.getElementById('inv-busca-res');
+  if(termo.length<2){ div.style.display='none'; return; }
+  const termoN = normNome(termo);
+  invBuscaRes = catalogoMateriais.filter(m=>normNome(m.nome).includes(termoN)).slice(0,10);
+  if(!invBuscaRes.length){ div.innerHTML='<div style="padding:9px 12px;font-size:13px;color:var(--cinza-4)">Nada encontrado.</div>'; }
+  else div.innerHTML = invBuscaRes.map((m,i)=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--cinza-1)" onclick="invSelecionarMaterial(${i})">${m.nome}</div>`).join('');
+  div.style.display='block';
+}
+function invSelecionarMaterial(i){
+  invMaterialSelecionado = invBuscaRes[i];
+  document.getElementById('inv-busca-material').value = invMaterialSelecionado.nome;
+  document.getElementById('inv-busca-res').style.display='none';
+  document.getElementById('inv-material-selecionado').textContent = 'Selecionado: ' + invMaterialSelecionado.nome;
+}
+async function invAplicarAjusteAvulso(){
+  const registrante = document.getElementById('inv-registrado-por').value;
+  if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
+  if(!invMaterialSelecionado){ toast('Busque e selecione um material.','erro'); return; }
+  const localId = document.getElementById('inv-ajuste-local').value;
+  if(!localId){ toast('Selecione o local.','erro'); return; }
+  const novoSaldoStr = document.getElementById('inv-ajuste-novo-saldo').value;
+  if(novoSaldoStr===''){ toast('Informe o novo saldo.','erro'); return; }
+  const novoSaldo = parseFloat(novoSaldoStr);
+  const motivo = document.getElementById('inv-ajuste-motivo').value.trim() || 'não informado';
+
+  try{
+    const est = await sbFetch(`estoque?select=saldo&material_id=eq.${invMaterialSelecionado.id}&local_id=eq.${localId}&limit=1`);
+    const saldoAtual = (est && est.length) ? Number(est[0].saldo) : 0;
+    const delta = novoSaldo - saldoAtual;
+    if(delta===0){ toast('Saldo informado é igual ao saldo atual — nada a ajustar.',''); return; }
+    if(!confirm(`Ajustar "${invMaterialSelecionado.nome}" de ${saldoAtual} para ${novoSaldo} (diferença: ${delta>0?'+':''}${delta})?`)) return;
+
+    const movArr = await sbFetch('movimentacoes','POST',{
+      tipo:'AJUSTE_INVENTARIO', material_id:invMaterialSelecionado.id, local_id:Number(localId),
+      qtd: delta, aprovado:false, registrado_por:registrante,
+      observacao: 'Ajuste avulso — ' + motivo,
+    });
+    const movId = movArr && movArr[0] && movArr[0].id;
+    await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+
+    toast('Ajuste aplicado ✓','sucesso');
+    invMaterialSelecionado = null;
+    document.getElementById('inv-busca-material').value = '';
+    document.getElementById('inv-ajuste-novo-saldo').value = '';
+    document.getElementById('inv-ajuste-motivo').value = '';
+    document.getElementById('inv-material-selecionado').textContent = '';
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ── NOVO MATERIAL ──────────────────────────────────────────────
+async function invCadastrarMaterial(){
+  const nome = document.getElementById('inv-novo-nome').value.trim();
+  if(!nome){ toast('Informe o nome do material.','erro'); return; }
+  const marca = document.getElementById('inv-novo-marca').value.trim() || null;
+  const unidade = document.getElementById('inv-novo-unidade').value.trim() || null;
+  const qtdKit = parseFloat(document.getElementById('inv-novo-qtdkit').value) || null;
+  const minimo = parseFloat(document.getElementById('inv-novo-minimo').value) || 0;
+  const fornId = document.getElementById('inv-novo-fornecedor').value || null;
+  try{
+    const r = await sbFetch('materiais','POST',{
+      nome, marca, unidade_medida:unidade, qtd_kit:qtdKit, estoque_minimo:minimo,
+      fornecedor_padrao_id: fornId?Number(fornId):null, ativo:true, exibir_dashboard:true,
+    });
+    if(!r || !r.length){ toast('⚠ Sem permissão para cadastrar (RLS). Rode o GRANT INSERT em materiais.','erro'); return; }
+    catalogoMateriais.push({id:r[0].id, nome});
+    todosOsMateriais.push(nome);
+    toast(nome + ' cadastrado no catálogo ✓','sucesso');
+    document.getElementById('inv-novo-nome').value='';
+    document.getElementById('inv-novo-marca').value='';
+    document.getElementById('inv-novo-unidade').value='';
+    document.getElementById('inv-novo-qtdkit').value='';
+    document.getElementById('inv-novo-minimo').value='';
+    document.getElementById('inv-novo-fornecedor').value='';
+  }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
+}
+
+// ── EXPORTAR PLANILHA DE CONTAGEM ───────────────────────────────
+async function invExportar(){
+  try{
+    const localId = document.getElementById('inv-export-local').value;
+    const locaisAlvo = localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais;
+
+    const materiais = (await sbFetch('materiais?select=id,nome,marca,unidade_medida&ativo=eq.true&order=nome.asc&limit=1000')) || [];
+    const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
+    const saldoMap = {};
+    for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = e.saldo;
+
+    const wb = XLSX.utils.book_new();
+    for(const local of locaisAlvo){
+      const linhas = [['ID','Material','Marca','Unidade','Saldo Sistema','Contagem Física']];
+      for(const m of materiais){
+        const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
+        linhas.push([m.id, m.nome, m.marca||'', m.unidade_medida||'', saldo, '']);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(linhas);
+      ws['!cols'] = [{wch:6},{wch:40},{wch:18},{wch:12},{wch:14},{wch:16}];
+      XLSX.utils.book_append_sheet(wb, ws, local.nome.slice(0,31));
+    }
+    const dataStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, 'Inventario_HOG_'+dataStr+'.xlsx');
+    toast('Planilha exportada — confira seus downloads ✓','sucesso');
+  }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
+}
+
+// ── IMPORTAR PLANILHA PREENCHIDA ────────────────────────────────
+async function invImportar(file){
+  if(!file) return;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    invPendentesImport = [];
+
+    // Sempre busca o saldo FRESCO do banco (nunca usa o saldo que estava na planilha exportada)
+    const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
+    const saldoMap = {};
+    for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = Number(e.saldo);
+
+    for(const sheetName of wb.SheetNames){
+      const local = invLocais.find(l => l.nome.toLowerCase().trim() === sheetName.toLowerCase().trim());
+      if(!local){ continue; } // aba que não corresponde a nenhum local conhecido — ignora
+
+      const ws = wb.Sheets[sheetName];
+      const linhas = XLSX.utils.sheet_to_json(ws, {header:1});
+      for(let i=1; i<linhas.length; i++){ // pula cabeçalho
+        const [id, nome, , , , contagemStr] = linhas[i];
+        if(id===undefined || id==='') continue;
+        if(contagemStr===undefined || contagemStr==='' || contagemStr===null) continue; // não preenchido, pula
+        const contagem = parseFloat(contagemStr);
+        if(isNaN(contagem)) continue;
+        const materialId = Number(id);
+        const saldoAtual = saldoMap[materialId+'_'+local.id] ?? 0;
+        const delta = contagem - saldoAtual;
+        if(delta === 0) continue; // sem diferença, não precisa ajustar
+        invPendentesImport.push({
+          material_id: materialId, local_id: local.id, nome: nome || rcNomeMaterial(materialId),
+          localNome: local.nome, saldoAtual, contagem, delta, incluir: true,
+        });
+      }
+    }
+
+    invRenderizarRevisao();
+  }catch(e){ toast('Erro ao ler a planilha: '+e.message,'erro'); }
+}
+
+function invRenderizarRevisao(){
+  const box = document.getElementById('inv-revisao-box');
+  const corpo = document.getElementById('inv-revisao-corpo');
+  if(!invPendentesImport.length){
+    corpo.innerHTML = '<div class="inv-empty">Nenhuma diferença encontrada entre a contagem e o saldo atual do sistema. ✓</div>';
+    box.style.display = '';
+    return;
+  }
+  box.style.display = '';
+  const porLocal = {};
+  for(const it of invPendentesImport){ (porLocal[it.localNome]=porLocal[it.localNome]||[]).push(it); }
+
+  let html = '';
+  for(const localNome of Object.keys(porLocal)){
+    const itens = porLocal[localNome];
+    html += `<div class="inv-loc-head">${localNome} — ${itens.length} diferença(s)</div>
+      <table><thead><tr><th></th><th>Material</th><th style="text-align:right">Saldo sistema</th><th style="text-align:right">Contagem</th><th style="text-align:right">Diferença</th></tr></thead><tbody>`;
+    for(const it of itens){
+      const idx = invPendentesImport.indexOf(it);
+      const cls = it.delta>0?'inv-delta-pos':'inv-delta-neg';
+      html += `<tr>
+        <td><input type="checkbox" checked onchange="invPendentesImport[${idx}].incluir=this.checked"></td>
+        <td>${it.nome}</td>
+        <td style="text-align:right">${it.saldoAtual}</td>
+        <td style="text-align:right">${it.contagem}</td>
+        <td style="text-align:right" class="${cls}">${it.delta>0?'+':''}${it.delta}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  corpo.innerHTML = html;
+}
+
+async function invAplicarAjustesImportados(){
+  const registrante = document.getElementById('inv-registrado-por').value;
+  if(!registrante){ toast('Selecione quem está registrando no topo da aba.','erro'); return; }
+  const selecionados = invPendentesImport.filter(it=>it.incluir);
+  if(!selecionados.length){ toast('Nenhum ajuste marcado.','erro'); return; }
+  if(!confirm(`Aplicar ${selecionados.length} ajuste(s) de inventário? Isso altera o saldo real do estoque.`)) return;
+
+  try{
+    for(const it of selecionados){
+      const movArr = await sbFetch('movimentacoes','POST',{
+        tipo:'AJUSTE_INVENTARIO', material_id:it.material_id, local_id:it.local_id,
+        qtd: it.delta, aprovado:false, registrado_por:registrante,
+        observacao: 'Inventário físico — contagem: '+it.contagem+' (sistema tinha '+it.saldoAtual+')',
+      });
+      const movId = movArr && movArr[0] && movArr[0].id;
+      await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+    }
+    toast(selecionados.length + ' ajuste(s) aplicado(s) — estoque atualizado ✓','sucesso');
+    invPendentesImport = [];
+    document.getElementById('inv-revisao-box').style.display = 'none';
+    document.getElementById('inv-file-input').value = '';
+  }catch(e){ toast('Erro ao aplicar ajustes: '+e.message,'erro'); }
 }
 </script>
 
