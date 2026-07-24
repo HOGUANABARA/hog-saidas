@@ -687,7 +687,7 @@ const CONFIG_FIXA = {
 url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
 key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 };
-  
+
 // Senha da aba Aprovação — troque por uma senha sua
 const SENHA_APROVACAO = 'hog2026';
 
@@ -2083,11 +2083,41 @@ function acRender(){
     html+= k==='__COTAR__'? acGrupo('A cotar — sem fornecedor padrão',it,'cotar') : acGrupo(k,it,'forn'); }
   if(!html) html='<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
   document.getElementById('ac-lista').innerHTML=html;
+  document.querySelectorAll('#aba-comprar .ac-orcar').forEach(b=>b.addEventListener('click',function(){
+    const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
+    acEnviarParaCotacao(mid);
+  }));
   document.querySelectorAll('#aba-comprar .ac-adiar').forEach(b=>b.addEventListener('click',function(){
     const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
     if(this.textContent==='Remover'){ acManuais=acManuais.filter(m=>m.material_id!==mid); acRender(); }
     else { tr.style.opacity='0.4'; toast('Item adiado (visual).',''); }
   }));
+}
+
+// Envia o item da aba Comprar para a Cotação (reaproveita o estado coItens/coOpVazia)
+function acEnviarParaCotacao(materialId){
+  if (typeof coItens === 'undefined' || typeof coOpVazia !== 'function') {
+    toast('Aba Cotação indisponível nesta versão.', 'erro'); return;
+  }
+  if (coItens.find(x => x.material_id === materialId)) {
+    toast('Este item já está na cotação. Abra a aba 🧾 Cotação.', ''); return;
+  }
+  const row = acAlerta.find(r => r.material_id === materialId) || acManuais.find(r => r.material_id === materialId);
+  if (!row) { toast('Item não encontrado.', 'erro'); return; }
+
+  const saldo = Number(row.saldo_total), minimo = Number(row.estoque_minimo);
+  const sug = Math.max(0, Math.round((minimo || 0) - (saldo || 0)));
+  const op1 = coOpVazia(1);
+  if (row.fornecedor_padrao_id) op1.fornecedor_id = row.fornecedor_padrao_id;
+  if (row.marca) op1.marca = row.marca;
+
+  coItens.push({
+    id: null, material_id: row.material_id, material_nome: row.material,
+    qtd_desejada: sug > 0 ? sug : null, saldo: saldo, minimo: minimo,
+    opcoes: [op1, coOpVazia(2), coOpVazia(3)]
+  });
+  if (typeof coRender === 'function') coRender();
+  toast(row.material + ' enviado para Cotação ✓ — abra a aba 🧾 Cotação para preencher fornecedores.', 'sucesso');
 }
 async function acSalvarFornecedor(materialId, fornecedorId){
   if(!fornecedorId){ return; }
