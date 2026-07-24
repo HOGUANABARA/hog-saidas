@@ -313,6 +313,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba ativa" id="aba-btn-registro" onclick="trocarAba('registro')">📋 Saída Cirúrgica</div>
   <div class="aba" id="aba-btn-diversas" onclick="trocarAba('diversas')">📦 Saídas Diversas</div>
   <div class="aba" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+  <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
 </div>
 
 <div class="container">
@@ -524,6 +525,47 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 </div>
 
 
+<!-- ═══ ABA COMPRAR (ALERTA) ═══ -->
+<style>
+  #aba-comprar .ac-search{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:14px 16px;margin-bottom:18px;position:relative}
+  #aba-comprar .ac-search label{font-size:11px;font-weight:700;color:var(--cinza-4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:7px}
+  #aba-comprar .ac-search input{width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--fonte);outline:none}
+  #aba-comprar .ac-search input:focus{border-color:var(--azul-medio)}
+  #aba-comprar .ac-res{position:absolute;left:16px;right:16px;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:280px;overflow:auto;z-index:9;display:none}
+  #aba-comprar .ac-res div{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--cinza-1);cursor:pointer;display:flex;justify-content:space-between;gap:12px}
+  #aba-comprar .ac-res div:hover{background:var(--azul-claro)} #aba-comprar .ac-res .ac-meta{color:var(--cinza-4);font-size:11px;white-space:nowrap}
+  #aba-comprar .ac-forn{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-comprar .ac-fhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cinza-5);color:#fff}
+  #aba-comprar .ac-fhead.cotar{background:var(--cinza-4)} #aba-comprar .ac-fhead.manual{background:var(--azul-medio)}
+  #aba-comprar .ac-fnome{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px}
+  #aba-comprar .ac-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+  #aba-comprar table{width:100%;border-collapse:collapse}
+  #aba-comprar thead th{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);text-align:left;padding:9px 10px;border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-comprar thead th.num,#aba-comprar tbody td.num{text-align:right}
+  #aba-comprar tbody td{padding:10px;border-bottom:1px solid var(--cinza-1);font-size:13px;vertical-align:middle}
+  #aba-comprar tbody tr:last-child td{border-bottom:none}
+  #aba-comprar .ac-item{font-weight:600}
+  #aba-comprar .ac-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff;display:inline-block;margin-top:3px}
+  #aba-comprar .ac-urg{background:var(--vermelho)} #aba-comprar .ac-com{background:#B7950B} #aba-comprar .ac-ate{background:var(--azul-medio)} #aba-comprar .ac-ok{background:var(--cinza-3)}
+  #aba-comprar .ac-etapa{font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:#EBEAFC;color:#6f42c1;margin-left:6px;text-transform:uppercase}
+  #aba-comprar .ac-min{width:60px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 6px;text-align:right;font-size:13px;background:#FFFDF3;font-family:var(--fonte)}
+  #aba-comprar .ac-min:focus{border-color:var(--azul-medio);outline:none}
+  #aba-comprar .ac-baixo{color:var(--vermelho);font-weight:700}
+  #aba-comprar .ac-trend{font-size:11px;color:var(--cinza-3)}
+  #aba-comprar .ac-ult{font-size:12px} #aba-comprar .ac-ult b{color:var(--verde)} #aba-comprar .ac-ult .ac-none{color:#9a6060;font-style:italic} #aba-comprar .ac-ult .ac-old{color:var(--cinza-4)}
+  #aba-comprar .ac-rowact button{font-size:11px;font-weight:600;padding:5px 9px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
+  #aba-comprar .ac-orcar{background:var(--azul-claro);color:var(--azul)} #aba-comprar .ac-adiar{background:var(--cinza-2);color:var(--cinza-4)}
+  #aba-comprar .ac-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px}
+</style>
+<div id="aba-comprar" class="container" style="display:none">
+  <div class="ac-search">
+    <label>➕ Incluir item na compra (fora da regra do mínimo)</label>
+    <input id="ac-busca" placeholder="buscar no catálogo por nome… ex: xylo, fio nylon, metil">
+    <div class="ac-res" id="ac-res"></div>
+  </div>
+  <div id="ac-lista"><div class="ac-empty">Carregando alerta…</div></div>
+</div>
+
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
   <div class="modal-box">
@@ -589,8 +631,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 // Cole aqui a URL e a chave do Supabase para a equipe não precisar configurar.
 // Deixe como está ('') para mostrar a caixa de configuração manual.
 const CONFIG_FIXA = {
-url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
-key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
+  url: '',   // ex: 'https://xxxx.supabase.co'
+  key: '',   // ex: 'sb_publishable_...'
 };
 
 // Senha da aba Aprovação — troque por uma senha sua
@@ -1819,8 +1861,8 @@ async function enviarDiversas() {
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
-  // Aba Aprovação protegida por senha (liberada uma vez por dispositivo)
-  if (aba === 'aprovacao' && localStorage.getItem('hog_aprov_ok') !== '1') {
+  // Abas Aprovação e Comprar protegidas por senha (liberadas uma vez por dispositivo)
+  if ((aba === 'aprovacao' || aba === 'comprar') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
@@ -1830,10 +1872,13 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-registro').classList.toggle('ativa', aba==='registro');
   document.getElementById('aba-btn-diversas').classList.toggle('ativa', aba==='diversas');
   document.getElementById('aba-btn-aprovacao').classList.toggle('ativa', aba==='aprovacao');
+  document.getElementById('aba-btn-comprar').classList.toggle('ativa', aba==='comprar');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
+  document.getElementById('aba-comprar').style.display   = aba==='comprar'   ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
+  if (aba==='comprar')   { acCarregar(); }
 }
 
 function limparForm() {
@@ -1896,5 +1941,134 @@ window.addEventListener('load', () => {
   renderizarTipos();
 });
 </script>
+<script>
+// ═══ ABA COMPRAR (ALERTA) — reaproveita sbFetch/toast/sbUrl/sbKey do app ═══
+let acAlerta = [];
+let acManuais = [];
+let acResultados = [];
+function acMesLabels(){
+  const d=new Date(); const ant=new Date(d.getFullYear(), d.getMonth()-1, 1);
+  const f=x=>x.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
+  return { atual:f(d)+'/'+String(d.getFullYear()).slice(2), anterior:f(ant)+'/'+String(ant.getFullYear()).slice(2) };
+}
+const AC_MES = acMesLabels();
+function acSit(saldo,minimo,alerta){
+  const a=(alerta||'').toUpperCase();
+  if(a.includes('URGENTE')) return ['URGENTE','ac-urg'];
+  if(a.includes('COMPRAR')) return ['COMPRAR','ac-com'];
+  if(a.includes('ATEN'))    return ['ATENÇÃO','ac-ate'];
+  const r=(minimo>0)?saldo/minimo:9;
+  if(saldo<0||r<=0.5) return ['URGENTE','ac-urg'];
+  if(r<=1) return ['COMPRAR','ac-com'];
+  if(r<=1.2) return ['ATENÇÃO','ac-ate'];
+  return ['OK','ac-ok'];
+}
+function acMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+function acData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
+function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLocaleString('pt-BR',{maximumFractionDigits:0}); }
+
+async function acCarregar(){
+  try{
+    const rows = await sbFetch('vw_alerta_compras?select=*&order=material.asc&limit=1000');
+    acAlerta = rows||[];
+    acRender();
+  }catch(e){
+    document.getElementById('ac-lista').innerHTML='<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+function acLinha(r, manual){
+  const [txt,cls]=acSit(Number(r.saldo_total),Number(r.estoque_minimo),r.alerta_compra);
+  const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
+  const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
+  const baixo=(saldo<0||(minimo>0&&saldo<=minimo))?'ac-baixo':'';
+  const trend=(Number(r.consumo_mes_atual)>Number(r.consumo_mes_anterior))?'↑':(Number(r.consumo_mes_atual)<Number(r.consumo_mes_anterior)?'↓':'');
+  let uc;
+  if(r.uc_data){ const c2=r.uc_dentro_2meses?'':'ac-old';
+    uc=`<span class="${c2}">${acData(r.uc_data)} · ${r.uc_fornecedor||'—'} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
+  } else uc='<span class="ac-none">nenhuma compra registrada</span>';
+  const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
+  return `<tr data-mid="${r.material_id}" data-saldo="${saldo}">
+    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}</td>
+    <td class="num"><input class="ac-min" value="${minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
+    <td class="num ac-saldo ${baixo}">${acN0(saldo)}</td>
+    <td class="num">${acN0(r.consumo_mes_anterior)}</td>
+    <td class="num">${acN0(r.consumo_mes_atual)} <span class="ac-trend">${trend}</span></td>
+    <td class="num"><b>${sug>0?sug:'—'}</b></td>
+    <td class="ac-ult">${uc}</td>
+    <td class="ac-rowact"><button class="ac-orcar">Orçar</button><button class="ac-adiar">${manual?'Remover':'Adiar'}</button></td>
+  </tr>`;
+}
+function acGrupo(nome,itens,tipo){
+  const cls=tipo==='manual'?'ac-fhead manual':(tipo==='cotar'?'ac-fhead cotar':'ac-fhead');
+  const trs=itens.map(r=>acLinha(r,tipo==='manual')).join('');
+  return `<div class="ac-forn"><div class="${cls}"><div class="ac-fnome">${nome} <span class="ac-count">${itens.length} ${itens.length>1?'itens':'item'}</span></div></div>
+    <table><thead><tr><th>Item</th><th class="num">Mín ✎</th><th class="num">Saldo</th>
+    <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
+    <th>Última compra</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+function acRender(){
+  const precisa=acAlerta.filter(r=>r.alerta_compra&&String(r.alerta_compra).trim()!=='');
+  const grupos={};
+  for(const r of precisa){ const k=r.fornecedor_padrao?r.fornecedor_padrao:'__COTAR__'; (grupos[k]=grupos[k]||[]).push(r); }
+  const ord=t=>({'URGENTE':0,'COMPRAR':1,'ATENÇÃO':2,'OK':3})[acSit(Number(t.saldo_total),Number(t.estoque_minimo),t.alerta_compra)[0]]??3;
+  const keys=Object.keys(grupos).sort((a,b)=>{ const ca=a==='__COTAR__',cb=b==='__COTAR__'; if(ca!==cb)return ca?1:-1;
+    const wa=Math.min(...grupos[a].map(ord)),wb=Math.min(...grupos[b].map(ord)); if(wa!==wb)return wa-wb; return a.localeCompare(b); });
+  let html='';
+  if(acManuais.length) html+=acGrupo('Incluídos manualmente',acManuais,'manual');
+  for(const k of keys){ const it=grupos[k].sort((x,y)=>ord(x)-ord(y));
+    html+= k==='__COTAR__'? acGrupo('A cotar — sem fornecedor padrão',it,'cotar') : acGrupo(k,it,'forn'); }
+  if(!html) html='<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
+  document.getElementById('ac-lista').innerHTML=html;
+  document.querySelectorAll('#aba-comprar .ac-adiar').forEach(b=>b.addEventListener('click',function(){
+    const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
+    if(this.textContent==='Remover'){ acManuais=acManuais.filter(m=>m.material_id!==mid); acRender(); }
+    else { tr.style.opacity='0.4'; toast('Item adiado (visual).',''); }
+  }));
+}
+async function acSalvarMinimo(materialId, inp){
+  const novo=parseFloat((''+inp.value).replace(',','.'));
+  if(isNaN(novo)||novo<0){ toast('Valor de mínimo inválido.','erro'); return; }
+  try{
+    const r=await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ estoque_minimo:novo });
+    if(!r||!r.length){ toast('⚠ Sem permissão para gravar o mínimo (RLS). Rode o script de policy.','erro'); return; }
+    inp.style.borderColor='var(--verde)'; inp.style.background='var(--verde-claro)';
+    const tr=inp.closest('tr'), saldo=Number(tr.dataset.saldo);
+    const loc=acAlerta.find(x=>x.material_id===materialId); if(loc) loc.estoque_minimo=novo;
+    const [txt,cls]=acSit(saldo,novo,'');
+    const b=tr.querySelector('.ac-badge'); b.textContent=txt; b.className='ac-badge '+cls;
+    tr.querySelector('.ac-saldo').classList.toggle('ac-baixo',(saldo<0||(novo>0&&saldo<=novo)));
+    toast('Mínimo atualizado no cadastro ✓','sucesso');
+    setTimeout(()=>{ inp.style.borderColor=''; inp.style.background='#FFFDF3'; },1500);
+  }catch(e){ toast('Erro ao salvar mínimo: '+e.message,'erro'); }
+}
+(function(){
+  const box=document.getElementById('ac-busca'), res=document.getElementById('ac-res'); let t=null;
+  if(!box) return;
+  box.addEventListener('input',function(){
+    const q=this.value.trim(); if(q.length<2){ res.style.display='none'; return; }
+    clearTimeout(t); t=setTimeout(async()=>{
+      try{
+        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,ultimo_valor_pago&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
+        acResultados=rows||[];
+        res.innerHTML=(!rows||!rows.length)?'<div class="ac-meta" style="justify-content:center">nada encontrado</div>'
+          : rows.map((r,i)=>`<div onclick="acIncluir(${i})"><span>${r.nome}</span><span class="ac-meta">mín ${r.estoque_minimo??'—'} · últ. ${r.ultimo_valor_pago?('R$ '+Number(r.ultimo_valor_pago).toFixed(2).replace('.',',')):'—'}</span></div>`).join('');
+        res.style.display='block';
+      }catch(e){ res.innerHTML='<div class="ac-meta">erro: '+e.message+'</div>'; res.style.display='block'; }
+    },250);
+  });
+  document.addEventListener('click',e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.style.display='none'; });
+})();
+async function acIncluir(idx){
+  const m=acResultados[idx]; if(!m) return;
+  if(acManuais.find(x=>x.material_id===m.id)){ toast('Item já incluído.',''); return; }
+  let full=null;
+  try{ const r=await sbFetch(`vw_alerta_compras?select=*&material_id=eq.${m.id}&limit=1`); full=r&&r[0]; }catch(e){}
+  if(!full) full={ material_id:m.id, material:m.nome, estoque_minimo:m.estoque_minimo, saldo_total:null, alerta_compra:'', consumo_mes_atual:0, consumo_mes_anterior:0, ultimo_valor_pago:m.ultimo_valor_pago, uc_data:null, fornecedor_padrao:null };
+  acManuais.push(full); acRender();
+  document.getElementById('ac-busca').value=''; document.getElementById('ac-res').style.display='none';
+  toast(m.nome+' incluído na compra ✓','sucesso');
+}
+</script>
+
 </body>
 </html>
