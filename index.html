@@ -594,8 +594,12 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-comprar .ac-rowact button{font-size:11px;font-weight:600;padding:5px 9px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
   #aba-comprar .ac-orcar{background:var(--azul-claro);color:var(--azul)} #aba-comprar .ac-adiar{background:var(--cinza-2);color:var(--cinza-4)}
   #aba-comprar .ac-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px}
-  #aba-comprar .ac-forn-sel{margin-top:5px;font-size:11px;border:1.5px dashed var(--azul-medio);border-radius:6px;padding:3px 6px;background:#fff;color:var(--azul);font-family:var(--fonte);max-width:180px}
-  #aba-comprar .ac-forn-sel:focus{outline:none;border-style:solid}
+  #aba-comprar .ac-forncol{font-size:12px;color:var(--cinza-5);min-width:120px}
+  #aba-comprar .ac-forncol .ac-forn-sel{width:100%;font-size:11px;border:1.5px dashed var(--azul-medio);border-radius:6px;padding:4px 6px;background:#fff;color:var(--azul);font-family:var(--fonte)}
+  #aba-comprar .ac-forncol .ac-forn-sel:focus{outline:none;border-style:solid}
+  #aba-comprar .ac-criterio{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;cursor:pointer;user-select:none;margin-top:3px}
+  #aba-comprar .ac-criterio-minimo{background:var(--cinza-2);color:var(--cinza-4)}
+  #aba-comprar .ac-criterio-consumo{background:#EBF5FB;color:#1B4F72;border:1px solid #AED6F1}
 </style>
 <div id="aba-comprar" class="container" style="display:none">
   <div class="ac-search" style="margin-bottom:10px">
@@ -2274,7 +2278,7 @@ async function acCarregar(){
     document.getElementById('ac-lista').innerHTML='<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
-function acLinha(r, manual, semForn){
+function acLinha(r){
   const [txt,cls]=acSit(Number(r.saldo_total),Number(r.estoque_minimo),r.alerta_compra);
   const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
   const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
@@ -2282,32 +2286,42 @@ function acLinha(r, manual, semForn){
   const trend=(Number(r.consumo_mes_atual)>Number(r.consumo_mes_anterior))?'↑':(Number(r.consumo_mes_atual)<Number(r.consumo_mes_anterior)?'↓':'');
   let uc;
   if(r.uc_data){ const c2=r.uc_dentro_2meses?'':'ac-old';
-    uc=`<span class="${c2}">${acData(r.uc_data)} · ${r.uc_fornecedor||'—'} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
-  } else uc='<span class="ac-none">nenhuma compra registrada</span>';
+    uc=`<span class="${c2}">${acData(r.uc_data)} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
+  } else uc='<span class="ac-none">nenhuma compra</span>';
   const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
-  const seletorForn = semForn ? `<br><select class="ac-forn-sel" onchange="acSalvarFornecedor(${r.material_id}, this.value)">
-      <option value="">📌 definir fornecedor...</option>
-      ${acFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
-    </select>` : '';
+  const porConsumo = !!r.gatilho_por_consumo;
+  const tagCriterio = `<span class="ac-criterio ${porConsumo?'ac-criterio-consumo':'ac-criterio-minimo'}"
+    onclick="acAlternarCriterio(${r.material_id}, ${porConsumo})" title="Clique para alternar o critério de alerta deste item">
+    ${porConsumo ? '📊 consumo' : '📦 mínimo'}</span>`;
+  // Fornecedor agora é só referência/coluna — a decisão de fornecedor acontece na Cotação
+  const colForn = r.fornecedor_padrao
+    ? `<span title="fornecedor de referência">${r.fornecedor_padrao}</span>`
+    : `<select class="ac-forn-sel" onchange="acSalvarFornecedor(${r.material_id}, this.value)">
+        <option value="">📌 definir...</option>
+        ${acFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
+      </select>`;
   return `<tr data-mid="${r.material_id}" data-saldo="${saldo}">
-    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}${seletorForn}</td>
+    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}<br>${tagCriterio}</td>
+    <td class="ac-forncol">${colForn}</td>
     <td class="num"><input class="ac-min" value="${minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
     <td class="num ac-saldo ${baixo}">${acN0(saldo)}</td>
     <td class="num">${acN0(r.consumo_mes_anterior)}</td>
     <td class="num">${acN0(r.consumo_mes_atual)} <span class="ac-trend">${trend}</span></td>
     <td class="num"><b>${sug>0?sug:'—'}</b></td>
     <td class="ac-ult">${uc}</td>
-    <td class="ac-rowact"><button class="ac-orcar">Orçar</button><button class="ac-adiar">${manual?'Remover':'Adiar'}</button></td>
+    <td class="ac-rowact"><button class="ac-orcar">Orçar</button><button class="ac-adiar">${r._manual?'Remover':'Adiar'}</button></td>
   </tr>`;
 }
-function acGrupo(nome,itens,tipo){
-  const cls=tipo==='manual'?'ac-fhead manual':(tipo==='cotar'?'ac-fhead cotar':'ac-fhead');
-  const trs=itens.map(r=>acLinha(r,tipo==='manual',tipo==='cotar')).join('');
-  return `<div class="ac-forn"><div class="${cls}"><div class="ac-fnome">${nome} <span class="ac-count">${itens.length} ${itens.length>1?'itens':'item'}</span></div></div>
-    <table><thead><tr><th>Item</th><th class="num">Mín ✎</th><th class="num">Saldo</th>
-    <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
-    <th>Última compra</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>`;
+
+function acGrupoCategoria(nomeCategoria, itens){
+  const trs = itens.map(r => acLinha(r)).join('');
+  return `<div class="ac-forn"><div class="ac-fhead"><div class="ac-fnome">${nomeCategoria} <span class="ac-count">${itens.length} ${itens.length>1?'itens':'item'}</span></div></div>
+    <div style="overflow-x:auto"><table><thead><tr>
+      <th>Item</th><th>Fornecedor</th><th class="num">Mín ✎</th><th class="num">Saldo</th>
+      <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
+      <th>Última compra</th><th></th></tr></thead><tbody>${trs}</tbody></table></div></div>`;
 }
+
 // Localiza item na lista já carregada (filtra sem recarregar do banco)
 function acFiltrar(){
   const campo = document.getElementById('ac-filtro');
@@ -2323,7 +2337,7 @@ function acFiltrar(){
     tr.style.display = bate ? '' : 'none';
     if (bate) visiveis++;
   });
-  // Esconde o bloco do fornecedor inteiro se nenhum item dele estiver visível
+  // Esconde o bloco da categoria inteira se nenhum item dela estiver visível
   document.querySelectorAll('#ac-lista .ac-forn').forEach(grupo => {
     const temVisivel = [...grupo.querySelectorAll('tr[data-mid]')].some(tr => tr.style.display !== 'none');
     grupo.style.display = (termo && !temVisivel) ? 'none' : '';
@@ -2332,18 +2346,49 @@ function acFiltrar(){
 }
 
 function acRender(){
-  const precisa=acAlerta.filter(r=>r.alerta_compra&&String(r.alerta_compra).trim()!=='');
-  const grupos={};
-  for(const r of precisa){ const k=r.fornecedor_padrao?r.fornecedor_padrao:'__COTAR__'; (grupos[k]=grupos[k]||[]).push(r); }
-  const ord=t=>({'URGENTE':0,'COMPRAR':1,'ATENÇÃO':2,'OK':3})[acSit(Number(t.saldo_total),Number(t.estoque_minimo),t.alerta_compra)[0]]??3;
-  const keys=Object.keys(grupos).sort((a,b)=>{ const ca=a==='__COTAR__',cb=b==='__COTAR__'; if(ca!==cb)return ca?1:-1;
-    const wa=Math.min(...grupos[a].map(ord)),wb=Math.min(...grupos[b].map(ord)); if(wa!==wb)return wa-wb; return a.localeCompare(b); });
-  let html='';
-  if(acManuais.length) html+=acGrupo('Incluídos manualmente',acManuais,'manual');
-  for(const k of keys){ const it=grupos[k].sort((x,y)=>ord(x)-ord(y));
-    html+= k==='__COTAR__'? acGrupo('A cotar — sem fornecedor padrão',it,'cotar') : acGrupo(k,it,'forn'); }
-  if(!html) html='<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
-  document.getElementById('ac-lista').innerHTML=html;
+  const precisa = acAlerta.filter(r=>r.alerta_compra && String(r.alerta_compra).trim()!=='');
+  const todos = [
+    ...acManuais.map(r=>({...r, _manual:true})),
+    ...precisa.map(r=>({...r, _manual:false})),
+  ];
+
+  if(!todos.length){
+    document.getElementById('ac-lista').innerHTML = '<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
+    return;
+  }
+
+  // Posição de cada item dentro da categoria + qual categoria, na mesma ordem do formulário de saída
+  const posItem = {}, catDoItem = {};
+  let pos = 0;
+  for(const cat of CATEGORIAS_ORDEM){
+    for(const item of cat.itens){
+      const key = item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
+      posItem[key] = pos++;
+      catDoItem[key] = cat.label;
+    }
+  }
+  const normKey = s => (s||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
+  const posCat = {}; CATEGORIAS_ORDEM.forEach((c,i)=>posCat[c.label]=i);
+
+  const porCategoria = {}; const ordemCategorias = [];
+  for(const r of todos){
+    const cat = catDoItem[normKey(r.material)] || 'EXTRAS';
+    if(!porCategoria[cat]){ porCategoria[cat]=[]; ordemCategorias.push(cat); }
+    porCategoria[cat].push(r);
+  }
+  ordemCategorias.sort((a,b)=>(posCat[a]??999)-(posCat[b]??999));
+
+  let html = '';
+  for(const cat of ordemCategorias){
+    const itens = porCategoria[cat].sort((a,b)=>{
+      const pa = posItem[normKey(a.material)] ?? 9999, pb = posItem[normKey(b.material)] ?? 9999;
+      if(pa!==pb) return pa-pb;
+      return (a.material||'').localeCompare(b.material||'');
+    });
+    html += acGrupoCategoria(cat, itens);
+  }
+
+  document.getElementById('ac-lista').innerHTML = html;
   document.querySelectorAll('#aba-comprar .ac-orcar').forEach(b=>b.addEventListener('click',function(){
     const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
     acEnviarParaCotacao(mid);
@@ -2390,6 +2435,18 @@ async function acSalvarFornecedor(materialId, fornecedorId){
     toast('Fornecedor definido: ' + nomeForn + ' ✓', 'sucesso');
     acCarregar(); // recarrega para reagrupar o item no fornecedor certo
   }catch(e){ toast('Erro ao salvar fornecedor: ' + e.message, 'erro'); }
+}
+
+// Alterna o critério de alerta do item: por mínimo cadastrado (padrão) ou por consumo do mês anterior
+// (útil para itens de uso irregular, onde comparar com o mínimo fixo não faz sentido)
+async function acAlternarCriterio(materialId, atualEraPorConsumo){
+  const novoValor = !atualEraPorConsumo;
+  try{
+    const r = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', { gatilho_por_consumo: novoValor });
+    if(!r || !r.length){ toast('⚠ Sem permissão para gravar (RLS). Rode o SQL da coluna gatilho_por_consumo.', 'erro'); return; }
+    toast('Critério alterado para: ' + (novoValor?'📊 por consumo':'📦 por mínimo') + ' ✓', 'sucesso');
+    acCarregar();
+  }catch(e){ toast('Erro ao alternar critério: '+e.message,'erro'); }
 }
 
 async function acSalvarMinimo(materialId, inp){
@@ -3417,6 +3474,8 @@ async function apCarregar(){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
     apOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc")) || [];
+    // Só mostra pedidos que realmente vieram da Decisão — exclui sugestões antigas da migração
+    apOrdens = apOrdens.filter(o => (o.observacao||'').includes('Gerado pela Decisão'));
     apRenderizar();
   }catch(e){
     document.getElementById('ap-corpo').innerHTML = '<div class="ap-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
