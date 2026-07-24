@@ -151,6 +151,9 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .btn-aprovar:hover { background: #155f33; }
 .btn-rejeitar { background: var(--vermelho); color: var(--branco); }
 .mini-tabela { width: 100%; border-collapse: collapse; }
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+details[open] summary { margin-bottom: 6px; }
 .mini-tabela td { padding: 5px 8px; font-size: 12px; border-bottom: 1px solid var(--cinza-2); }
 .mini-tabela tr:last-child td { border-bottom: none; }
 
@@ -774,6 +777,15 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-receber .rc-nfs-recentes h3{font-size:14px;margin-bottom:10px}
   #aba-receber .rc-status-entregue{color:var(--verde);font-weight:700}
   #aba-receber .rc-status-aguardando{color:#B7950B;font-weight:700}
+  #aba-receber .rc-nf-card{border:1px solid var(--cinza-2);border-radius:8px;margin-bottom:8px;overflow:hidden}
+  #aba-receber .rc-nf-head{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;background:var(--cinza-1)}
+  #aba-receber .rc-nf-head:hover{background:var(--azul-claro)}
+  #aba-receber .rc-nf-seta{font-size:11px;color:var(--cinza-4);transition:transform .2s;flex-shrink:0}
+  #aba-receber .rc-nf-info{flex:1}
+  #aba-receber .rc-nf-titulo{font-size:13px;font-weight:700;color:var(--cinza-5)}
+  #aba-receber .rc-nf-meta{font-size:11px;color:var(--cinza-4);margin-top:2px}
+  #aba-receber .rc-nf-corpo{display:none}
+  #aba-receber .rc-nf-corpo.aberto{display:block}
   #aba-receber .rc-btn-problema{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer}
   #aba-receber .rc-btn-editar{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer;font-family:var(--fonte);margin-left:4px}
   #aba-receber .rc-btn-reabrir{background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
@@ -1991,7 +2003,10 @@ function renderizarAprovadas() {
       <div>
         <div class="info-periodo" style="color:var(--verde)">✅ ${ehDiversa ? medico : medico + ' — ' + tipo}</div>
         <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
-        <table class="mini-tabela">${linhas}</table>
+        <details>
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--verde);padding:4px 0">▶ Ver itens (${p.itens.length})</summary>
+          <table class="mini-tabela">${linhas}</table>
+        </details>
       </div>
       <div class="acoes" style="flex-direction:column">
         <button class="btn btn-primario btn-sm" onclick="imprimirGrupo(${i})">🖨️ Imprimir</button>
@@ -3459,26 +3474,69 @@ async function rcConfirmarNF(fid){
   }catch(e){ toast('Erro ao registrar NF: '+e.message,'erro'); }
 }
 
+let rcNfItensCache = {}; // nf_id -> itens carregados
+
 async function rcCarregarNfsRecentes(){
   try{
     rcNfsRecentes = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=15')) || [];
     const div = document.getElementById('rc-nfs-lista');
     if(!rcNfsRecentes.length){ div.innerHTML = '<div class="rc-empty" style="padding:20px">Nenhuma NF registrada ainda.</div>'; return; }
-    div.innerHTML = `<div style="overflow-x:auto"><table>
-      <thead><tr><th>NF</th><th>Fornecedor</th><th>Emissão</th><th>Entrega</th><th style="text-align:right">Valor</th><th>Status</th><th></th></tr></thead>
-      <tbody>${rcNfsRecentes.map(nf => `<tr>
-        <td>${nf.numero_nf||'—'}</td>
-        <td>${rcNomeFornecedor(nf.fornecedor_id)}</td>
-        <td>${nf.data_emissao ? nf.data_emissao.split('-').reverse().join('/') : '—'}</td>
-        <td>${nf.data_entrega ? nf.data_entrega.split('-').reverse().join('/') : '—'}</td>
-        <td style="text-align:right">${rcMoney(nf.valor_total)}</td>
-        <td class="${nf.status==='ENTREGUE'?'rc-status-entregue':'rc-status-aguardando'}">${nf.status}</td>
-        <td>${nf.status!=='DEVOLVIDO' ? `<button class="rc-btn-devolver" onclick="rcAbrirDevolucao(${nf.id})">↩️ Devolução</button>` : '<span style="color:var(--vermelho);font-size:11px">devolvida</span>'}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
+    div.innerHTML = rcNfsRecentes.map(nf => `
+      <div class="rc-nf-card">
+        <div class="rc-nf-head" id="rc-nf-head-${nf.id}" onclick="rcToggleNf(${nf.id})">
+          <div class="rc-nf-seta" id="rc-nf-seta-${nf.id}">▶</div>
+          <div class="rc-nf-info">
+            <div class="rc-nf-titulo">NF ${nf.numero_nf||'—'} — ${rcNomeFornecedor(nf.fornecedor_id)}</div>
+            <div class="rc-nf-meta">
+              Emissão: ${nf.data_emissao ? nf.data_emissao.split('-').reverse().join('/') : '—'}
+              &nbsp;·&nbsp; Entrega: ${nf.data_entrega ? nf.data_entrega.split('-').reverse().join('/') : '—'}
+              &nbsp;·&nbsp; <b>${rcMoney(nf.valor_total)}</b>
+              &nbsp;·&nbsp; <span class="${nf.status==='ENTREGUE'?'rc-status-entregue':'rc-status-aguardando'}">${nf.status}</span>
+            </div>
+          </div>
+          <div onclick="event.stopPropagation()">
+            ${nf.status!=='DEVOLVIDO' ? `<button class="rc-btn-devolver" onclick="rcAbrirDevolucao(${nf.id})">↩️ Devolução</button>` : '<span style="color:var(--vermelho);font-size:11px">devolvida</span>'}
+          </div>
+        </div>
+        <div class="rc-nf-corpo" id="rc-nf-corpo-${nf.id}"></div>
+      </div>
+    `).join('');
   }catch(e){
     document.getElementById('rc-nfs-lista').innerHTML = '<div class="rc-empty" style="color:var(--vermelho)">Erro: '+e.message+'</div>';
   }
+}
+
+async function rcToggleNf(nfId){
+  const seta = document.getElementById('rc-nf-seta-'+nfId);
+  const corpo = document.getElementById('rc-nf-corpo-'+nfId);
+  const abrindo = !corpo.classList.contains('aberto');
+  seta.style.transform = abrindo ? 'rotate(90deg)' : '';
+  corpo.classList.toggle('aberto', abrindo);
+  if(abrindo && !rcNfItensCache[nfId]){
+    corpo.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--cinza-4)">Carregando itens...</div>';
+    try{
+      const itens = await sbFetch(`nf_itens?select=*&nota_fiscal_id=eq.${nfId}&order=id.asc`);
+      rcNfItensCache[nfId] = itens || [];
+      rcRenderizarItensNf(nfId);
+    }catch(e){
+      corpo.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--vermelho)">Erro ao carregar itens: '+e.message+'</div>';
+    }
+  }
+}
+
+function rcRenderizarItensNf(nfId){
+  const corpo = document.getElementById('rc-nf-corpo-'+nfId);
+  const itens = rcNfItensCache[nfId] || [];
+  if(!itens.length){ corpo.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--cinza-4)">Nenhum item registrado nesta NF.</div>'; return; }
+  corpo.innerHTML = `<div style="overflow-x:auto;padding:0 16px 12px"><table>
+    <thead><tr><th>Material</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
+    <tbody>${itens.map(it => `<tr>
+      <td>${rcNomeMaterial(it.material_id)}</td>
+      <td style="text-align:right">${it.qtd}</td>
+      <td style="text-align:right">${rcMoney(it.valor_unitario)}</td>
+      <td style="text-align:right;font-weight:600">${rcMoney(it.valor_item)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 // ── DEVOLUÇÃO AO FORNECEDOR ────────────────────────────────────
