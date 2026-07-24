@@ -2353,7 +2353,7 @@ async function coCarregar(){
 }
 
 async function coAbrir(id){
-  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes(*)&cotacao_id=eq.${id}&order=id.asc`);
+  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
   coCotacaoId = id;
   coItens = (its||[]).map(it=>({
     id: it.id,
@@ -2630,7 +2630,7 @@ async function deCarregar(){
       return;
     }
     deCotacaoId = cots[0].id;
-    const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes(*)&cotacao_id=eq.${deCotacaoId}&order=id.asc`);
+    const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${deCotacaoId}&order=id.asc`);
     deItens = (its||[]).map(it => ({
       item_id: it.id,
       material_id: it.material_id,
@@ -2857,7 +2857,7 @@ async function hiToggle(id){
 async function hiCarregarDetalhe(id){
   const corpo = document.getElementById('hi-corpo-'+id);
   try{
-    const its = await sbFetch(`cotacao_itens?select=id,material_nome,qtd_desejada,opcao_escolhida_id,cotacao_opcoes(*)&cotacao_id=eq.${id}&order=id.asc`);
+    const its = await sbFetch(`cotacao_itens?select=id,material_nome,qtd_desejada,opcao_escolhida_id,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
     hiDetalhes[id] = its || [];
     hiRenderizarDetalhe(id);
   }catch(e){
