@@ -315,6 +315,7 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   <div class="aba" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
   <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
   <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
+  <div class="aba" id="aba-btn-decisao" onclick="trocarAba('decisao')">📋 Decisão</div>
 </div>
 
 <div class="container">
@@ -561,6 +562,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-comprar .ac-forn-sel:focus{outline:none;border-style:solid}
 </style>
 <div id="aba-comprar" class="container" style="display:none">
+  <div class="ac-search" style="margin-bottom:10px">
+    <label>🔍 Localizar item nesta lista <span id="ac-filtro-count" style="font-weight:400;text-transform:none;color:var(--cinza-3)"></span></label>
+    <input id="ac-filtro" placeholder="digite o nome do item… ex: xylo, dipirona, luva" oninput="acFiltrar()">
+  </div>
   <div class="ac-search">
     <label>➕ Incluir item na compra (fora da regra do mínimo)</label>
     <input id="ac-busca" placeholder="buscar no catálogo por nome… ex: xylo, fio nylon, metil">
@@ -597,6 +602,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #aba-cotacao .co-addop{flex:0 0 auto;align-self:center;background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-cotacao .co-x{background:none;border:none;color:var(--vermelho);cursor:pointer;font-size:11px;font-weight:700}
   #aba-cotacao .co-empty{text-align:center;padding:34px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-cotacao .co-grupo-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;margin:18px 0 8px;background:var(--azul);color:#fff;border-radius:8px;font-size:13px;font-weight:700}
+  #aba-cotacao .co-grupo-head:first-child{margin-top:0}
+  #aba-cotacao .co-grupo-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+  #aba-cotacao .co-grupo-sel{width:auto !important;display:inline-block;font-size:11px !important;padding:2px 5px !important;margin:0 !important;border-radius:5px !important}
   #aba-cotacao .co-wa{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:12px}
   #aba-cotacao .co-wa-head{font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   #aba-cotacao .co-wa-head button{background:var(--verde);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
@@ -605,6 +614,8 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 <div id="aba-cotacao" class="container" style="display:none">
   <div class="co-bar">
     <span class="co-status" id="co-status">Rascunho</span>
+    <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
+    <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens do alerta</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
@@ -617,6 +628,55 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   </div>
   <div id="co-corpo"><div class="co-empty">Carregando…</div></div>
   <div id="co-wa-box" style="margin-top:16px"></div>
+</div>
+
+<!-- ═══ ABA DECISÃO (COMPRA) ═══ -->
+<style>
+  #aba-decisao .de-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px}
+  #aba-decisao .de-status{font-size:12px;color:var(--cinza-4);font-weight:700;margin-right:auto}
+  #aba-decisao .de-bar button{font-size:12px;font-weight:700;font-family:var(--fonte);padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+  #aba-decisao .de-refresh{background:var(--azul-medio);color:#fff}
+  #aba-decisao .de-confirmar{background:var(--verde);color:#fff}
+  #aba-decisao .de-item{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:14px;overflow:hidden}
+  #aba-decisao .de-ihead{padding:12px 14px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2)}
+  #aba-decisao .de-inome{font-size:14px;font-weight:700}
+  #aba-decisao .de-iref{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:11px;color:var(--cinza-4)}
+  #aba-decisao .de-iref b{color:var(--cinza-5)}
+  #aba-decisao .de-saldo-baixo{color:var(--vermelho);font-weight:700}
+  #aba-decisao .de-qtd-desejada{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;font-weight:700;color:var(--cinza-4)}
+  #aba-decisao .de-qtd-desejada input{width:70px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;text-align:center}
+  #aba-decisao .de-ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--cinza-2)}
+  #aba-decisao .de-op{background:#fff;padding:12px 14px;cursor:pointer;border-top:3px solid transparent}
+  #aba-decisao .de-op:hover{background:var(--cinza-1)}
+  #aba-decisao .de-op.de-chosen{background:var(--verde-claro);border-top-color:var(--verde)}
+  #aba-decisao .de-op.de-vazia{opacity:.4;cursor:default}
+  #aba-decisao .de-sfor{font-weight:700;font-size:12px;color:var(--cinza-5);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  #aba-decisao .de-pick{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid var(--cinza-3);background:#fff;color:var(--cinza-4)}
+  #aba-decisao .de-op.de-chosen .de-pick{background:var(--verde);color:#fff;border-color:var(--verde)}
+  #aba-decisao .de-f{display:flex;justify-content:space-between;font-size:12px;margin:3px 0}
+  #aba-decisao .de-lb{color:var(--cinza-4);font-size:10px;text-transform:uppercase}
+  #aba-decisao .de-un{font-weight:700;color:var(--azul)}
+  #aba-decisao .de-best{font-size:9px;font-weight:700;background:var(--azul-claro);color:var(--azul);padding:1px 6px;border-radius:10px;margin-left:5px}
+  #aba-decisao .de-resumo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px 18px;margin-top:18px}
+  #aba-decisao .de-rgrp{border:1px solid var(--cinza-2);border-radius:8px;padding:10px 13px;margin-bottom:10px}
+  #aba-decisao .de-rf{font-weight:700;font-size:13px;color:var(--verde);margin-bottom:6px;display:flex;justify-content:space-between}
+  #aba-decisao .de-ri{font-size:12px;color:var(--cinza-5);display:flex;justify-content:space-between;padding:2px 0}
+  #aba-decisao .de-tot{text-align:right;font-weight:700;font-size:15px;margin-top:8px;color:var(--cinza-5)}
+  #aba-decisao .de-empty{text-align:center;padding:40px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
+  #aba-decisao .de-atrasado{color:var(--vermelho)}
+</style>
+<div id="aba-decisao" class="container" style="display:none">
+  <div class="de-bar">
+    <span class="de-status" id="de-status">Carregando...</span>
+    <button class="de-refresh" onclick="deAtualizarSaldos()">🔄 Atualizar saldos agora</button>
+    <button class="de-confirmar" onclick="deConfirmarCompra()">✔ Confirmar compra</button>
+  </div>
+  <div id="de-corpo"><div class="de-empty">Carregando cotação...</div></div>
+  <div class="de-resumo" id="de-resumo-box" style="display:none">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">Resumo da decisão — por fornecedor</div>
+    <div id="de-resumo"></div>
+    <div class="de-tot" id="de-total"></div>
+  </div>
 </div>
 
 <!-- MODAL REVISÃO -->
@@ -1915,7 +1975,7 @@ async function enviarDiversas() {
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
   // Abas Aprovação, Comprar e Cotação protegidas por senha (liberadas uma vez por dispositivo)
-  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao') && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
@@ -1927,14 +1987,17 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-aprovacao').classList.toggle('ativa', aba==='aprovacao');
   document.getElementById('aba-btn-comprar').classList.toggle('ativa', aba==='comprar');
   document.getElementById('aba-btn-cotacao').classList.toggle('ativa', aba==='cotacao');
+  document.getElementById('aba-btn-decisao').classList.toggle('ativa', aba==='decisao');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
   document.getElementById('aba-comprar').style.display   = aba==='comprar'   ? '' : 'none';
   document.getElementById('aba-cotacao').style.display   = aba==='cotacao'   ? '' : 'none';
+  document.getElementById('aba-decisao').style.display   = aba==='decisao'   ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='cotacao')   { coCarregar(); }
+  if (aba==='decisao')   { deCarregar(); }
 }
 
 function limparForm() {
@@ -2070,6 +2133,29 @@ function acGrupo(nome,itens,tipo){
     <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
     <th>Última compra</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>`;
 }
+// Localiza item na lista já carregada (filtra sem recarregar do banco)
+function acFiltrar(){
+  const campo = document.getElementById('ac-filtro');
+  const contador = document.getElementById('ac-filtro-count');
+  if (!campo) return;
+  const termo = normNome(campo.value.trim());
+  const linhas = document.querySelectorAll('#ac-lista tr[data-mid]');
+  let visiveis = 0;
+  linhas.forEach(tr => {
+    const nomeEl = tr.querySelector('.ac-item');
+    const texto = nomeEl ? normNome(nomeEl.textContent) : '';
+    const bate = !termo || texto.includes(termo);
+    tr.style.display = bate ? '' : 'none';
+    if (bate) visiveis++;
+  });
+  // Esconde o bloco do fornecedor inteiro se nenhum item dele estiver visível
+  document.querySelectorAll('#ac-lista .ac-forn').forEach(grupo => {
+    const temVisivel = [...grupo.querySelectorAll('tr[data-mid]')].some(tr => tr.style.display !== 'none');
+    grupo.style.display = (termo && !temVisivel) ? 'none' : '';
+  });
+  contador.textContent = termo ? `— ${visiveis} encontrado(s)` : '';
+}
+
 function acRender(){
   const precisa=acAlerta.filter(r=>r.alerta_compra&&String(r.alerta_compra).trim()!=='');
   const grupos={};
@@ -2092,6 +2178,7 @@ function acRender(){
     if(this.textContent==='Remover'){ acManuais=acManuais.filter(m=>m.material_id!==mid); acRender(); }
     else { tr.style.opacity='0.4'; toast('Item adiado (visual).',''); }
   }));
+  acFiltrar(); // reaplica o filtro (se houver texto digitado) após recarregar a lista
 }
 
 // Envia o item da aba Comprar para a Cotação (reaproveita o estado coItens/coOpVazia)
@@ -2113,7 +2200,7 @@ function acEnviarParaCotacao(materialId){
 
   coItens.push({
     id: null, material_id: row.material_id, material_nome: row.material,
-    qtd_desejada: sug > 0 ? sug : null, saldo: saldo, minimo: minimo,
+    qtd_desejada: sug > 0 ? sug : null, saldo: saldo, minimo: minimo, grupo: (typeof coGrupoAtual !== 'undefined' ? coGrupoAtual : 'Orçamento 1'),
     opcoes: [op1, coOpVazia(2), coOpVazia(3)]
   });
   if (typeof coRender === 'function') coRender();
@@ -2182,6 +2269,41 @@ let coItens = [];            // itens em tela
 let coFornecedores = [];     // catálogo de fornecedores {id,nome}
 let coBuscaTimer = null;
 let coBuscaRes = [];
+let coGrupoAtual = 'Orçamento 1'; // grupo em que novos itens entram (organiza a tela quando há vários orçamentos misturados)
+
+function coGruposDistintos(){
+  const lista = [];
+  for(const it of coItens){ const g = it.grupo || 'Orçamento 1'; if(!lista.includes(g)) lista.push(g); }
+  return lista.length ? lista : ['Orçamento 1'];
+}
+function coAtualizaLabelGrupo(){
+  const el = document.getElementById('co-grupo-atual-label');
+  if (el) el.textContent = coGrupoAtual;
+}
+function coNovoGrupo(){
+  const sugestao = 'Orçamento ' + (coGruposDistintos().length + 1);
+  const nome = prompt('Nome do novo grupo de orçamento:', sugestao);
+  if (!nome || !nome.trim()) return;
+  coGrupoAtual = nome.trim();
+  coAtualizaLabelGrupo();
+  toast('Grupo "' + coGrupoAtual + '" ativo — itens adicionados agora entram nele.', 'sucesso');
+}
+function coGrupoOptions(sel){
+  let h = '';
+  for (const g of coGruposDistintos()) h += `<option value="${g}" ${g===sel?'selected':''}>${g}</option>`;
+  h += '<option value="__novo__">+ novo grupo…</option>';
+  return h;
+}
+function coMoverGrupo(i, val){
+  if (val === '__novo__') {
+    const nome = prompt('Nome do novo grupo:');
+    if (!nome || !nome.trim()) { coRender(); return; }
+    coItens[i].grupo = nome.trim();
+  } else {
+    coItens[i].grupo = val;
+  }
+  coRender();
+}
 
 function coMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function coNum(v){ const n=parseFloat((''+v).replace(',','.')); return isNaN(n)?null:n; }
@@ -2213,10 +2335,12 @@ async function coAbrir(id){
     qtd_desejada: it.qtd_desejada,
     saldo: it.saldo_no_momento,
     minimo: it.estoque_minimo,
+    grupo: it.grupo || 'Orçamento 1',
     opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
   }));
   coGaranteSlots();
   coRender();
+  coAtualizaLabelGrupo();
   toast('Cotação #'+id+' carregada.','sucesso');
 }
 function coOpMap(o){
@@ -2237,7 +2361,7 @@ function coGaranteSlots(){
 
 function coNova(){
   if(coItens.length && !confirm('Isto vai limpar a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
-  coCotacaoId=null; coItens=[]; coRender();
+  coCotacaoId=null; coItens=[]; coGrupoAtual='Orçamento 1'; coAtualizaLabelGrupo(); coRender();
   toast('Nova cotação (rascunho). Puxe os itens do alerta ou busque no catálogo.','');
 }
 
@@ -2253,7 +2377,7 @@ async function coPuxarAlerta(){
       if(r.fornecedor_padrao_id){ op1.fornecedor_id=r.fornecedor_padrao_id; }
       if(r.marca){ op1.marca=r.marca; }
       coItens.push({ id:null, material_id:r.material_id, material_nome:r.material,
-        qtd_desejada:sug>0?sug:null, saldo:saldo, minimo:minimo,
+        qtd_desejada:sug>0?sug:null, saldo:saldo, minimo:minimo, grupo: coGrupoAtual,
         opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
       add++;
     }
@@ -2285,7 +2409,7 @@ function coAddBusca(idx){
   if(coItens.find(x=>x.material_id===m.id)){ toast('Item já está na cotação.',''); return; }
   const op1=coOpVazia(1); if(m.fornecedor_padrao_id) op1.fornecedor_id=m.fornecedor_padrao_id; if(m.marca) op1.marca=m.marca;
   coItens.push({ id:null, material_id:m.id, material_nome:m.nome, qtd_desejada:null,
-    saldo:null, minimo:m.estoque_minimo, opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
+    saldo:null, minimo:m.estoque_minimo, grupo: coGrupoAtual, opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
   document.getElementById('co-busca').value=''; document.getElementById('co-busca-res').style.display='none';
   coRender(); toast(m.nome+' adicionado.','sucesso');
 }
@@ -2344,7 +2468,9 @@ function coCardItem(i,it){
   if(it.minimo!=null) info.push('mín '+it.minimo);
   return `<div class="co-item" id="co-item-${i}">
     <div class="co-ihead">
-      <div><div class="co-inome">${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}</div></div>
+      <div><div class="co-inome">${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}
+        <select class="co-grupo-sel" onchange="coMoverGrupo(${i},this.value)" title="mover para outro grupo de orçamento">${coGrupoOptions(it.grupo||'Orçamento 1')}</select>
+      </div></div>
       <div class="co-iqtd">Qtd desejada <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coItens[${i}].qtd_desejada=coNum(this.value)">
         <button class="co-x" onclick="coRemoveItem(${i})" title="remover item">✕ item</button></div>
     </div>
@@ -2353,11 +2479,28 @@ function coCardItem(i,it){
 }
 function coRender(){
   coGaranteSlots();
+  coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
   head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
   const corpo=document.getElementById('co-corpo');
   if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use “Puxar itens do alerta” ou a busca acima.</div>'; return; }
-  corpo.innerHTML=coItens.map((it,i)=>coCardItem(i,it)).join('');
+
+  // Agrupa por "grupo de orçamento", preservando a ordem em que cada grupo apareceu primeiro
+  const ordemGrupos = [];
+  const porGrupo = {};
+  coItens.forEach((it,i)=>{
+    const g = it.grupo || 'Orçamento 1';
+    if(!porGrupo[g]){ porGrupo[g]=[]; ordemGrupos.push(g); }
+    porGrupo[g].push(i);
+  });
+
+  let html='';
+  for(const g of ordemGrupos){
+    const idxs = porGrupo[g];
+    html += `<div class="co-grupo-head"><span>🗂️ ${g}</span><span class="co-grupo-count">${idxs.length} ${idxs.length>1?'itens':'item'}</span></div>`;
+    html += idxs.map(i=>coCardItem(i, coItens[i])).join('');
+  }
+  corpo.innerHTML = html;
   coItens.forEach((it,i)=>coAtualizaUnit(i));
 }
 
@@ -2377,7 +2520,8 @@ async function coSalvar(){
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
-        qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo });
+        qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo,
+        grupo: it.grupo || 'Orçamento 1' });
       const itemId=ins&&ins[0]&&ins[0].id;
       it.id=itemId;
       const ops=it.opcoes
@@ -2429,6 +2573,209 @@ function coCopiar(id){
   ta.select();
   try{ document.execCommand('copy'); toast('Texto copiado ✓','sucesso'); }
   catch(e){ if(navigator.clipboard){ navigator.clipboard.writeText(ta.value); toast('Texto copiado ✓','sucesso'); } }
+}
+</script>
+
+<script>
+// ═══ ABA DECISÃO (COMPRA) — lê a cotação salva e o saldo SEMPRE em tempo real ═══
+let deCotacaoId = null;
+let deItens = [];          // [{item_id, material_id, nome, qtd_desejada, opcoes:[...], escolhidaSlot, qtdComprar}]
+let deReferencias = {};    // material_id -> linha fresca da vw_alerta_compras (saldo, última compra...)
+
+function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+function deData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
+function deUnit(o){ return (o.preco_total!=null && o.qtd_embalagem) ? o.preco_total/o.qtd_embalagem : null; }
+function deFornNome(o){ return o.fornecedor_nome || (coFornecedores.find(f=>f.id===o.fornecedor_id)||{}).nome || null; }
+
+async function deCarregar(){
+  document.getElementById('de-corpo').innerHTML = '<div class="de-empty">Carregando cotação...</div>';
+  document.getElementById('de-resumo-box').style.display = 'none';
+  try{
+    if(!coFornecedores.length){
+      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    }
+    // Pega a cotação mais recente que ainda não foi fechada
+    const cots = await sbFetch("cotacoes?select=id,status,criado_por,created_at&status=not.eq.fechada&order=id.desc&limit=1");
+    if(!cots || !cots.length){
+      deCotacaoId = null; deItens = [];
+      document.getElementById('de-status').textContent = 'Nenhuma cotação em aberto.';
+      document.getElementById('de-corpo').innerHTML = '<div class="de-empty">Nenhuma cotação salva ainda. Preencha a aba 🧾 Cotação primeiro.</div>';
+      return;
+    }
+    deCotacaoId = cots[0].id;
+    const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes(*)&cotacao_id=eq.${deCotacaoId}&order=id.asc`);
+    deItens = (its||[]).map(it => ({
+      item_id: it.id,
+      material_id: it.material_id,
+      nome: it.material_nome,
+      qtd_desejada: it.qtd_desejada,
+      grupo: it.grupo || 'Orçamento 1',
+      opcoes: (it.cotacao_opcoes||[]).filter(o => o.fornecedor_id || o.fornecedor_nome || o.preco_total!=null).sort((a,b)=>(a.slot||0)-(b.slot||0)),
+      escolhidaId: it.opcao_escolhida_id,
+      qtdComprar: it.qtd_desejada,
+    }));
+    document.getElementById('de-status').textContent = `Cotação #${deCotacaoId} (${cots[0].criado_por||'—'}) · ${deItens.length} item(ns)`;
+    await deAtualizarSaldos(true);
+  }catch(e){
+    document.getElementById('de-corpo').innerHTML = '<div class="de-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+  }
+}
+
+// Busca o saldo e as referências de compra SEMPRE frescas do banco — nunca usa dado salvo antigo
+async function deAtualizarSaldos(silencioso){
+  if(!deItens.length){ deRenderizar(); return; }
+  try{
+    const ids = [...new Set(deItens.map(it=>it.material_id))].join(',');
+    const rows = await sbFetch(`vw_alerta_compras?select=material_id,material,saldo_total,estoque_minimo,uc_data,uc_fornecedor,uc_valor_unitario,uc_qtd,uc_dentro_2meses&material_id=in.(${ids})`);
+    deReferencias = {};
+    for(const r of (rows||[])) deReferencias[r.material_id] = r;
+    deRenderizar();
+    if(!silencioso) toast('Saldos atualizados agora ✓','sucesso');
+  }catch(e){
+    if(!silencioso) toast('Erro ao atualizar saldos: '+e.message,'erro');
+  }
+}
+
+function deCardOpcao(it, o, melhorUnit){
+  const u = deUnit(o);
+  const nome = deFornNome(o) || '(sem fornecedor)';
+  const vazia = !o.fornecedor_id && !o.fornecedor_nome && o.preco_total==null;
+  const escolhida = it.escolhidaSlot === o.slot;
+  if(vazia) return `<div class="de-op de-vazia"><div class="de-sfor">${nome}</div></div>`;
+  return `<div class="de-op ${escolhida?'de-chosen':''}" onclick="deEscolher(${it.item_id},${o.slot})">
+    <div class="de-sfor">${nome}<span class="de-pick">${escolhida?'✔ escolhido':'escolher'}</span></div>
+    ${o.marca?`<div class="de-f"><span class="de-lb">Marca</span><span>${o.marca}</span></div>`:''}
+    ${o.apresentacao?`<div class="de-f"><span class="de-lb">Apres.</span><span>${o.apresentacao}</span></div>`:''}
+    <div class="de-f"><span class="de-lb">Preço total</span><span>${deMoney(o.preco_total)}</span></div>
+    <div class="de-f"><span class="de-lb">R$/un</span><span class="de-un">${deMoney(u)}${(u!=null&&u===melhorUnit)?'<span class="de-best">menor</span>':''}</span></div>
+  </div>`;
+}
+
+function deCardItem(it){
+  const ref = deReferencias[it.material_id] || {};
+  const saldo = ref.saldo_total ?? '—';
+  const minimo = ref.estoque_minimo ?? '—';
+  const baixoCls = (typeof saldo === 'number' && typeof minimo === 'number' && saldo <= minimo) ? 'de-saldo-baixo' : '';
+  const unidades = it.opcoes.map(deUnit).filter(u=>u!=null);
+  const melhorUnit = unidades.length ? Math.min(...unidades) : null;
+  const ops = it.opcoes.map(o => deCardOpcao(it,o,melhorUnit)).join('');
+
+  let ucRef = '<span style="color:#9a6060;font-style:italic">nenhuma compra registrada</span>';
+  if(ref.uc_data){
+    const antigo = ref.uc_dentro_2meses ? '' : ' (fora dos últimos 2 meses)';
+    ucRef = `<b>${deData(ref.uc_data)}</b> · ${ref.uc_fornecedor||'—'} · qtd <b>${ref.uc_qtd??'—'}</b> · <b>${deMoney(ref.uc_valor_unitario)}/un</b>${antigo}`;
+  }
+
+  return `<div class="de-item" id="de-item-${it.item_id}">
+    <div class="de-ihead">
+      <div class="de-inome">${it.nome}</div>
+      <div class="de-iref">
+        <span>Saldo agora: <b class="${baixoCls}">${saldo}</b></span>
+        <span>Mínimo: <b>${minimo}</b></span>
+        <span>Última compra: ${ucRef}</span>
+      </div>
+      <div class="de-qtd-desejada">Quantidade a comprar:
+        <input type="number" min="0" value="${it.qtdComprar??''}" onchange="deSetQtd(${it.item_id},this.value)">
+      </div>
+    </div>
+    <div class="de-ops">${ops}</div>
+  </div>`;
+}
+
+function deRenderizar(){
+  const corpo = document.getElementById('de-corpo');
+  if(!deItens.length){ corpo.innerHTML = '<div class="de-empty">Nenhum item nesta cotação.</div>'; document.getElementById('de-resumo-box').style.display='none'; return; }
+
+  // Agrupar visualmente por "grupo de orçamento" (mesmos grupos definidos na aba Cotação)
+  const ordemGrupos = [];
+  const porGrupo = {};
+  for(const it of deItens){
+    const g = it.grupo || 'Orçamento 1';
+    if(!porGrupo[g]){ porGrupo[g]=[]; ordemGrupos.push(g); }
+    porGrupo[g].push(it);
+  }
+  let html = '';
+  for(const g of ordemGrupos){
+    html += `<div class="co-grupo-head" style="background:var(--azul-medio)"><span>🗂️ ${g}</span><span class="co-grupo-count">${porGrupo[g].length} item(ns)</span></div>`;
+    html += porGrupo[g].map(deCardItem).join('');
+  }
+  corpo.innerHTML = html;
+  deResumo();
+}
+
+function deEscolher(itemId, slot){
+  const it = deItens.find(x=>x.item_id===itemId); if(!it) return;
+  it.escolhidaSlot = (it.escolhidaSlot===slot) ? null : slot;
+  deRenderizar();
+}
+function deSetQtd(itemId, val){
+  const it = deItens.find(x=>x.item_id===itemId); if(!it) return;
+  const n = parseFloat((''+val).replace(',','.'));
+  it.qtdComprar = isNaN(n) ? null : n;
+  deResumo();
+}
+
+function deResumo(){
+  const box = document.getElementById('de-resumo-box');
+  const escolhidos = deItens.filter(it => it.escolhidaSlot!=null && it.qtdComprar>0);
+  if(!escolhidos.length){ box.style.display='none'; return; }
+  box.style.display = '';
+  const grupos = {};
+  let total = 0;
+  for(const it of escolhidos){
+    const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot); if(!o) continue;
+    const u = deUnit(o) || 0;
+    const sub = u * it.qtdComprar;
+    total += sub;
+    const nome = deFornNome(o) || '(sem fornecedor)';
+    (grupos[nome]=grupos[nome]||[]).push({nome:it.nome, qtd:it.qtdComprar, sub});
+  }
+  document.getElementById('de-resumo').innerHTML = Object.keys(grupos).map(fo=>{
+    const st = grupos[fo].reduce((a,b)=>a+b.sub,0);
+    return `<div class="de-rgrp"><div class="de-rf"><span>${fo}</span><span>${deMoney(st)}</span></div>${grupos[fo].map(i=>`<div class="de-ri"><span>${i.nome} · ${i.qtd} un</span><span>${deMoney(i.sub)}</span></div>`).join('')}</div>`;
+  }).join('');
+  document.getElementById('de-total').textContent = 'Total da compra: ' + deMoney(total);
+}
+
+async function deConfirmarCompra(){
+  const escolhidos = deItens.filter(it => it.escolhidaSlot!=null && it.qtdComprar>0);
+  if(!escolhidos.length){ toast('Escolha ao menos um item com fornecedor e quantidade.','erro'); return; }
+
+  const semFornCadastrado = escolhidos.filter(it => {
+    const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot);
+    return o && !o.fornecedor_id && o.fornecedor_nome;
+  });
+  let msg = `Confirmar compra de ${escolhidos.length} item(ns)?`;
+  if(semFornCadastrado.length) msg += `\n\n⚠️ ${semFornCadastrado.length} item(ns) têm fornecedor digitado manualmente (não cadastrado) — serão criados sem vínculo de fornecedor na ordem.`;
+  if(!confirm(msg)) return;
+
+  try{
+    for(const it of escolhidos){
+      const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot); if(!o) continue;
+      const u = deUnit(o);
+      const ref = deReferencias[it.material_id] || {};
+      await sbFetch('ordens_compra','POST',{
+        material_id: it.material_id,
+        fornecedor_id: o.fornecedor_id || null,
+        fornecedor_compra_id: o.fornecedor_id || null,
+        status: 'COMPRAR',
+        situacao: 'PENDENTE',
+        saldo_no_momento: ref.saldo_total ?? null,
+        estoque_minimo: ref.estoque_minimo ?? null,
+        qtd_a_comprar: it.qtdComprar,
+        qtd_comprada: it.qtdComprar,
+        valor_unitario: u,
+        ultimo_valor_pago: ref.uc_valor_unitario ?? null,
+        observacao: 'Gerado pela Decisão — Cotação #' + deCotacaoId + (o.marca?(' — marca: '+o.marca):'') + (o.apresentacao?(' — '+o.apresentacao):''),
+      });
+      // marca a opção escolhida e o item decidido (histórico)
+      await sbFetch(`cotacao_opcoes?id=eq.${o.id}`,'PATCH',{ escolhida:true });
+      await sbFetch(`cotacao_itens?id=eq.${it.item_id}`,'PATCH',{ opcao_escolhida_id:o.id });
+    }
+    await sbFetch(`cotacoes?id=eq.${deCotacaoId}`,'PATCH',{ status:'fechada' });
+    toast(`Compra confirmada — ${escolhidos.length} ordem(ns) de compra criada(s) ✓`,'sucesso');
+    deCarregar();
+  }catch(e){ toast('Erro ao confirmar compra: '+e.message,'erro'); }
 }
 </script>
 
