@@ -591,6 +591,7 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .ac-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff;display:inline-block;margin-top:3px}
   #aba-comprar .ac-urg{background:var(--vermelho)} #aba-comprar .ac-com{background:#B7950B} #aba-comprar .ac-ate{background:var(--azul-medio)} #aba-comprar .ac-ok{background:var(--cinza-3)}
   #aba-comprar .ac-etapa{font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:#EBEAFC;color:#6f42c1;margin-left:6px;text-transform:uppercase}
+  #aba-comprar .ac-vigilancia{font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;margin-left:6px;text-transform:uppercase}
   #aba-comprar .ac-min{width:60px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 6px;text-align:right;font-size:13px;background:#FFFDF3;font-family:var(--fonte)}
   #aba-comprar .ac-min:focus{border-color:var(--azul-medio);outline:none}
   #aba-comprar .ac-baixo{color:var(--vermelho);font-weight:700}
@@ -2432,13 +2433,33 @@ async function acCarregar(){
     if(!acFornecedores.length){
       try{ acFornecedores = await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=300'); }catch(e){}
     }
+    if(!catalogoMateriais.length){
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+      todosOsMateriais = catalogoMateriais.map(m=>m.nome);
+    }
     const rows = await sbFetch('vw_alerta_compras?select=*&order=material.asc&limit=1000');
     acAlerta = rows||[];
+
+    // Busca TODO pedido ativo direto da tabela — independente do saldo estar em alerta agora ou não
+    // (corrige o item que "some" quando o saldo melhora mas o pedido continua pendente)
+    const pedidosAtivos = await sbFetch("ordens_compra?select=material_id,situacao,fornecedor_compra_id,fornecedor_id&situacao=in.(PENDENTE,\"NF EMITIDA\")&order=id.desc");
+    acPedidosAtivos = {};
+    for(const p of (pedidosAtivos||[])){
+      if(!acPedidosAtivos[p.material_id]){ // mantém o mais recente por material
+        acPedidosAtivos[p.material_id] = {
+          etapa_status: p.situacao === 'PENDENTE' ? 'PEDIDO PENDENTE' : 'NF EMITIDA',
+          fornecedor_id: p.fornecedor_compra_id || p.fornecedor_id,
+        };
+      }
+    }
+
     acRender();
   }catch(e){
     document.getElementById('ac-lista').innerHTML='<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
+let acPedidosAtivos = {}; // material_id -> {etapa_status, fornecedor_id} — pedidos ativos, sempre visíveis
+
 function acLinha(r){
   const [txt,cls]=acSit(Number(r.saldo_total),Number(r.estoque_minimo),r.alerta_compra);
   const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
@@ -2450,6 +2471,7 @@ function acLinha(r){
     uc=`<span class="${c2}">${acData(r.uc_data)} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
   } else uc='<span class="ac-none">nenhuma compra</span>';
   const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
+  const vigilancia = r._vigilancia ? `<span class="ac-vigilancia" title="Já tem pedido em andamento, mas saldo ainda está bem próximo do mínimo">👀 Acompanhar</span>` : '';
   const porConsumo = !!r.gatilho_por_consumo;
   const tagCriterio = `<span class="ac-criterio ${porConsumo?'ac-criterio-consumo':'ac-criterio-minimo'}"
     onclick="acAlternarCriterio(${r.material_id}, ${porConsumo}, '${(r.material||'').replace(/'/g,"\\'")}')" title="Clique para alternar o critério de alerta deste item">
@@ -2462,7 +2484,7 @@ function acLinha(r){
         ${acFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
       </select>`;
   return `<tr data-mid="${r.material_id}" data-saldo="${saldo}">
-    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}<br>${tagCriterio}</td>
+    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}${vigilancia}<br>${tagCriterio}</td>
     <td class="ac-forncol">${colForn}</td>
     <td class="num"><input class="ac-min" value="${minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
     <td class="num ac-saldo ${baixo}">${acN0(saldo)}</td>
@@ -2522,20 +2544,50 @@ function acFiltrar(){
 }
 
 function acRender(){
-  const precisa = acAlerta.filter(r=>r.alerta_compra && String(r.alerta_compra).trim()!=='');
-  const todosBruto = [
-    ...acManuais.map(r=>({...r, _manual:true})),
+  // "Já em andamento" agora vem direto dos pedidos ativos no banco — SEMPRE aparece,
+  // mesmo que o saldo do item já esteja ok no momento (corrige item que "sumia")
+  const jaEmAndamento = Object.keys(acPedidosAtivos).map(materialId => {
+    const pedido = acPedidosAtivos[materialId];
+    const ref = acAlerta.find(r => String(r.material_id) === String(materialId));
+    const nomeMat = ref ? ref.material : rcNomeMaterial ? rcNomeMaterial(Number(materialId)) : ('material #'+materialId);
+    const nomeForn = pedido.fornecedor_id ? (acFornecedores.find(f=>f.id===pedido.fornecedor_id)||{}).nome : null;
+    return {
+      material_id: Number(materialId), material: nomeMat,
+      etapa_status: pedido.etapa_status, fornecedor_padrao: nomeForn,
+      saldo_total: ref ? ref.saldo_total : null,
+      estoque_minimo: ref ? ref.estoque_minimo : null,
+    };
+  });
+  const idsEmAndamento = new Set(jaEmAndamento.map(r => r.material_id));
+
+  // Faixa de vigilância: mesmo com pedido em andamento, se o saldo estiver entre
+  // 90% e 110% do mínimo, o item continua aparecendo na lista principal também
+  // (é uma faixa arriscada de ficar sem cobertura)
+  const idsVigilancia = new Set(
+    jaEmAndamento
+      .filter(r => {
+        const min = Number(r.estoque_minimo);
+        const saldo = Number(r.saldo_total);
+        if (!min || min <= 0 || saldo == null || isNaN(saldo)) return false;
+        const razao = saldo / min;
+        return razao >= 0.9 && razao <= 1.1;
+      })
+      .map(r => r.material_id)
+  );
+  const idsOcultarDaLista = new Set([...idsEmAndamento].filter(id => !idsVigilancia.has(id)));
+
+  const precisa = acAlerta
+    .filter(r=>r.alerta_compra && String(r.alerta_compra).trim()!=='' && !idsOcultarDaLista.has(r.material_id))
+    .map(r => ({ ...r, _vigilancia: idsVigilancia.has(r.material_id) }));
+  const todos = [
+    ...acManuais.filter(r=>!idsOcultarDaLista.has(r.material_id)).map(r=>({...r, _manual:true})),
     ...precisa.map(r=>({...r, _manual:false})),
   ];
 
-  if(!todosBruto.length){
+  if(!todos.length && !jaEmAndamento.length){
     document.getElementById('ac-lista').innerHTML = '<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
     return;
   }
-
-  // Separa quem já tem pedido em andamento (PEDIDO PENDENTE / NF EMITIDA) — não deve ser comprado de novo
-  const jaEmAndamento = todosBruto.filter(r => r.etapa_status);
-  const todos = todosBruto.filter(r => !r.etapa_status);
 
   // Posição de cada item dentro da categoria + qual categoria, na mesma ordem do formulário de saída
   const posItem = {}, catDoItem = {};
