@@ -613,6 +613,11 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .ac-pill.ativa[data-status="ATENÇÃO"]{background:var(--azul-medio);border-color:var(--azul-medio)}
   #aba-comprar .ac-btn-novo{white-space:nowrap;font-family:var(--fonte);font-size:12px;font-weight:700;padding:9px 14px;border-radius:8px;border:1.5px dashed var(--verde);background:var(--verde-claro);color:var(--verde);cursor:pointer}
   #aba-comprar .ac-btn-novo:hover{background:var(--verde);color:#fff}
+  #aba-comprar .ac-andamento{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:4px 16px 12px;margin-bottom:16px}
+  #aba-comprar .ac-andamento summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:700;color:var(--cinza-4);list-style:none}
+  #aba-comprar .ac-andamento summary::-webkit-details-marker{display:none}
+  #aba-comprar .ac-count-andamento{background:#EBEAFC;color:#6f42c1;border-radius:20px;padding:1px 9px;font-size:11px;margin-left:6px}
+  #aba-comprar .ac-andamento table{opacity:.75}
 </style>
 <div id="aba-comprar" class="container" style="display:none">
   <div class="ac-search" style="margin-bottom:10px">
@@ -2447,7 +2452,7 @@ function acLinha(r){
   const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
   const porConsumo = !!r.gatilho_por_consumo;
   const tagCriterio = `<span class="ac-criterio ${porConsumo?'ac-criterio-consumo':'ac-criterio-minimo'}"
-    onclick="acAlternarCriterio(${r.material_id}, ${porConsumo})" title="Clique para alternar o critério de alerta deste item">
+    onclick="acAlternarCriterio(${r.material_id}, ${porConsumo}, '${(r.material||'').replace(/'/g,"\\'")}')" title="Clique para alternar o critério de alerta deste item">
     ${porConsumo ? '📊 consumo' : '📦 mínimo'}</span>`;
   // Fornecedor agora é só referência/coluna — a decisão de fornecedor acontece na Cotação
   const colForn = r.fornecedor_padrao
@@ -2518,15 +2523,19 @@ function acFiltrar(){
 
 function acRender(){
   const precisa = acAlerta.filter(r=>r.alerta_compra && String(r.alerta_compra).trim()!=='');
-  const todos = [
+  const todosBruto = [
     ...acManuais.map(r=>({...r, _manual:true})),
     ...precisa.map(r=>({...r, _manual:false})),
   ];
 
-  if(!todos.length){
+  if(!todosBruto.length){
     document.getElementById('ac-lista').innerHTML = '<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
     return;
   }
+
+  // Separa quem já tem pedido em andamento (PEDIDO PENDENTE / NF EMITIDA) — não deve ser comprado de novo
+  const jaEmAndamento = todosBruto.filter(r => r.etapa_status);
+  const todos = todosBruto.filter(r => !r.etapa_status);
 
   // Posição de cada item dentro da categoria + qual categoria, na mesma ordem do formulário de saída
   const posItem = {}, catDoItem = {};
@@ -2541,6 +2550,33 @@ function acRender(){
   const normKey = s => (s||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
   const posCat = {}; CATEGORIAS_ORDEM.forEach((c,i)=>posCat[c.label]=i);
 
+  let html = '';
+
+  // Seção retrátil: itens já em andamento (só informativo, sem botão de Orçar)
+  if(jaEmAndamento.length){
+    const linhasAndamento = jaEmAndamento
+      .sort((a,b)=>(a.material||'').localeCompare(b.material||''))
+      .map(r => `<tr>
+        <td>${r.material}</td>
+        <td><span class="ac-etapa">${r.etapa_status}</span></td>
+        <td>${r.fornecedor_padrao || '—'}</td>
+        <td style="text-align:right">${acN0(r.saldo_total)}</td>
+      </tr>`).join('');
+    html += `<details class="ac-andamento">
+      <summary>⏳ Já em andamento — não comprar de novo <span class="ac-count-andamento">${jaEmAndamento.length}</span></summary>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Item</th><th>Status</th><th>Fornecedor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody>${linhasAndamento}</tbody>
+      </table></div>
+    </details>`;
+  }
+
+  if(!todos.length){
+    html += '<div class="ac-empty">Todos os itens em alerta já têm compra em andamento. ✓</div>';
+    document.getElementById('ac-lista').innerHTML = html;
+    return;
+  }
+
   const porCategoria = {}; const ordemCategorias = [];
   for(const r of todos){
     const cat = catDoItem[normKey(r.material)] || 'EXTRAS';
@@ -2549,7 +2585,6 @@ function acRender(){
   }
   ordemCategorias.sort((a,b)=>(posCat[a]??999)-(posCat[b]??999));
 
-  let html = '';
   for(const cat of ordemCategorias){
     const itens = porCategoria[cat].sort((a,b)=>{
       const pa = posItem[normKey(a.material)] ?? 9999, pb = posItem[normKey(b.material)] ?? 9999;
@@ -2635,12 +2670,15 @@ async function acCadastrarNovoMaterial(){
   }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
 }
 
-async function acAlternarCriterio(materialId, atualEraPorConsumo){
+async function acAlternarCriterio(materialId, atualEraPorConsumo, nomeMaterial){
   const novoValor = !atualEraPorConsumo;
+  const de = atualEraPorConsumo ? '📊 por consumo' : '📦 por mínimo';
+  const para = novoValor ? '📊 por consumo' : '📦 por mínimo';
+  if(!confirm(`Alterar o critério de alerta de "${nomeMaterial||'este item'}"?\n\nDe: ${de}\nPara: ${para}`)) return;
   try{
     const r = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', { gatilho_por_consumo: novoValor });
     if(!r || !r.length){ toast('⚠ Sem permissão para gravar (RLS). Rode o SQL da coluna gatilho_por_consumo.', 'erro'); return; }
-    toast('Critério alterado para: ' + (novoValor?'📊 por consumo':'📦 por mínimo') + ' ✓', 'sucesso');
+    toast('Critério alterado para: ' + para + ' ✓', 'sucesso');
     acCarregar();
   }catch(e){ toast('Erro ao alternar critério: '+e.message,'erro'); }
 }
