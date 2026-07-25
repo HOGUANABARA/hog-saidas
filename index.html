@@ -3982,26 +3982,38 @@ async function invCadastrarMaterial(){
 }
 
 // ── EXPORTAR PLANILHA DE CONTAGEM ───────────────────────────────
+// Excel proíbe estes caracteres em nome de aba: \ / ? * [ ] : — e limita a 31 caracteres
+function invNomeAbaSeguro(nome, usados){
+  let seguro = (nome||'Local').replace(/[\\\/\?\*\[\]:]/g, '-').trim().slice(0,31);
+  if(!seguro) seguro = 'Local';
+  let final = seguro, n = 2;
+  while(usados.has(final)){ final = seguro.slice(0, 28) + '_' + n; n++; }
+  usados.add(final);
+  return final;
+}
+
 async function invExportar(){
   try{
     const localId = document.getElementById('inv-export-local').value;
     const locaisAlvo = localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais;
 
-    const materiais = (await sbFetch('materiais?select=id,nome,marca,unidade_medida&ativo=eq.true&order=nome.asc&limit=1000')) || [];
+    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit&ativo=eq.true&order=nome.asc&limit=1000')) || [];
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = e.saldo;
 
     const wb = XLSX.utils.book_new();
+    const nomesUsados = new Set();
     for(const local of locaisAlvo){
-      const linhas = [['ID','Material','Marca','Unidade','Saldo Sistema','Contagem Física']];
+      const linhas = [['ID','Material','Descrição NF','Marca','Unidade','Qtd/Pacote','Saldo Sistema','Contagem Física']];
       for(const m of materiais){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
-        linhas.push([m.id, m.nome, m.marca||'', m.unidade_medida||'', saldo, '']);
+        linhas.push([m.id, m.nome, m.descricao_nf||'', m.marca||'', m.unidade_medida||'', m.qtd_kit??'', saldo, '']);
       }
       const ws = XLSX.utils.aoa_to_sheet(linhas);
-      ws['!cols'] = [{wch:6},{wch:40},{wch:18},{wch:12},{wch:14},{wch:16}];
-      XLSX.utils.book_append_sheet(wb, ws, local.nome.slice(0,31));
+      ws['!cols'] = [{wch:6},{wch:40},{wch:40},{wch:18},{wch:12},{wch:11},{wch:14},{wch:16}];
+      const nomeAba = invNomeAbaSeguro(local.nome, nomesUsados);
+      XLSX.utils.book_append_sheet(wb, ws, nomeAba);
     }
     const dataStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, 'Inventario_HOG_'+dataStr+'.xlsx');
@@ -4016,20 +4028,36 @@ async function invImportar(file){
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, {type:'array'});
     invPendentesImport = [];
+    const avisos = [];
 
     // Sempre busca o saldo FRESCO do banco (nunca usa o saldo que estava na planilha exportada)
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = Number(e.saldo);
 
+    const CABECALHO_ESPERADO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE','SALDO SISTEMA','CONTAGEM FÍSICA'];
+
     for(const sheetName of wb.SheetNames){
-      const local = invLocais.find(l => l.nome.toLowerCase().trim() === sheetName.toLowerCase().trim());
-      if(!local){ continue; } // aba que não corresponde a nenhum local conhecido — ignora
+      const nomeLimpo = s => s.replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
+      const local = invLocais.find(l => nomeLimpo(l.nome) === nomeLimpo(sheetName));
+      if(!local){
+        avisos.push(`Aba "${sheetName}" não corresponde a nenhum local cadastrado — ignorada.`);
+        continue;
+      }
 
       const ws = wb.Sheets[sheetName];
       const linhas = XLSX.utils.sheet_to_json(ws, {header:1});
+
+      // Valida as colunas antes de confiar nos dados — evita ler número errado por planilha fora do padrão
+      const cabecalho = (linhas[0] || []).map(c => (c===undefined||c===null) ? '' : String(c).trim().toUpperCase());
+      const cabecalhoOk = CABECALHO_ESPERADO.every((esperado, i) => cabecalho[i] === esperado);
+      if(!cabecalhoOk){
+        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado (esperado: ${CABECALHO_ESPERADO.join(' | ')}). Aba ignorada. Se editou a planilha, use sempre o arquivo gerado pelo botão "Exportar".`);
+        continue;
+      }
+
       for(let i=1; i<linhas.length; i++){ // pula cabeçalho
-        const [id, nome, , , , contagemStr] = linhas[i];
+        const [id, nome, , , , , , contagemStr] = linhas[i];
         if(id===undefined || id==='') continue;
         if(contagemStr===undefined || contagemStr==='' || contagemStr===null) continue; // não preenchido, pula
         const contagem = parseFloat(contagemStr);
@@ -4045,15 +4073,25 @@ async function invImportar(file){
       }
     }
 
-    invRenderizarRevisao();
+    if(avisos.length){
+      toast(avisos.length + ' aba(s) com problema — veja detalhes na revisão abaixo.', 'erro');
+    }
+    invRenderizarRevisao(avisos);
   }catch(e){ toast('Erro ao ler a planilha: '+e.message,'erro'); }
 }
 
-function invRenderizarRevisao(){
+function invRenderizarRevisao(avisos){
+  avisos = avisos || [];
   const box = document.getElementById('inv-revisao-box');
   const corpo = document.getElementById('inv-revisao-corpo');
+  const avisosHtml = avisos.length
+    ? `<div style="background:#FDEDEC;border:1.5px solid var(--vermelho);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--vermelho)">
+        ⚠️ <b>${avisos.length} aba(s) não foram lidas:</b><br>
+        ${avisos.map(a => '• ' + a).join('<br>')}
+      </div>`
+    : '';
   if(!invPendentesImport.length){
-    corpo.innerHTML = '<div class="inv-empty">Nenhuma diferença encontrada entre a contagem e o saldo atual do sistema. ✓</div>';
+    corpo.innerHTML = avisosHtml + '<div class="inv-empty">Nenhuma diferença encontrada entre a contagem e o saldo atual do sistema. ✓</div>';
     box.style.display = '';
     return;
   }
@@ -4061,7 +4099,7 @@ function invRenderizarRevisao(){
   const porLocal = {};
   for(const it of invPendentesImport){ (porLocal[it.localNome]=porLocal[it.localNome]||[]).push(it); }
 
-  let html = '';
+  let html = avisosHtml;
   for(const localNome of Object.keys(porLocal)){
     const itens = porLocal[localNome];
     html += `<div class="inv-loc-head">${localNome} — ${itens.length} diferença(s)</div>
