@@ -341,7 +341,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.1 · Compras por Classe</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.3 · Compras Ajustadas</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -598,6 +598,10 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .ac-min:focus{border-color:var(--azul-medio);outline:none}
   #aba-comprar .ac-baixo{color:var(--vermelho);font-weight:700}
   #aba-comprar .ac-trend{font-size:11px;color:var(--cinza-3)}
+  #aba-comprar .cc-selclasse{font-size:10px;font-family:var(--fonte);border:1px solid var(--cinza-2);border-radius:6px;padding:2px 4px;background:#fff;color:var(--cinza-4);margin-top:3px;max-width:180px;cursor:pointer}
+  #aba-comprar .cc-fontes{font-size:10px;color:var(--cinza-4);line-height:1.5;max-width:230px}
+  #aba-comprar .cc-c-chk{width:26px;text-align:center}
+  #aba-comprar .cc-chk{width:16px;height:16px;cursor:pointer;accent-color:var(--azul-medio)}
   #aba-comprar .ac-ult{font-size:12px} #aba-comprar .ac-ult b{color:var(--verde)} #aba-comprar .ac-ult .ac-none{color:#9a6060;font-style:italic} #aba-comprar .ac-ult .ac-old{color:var(--cinza-4)}
   #aba-comprar .ac-rowact button{font-size:11px;font-weight:600;padding:5px 9px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
   #aba-comprar .ac-orcar{background:var(--azul-claro);color:var(--azul)} #aba-comprar .ac-adiar{background:var(--cinza-2);color:var(--cinza-4)}
@@ -651,7 +655,9 @@ details[open] summary { margin-bottom: 6px; }
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="ac-filtro" style="flex:1;min-width:180px" placeholder="digite o nome do item… ex: metil, adrenalina, touca" oninput="ccFiltrar()">
       <span id="cc-triagem-chip"></span>
+      <button id="cc-btn-orcar-sel" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px" onclick="ccOrcarSelecionados()">📤 Orçar selecionados (0) 🔒</button>
     </div>
+    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">☑ marque os itens que pretende orçar (em qualquer classe) e clique no botão acima. Itens 🔄 em andamento ficam bloqueados até o pedido terminar.</div>
   </div>
   <div class="ac-search">
     <label>➕ Incluir item na compra (fora da regra) — busca no catálogo</label>
@@ -713,6 +719,7 @@ details[open] summary { margin-bottom: 6px; }
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
     <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
+    <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
@@ -2486,6 +2493,9 @@ let ccPrevisao = null;   // pacientes previstos no mês (editável)
 let ccFiltroClasse = ''; // '' = todas
 let ccModoTriagem = false;
 let acResultados = [];
+let ccFontes = {};      // NOME (maiúsculo) -> {marcas, fornecedores} das compras passadas
+let ccAndamento = {};   // material_id -> rótulo da etapa em andamento (cotação/pedido)
+let ccSel = new Set();  // itens marcados ☑ para orçar
 
 const CC_INFO = {
   RECORRENTE:       { emoji:'🔁', nome:'Recorrentes',            grad:'linear-gradient(135deg,var(--azul),var(--azul-medio))', cor:'var(--azul-medio)', chip:'cc-azul',
@@ -2514,6 +2524,11 @@ async function acCarregar(){
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
     ccDados = (await sbFetch('vw_compras_classes?select=*&limit=1000')) || [];
+    try{
+      const f = await sbFetch('staging_fontes_compra?select=*&limit=500');
+      ccFontes = {}; for(const x of (f||[])) ccFontes[x.nome] = x;
+    }catch(e){ ccFontes = {}; }
+    await ccCarregarAndamento();
     if(ccPrevisao === null){
       try{
         const prev = await sbFetch('vw_previsao_cirurgias?select=*');
@@ -2528,6 +2543,51 @@ async function acCarregar(){
   }
 }
 
+// itens em andamento (cotação aberta ou pedido na esteira) — não voltam à lista de compra
+async function ccCarregarAndamento(){
+  ccAndamento = {};
+  try{
+    const ords = (await sbFetch('ordens_compra?select=material_id,pedido_id&situacao=eq.PENDENTE&limit=1000')) || [];
+    const pedIds = [...new Set(ords.map(o=>o.pedido_id).filter(Boolean))];
+    const pedMap = {};
+    if(pedIds.length){
+      const peds = (await sbFetch(`pedidos?select=id,status&id=in.(${pedIds.join(',')})`)) || [];
+      for(const p of peds) pedMap[p.id] = p.status;
+    }
+    const ROT = { EM_MONTAGEM:'PEDIDO EM MONTAGEM', AGUARDANDO_APROVACAO:'AGUARDANDO APROVAÇÃO',
+                  APROVADO:'PEDIDO APROVADO', AGUARDANDO_ENTREGA:'AGUARDANDO ENTREGA', EM_CONFERENCIA:'EM CONFERÊNCIA' };
+    for(const o of ords){
+      const st = o.pedido_id ? pedMap[o.pedido_id] : null;
+      if(st==='CANCELADO' || st==='CONCLUIDO') continue;
+      ccAndamento[o.material_id] = st ? (ROT[st]||st) : 'AGUARDANDO NF';
+    }
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=20')) || [];
+    if(cots.length){
+      const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&limit=1000`)) || [];
+      for(const it of cits) if(!ccAndamento[it.material_id]) ccAndamento[it.material_id] = 'EM COTAÇÃO';
+    }
+  }catch(e){}
+}
+
+// marcas/fornecedores das compras passadas (planilha + histórico)
+function ccFontesHtml(r){
+  const nome = (r.material||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const f = ccFontes[nome];
+  if(!f || (!f.marcas && !f.fornecedores)) return '<span style="color:var(--cinza-3);font-size:10px">—</span>';
+  return `<div class="cc-fontes">${f.marcas?('🏷️ '+f.marcas):''}${f.marcas&&f.fornecedores?'<br>':''}${f.fornecedores?('🏪 '+f.fornecedores):''}</div>`;
+}
+
+// ordem canônica = mesma do formulário de saídas (CATEGORIAS_ORDEM)
+let __ccOrdIdx = null;
+function ccOrdemForm(nome){
+  const n = s => (s||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
+  if(!__ccOrdIdx){
+    __ccOrdIdx = {}; let p = 0;
+    for(const cat of CATEGORIAS_ORDEM) for(const it of cat.itens) __ccOrdIdx[n(it)] = p++;
+  }
+  return __ccOrdIdx[n(nome)] ?? 9999;
+}
+
 // gatilho por classe — retorna {compra, motivo, sugestao, chip}
 function ccGatilho(r){
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
@@ -2540,7 +2600,7 @@ function ccGatilho(r){
     case 'RECORRENTE': {
       if(cm > 0 && cob !== null && cob < 1.5){
         const sug = Math.max(0, Math.ceil(cm*2 - saldo));
-        return { compra: sug>0, motivo:`cobertura ${cob.toFixed(2)}m`, sugestao:sug,
+        return { compra: sug>0, motivo:`cobertura ${Math.round(cob*30)} dias`, sugestao:sug,
                  chip: cob<=0?'cc-verm':(cob<1?'cc-lar':'cc-ama') };
       }
       return { compra:false };
@@ -2553,7 +2613,7 @@ function ccGatilho(r){
                  nec, chip: falta>0?'cc-verm':(saldo < nec*2 ? 'cc-ama' : 'cc-verd') };
       }
       if(cm > 0 && cob !== null && cob < 1){
-        return { compra:true, motivo:`sem histórico p/ paciente · cobertura ${cob.toFixed(2)}m`,
+        return { compra:true, motivo:`sem histórico p/ paciente · cobertura ${Math.round(cob*30)} dias`,
                  sugestao:Math.max(0, Math.ceil(cm*1.5 - saldo)), chip:'cc-lar' };
       }
       return { compra:false };
@@ -2581,7 +2641,7 @@ function ccResumo(){
     const cl = r.classe_compra || 'ESPORADICO';
     if(!porClasse[cl]) porClasse[cl] = { total:0, comprar:0 };
     porClasse[cl].total++;
-    if(ccGatilho(r).compra) porClasse[cl].comprar++;
+    if(ccGatilho(r).compra && !ccAndamento[r.material_id]) porClasse[cl].comprar++;
     if(!r.classe_confirmada) triagem++;
   }
   cont.innerHTML = CC_ORDEM.map(c=>{
@@ -2601,23 +2661,26 @@ function ccSetFiltroClasse(c){ ccFiltroClasse = (ccFiltroClasse===c ? '' : c); c
 function ccToggleTriagem(){ ccModoTriagem = !ccModoTriagem; ccRender(); }
 
 function ccTagClasse(r){
-  const i = CC_INFO[r.classe_compra] || CC_INFO.ESPORADICO;
+  const atual = r.classe_compra || 'ESPORADICO';
   const alerta = r.classe_confirmada ? '' : ' ⚠';
-  return `<span class="cc-tag ${i.chip}" title="clique para reclassificar" onclick="ccReclassificar(${r.material_id})">${i.emoji} ${i.nome.toLowerCase()}${alerta} ▾</span>`;
+  return `<select class="cc-selclasse" title="mudar a classe deste item" onchange="ccReclassSel(${r.material_id}, this.value)">
+    ${CC_ORDEM.map(c=>`<option value="${c}" ${c===atual?'selected':''}>${CC_INFO[c].emoji} ${CC_INFO[c].nome.toLowerCase()}${c===atual?alerta:''}</option>`).join('')}
+  </select>`;
 }
 function ccCob(r){
   const cob = (r.cobertura_meses===null||r.cobertura_meses===undefined)?null:Number(r.cobertura_meses);
   if(cob===null) return '—';
   const pct = Math.max(2, Math.min(100, cob/3*100));
   const cor = cob<=0?'var(--vermelho)':(cob<1?'#D35400':(cob<1.5?'#B7950B':(cob<3?'var(--azul-medio)':'var(--verde)')));
-  return `<span class="cc-cob"><i style="width:${pct}%;background:${cor}"></i></span><b style="color:${cor}">${cob.toFixed(2)}m</b>`;
+  return `<span class="cc-cob"><i style="width:${pct}%;background:${cor}"></i></span><b style="color:${cor}">${Math.round(cob*30)}d</b>`;
 }
 function ccUc(r){
   if(!r.uc_data) return '<span style="color:#9a6060;font-style:italic;font-size:11px">nenhuma compra</span>';
   return `<span style="font-size:11px">${acData(r.uc_data)} · <b style="color:var(--verde)">${acMoney(r.uc_valor_unitario)}/un</b></span>`;
 }
 function ccEtapa(r){
-  return r.etapa_status ? `<span class="ac-etapa">${r.etapa_status}</span>` : '';
+  const rot = ccAndamento[r.material_id] || r.etapa_status;
+  return rot ? `<span class="ac-etapa">🔄 ${rot}</span>` : '';
 }
 
 function ccRender(){
@@ -2641,20 +2704,21 @@ function ccRender(){
       continue;
     }
 
-    const emCompra = doGrupo.filter(r=>ccGatilho(r).compra);
+    const emCompra = doGrupo.filter(r=>ccGatilho(r).compra && !ccAndamento[r.material_id]);
     const titulo = classe==='ESPORADICO'
       ? `${i.emoji} ESPORÁDICOS — sob demanda (${doGrupo.length})`
       : `${i.emoji} ${i.nome.toUpperCase()} — comprar agora (${emCompra.length})`;
     html += `<div class="cc-bloco" data-classe="${classe}">
       <div class="cc-bhead" style="background:${i.grad}">
         <span>${titulo}</span>
-        ${emCompra.length ? `<button class="ac-orcar" style="background:#fff;color:${i.cor};font-weight:800" onclick="ccOrcarClasse('${classe}')">📤 Enviar os ${emCompra.length} para Cotação 🔒</button>` : ''}
+        ${emCompra.length ? `<button class="ac-orcar" style="background:#fff;color:${i.cor};font-weight:800" onclick="ccMarcarClasse('${classe}')">☑ Marcar os ${emCompra.length} com gatilho</button>` : ''}
       </div>
       <div class="cc-bbody">${classe==='POR_PROCEDIMENTO' ? ccPrevBox() : ''}${ccTabela(classe, doGrupo)}</div>
     </div>`;
   }
   lista.innerHTML = html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>';
   ccFiltrar();
+  ccAtualizaBotaoSel();
 }
 
 function ccPrevBox(){
@@ -2667,25 +2731,29 @@ function ccSetPrevisao(v){
   ccPrevisao = n; ccRender();
 }
 
+function ccChk(r){
+  const and = ccAndamento[r.material_id];
+  return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${and?'disabled title="já em andamento: '+and+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)"></td>`;
+}
+
 function ccTabela(classe, rows){
   const g = r => ccGatilho(r);
-  // ordena: quem pede compra primeiro, depois por severidade
+  // ordem canônica: a mesma do formulário de saídas (em todos os detalhamentos)
   const ord = [...rows].sort((a,b)=>{
-    const ga=g(a), gb=g(b);
-    if(ga.compra!==gb.compra) return ga.compra?-1:1;
-    const ca=(a.cobertura_meses==null)?99:Number(a.cobertura_meses);
-    const cb=(b.cobertura_meses==null)?99:Number(b.cobertura_meses);
-    return ca-cb;
+    const ia = ccOrdemForm(a.material), ib = ccOrdemForm(b.material);
+    if(ia !== ib) return ia - ib;
+    return (a.material||'').localeCompare(b.material||'');
   });
-  // recorrentes/proc: mostra só quem pede compra (+ triagem mostra tudo); críticos: mostra TODOS; esporádicos: todos
+  // recorrentes/proc: mostra quem pede compra OU já está em andamento (+ triagem mostra tudo); críticos/esporádicos: todos
   let visiveis = ord;
   if(!ccModoTriagem && (classe==='RECORRENTE' || classe==='POR_PROCEDIMENTO')){
-    visiveis = ord.filter(r=>g(r).compra);
+    visiveis = ord.filter(r=>g(r).compra || ccAndamento[r.material_id]);
     if(!visiveis.length) return '<div class="ac-empty" style="padding:14px">Nenhum item desta classe pedindo compra. ✓</div>';
   }
+  const FONTES_TH = '<th>Marcas / fornecedores (compras passadas)</th>';
 
   if(classe==='CRITICO'){
-    return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Mín ✎</th><th>Validade próx.</th><th>Status</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
+    return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Mín ✎</th><th>Validade próx.</th><th>Status</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
       visiveis.map(r=>{
         const gt=g(r);
         const val = r.proxima_validade
@@ -2696,16 +2764,15 @@ function ccTabela(classe, rows){
                   : `<span class="cc-chip cc-verd">${acData(r.proxima_validade)} ✓</span>`))
           : `<span class="cc-chip cc-cz">— sem lote</span>`;
         const status = gt.compra ? `<span class="cc-chip ${gt.chip}">${gt.motivo}</span>` : `<span class="cc-chip cc-verd">✓ ok</span>`;
-        return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
           <td class="num"><input class="ac-min" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
-          <td>${val}</td><td>${status}</td><td>${ccUc(r)}</td>
-          <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+          <td>${val}</td><td>${status}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`;
       }).join('') + '</tbody></table>';
   }
 
   if(classe==='POR_PROCEDIMENTO'){
-    return `<table><thead><tr><th>Item</th><th class="num">Cons./paciente</th><th class="num">Necessidade</th><th class="num">Saldo</th><th class="num">Falta</th><th>Situação</th><th></th></tr></thead><tbody>` +
+    return `<table><thead><tr><th></th><th>Item</th><th class="num">Cons./paciente</th><th class="num">Necessidade</th><th class="num">Saldo</th><th class="num">Falta</th><th>Situação</th>${FONTES_TH}</tr></thead><tbody>` +
       visiveis.map(r=>{
         const gt=g(r);
         const cpp = r.consumo_por_paciente!=null ? Number(r.consumo_por_paciente).toFixed(2) : '—';
@@ -2713,32 +2780,54 @@ function ccTabela(classe, rows){
         const falta = gt.compra ? `<b style="color:var(--vermelho)">${acN0(gt.sugestao)}</b>` : '—';
         const sit = gt.compra ? `<span class="cc-chip cc-verm">⛔ não cobre o mês</span>`
                               : `<span class="cc-chip cc-verd">✓ cobre</span>`;
-        return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num">${cpp}</td><td class="num">${nec}</td><td class="num">${acN0(r.saldo)}</td>
-          <td class="num">${falta}</td><td>${sit}</td>
-          <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+          <td class="num">${falta}</td><td>${sit}</td><td>${ccFontesHtml(r)}</td></tr>`;
       }).join('') + '</tbody></table>';
   }
 
   if(classe==='ESPORADICO'){
-    return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Meses c/ consumo (5m)</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
-      visiveis.map(r=>`<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
-        <td class="num">${acN0(r.saldo)}</td><td class="num">${r.meses_com_consumo??0}</td><td>${ccUc(r)}</td>
-        <td><button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button></td></tr>`).join('') + '</tbody></table>';
+    return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Meses c/ consumo (5m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
+      visiveis.map(r=>`<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        <td class="num">${acN0(r.saldo)}</td><td class="num">${r.meses_com_consumo??0}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`).join('') + '</tbody></table>';
   }
 
-  // RECORRENTE
-  return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura</th><th class="num">Sugerido (2m)</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
+  // RECORRENTE — cobertura em DIAS
+  return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura (dias)</th><th class="num">Sugerido (2m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
     visiveis.map(r=>{
       const gt=g(r);
-      return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+      return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
         <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
         <td class="num">${acN0(r.consumo_medio_mensal)}</td>
         <td class="num">${ccCob(r)}</td>
         <td class="num"><b>${gt.compra?acN0(gt.sugestao):'—'}</b></td>
-        <td>${ccUc(r)}</td>
-        <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+        <td>${ccFontesHtml(r)}</td>
+        <td>${ccUc(r)}</td></tr>`;
     }).join('') + '</tbody></table>';
+}
+
+// ── seleção ☑ para orçar ──
+function ccToggleSel(mid, on){ if(on) ccSel.add(mid); else ccSel.delete(mid); ccAtualizaBotaoSel(); }
+function ccAtualizaBotaoSel(){
+  const b=document.getElementById('cc-btn-orcar-sel');
+  if(b){ b.textContent=`📤 Orçar selecionados (${ccSel.size}) 🔒`; b.style.opacity = ccSel.size? '1':'0.55'; }
+}
+function ccMarcarClasse(classe){
+  for(const r of ccDados){
+    if((r.classe_compra||'ESPORADICO')===classe && ccGatilho(r).compra && !ccAndamento[r.material_id]) ccSel.add(r.material_id);
+  }
+  ccRender();
+  toast('Itens com gatilho marcados ☑ — revise e clique em 📤 Orçar selecionados.','sucesso');
+}
+function ccOrcarSelecionados(){
+  if(!ccSel.size){ toast('Marque primeiro (☑) os itens que pretende orçar.',''); return; }
+  if(!exigirSenhaCompras()) return;
+  let n=0;
+  for(const mid of ccSel){ if(acEnviarParaCotacao(mid, true)) n++; }
+  ccSel.clear();
+  if(typeof coRender==='function') coRender();
+  toast(`${n} item(ns) enviados para a Cotação ✓ — abra a aba 🧾 Cotação.`,'sucesso');
+  ccRender();
 }
 
 function ccFiltrar(){
@@ -2758,6 +2847,21 @@ function ccFiltrar(){
     bl.style.display = (termo && !tem) ? 'none' : '';
   });
   contador.textContent = termo ? `— ${visiveis} encontrado(s)` : '';
+}
+
+// reclassificação direta pelo seletor ▾ da linha (funciona em TODAS as classes)
+async function ccReclassSel(materialId, nova){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  if(!CC_INFO[nova]) return;
+  try{
+    const patch = { classe_compra: nova, classe_confirmada: true };
+    if(nova === 'CRITICO') patch.controla_lote = true;
+    const res = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', patch);
+    if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); ccRender(); return; }
+    r.classe_compra = nova; r.classe_confirmada = true;
+    toast(`${r.material} → ${CC_INFO[nova].emoji} ${CC_INFO[nova].nome} ✓`,'sucesso');
+    ccRender();
+  }catch(e){ toast('Erro: '+e.message,'erro'); ccRender(); }
 }
 
 // reclassificação: 1 clique na etiqueta
@@ -2966,18 +3070,30 @@ function coNova(){
   coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1';
   coAtualizaLabelGrupo(); coRender();
 }
+let coSnapshotUndo = null;
 async function coPuxarAlerta(){
   try{
     if(!ccDados.length){ await acCarregar(); }
+    coSnapshotUndo = JSON.stringify({ itens: coItens, forn: coFornGrupo });
     let add=0;
     for(const r of ccDados){
       if(!ccGatilho(r).compra) continue;
+      if(ccAndamento[r.material_id]) continue; // já em cotação/pedido — não duplica
       if(coItens.find(x=>x.material_id===r.material_id)) continue;
       acEnviarParaCotacao(r.material_id, true); add++;
     }
     coRender();
-    toast(add ? (add+' item(ns) pedindo compra adicionados.') : 'Nenhum item novo a puxar.', add?'sucesso':'');
+    const btn=document.getElementById('co-btn-desfazer'); if(btn) btn.style.display = add ? '' : 'none';
+    toast(add ? (add+' item(ns) adicionados. Se não era isso, clique em ↩ Desfazer puxada.') : 'Nenhum item novo a puxar.', add?'sucesso':'');
   }catch(e){ toast('Erro ao puxar itens: '+e.message,'erro'); }
+}
+function coDesfazerPuxada(){
+  if(!coSnapshotUndo){ toast('Nada para desfazer.',''); return; }
+  const s = JSON.parse(coSnapshotUndo);
+  coItens = s.itens; coFornGrupo = s.forn; coSnapshotUndo = null;
+  const btn=document.getElementById('co-btn-desfazer'); if(btn) btn.style.display='none';
+  coRender();
+  toast('Puxada desfeita ↩ — a cotação voltou como estava.','sucesso');
 }
 // busca no catálogo
 (function(){
@@ -3551,6 +3667,7 @@ function hiRenderizarDetalhe(id){
 <script>
 // ═══ ABA RECEBER NF — fecha o ciclo: ordem pendente -> NF -> sobe estoque ═══
 let rcOrdens = [];       // ordens_compra com situacao='PENDENTE'
+let rcControlaLote = new Set(); // materiais que exigem lote/validade na entrada
 let rcNfsRecentes = [];
 
 function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
@@ -3572,6 +3689,12 @@ async function rcCarregar(){
     }
     if(!coFornecedores.length){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    }
+    if(!rcControlaLote.size){
+      try{
+        const cl = await sbFetch('materiais?select=id&controla_lote=eq.true&limit=300');
+        rcControlaLote = new Set((cl||[]).map(x=>x.id));
+      }catch(e){}
     }
     rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
@@ -3603,15 +3726,23 @@ function rcRenderizar(){
     const linhas = itens.map(o => {
       const qtdPadrao = o.qtd_comprada ?? o.qtd_a_comprar ?? '';
       const valPadrao = o.valor_unitario ?? o.ultimo_valor_pago ?? '';
+      const exigeLote = rcControlaLote.has(o.material_id);
       return `<tr data-ordem="${o.id}">
         <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}"></td>
-        <td>${rcNomeMaterial(o.material_id)}</td>
+        <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
         <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd"></td>
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un"></td>
         <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
         <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
-      </tr>`;
+      </tr>
+      <tr><td></td><td colspan="5" style="padding:4px 10px 10px">
+        <div id="rc-lotes-${o.id}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:${exigeLote?'var(--vermelho)':'var(--cinza-4)'}">${exigeLote?'🔒 lote e validade obrigatórios':'lote/validade (se houver)'}</span>
+          ${rcLoteBloco()}
+          <button type="button" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="rcAddLote(${o.id})">+ lote</button>
+        </div>
+      </td></tr>`;
     }).join('');
 
     return `<div class="rc-grupo" data-forn="${fid}">
@@ -3651,6 +3782,32 @@ function rcHtmlPausados(){
       <tbody>${linhas}</tbody>
     </table></div>
   </details>`;
+}
+
+// bloco de lote/validade/qtd (até 3 por item — pode chegar mais de um lote do mesmo produto)
+function rcLoteBloco(){
+  return `<span class="rc-lote-bloco" style="display:inline-flex;gap:4px;align-items:center;background:var(--cinza-1);border-radius:6px;padding:4px 6px">
+    <input type="text" class="rc-lote-l" placeholder="lote" style="width:90px;border:1px solid var(--cinza-2);border-radius:5px;padding:4px 6px;font-size:11px;font-family:var(--fonte)">
+    <input type="date" class="rc-lote-v" title="validade" style="border:1px solid var(--cinza-2);border-radius:5px;padding:3px 5px;font-size:11px;font-family:var(--fonte)">
+    <input type="number" class="rc-lote-q" placeholder="qtd" style="width:56px;border:1px solid var(--cinza-2);border-radius:5px;padding:4px 5px;font-size:11px;font-family:var(--fonte)">
+  </span>`;
+}
+function rcAddLote(ordemId){
+  const cont = document.getElementById('rc-lotes-'+ordemId); if(!cont) return;
+  if(cont.querySelectorAll('.rc-lote-bloco').length >= 3){ toast('Máximo de 3 lotes por item nesta NF.',''); return; }
+  const btn = cont.querySelector('button');
+  btn.insertAdjacentHTML('beforebegin', rcLoteBloco());
+}
+function rcColherLotes(ordemId, qtdRecebida){
+  const cont = document.getElementById('rc-lotes-'+ordemId);
+  if(!cont) return [];
+  const lotes = [...cont.querySelectorAll('.rc-lote-bloco')].map(b=>({
+    lote: (b.querySelector('.rc-lote-l').value||'').trim(),
+    validade: b.querySelector('.rc-lote-v').value || null,
+    qtd: parseFloat(b.querySelector('.rc-lote-q').value) || 0,
+  })).filter(l=>l.lote || l.validade || l.qtd);
+  if(lotes.length===1 && !lotes[0].qtd) lotes[0].qtd = qtdRecebida; // um lote só = a NF inteira
+  return lotes;
 }
 
 async function rcMarcarProblema(ordemId){
@@ -3701,9 +3858,19 @@ async function rcConfirmarNF(fid){
     const val = parseFloat(document.getElementById(`rc-val-${ordemId}`).value);
     if(!qtd || qtd<=0){ toast('Informe a quantidade recebida de todos os itens marcados.','erro'); return; }
     if(isNaN(val) || val<0){ toast('Informe o valor unitário de todos os itens marcados.','erro'); return; }
+    const lotes = rcColherLotes(ordemId, qtd);
+    if(rcControlaLote.has(ordem.material_id)){
+      const nome = rcNomeMaterial(ordem.material_id);
+      if(!lotes.length){ toast(`"${nome}" controla lote — preencha lote e validade antes de confirmar.`,'erro'); return; }
+      for(const l of lotes){
+        if(!l.lote || !l.validade || !l.qtd){ toast(`Complete lote, validade e qtd de "${nome}".`,'erro'); return; }
+      }
+      const soma = lotes.reduce((s,l)=>s+l.qtd,0);
+      if(Math.abs(soma - qtd) > 0.001){ toast(`Os lotes de "${nome}" somam ${soma}, mas a qtd recebida é ${qtd}.`,'erro'); return; }
+    }
     const item = qtd*val;
     valorTotal += item;
-    itensParaGravar.push({ ordem, qtd, val, item });
+    itensParaGravar.push({ ordem, qtd, val, item, lotes });
   }
   valorTotal += frete;
 
@@ -3726,12 +3893,23 @@ async function rcConfirmarNF(fid){
     const localId = await getEstoqueGeralId();
 
     // 2. Item por item: nf_itens -> movimentacao (pendente -> aprovada, sobe estoque) -> atualiza ordem
-    for(const {ordem, qtd, val, item} of itensParaGravar){
+    for(const {ordem, qtd, val, item, lotes} of itensParaGravar){
       const itemArr = await sbFetch('nf_itens','POST',{
         nota_fiscal_id: nfId, material_id: ordem.material_id,
         qtd: qtd, valor_unitario: val, valor_item: item,
       });
       const nfItemId = itemArr && itemArr[0] && itemArr[0].id;
+
+      // grava os lotes (validade controla o crítico; FEFO consome depois)
+      for(const l of (lotes||[])){
+        if(!l.lote && !l.validade) continue;
+        try{
+          await sbFetch('lotes','POST',{
+            material_id: ordem.material_id, lote: l.lote || '—', validade: l.validade,
+            qtd: l.qtd || qtd, nf_item_id: nfItemId, status: 'ativo',
+          });
+        }catch(e){ toast('⚠ Lote não gravado ('+(l.lote||'—')+'): '+e.message,'erro'); }
+      }
 
       const movArr = await sbFetch('movimentacoes','POST',{
         tipo: 'ENTRADA_COMPRA', material_id: ordem.material_id, local_id: localId,
