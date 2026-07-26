@@ -341,7 +341,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v2.1</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.1 · Compras por Classe</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -349,14 +349,16 @@ details[open] summary { margin-bottom: 6px; }
 <div class="abas">
   <div class="aba ativa" id="aba-btn-registro" onclick="trocarAba('registro')">📋 Saída Cirúrgica</div>
   <div class="aba" id="aba-btn-diversas" onclick="trocarAba('diversas')">📦 Saídas Diversas</div>
-  <div class="aba" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-  <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Comprar</div>
-  <div class="aba" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
-  <div class="aba" id="aba-btn-decisao" onclick="trocarAba('decisao')">📋 Decisão</div>
-  <div class="aba" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')">🔏 Aprovar Pedido</div>
-  <div class="aba" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
-  <div class="aba" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
-  <div class="aba" id="aba-btn-inventario" onclick="trocarAba('inventario')">📐 Inventário</div>
+  <div class="aba" id="aba-btn-comprar" onclick="trocarAba('comprar')">🛒 Compras</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-decisao" onclick="trocarAba('decisao')">📦 Pedidos</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')">🔏 Aprovar Pedido</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-inventario" onclick="trocarAba('inventario')">📐 Inventário</div>
+  <div class="aba" id="aba-btn-cadeado" onclick="desbloquearRestrito()" title="Área restrita (senha)" style="margin-left:auto">🔒</div>
+</div>
 </div>
 
 <div class="container">
@@ -619,27 +621,47 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .ac-andamento summary::-webkit-details-marker{display:none}
   #aba-comprar .ac-count-andamento{background:#EBEAFC;color:#6f42c1;border-radius:20px;padding:1px 9px;font-size:11px;margin-left:6px}
   #aba-comprar .ac-andamento table{opacity:.75}
+  #aba-comprar .cc-classes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px}
+  #aba-comprar .cc-classe{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;border-left:5px solid var(--cinza-3);cursor:pointer}
+  #aba-comprar .cc-classe.on{outline:2.5px solid var(--azul);outline-offset:-1px}
+  #aba-comprar .cc-classe .n{font-size:12.5px;font-weight:800}
+  #aba-comprar .cc-classe .g{font-size:10px;color:var(--cinza-4);margin-top:2px;line-height:1.4}
+  #aba-comprar .cc-classe .c{font-size:22px;font-weight:800;margin-top:6px}
+  #aba-comprar .cc-classe .s{font-size:10px;font-weight:700}
+  #aba-comprar .cc-bloco{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-comprar .cc-bhead{padding:10px 16px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;font-weight:800}
+  #aba-comprar .cc-bbody{padding:10px 14px;overflow-x:auto}
+  #aba-comprar .cc-tag{font-size:9px;font-weight:800;padding:1px 7px;border-radius:20px;cursor:pointer;border:1px dashed transparent;white-space:nowrap}
+  #aba-comprar .cc-tag:hover{border-color:currentColor}
+  #aba-comprar .cc-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  #aba-comprar .cc-verm{background:#FDEDEC;color:var(--vermelho)} #aba-comprar .cc-lar{background:#FDF2E9;color:#D35400}
+  #aba-comprar .cc-ama{background:#FEF9E7;color:#B7950B} #aba-comprar .cc-verd{background:#D5F5E3;color:var(--verde)}
+  #aba-comprar .cc-azul{background:var(--azul-claro);color:var(--azul)} #aba-comprar .cc-roxo{background:#EBEAFC;color:#6f42c1}
+  #aba-comprar .cc-cz{background:var(--cinza-1);color:var(--cinza-4);border:1px solid var(--cinza-2)}
+  #aba-comprar .cc-cob{display:inline-block;width:50px;height:7px;background:var(--cinza-2);border-radius:4px;overflow:hidden;vertical-align:middle;margin-right:5px}
+  #aba-comprar .cc-cob i{display:block;height:7px}
+  #aba-comprar .cc-prev{background:#EBEAFC;border:1.5px solid #d3cef2;border-radius:8px;padding:8px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;margin-bottom:10px}
+  #aba-comprar .cc-prev input{width:64px;border:1.5px solid #d3cef2;border-radius:6px;padding:5px;font-size:13px;font-weight:800;text-align:center;color:#6f42c1;font-family:var(--fonte)}
+
 </style>
 <div id="aba-comprar" class="container" style="display:none">
+  <div id="cc-resumo" class="cc-classes"></div>
   <div class="ac-search" style="margin-bottom:10px">
     <label>🔍 Localizar item nesta lista <span id="ac-filtro-count" style="font-weight:400;text-transform:none;color:var(--cinza-3)"></span></label>
-    <input id="ac-filtro" placeholder="digite o nome do item… ex: xylo, dipirona, luva" oninput="acFiltrar()">
-    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-      <button class="ac-pill" data-status="" onclick="acFiltrarStatus('')">Todos</button>
-      <button class="ac-pill" data-status="URGENTE" onclick="acFiltrarStatus('URGENTE')">🔴 Urgente</button>
-      <button class="ac-pill" data-status="COMPRAR" onclick="acFiltrarStatus('COMPRAR')">🟡 Comprar</button>
-      <button class="ac-pill" data-status="ATENÇÃO" onclick="acFiltrarStatus('ATENÇÃO')">🟠 Atenção</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="ac-filtro" style="flex:1;min-width:180px" placeholder="digite o nome do item… ex: metil, adrenalina, touca" oninput="ccFiltrar()">
+      <span id="cc-triagem-chip"></span>
     </div>
   </div>
   <div class="ac-search">
-    <label>➕ Incluir item na compra (fora da regra do mínimo)</label>
+    <label>➕ Incluir item na compra (fora da regra) — busca no catálogo</label>
     <div style="display:flex;gap:8px">
-      <input id="ac-busca" style="flex:1" placeholder="buscar no catálogo por nome… ex: xylo, fio nylon, metil">
+      <input id="ac-busca" style="flex:1" placeholder="buscar por nome… ex: xylo, fio nylon, metil">
       <button class="ac-btn-novo" onclick="acCadastrarNovoMaterial()">➕ Não encontrou? Cadastrar novo</button>
     </div>
     <div class="ac-res" id="ac-res"></div>
   </div>
-  <div id="ac-lista"><div class="ac-empty">Carregando alerta…</div></div>
+  <div id="ac-lista"><div class="ac-empty">Carregando…</div></div>
 </div>
 
 <!-- ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) ═══ -->
@@ -690,7 +712,7 @@ details[open] summary { margin-bottom: 6px; }
     </span>
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
     <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
-    <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens do alerta</button>
+    <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
@@ -742,15 +764,10 @@ details[open] summary { margin-bottom: 6px; }
 <div id="aba-decisao" class="container" style="display:none">
   <div class="de-bar">
     <span class="de-status" id="de-status">Carregando...</span>
-    <button class="de-refresh" onclick="deAtualizarSaldos()">🔄 Atualizar saldos agora</button>
-    <button class="de-confirmar" onclick="deConfirmarCompra()">✔ Confirmar compra</button>
+    <button class="de-refresh" onclick="deCarregar()">🔄 Atualizar</button>
   </div>
-  <div id="de-corpo"><div class="de-empty">Carregando cotação...</div></div>
-  <div class="de-resumo" id="de-resumo-box" style="display:none">
-    <div style="font-size:15px;font-weight:700;margin-bottom:12px">Resumo da decisão — por fornecedor</div>
-    <div id="de-resumo"></div>
-    <div class="de-tot" id="de-total"></div>
-  </div>
+  <p style="font-size:12px;color:var(--cinza-4);margin-bottom:12px">📦 Pedidos montados automaticamente pelas escolhas da Cotação. Aqui você <b>confere e completa</b> (frete, pagamento, prazo, quem pediu) e envia para a Aprovação.</p>
+  <div id="de-corpo"><div class="de-empty">Carregando pedidos...</div></div>
 </div>
 
 <!-- ═══ ABA HISTÓRICO (COTAÇÕES FECHADAS) ═══ -->
@@ -885,20 +902,20 @@ details[open] summary { margin-bottom: 6px; }
   <!-- AJUSTE AVULSO -->
   <div class="inv-card">
     <h3>🔧 Ajuste avulso de saldo</h3>
-    <div class="inv-sub">Corrige um item pontual — ex: erro de contagem, quebra não registrada.</div>
+    <div class="inv-sub">Corrige um item pontual — ex: erro de contagem, quebra não registrada. O ajuste é aplicado no saldo do <b>ESTOQUE GERAL</b>.</div>
     <div class="inv-row">
       <div class="inv-campo" style="flex:2;min-width:220px;position:relative">
         <label>Material</label>
         <input type="text" id="inv-busca-material" placeholder="buscar por nome..." oninput="invFiltrarMaterial()">
         <div id="inv-busca-res" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;z-index:9"></div>
       </div>
-      <div class="inv-campo">
+      <div class="inv-campo" style="display:none">
         <label>Local</label>
         <select id="inv-ajuste-local"></select>
       </div>
       <div class="inv-campo">
-        <label>Novo saldo</label>
-        <input type="number" id="inv-ajuste-novo-saldo" style="width:100px">
+        <label>Novo saldo (Estoque Geral)</label>
+        <input type="number" id="inv-ajuste-novo-saldo" style="width:150px">
       </div>
       <div class="inv-campo" style="flex:2;min-width:180px">
         <label>Motivo</label>
@@ -1029,6 +1046,37 @@ const SENHA_APROVACAO = 'hog2026';
 
 // Senha DIFERENTE para a aba Receber NF — só ela mexe no saldo de verdade (entrada de estoque)
 const SENHA_ENTRADA = 'hog2026entrada';
+// Senha da equipe de COMPRAS (orçar, cotar, decidir) — diferente da senha de gestão
+const SENHA_COMPRAS = 'hogcompras2026';
+
+// ── ÁREA RESTRITA: revela as abas escondidas mediante qualquer senha válida ──
+function revelarAbasRestritas(){
+  document.querySelectorAll('.aba-restrita').forEach(a => a.style.display = '');
+  const cad = document.getElementById('aba-btn-cadeado');
+  if (cad) cad.textContent = '🔓';
+}
+function desbloquearRestrito(){
+  if (localStorage.getItem('hog_restrito_ok') === '1') { revelarAbasRestritas(); return; }
+  const sn = prompt('🔒 Área restrita.\n\nDigite uma senha válida (gestão, compras ou entrada):');
+  if (sn === null) return;
+  if (sn === SENHA_APROVACAO || sn === SENHA_COMPRAS || sn === SENHA_ENTRADA) {
+    localStorage.setItem('hog_restrito_ok', '1');
+    revelarAbasRestritas();
+    toast('Área restrita liberada neste dispositivo. ✓', 'sucesso');
+  } else { toast('Senha incorreta.', 'erro'); }
+}
+function exigirSenhaCompras(){
+  if (localStorage.getItem('hog_compras_ok') === '1') return true;
+  const sn = prompt('🔑 Ação de COMPRAS.\n\nDigite a senha de compras:');
+  if (sn === null) return false;
+  if (sn === SENHA_COMPRAS || sn === SENHA_APROVACAO) {
+    localStorage.setItem('hog_compras_ok', '1');
+    revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
+    toast('Acesso de compras liberado neste dispositivo. ✓', 'sucesso');
+    return true;
+  }
+  toast('Senha incorreta.', 'erro'); return false;
+}
 
 // Equipe do Centro Cirúrgico — edite os nomes conforme necessário
 const EQUIPE = [
@@ -1111,6 +1159,21 @@ async function testarConexao() {
   } catch(e) {
     document.getElementById('status-cx').textContent = `❌ Erro: ${e.message}`;
   }
+}
+
+// ── ESTOQUE GERAL — local virtual único onde vive o saldo ─────
+// Todo movimento (saída, entrada, ajuste) acontece contra ele.
+// Os locais físicos servem apenas para a contagem do inventário mensal.
+let _estoqueGeralId = null;
+async function getEstoqueGeralId(){
+  if(_estoqueGeralId) return _estoqueGeralId;
+  const rows = await sbFetch(`locais?select=id&nome=eq.${encodeURIComponent('ESTOQUE GERAL')}&limit=1`);
+  if(rows && rows.length){ _estoqueGeralId = rows[0].id; return _estoqueGeralId; }
+  // fallback de segurança: se o local virtual não existir, usa ARSENAL
+  // (o trigger do banco redireciona tudo para o Estoque Geral de qualquer forma)
+  const ars = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
+  _estoqueGeralId = (ars && ars.length) ? ars[0].id : null;
+  return _estoqueGeralId;
 }
 
 async function sbFetch(ep, method='GET', body=null) {
@@ -1773,8 +1836,7 @@ async function enviarSupabase(reg) {
   const medicoRows = await sbFetch(`medicos?select=id&nome=eq.${encodeURIComponent(reg.medico)}&limit=1`);
   if (!medicoRows?.length) throw new Error('Médico não encontrado');
   const medicoId = medicoRows[0].id;
-  const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
-  const localId = localRows[0].id;
+  const localId = await getEstoqueGeralId();
 
   for (let j = 0; j < reg.tipos.length; j++) {
     const t = reg.tipos[j];
@@ -2242,8 +2304,7 @@ async function enviarDiversas() {
   if (!confirm(`Enviar ${itens.length} item(ns) para aprovação?\nDestino: ${destino} — Data: ${data.split('-').reverse().join('/')}`)) return;
 
   try {
-    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
-    const localId = localRows[0].id;
+    const localId = await getEstoqueGeralId();
     const naoEnc = [];
     for (const item of itens) {
       const mat = resolverMaterial(item.nome);
@@ -2271,13 +2332,25 @@ async function enviarDiversas() {
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function trocarAba(aba) {
-  // Abas de compra (Comprar/Cotação/Decisão/Aprovar Pedido/Histórico) usam a senha de gestão
-  if ((aba === 'aprovacao' || aba === 'comprar' || aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'aprovarpedido') && localStorage.getItem('hog_aprov_ok') !== '1') {
+  // ESQUEMA DE SENHAS v3.1:
+  // • Saídas + Compras(Etapa 1): visíveis a todos — o botão Orçar pede senha de compras
+  // • Cotação/Decisão/Histórico: senha de COMPRAS
+  // • Aprovação de saídas: senha de GESTÃO (memoriza no dispositivo)
+  // • Aprovar Pedido: senha de GESTÃO pedida SEMPRE (não memoriza)
+  // • Receber NF / Inventário: senha de ENTRADA (memoriza)
+  if ((aba === 'cotacao' || aba === 'decisao' || aba === 'historico') && !exigirSenhaCompras()) return;
+  if (aba === 'aprovacao' && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
     if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
     localStorage.setItem('hog_aprov_ok', '1');
+    revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
     toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
+  }
+  if (aba === 'aprovarpedido') {
+    const s = prompt('🔒 APROVAÇÃO DE PEDIDOS — senha de gestão (pedida a cada acesso):');
+    if (s === null) return;
+    if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
   }
   // Receber NF e Inventário usam senha PRÓPRIA e diferente — únicas etapas que efetivamente movem o saldo
   if ((aba === 'receber' || aba === 'inventario') && localStorage.getItem('hog_entrada_ok') !== '1') {
@@ -2399,34 +2472,37 @@ window.addEventListener('load', () => {
   }
   document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
   renderizarTipos();
+  if (localStorage.getItem('hog_restrito_ok') === '1'
+      || localStorage.getItem('hog_aprov_ok') === '1'
+      || localStorage.getItem('hog_compras_ok') === '1'
+      || localStorage.getItem('hog_entrada_ok') === '1') { revelarAbasRestritas(); }
 });
 </script>
 <script>
-// ═══ ABA COMPRAR (ALERTA) — reaproveita sbFetch/toast/sbUrl/sbKey do app ═══
-let acAlerta = [];
-let acManuais = [];
-let acResultados = [];
+// ═══ ABA COMPRAS — ETAPA 1 POR CLASSES (v3.1) · lê vw_compras_classes ═══
 let acFornecedores = [];
-function acMesLabels(){
-  const d=new Date(); const ant=new Date(d.getFullYear(), d.getMonth()-1, 1);
-  const f=x=>x.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
-  return { atual:f(d)+'/'+String(d.getFullYear()).slice(2), anterior:f(ant)+'/'+String(ant.getFullYear()).slice(2) };
-}
-const AC_MES = acMesLabels();
-function acSit(saldo,minimo,alerta){
-  const a=(alerta||'').toUpperCase();
-  if(a.includes('URGENTE')) return ['URGENTE','ac-urg'];
-  if(a.includes('COMPRAR')) return ['COMPRAR','ac-com'];
-  if(a.includes('ATEN'))    return ['ATENÇÃO','ac-ate'];
-  const r=(minimo>0)?saldo/minimo:9;
-  if(saldo<0||r<=0.5) return ['URGENTE','ac-urg'];
-  if(r<=1) return ['COMPRAR','ac-com'];
-  if(r<=1.2) return ['ATENÇÃO','ac-ate'];
-  return ['OK','ac-ok'];
-}
+let ccDados = [];        // linhas da vw_compras_classes
+let ccPrevisao = null;   // pacientes previstos no mês (editável)
+let ccFiltroClasse = ''; // '' = todas
+let ccModoTriagem = false;
+let acResultados = [];
+
+const CC_INFO = {
+  RECORRENTE:       { emoji:'🔁', nome:'Recorrentes',            grad:'linear-gradient(135deg,var(--azul),var(--azul-medio))', cor:'var(--azul-medio)', chip:'cc-azul',
+                      gat:'Consumo todo mês. Gatilho: cobertura < 1,5 mês' },
+  POR_PROCEDIMENTO: { emoji:'🎯', nome:'Por procedimento',       grad:'linear-gradient(135deg,#4b2e91,#6f42c1)', cor:'#6f42c1', chip:'cc-roxo',
+                      gat:'Sai por paciente. Gatilho: projeção de cirurgias' },
+  CRITICO:          { emoji:'🚑', nome:'Críticos de segurança',  grad:'linear-gradient(135deg,#7B241C,var(--vermelho))', cor:'var(--vermelho)', chip:'cc-verm',
+                      gat:'Nunca abaixo do mínimo nem perto de vencer' },
+  ESPORADICO:       { emoji:'💤', nome:'Esporádicos',            grad:'linear-gradient(135deg,#5D6D7E,#7F8C8D)', cor:'var(--cinza-4)', chip:'cc-cz',
+                      gat:'Sem consumo regular — sob demanda, sem gatilho' },
+};
+const CC_ORDEM = ['RECORRENTE','POR_PROCEDIMENTO','CRITICO','ESPORADICO'];
+
 function acMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function acData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
-function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLocaleString('pt-BR',{maximumFractionDigits:0}); }
+function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLocaleString('pt-BR',{maximumFractionDigits:1}); }
+function ccHoje(){ return new Date().toISOString().split('T')[0]; }
 
 async function acCarregar(){
   try{
@@ -2437,320 +2513,347 @@ async function acCarregar(){
       catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
-    const rows = await sbFetch('vw_alerta_compras?select=*&order=material.asc&limit=1000');
-    acAlerta = rows||[];
-
-    // Busca TODO pedido ativo direto da tabela — independente do saldo estar em alerta agora ou não
-    // (corrige o item que "some" quando o saldo melhora mas o pedido continua pendente)
-    const pedidosAtivos = await sbFetch("ordens_compra?select=material_id,situacao,fornecedor_compra_id,fornecedor_id&situacao=in.(PENDENTE,\"NF EMITIDA\")&order=id.desc");
-    acPedidosAtivos = {};
-    for(const p of (pedidosAtivos||[])){
-      if(!acPedidosAtivos[p.material_id]){ // mantém o mais recente por material
-        acPedidosAtivos[p.material_id] = {
-          etapa_status: p.situacao === 'PENDENTE' ? 'PEDIDO PENDENTE' : 'NF EMITIDA',
-          fornecedor_id: p.fornecedor_compra_id || p.fornecedor_id,
-        };
-      }
+    ccDados = (await sbFetch('vw_compras_classes?select=*&limit=1000')) || [];
+    if(ccPrevisao === null){
+      try{
+        const prev = await sbFetch('vw_previsao_cirurgias?select=*');
+        const soma = (prev||[]).reduce((a,b)=>a+Number(b.media_mensal||0),0);
+        ccPrevisao = Math.max(1, Math.round(soma)) || 120;
+      }catch(e){ ccPrevisao = 120; }
     }
-
-    acRender();
+    ccRender();
   }catch(e){
-    document.getElementById('ac-lista').innerHTML='<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+    document.getElementById('ac-lista').innerHTML =
+      '<div class="ac-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'<br><span style="font-size:11px">Confirme que o script Onda 1A foi executado no Supabase (vw_compras_classes).</span></div>';
   }
 }
-let acPedidosAtivos = {}; // material_id -> {etapa_status, fornecedor_id} — pedidos ativos, sempre visíveis
 
-function acLinha(r){
-  const [txt,cls]=acSit(Number(r.saldo_total),Number(r.estoque_minimo),r.alerta_compra);
-  const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
-  const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
-  const baixo=(saldo<0||(minimo>0&&saldo<=minimo))?'ac-baixo':'';
-  const trend=(Number(r.consumo_mes_atual)>Number(r.consumo_mes_anterior))?'↑':(Number(r.consumo_mes_atual)<Number(r.consumo_mes_anterior)?'↓':'');
-  let uc;
-  if(r.uc_data){ const c2=r.uc_dentro_2meses?'':'ac-old';
-    uc=`<span class="${c2}">${acData(r.uc_data)} · <b>${acMoney(r.uc_valor_unitario)}/un</b>${r.uc_dentro_2meses?'':' (fora 2m)'}</span>`;
-  } else uc='<span class="ac-none">nenhuma compra</span>';
-  const etapa=r.etapa_status?`<span class="ac-etapa">${r.etapa_status}</span>`:'';
-  const vigilancia = r._vigilancia ? `<span class="ac-vigilancia" title="Já tem pedido em andamento, mas saldo ainda está bem próximo do mínimo">👀 Acompanhar</span>` : '';
-  const porConsumo = !!r.gatilho_por_consumo;
-  const tagCriterio = `<span class="ac-criterio ${porConsumo?'ac-criterio-consumo':'ac-criterio-minimo'}"
-    onclick="acAlternarCriterio(${r.material_id}, ${porConsumo}, '${(r.material||'').replace(/'/g,"\\'")}')" title="Clique para alternar o critério de alerta deste item">
-    ${porConsumo ? '📊 consumo' : '📦 mínimo'}</span>`;
-  // Fornecedor agora é só referência/coluna — a decisão de fornecedor acontece na Cotação
-  const colForn = r.fornecedor_padrao
-    ? `<span title="fornecedor de referência">${r.fornecedor_padrao}</span>`
-    : `<select class="ac-forn-sel" onchange="acSalvarFornecedor(${r.material_id}, this.value)">
-        <option value="">📌 definir...</option>
-        ${acFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
-      </select>`;
-  return `<tr data-mid="${r.material_id}" data-saldo="${saldo}">
-    <td><div class="ac-item">${r.material}</div><span class="ac-badge ${cls}">${txt}</span>${etapa}${vigilancia}<br>${tagCriterio}</td>
-    <td class="ac-forncol">${colForn}</td>
-    <td class="num"><input class="ac-min" value="${minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
-    <td class="num ac-saldo ${baixo}">${acN0(saldo)}</td>
-    <td class="num">${acN0(r.consumo_mes_anterior)}</td>
-    <td class="num">${acN0(r.consumo_mes_atual)} <span class="ac-trend">${trend}</span></td>
-    <td class="num"><b>${sug>0?sug:'—'}</b></td>
-    <td class="ac-ult">${uc}</td>
-    <td class="ac-rowact"><button class="ac-orcar">Orçar</button><button class="ac-adiar">${r._manual?'Remover':'Adiar'}</button></td>
-  </tr>`;
-}
-
-function acGrupoCategoria(nomeCategoria, itens){
-  const trs = itens.map(r => acLinha(r)).join('');
-  return `<div class="ac-forn"><div class="ac-fhead"><div class="ac-fnome">${nomeCategoria} <span class="ac-count">${itens.length} ${itens.length>1?'itens':'item'}</span></div></div>
-    <div style="overflow-x:auto"><table><thead><tr>
-      <th>Item</th><th>Fornecedor</th><th class="num">Mín ✎</th><th class="num">Saldo</th>
-      <th class="num">Cons. ${AC_MES.anterior}</th><th class="num">Cons. ${AC_MES.atual}</th><th class="num">Sugerido</th>
-      <th>Última compra</th><th></th></tr></thead><tbody>${trs}</tbody></table></div></div>`;
-}
-
-// Localiza item na lista já carregada (filtra sem recarregar do banco)
-let acStatusAtivo = ''; // '' = todos, ou 'URGENTE'/'COMPRAR'/'ATENÇÃO'
-
-function acFiltrarStatus(status){
-  acStatusAtivo = status;
-  document.querySelectorAll('#aba-comprar .ac-pill').forEach(b => {
-    b.classList.toggle('ativa', b.dataset.status === status);
-  });
-  acFiltrar();
-}
-
-function acFiltrar(){
-  const campo = document.getElementById('ac-filtro');
-  const contador = document.getElementById('ac-filtro-count');
-  if (!campo) return;
-  const termo = normNome(campo.value.trim());
-  const linhas = document.querySelectorAll('#ac-lista tr[data-mid]');
-  let visiveis = 0;
-  linhas.forEach(tr => {
-    const nomeEl = tr.querySelector('.ac-item');
-    const texto = nomeEl ? normNome(nomeEl.textContent) : '';
-    const bateTexto = !termo || texto.includes(termo);
-    const badgeEl = tr.querySelector('.ac-badge');
-    const statusItem = badgeEl ? badgeEl.textContent.trim() : '';
-    const bateStatus = !acStatusAtivo || statusItem === acStatusAtivo;
-    const bate = bateTexto && bateStatus;
-    tr.style.display = bate ? '' : 'none';
-    if (bate) visiveis++;
-  });
-  // Esconde o bloco da categoria inteira se nenhum item dela estiver visível
-  const filtroAtivo = termo || acStatusAtivo;
-  document.querySelectorAll('#ac-lista .ac-forn').forEach(grupo => {
-    const temVisivel = [...grupo.querySelectorAll('tr[data-mid]')].some(tr => tr.style.display !== 'none');
-    grupo.style.display = (filtroAtivo && !temVisivel) ? 'none' : '';
-  });
-  contador.textContent = filtroAtivo ? `— ${visiveis} encontrado(s)` : '';
-}
-
-function acRender(){
-  // "Já em andamento" agora vem direto dos pedidos ativos no banco — SEMPRE aparece,
-  // mesmo que o saldo do item já esteja ok no momento (corrige item que "sumia")
-  const jaEmAndamento = Object.keys(acPedidosAtivos).map(materialId => {
-    const pedido = acPedidosAtivos[materialId];
-    const ref = acAlerta.find(r => String(r.material_id) === String(materialId));
-    const nomeMat = ref ? ref.material : rcNomeMaterial ? rcNomeMaterial(Number(materialId)) : ('material #'+materialId);
-    const nomeForn = pedido.fornecedor_id ? (acFornecedores.find(f=>f.id===pedido.fornecedor_id)||{}).nome : null;
-    return {
-      material_id: Number(materialId), material: nomeMat,
-      etapa_status: pedido.etapa_status, fornecedor_padrao: nomeForn,
-      saldo_total: ref ? ref.saldo_total : null,
-      estoque_minimo: ref ? ref.estoque_minimo : null,
-    };
-  });
-  const idsEmAndamento = new Set(jaEmAndamento.map(r => r.material_id));
-
-  // Faixa de vigilância: mesmo com pedido em andamento, se o saldo estiver entre
-  // 90% e 110% do mínimo, o item continua aparecendo na lista principal também
-  // (é uma faixa arriscada de ficar sem cobertura)
-  const idsVigilancia = new Set(
-    jaEmAndamento
-      .filter(r => {
-        const min = Number(r.estoque_minimo);
-        const saldo = Number(r.saldo_total);
-        if (!min || min <= 0 || saldo == null || isNaN(saldo)) return false;
-        const razao = saldo / min;
-        return razao >= 0.9 && razao <= 1.1;
-      })
-      .map(r => r.material_id)
-  );
-  const idsOcultarDaLista = new Set([...idsEmAndamento].filter(id => !idsVigilancia.has(id)));
-
-  const precisa = acAlerta
-    .filter(r=>r.alerta_compra && String(r.alerta_compra).trim()!=='' && !idsOcultarDaLista.has(r.material_id))
-    .map(r => ({ ...r, _vigilancia: idsVigilancia.has(r.material_id) }));
-  const todos = [
-    ...acManuais.filter(r=>!idsOcultarDaLista.has(r.material_id)).map(r=>({...r, _manual:true})),
-    ...precisa.map(r=>({...r, _manual:false})),
-  ];
-
-  if(!todos.length && !jaEmAndamento.length){
-    document.getElementById('ac-lista').innerHTML = '<div class="ac-empty">Nenhum item em alerta de compra no momento. ✓</div>';
-    return;
-  }
-
-  // Posição de cada item dentro da categoria + qual categoria, na mesma ordem do formulário de saída
-  const posItem = {}, catDoItem = {};
-  let pos = 0;
-  for(const cat of CATEGORIAS_ORDEM){
-    for(const item of cat.itens){
-      const key = item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
-      posItem[key] = pos++;
-      catDoItem[key] = cat.label;
+// gatilho por classe — retorna {compra, motivo, sugestao, chip}
+function ccGatilho(r){
+  const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
+  const cm = Number(r.consumo_medio_mensal)||0;
+  const cob = (r.cobertura_meses===null||r.cobertura_meses===undefined) ? null : Number(r.cobertura_meses);
+  const cpp = (r.consumo_por_paciente===null||r.consumo_por_paciente===undefined) ? null : Number(r.consumo_por_paciente);
+  const venc60 = Number(r.qtd_vencendo_60d)||0;
+  const vencido = r.proxima_validade && r.proxima_validade < ccHoje();
+  switch(r.classe_compra){
+    case 'RECORRENTE': {
+      if(cm > 0 && cob !== null && cob < 1.5){
+        const sug = Math.max(0, Math.ceil(cm*2 - saldo));
+        return { compra: sug>0, motivo:`cobertura ${cob.toFixed(2)}m`, sugestao:sug,
+                 chip: cob<=0?'cc-verm':(cob<1?'cc-lar':'cc-ama') };
+      }
+      return { compra:false };
     }
+    case 'POR_PROCEDIMENTO': {
+      if(cpp && cpp > 0 && ccPrevisao){
+        const nec = Math.ceil(cpp * ccPrevisao);
+        const falta = nec - saldo;
+        return { compra: falta>0, motivo:`necessidade ${nec} p/ ${ccPrevisao} pacientes`, sugestao:Math.max(0,falta),
+                 nec, chip: falta>0?'cc-verm':(saldo < nec*2 ? 'cc-ama' : 'cc-verd') };
+      }
+      if(cm > 0 && cob !== null && cob < 1){
+        return { compra:true, motivo:`sem histórico p/ paciente · cobertura ${cob.toFixed(2)}m`,
+                 sugestao:Math.max(0, Math.ceil(cm*1.5 - saldo)), chip:'cc-lar' };
+      }
+      return { compra:false };
+    }
+    case 'CRITICO': {
+      const sobrev = saldo - venc60;
+      if(vencido) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor', sugestao:Math.max(0, min - sobrev), chip:'cc-verm' };
+      if(min > 0 && sobrev < min){
+        const motivo = venc60 > 0 ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(sobrev)} < mín ${acN0(min)}`
+                                  : `saldo ${acN0(saldo)} < mín ${acN0(min)}`;
+        return { compra:true, motivo, sugestao:Math.max(0, Math.ceil(min*2 - sobrev)), chip: saldo<=min*0.5?'cc-verm':'cc-ama' };
+      }
+      return { compra:false };
+    }
+    default: return { compra:false };
   }
-  const normKey = s => (s||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
-  const posCat = {}; CATEGORIAS_ORDEM.forEach((c,i)=>posCat[c.label]=i);
+}
+
+function ccResumo(){
+  const cont = document.getElementById('cc-resumo');
+  const porClasse = {};
+  for(const c of CC_ORDEM) porClasse[c] = { total:0, comprar:0 };
+  let triagem = 0;
+  for(const r of ccDados){
+    const cl = r.classe_compra || 'ESPORADICO';
+    if(!porClasse[cl]) porClasse[cl] = { total:0, comprar:0 };
+    porClasse[cl].total++;
+    if(ccGatilho(r).compra) porClasse[cl].comprar++;
+    if(!r.classe_confirmada) triagem++;
+  }
+  cont.innerHTML = CC_ORDEM.map(c=>{
+    const i = CC_INFO[c], d = porClasse[c];
+    const num = c==='ESPORADICO' ? '—' : d.comprar;
+    const sub = c==='ESPORADICO' ? `${d.total} fora da lista principal ✓` : `comprar agora · ${d.total} na classe`;
+    return `<div class="cc-classe ${ccFiltroClasse===c?'on':''}" style="border-left-color:${i.cor}" onclick="ccSetFiltroClasse('${c}')">
+      <div class="n">${i.emoji} ${i.nome}</div><div class="g">${i.gat}</div>
+      <div class="c" style="color:${i.cor}">${num}</div><div class="s" style="color:${i.cor}">${sub}</div></div>`;
+  }).join('');
+  const chip = document.getElementById('cc-triagem-chip');
+  chip.innerHTML = triagem
+    ? `<span class="cc-chip ${ccModoTriagem?'cc-azul':'cc-cz'}" style="cursor:pointer" onclick="ccToggleTriagem()">🏷️ ${triagem} aguardando classificação — ${ccModoTriagem?'voltar à lista':'revisar'}</span>`
+    : `<span class="cc-chip cc-verd">🏷️ classificação em dia ✓</span>`;
+}
+function ccSetFiltroClasse(c){ ccFiltroClasse = (ccFiltroClasse===c ? '' : c); ccRender(); }
+function ccToggleTriagem(){ ccModoTriagem = !ccModoTriagem; ccRender(); }
+
+function ccTagClasse(r){
+  const i = CC_INFO[r.classe_compra] || CC_INFO.ESPORADICO;
+  const alerta = r.classe_confirmada ? '' : ' ⚠';
+  return `<span class="cc-tag ${i.chip}" title="clique para reclassificar" onclick="ccReclassificar(${r.material_id})">${i.emoji} ${i.nome.toLowerCase()}${alerta} ▾</span>`;
+}
+function ccCob(r){
+  const cob = (r.cobertura_meses===null||r.cobertura_meses===undefined)?null:Number(r.cobertura_meses);
+  if(cob===null) return '—';
+  const pct = Math.max(2, Math.min(100, cob/3*100));
+  const cor = cob<=0?'var(--vermelho)':(cob<1?'#D35400':(cob<1.5?'#B7950B':(cob<3?'var(--azul-medio)':'var(--verde)')));
+  return `<span class="cc-cob"><i style="width:${pct}%;background:${cor}"></i></span><b style="color:${cor}">${cob.toFixed(2)}m</b>`;
+}
+function ccUc(r){
+  if(!r.uc_data) return '<span style="color:#9a6060;font-style:italic;font-size:11px">nenhuma compra</span>';
+  return `<span style="font-size:11px">${acData(r.uc_data)} · <b style="color:var(--verde)">${acMoney(r.uc_valor_unitario)}/un</b></span>`;
+}
+function ccEtapa(r){
+  return r.etapa_status ? `<span class="ac-etapa">${r.etapa_status}</span>` : '';
+}
+
+function ccRender(){
+  ccResumo();
+  const lista = document.getElementById('ac-lista');
+  let dados = ccDados;
+  if(ccModoTriagem) dados = dados.filter(r=>!r.classe_confirmada);
+  if(ccFiltroClasse) dados = dados.filter(r=>(r.classe_compra||'ESPORADICO')===ccFiltroClasse);
 
   let html = '';
+  for(const classe of CC_ORDEM){
+    if(ccFiltroClasse && classe!==ccFiltroClasse) continue;
+    const i = CC_INFO[classe];
+    const doGrupo = dados.filter(r=>(r.classe_compra||'ESPORADICO')===classe);
+    if(!doGrupo.length) continue;
 
-  // Seção retrátil: itens já em andamento (só informativo, sem botão de Orçar)
-  if(jaEmAndamento.length){
-    const linhasAndamento = jaEmAndamento
-      .sort((a,b)=>(a.material||'').localeCompare(b.material||''))
-      .map(r => `<tr>
-        <td>${r.material}</td>
-        <td><span class="ac-etapa">${r.etapa_status}</span></td>
-        <td>${r.fornecedor_padrao || '—'}</td>
-        <td style="text-align:right">${acN0(r.saldo_total)}</td>
-      </tr>`).join('');
-    html += `<details class="ac-andamento">
-      <summary>⏳ Já em andamento — não comprar de novo <span class="ac-count-andamento">${jaEmAndamento.length}</span></summary>
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>Item</th><th>Status</th><th>Fornecedor</th><th style="text-align:right">Saldo</th></tr></thead>
-        <tbody>${linhasAndamento}</tbody>
-      </table></div>
-    </details>`;
+    if(classe === 'ESPORADICO' && !ccModoTriagem && !ccFiltroClasse){
+      // gaveta fechada
+      html += `<div class="cc-bloco"><details><summary style="cursor:pointer;list-style:none;padding:12px 16px;font-size:13px;font-weight:800;color:var(--cinza-4)">💤 ESPORÁDICOS — sob demanda (${doGrupo.length} itens fora da lista) ▸</summary>
+        <div class="cc-bbody" style="border-top:1px solid var(--cinza-2)">${ccTabela(classe, doGrupo)}</div></details></div>`;
+      continue;
+    }
+
+    const emCompra = doGrupo.filter(r=>ccGatilho(r).compra);
+    const titulo = classe==='ESPORADICO'
+      ? `${i.emoji} ESPORÁDICOS — sob demanda (${doGrupo.length})`
+      : `${i.emoji} ${i.nome.toUpperCase()} — comprar agora (${emCompra.length})`;
+    html += `<div class="cc-bloco" data-classe="${classe}">
+      <div class="cc-bhead" style="background:${i.grad}">
+        <span>${titulo}</span>
+        ${emCompra.length ? `<button class="ac-orcar" style="background:#fff;color:${i.cor};font-weight:800" onclick="ccOrcarClasse('${classe}')">📤 Enviar os ${emCompra.length} para Cotação 🔒</button>` : ''}
+      </div>
+      <div class="cc-bbody">${classe==='POR_PROCEDIMENTO' ? ccPrevBox() : ''}${ccTabela(classe, doGrupo)}</div>
+    </div>`;
   }
-
-  if(!todos.length){
-    html += '<div class="ac-empty">Todos os itens em alerta já têm compra em andamento. ✓</div>';
-    document.getElementById('ac-lista').innerHTML = html;
-    return;
-  }
-
-  const porCategoria = {}; const ordemCategorias = [];
-  for(const r of todos){
-    const cat = catDoItem[normKey(r.material)] || 'EXTRAS';
-    if(!porCategoria[cat]){ porCategoria[cat]=[]; ordemCategorias.push(cat); }
-    porCategoria[cat].push(r);
-  }
-  ordemCategorias.sort((a,b)=>(posCat[a]??999)-(posCat[b]??999));
-
-  for(const cat of ordemCategorias){
-    const itens = porCategoria[cat].sort((a,b)=>{
-      const pa = posItem[normKey(a.material)] ?? 9999, pb = posItem[normKey(b.material)] ?? 9999;
-      if(pa!==pb) return pa-pb;
-      return (a.material||'').localeCompare(b.material||'');
-    });
-    html += acGrupoCategoria(cat, itens);
-  }
-
-  document.getElementById('ac-lista').innerHTML = html;
-  document.querySelectorAll('#aba-comprar .ac-orcar').forEach(b=>b.addEventListener('click',function(){
-    const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
-    acEnviarParaCotacao(mid);
-  }));
-  document.querySelectorAll('#aba-comprar .ac-adiar').forEach(b=>b.addEventListener('click',function(){
-    const tr=this.closest('tr'), mid=Number(tr.dataset.mid);
-    if(this.textContent==='Remover'){ acManuais=acManuais.filter(m=>m.material_id!==mid); acRender(); }
-    else { tr.style.opacity='0.4'; toast('Item adiado (visual).',''); }
-  }));
-  acFiltrar(); // reaplica o filtro (se houver texto digitado) após recarregar a lista
+  lista.innerHTML = html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>';
+  ccFiltrar();
 }
 
-// Envia o item da aba Comprar para a Cotação (reaproveita o estado coItens/coOpVazia)
-function acEnviarParaCotacao(materialId){
+function ccPrevBox(){
+  return `<div class="cc-prev">📅 <b>Pacientes previstos no mês:</b>
+    <input type="number" min="1" value="${ccPrevisao}" onchange="ccSetPrevisao(this.value)">
+    <span class="cc-chip cc-roxo">sugerido pela média dos últimos meses ✎ editável — a lista recalcula na hora</span></div>`;
+}
+function ccSetPrevisao(v){
+  const n = parseInt(v); if(!n || n<1){ toast('Valor inválido.','erro'); return; }
+  ccPrevisao = n; ccRender();
+}
+
+function ccTabela(classe, rows){
+  const g = r => ccGatilho(r);
+  // ordena: quem pede compra primeiro, depois por severidade
+  const ord = [...rows].sort((a,b)=>{
+    const ga=g(a), gb=g(b);
+    if(ga.compra!==gb.compra) return ga.compra?-1:1;
+    const ca=(a.cobertura_meses==null)?99:Number(a.cobertura_meses);
+    const cb=(b.cobertura_meses==null)?99:Number(b.cobertura_meses);
+    return ca-cb;
+  });
+  // recorrentes/proc: mostra só quem pede compra (+ triagem mostra tudo); críticos: mostra TODOS; esporádicos: todos
+  let visiveis = ord;
+  if(!ccModoTriagem && (classe==='RECORRENTE' || classe==='POR_PROCEDIMENTO')){
+    visiveis = ord.filter(r=>g(r).compra);
+    if(!visiveis.length) return '<div class="ac-empty" style="padding:14px">Nenhum item desta classe pedindo compra. ✓</div>';
+  }
+
+  if(classe==='CRITICO'){
+    return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Mín ✎</th><th>Validade próx.</th><th>Status</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
+      visiveis.map(r=>{
+        const gt=g(r);
+        const val = r.proxima_validade
+          ? (r.proxima_validade < ccHoje()
+              ? `<span class="cc-chip cc-verm">⛔ vencido ${acData(r.proxima_validade)}</span>`
+              : (Number(r.qtd_vencendo_60d)>0
+                  ? `<span class="cc-chip cc-ama">⏰ ${acData(r.proxima_validade)} · ${acN0(r.qtd_vencendo_60d)} un vencendo</span>`
+                  : `<span class="cc-chip cc-verd">${acData(r.proxima_validade)} ✓</span>`))
+          : `<span class="cc-chip cc-cz">— sem lote</span>`;
+        const status = gt.compra ? `<span class="cc-chip ${gt.chip}">${gt.motivo}</span>` : `<span class="cc-chip cc-verd">✓ ok</span>`;
+        return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+          <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
+          <td class="num"><input class="ac-min" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
+          <td>${val}</td><td>${status}</td><td>${ccUc(r)}</td>
+          <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+
+  if(classe==='POR_PROCEDIMENTO'){
+    return `<table><thead><tr><th>Item</th><th class="num">Cons./paciente</th><th class="num">Necessidade</th><th class="num">Saldo</th><th class="num">Falta</th><th>Situação</th><th></th></tr></thead><tbody>` +
+      visiveis.map(r=>{
+        const gt=g(r);
+        const cpp = r.consumo_por_paciente!=null ? Number(r.consumo_por_paciente).toFixed(2) : '—';
+        const nec = gt.nec!=null ? gt.nec : '—';
+        const falta = gt.compra ? `<b style="color:var(--vermelho)">${acN0(gt.sugestao)}</b>` : '—';
+        const sit = gt.compra ? `<span class="cc-chip cc-verm">⛔ não cobre o mês</span>`
+                              : `<span class="cc-chip cc-verd">✓ cobre</span>`;
+        return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+          <td class="num">${cpp}</td><td class="num">${nec}</td><td class="num">${acN0(r.saldo)}</td>
+          <td class="num">${falta}</td><td>${sit}</td>
+          <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+
+  if(classe==='ESPORADICO'){
+    return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Meses c/ consumo (5m)</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
+      visiveis.map(r=>`<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        <td class="num">${acN0(r.saldo)}</td><td class="num">${r.meses_com_consumo??0}</td><td>${ccUc(r)}</td>
+        <td><button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button></td></tr>`).join('') + '</tbody></table>';
+  }
+
+  // RECORRENTE
+  return `<table><thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura</th><th class="num">Sugerido (2m)</th><th>Últ. compra</th><th></th></tr></thead><tbody>` +
+    visiveis.map(r=>{
+      const gt=g(r);
+      return `<tr data-mid="${r.material_id}"><td><div class="ac-item">${r.material}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
+        <td class="num">${acN0(r.consumo_medio_mensal)}</td>
+        <td class="num">${ccCob(r)}</td>
+        <td class="num"><b>${gt.compra?acN0(gt.sugestao):'—'}</b></td>
+        <td>${ccUc(r)}</td>
+        <td>${gt.compra?`<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">Orçar 🔒</button>`:''}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function ccFiltrar(){
+  const campo = document.getElementById('ac-filtro');
+  const contador = document.getElementById('ac-filtro-count');
+  if(!campo) return;
+  const termo = normNome(campo.value.trim());
+  let visiveis = 0;
+  document.querySelectorAll('#ac-lista tr[data-mid]').forEach(tr=>{
+    const nomeEl = tr.querySelector('.ac-item');
+    const bate = !termo || (nomeEl && normNome(nomeEl.textContent).includes(termo));
+    tr.style.display = bate ? '' : 'none';
+    if(bate) visiveis++;
+  });
+  document.querySelectorAll('#ac-lista .cc-bloco').forEach(bl=>{
+    const tem = [...bl.querySelectorAll('tr[data-mid]')].some(tr=>tr.style.display!=='none');
+    bl.style.display = (termo && !tem) ? 'none' : '';
+  });
+  contador.textContent = termo ? `— ${visiveis} encontrado(s)` : '';
+}
+
+// reclassificação: 1 clique na etiqueta
+async function ccReclassificar(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  const escolha = prompt(
+    `Reclassificar "${r.material}"\n(atual: ${r.classe_compra}${r.classe_confirmada?'':' — aguardando confirmação'})\n\n`+
+    `1 — 🔁 RECORRENTE (consumo todo mês)\n2 — 🎯 POR PROCEDIMENTO (sai por paciente)\n3 — 🚑 CRÍTICO (emergência: mínimo + validade)\n4 — 💤 ESPORÁDICO (sob demanda)\n\nDigite o número (ou só OK para confirmar a classe atual):`);
+  if(escolha === null) return;
+  const mapa = {'1':'RECORRENTE','2':'POR_PROCEDIMENTO','3':'CRITICO','4':'ESPORADICO'};
+  const nova = mapa[escolha.trim()] || r.classe_compra;
+  try{
+    const patch = { classe_compra: nova, classe_confirmada: true };
+    if(nova === 'CRITICO') patch.controla_lote = true;
+    const res = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', patch);
+    if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); return; }
+    r.classe_compra = nova; r.classe_confirmada = true;
+    toast(`${r.material} → ${CC_INFO[nova].emoji} ${CC_INFO[nova].nome} ✓`,'sucesso');
+    ccRender();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// mínimo editável (crítico) — grava no cadastro
+async function acSalvarMinimo(materialId, inp){
+  const novo = parseFloat((''+inp.value).replace(',','.'));
+  if(isNaN(novo)||novo<0){ toast('Valor de mínimo inválido.','erro'); return; }
+  try{
+    const r = await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ estoque_minimo:novo });
+    if(!r||!r.length){ toast('⚠ Sem permissão para gravar o mínimo (RLS).','erro'); return; }
+    const loc = ccDados.find(x=>x.material_id===materialId); if(loc) loc.estoque_minimo = novo;
+    toast('Mínimo atualizado ✓','sucesso'); ccRender();
+  }catch(e){ toast('Erro ao salvar mínimo: '+e.message,'erro'); }
+}
+
+// enviar para cotação (Etapa 2) — pede senha de compras
+function ccOrcar(materialId){
+  if(!exigirSenhaCompras()) return;
+  acEnviarParaCotacao(materialId);
+}
+function ccOrcarClasse(classe){
+  if(!exigirSenhaCompras()) return;
+  const doGrupo = ccDados.filter(r=>(r.classe_compra||'ESPORADICO')===classe && ccGatilho(r).compra);
+  let n=0;
+  for(const r of doGrupo){ if(acEnviarParaCotacao(r.material_id, true)) n++; }
+  if(typeof coRender === 'function') coRender();
+  toast(`${n} item(ns) enviados para a Cotação ✓ — abra a aba 🧾 Cotação.`,'sucesso');
+}
+function acEnviarParaCotacao(materialId, silencioso){
   if (typeof coItens === 'undefined' || typeof coOpVazia !== 'function') {
-    toast('Aba Cotação indisponível nesta versão.', 'erro'); return;
+    toast('Aba Cotação indisponível nesta versão.', 'erro'); return false;
   }
   if (coItens.find(x => x.material_id === materialId)) {
-    toast('Este item já está na cotação. Abra a aba 🧾 Cotação.', ''); return;
+    if(!silencioso) toast('Este item já está na cotação. Abra a aba 🧾 Cotação.', '');
+    return false;
   }
-  const row = acAlerta.find(r => r.material_id === materialId) || acManuais.find(r => r.material_id === materialId);
-  if (!row) { toast('Item não encontrado.', 'erro'); return; }
-
-  const saldo = Number(row.saldo_total), minimo = Number(row.estoque_minimo);
-  const sug = Math.max(0, Math.round((minimo || 0) - (saldo || 0)));
+  const r = ccDados.find(x => x.material_id === materialId);
+  if (!r) { if(!silencioso) toast('Item não encontrado.', 'erro'); return false; }
+  const gt = ccGatilho(r);
+  const sug = gt.sugestao || Math.max(0, Math.round((Number(r.estoque_minimo)||0) - (Number(r.saldo)||0)));
   const op1 = coOpVazia(1);
-  if (row.fornecedor_padrao_id) op1.fornecedor_id = row.fornecedor_padrao_id;
-  if (row.marca) op1.marca = row.marca;
-
+  if (r.fornecedor_padrao_id) op1.fornecedor_id = r.fornecedor_padrao_id;
+  if (r.marca) op1.marca = r.marca;
   coItens.push({
-    id: null, material_id: row.material_id, material_nome: row.material,
-    qtd_desejada: sug > 0 ? sug : null, saldo: saldo, minimo: minimo, grupo: (typeof coGrupoAtual !== 'undefined' ? coGrupoAtual : 'Orçamento 1'),
+    id: null, material_id: r.material_id, material_nome: r.material,
+    qtd_desejada: sug > 0 ? sug : null, saldo: Number(r.saldo)||0, minimo: Number(r.estoque_minimo)||0,
+    grupo: (typeof coGrupoAtual !== 'undefined' ? coGrupoAtual : 'Orçamento 1'),
     opcoes: [op1, coOpVazia(2), coOpVazia(3)]
   });
-  if (typeof coRender === 'function') coRender();
-  toast(row.material + ' enviado para Cotação ✓ — abra a aba 🧾 Cotação para preencher fornecedores.', 'sucesso');
-}
-async function acSalvarFornecedor(materialId, fornecedorId){
-  if(!fornecedorId){ return; }
-  try{
-    const r = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', { fornecedor_padrao_id: parseInt(fornecedorId) });
-    if(!r || !r.length){ toast('⚠ Sem permissão para gravar o fornecedor (RLS). Rode o GRANT da coluna fornecedor_padrao_id.', 'erro'); return; }
-    const nomeForn = (acFornecedores.find(f => f.id === parseInt(fornecedorId)) || {}).nome || '';
-    toast('Fornecedor definido: ' + nomeForn + ' ✓', 'sucesso');
-    acCarregar(); // recarrega para reagrupar o item no fornecedor certo
-  }catch(e){ toast('Erro ao salvar fornecedor: ' + e.message, 'erro'); }
+  if (!silencioso && typeof coRender === 'function') coRender();
+  if (!silencioso) toast(r.material + ' enviado para Cotação ✓','sucesso');
+  return true;
 }
 
-// Alterna o critério de alerta do item: por mínimo cadastrado (padrão) ou por consumo do mês anterior
-// (útil para itens de uso irregular, onde comparar com o mínimo fixo não faz sentido)
-// Cadastra um material que ainda não existe no catálogo, direto da aba Comprar
-// (mesma lógica da aba Inventário, só que mais rápida — via prompts)
+// cadastrar material novo (com classe)
 async function acCadastrarNovoMaterial(){
   const nome = prompt('Nome do novo material:');
   if(!nome || !nome.trim()) return;
   const minimoStr = prompt('Estoque mínimo (pode deixar em branco e ajustar depois):', '0');
   const minimo = parseFloat(minimoStr) || 0;
+  const clStr = prompt('Classe de compra:\n1 — 🔁 Recorrente\n2 — 🎯 Por procedimento\n3 — 🚑 Crítico\n4 — 💤 Esporádico (padrão)\n\nDigite o número:', '4');
+  const mapa = {'1':'RECORRENTE','2':'POR_PROCEDIMENTO','3':'CRITICO','4':'ESPORADICO'};
+  const classe = mapa[(clStr||'4').trim()] || 'ESPORADICO';
   try{
-    const r = await sbFetch('materiais','POST',{
-      nome: nome.trim(), estoque_minimo: minimo, ativo:true, exibir_dashboard:true,
-    });
-    if(!r || !r.length){ toast('⚠ Sem permissão para cadastrar (RLS). Rode o GRANT INSERT em materiais.','erro'); return; }
+    const body = { nome: nome.trim(), estoque_minimo: minimo, ativo:true, exibir_dashboard:true,
+                   classe_compra: classe, classe_confirmada: true };
+    if(classe==='CRITICO') body.controla_lote = true;
+    const r = await sbFetch('materiais','POST', body);
+    if(!r || !r.length){ toast('⚠ Sem permissão para cadastrar (RLS).','erro'); return; }
     catalogoMateriais.push({id:r[0].id, nome:nome.trim()});
     todosOsMateriais.push(nome.trim());
-    // Adiciona à lista visível como "incluído manualmente", com saldo 0 (recém-cadastrado, sem estoque ainda)
-    acManuais.push({
-      material_id: r[0].id, material: nome.trim(), saldo_total: 0, estoque_minimo: minimo,
-      alerta_compra: minimo>0 ? 'URGENTE' : '', consumo_mes_atual:0, consumo_mes_anterior:0,
-      fornecedor_padrao:null, uc_data:null,
-    });
-    acRender();
-    toast(nome.trim() + ' cadastrado e adicionado à lista ✓','sucesso');
+    toast(nome.trim() + ' cadastrado como ' + CC_INFO[classe].emoji + ' ' + CC_INFO[classe].nome + ' ✓','sucesso');
+    acCarregar();
   }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
 }
 
-async function acAlternarCriterio(materialId, atualEraPorConsumo, nomeMaterial){
-  const novoValor = !atualEraPorConsumo;
-  const de = atualEraPorConsumo ? '📊 por consumo' : '📦 por mínimo';
-  const para = novoValor ? '📊 por consumo' : '📦 por mínimo';
-  if(!confirm(`Alterar o critério de alerta de "${nomeMaterial||'este item'}"?\n\nDe: ${de}\nPara: ${para}`)) return;
-  try{
-    const r = await sbFetch(`materiais?id=eq.${materialId}`, 'PATCH', { gatilho_por_consumo: novoValor });
-    if(!r || !r.length){ toast('⚠ Sem permissão para gravar (RLS). Rode o SQL da coluna gatilho_por_consumo.', 'erro'); return; }
-    toast('Critério alterado para: ' + para + ' ✓', 'sucesso');
-    acCarregar();
-  }catch(e){ toast('Erro ao alternar critério: '+e.message,'erro'); }
-}
-
-async function acSalvarMinimo(materialId, inp){
-  const novo=parseFloat((''+inp.value).replace(',','.'));
-  if(isNaN(novo)||novo<0){ toast('Valor de mínimo inválido.','erro'); return; }
-  try{
-    const r=await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ estoque_minimo:novo });
-    if(!r||!r.length){ toast('⚠ Sem permissão para gravar o mínimo (RLS). Rode o script de policy.','erro'); return; }
-    inp.style.borderColor='var(--verde)'; inp.style.background='var(--verde-claro)';
-    const tr=inp.closest('tr'), saldo=Number(tr.dataset.saldo);
-    const loc=acAlerta.find(x=>x.material_id===materialId); if(loc) loc.estoque_minimo=novo;
-    const [txt,cls]=acSit(saldo,novo,'');
-    const b=tr.querySelector('.ac-badge'); b.textContent=txt; b.className='ac-badge '+cls;
-    tr.querySelector('.ac-saldo').classList.toggle('ac-baixo',(saldo<0||(novo>0&&saldo<=novo)));
-    toast('Mínimo atualizado no cadastro ✓','sucesso');
-    setTimeout(()=>{ inp.style.borderColor=''; inp.style.background='#FFFDF3'; },1500);
-  }catch(e){ toast('Erro ao salvar mínimo: '+e.message,'erro'); }
-}
+// busca do catálogo → orçar direto
 (function(){
   const box=document.getElementById('ac-busca'), res=document.getElementById('ac-res'); let t=null;
   if(!box) return;
@@ -2768,70 +2871,60 @@ async function acSalvarMinimo(materialId, inp){
   });
   document.addEventListener('click',e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.style.display='none'; });
 })();
-async function acIncluir(idx){
+function acIncluir(idx){
   const m=acResultados[idx]; if(!m) return;
-  if(acManuais.find(x=>x.material_id===m.id)){ toast('Item já incluído.',''); return; }
-  let full=null;
-  try{ const r=await sbFetch(`vw_alerta_compras?select=*&material_id=eq.${m.id}&limit=1`); full=r&&r[0]; }catch(e){}
-  if(!full) full={ material_id:m.id, material:m.nome, estoque_minimo:m.estoque_minimo, saldo_total:null, alerta_compra:'', consumo_mes_atual:0, consumo_mes_anterior:0, ultimo_valor_pago:m.ultimo_valor_pago, uc_data:null, fornecedor_padrao:null };
-  acManuais.push(full); acRender();
   document.getElementById('ac-busca').value=''; document.getElementById('ac-res').style.display='none';
-  toast(m.nome+' incluído na compra ✓','sucesso');
+  if(!ccDados.find(x=>x.material_id===m.id)){
+    ccDados.push({ material_id:m.id, material:m.nome, classe_compra:'ESPORADICO', classe_confirmada:true,
+      saldo:null, estoque_minimo:m.estoque_minimo, consumo_medio_mensal:0, cobertura_meses:null,
+      consumo_por_paciente:null, qtd_vencendo_60d:0, proxima_validade:null, meses_com_consumo:0 });
+  }
+  ccOrcar(m.id);
 }
 </script>
 
 <script>
-// ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) — reaproveita sbFetch/toast do app ═══
-let coCotacaoId = null;      // id da cotação aberta (null = rascunho não salvo)
-let coItens = [];            // itens em tela
-let coFornecedores = [];     // catálogo de fornecedores {id,nome}
+// ═══ ABA COTAÇÃO v3.2 — grupos neutros arrastáveis · até 3 fornecedores/grupo ═══
+let coCotacaoId = null;
+let coItens = [];
+let coFornecedores = [];
+let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
 let coBuscaTimer = null;
 let coBuscaRes = [];
-let coGrupoAtual = 'Orçamento 1'; // grupo em que novos itens entram (organiza a tela quando há vários orçamentos misturados)
-
-function coGruposDistintos(){
-  const lista = [];
-  for(const it of coItens){ const g = it.grupo || 'Orçamento 1'; if(!lista.includes(g)) lista.push(g); }
-  return lista.length ? lista : ['Orçamento 1'];
-}
-function coAtualizaLabelGrupo(){
-  const el = document.getElementById('co-grupo-atual-label');
-  if (el) el.textContent = coGrupoAtual;
-}
-function coNovoGrupo(){
-  const sugestao = 'Orçamento ' + (coGruposDistintos().length + 1);
-  const nome = prompt('Nome do novo grupo de orçamento:', sugestao);
-  if (!nome || !nome.trim()) return;
-  coGrupoAtual = nome.trim();
-  coAtualizaLabelGrupo();
-  toast('Grupo "' + coGrupoAtual + '" ativo — itens adicionados agora entram nele.', 'sucesso');
-}
-function coGrupoOptions(sel){
-  let h = '';
-  for (const g of coGruposDistintos()) h += `<option value="${g}" ${g===sel?'selected':''}>${g}</option>`;
-  h += '<option value="__novo__">+ novo grupo…</option>';
-  return h;
-}
-function coMoverGrupo(i, val){
-  if (val === '__novo__') {
-    const nome = prompt('Nome do novo grupo:');
-    if (!nome || !nome.trim()) { coRender(); return; }
-    coItens[i].grupo = nome.trim();
-  } else {
-    coItens[i].grupo = val;
-  }
-  coRender();
-}
+let coGrupoAtual = 'Orçamento 1';
+let coCardArrastado = null;
 
 function coMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function coNum(v){ const n=parseFloat((''+v).replace(',','.')); return isNaN(n)?null:n; }
+function coFornNomeById(id){ const f=coFornecedores.find(x=>x.id===Number(id)); return f?f.nome:('#'+id); }
+function coGruposDistintos(){
+  const l=[]; for(const it of coItens){ const g=it.grupo||'Orçamento 1'; if(!l.includes(g)) l.push(g); }
+  for(const g of Object.keys(coFornGrupo)) if(!l.includes(g)) l.push(g);
+  return l.length?l:['Orçamento 1'];
+}
+function coAtualizaLabelGrupo(){ const el=document.getElementById('co-grupo-atual-label'); if(el) el.textContent=coGrupoAtual; }
+function coNovoGrupo(){
+  const nome = prompt('Nome do novo grupo de orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
+  if(!nome||!nome.trim()) return;
+  coGrupoAtual = nome.trim(); if(!coFornGrupo[coGrupoAtual]) coFornGrupo[coGrupoAtual]=[];
+  coAtualizaLabelGrupo(); coRender();
+  toast('Grupo "'+coGrupoAtual+'" ativo.','sucesso');
+}
+function coRenomearGrupo(g){
+  const novo = prompt('Novo nome do grupo:', g);
+  if(!novo||!novo.trim()||novo.trim()===g) return;
+  const n = novo.trim();
+  coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')===g) it.grupo=n; });
+  if(coFornGrupo[g]){ coFornGrupo[n]=coFornGrupo[g]; delete coFornGrupo[g]; }
+  if(coGrupoAtual===g) coGrupoAtual=n;
+  coRender();
+}
 
 async function coCarregar(){
   try{
     if(!coFornecedores.length){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
-    // se ainda não carregou, tenta abrir a última cotação "aberta"
     if(coCotacaoId===null && !coItens.length){
       const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta&order=id.desc&limit=1');
       if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
@@ -2842,69 +2935,51 @@ async function coCarregar(){
       '<div class="co-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
-
-async function coAbrir(id){
-  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
-  coCotacaoId = id;
-  coItens = (its||[]).map(it=>({
-    id: it.id,
-    material_id: it.material_id,
-    material_nome: it.material_nome,
-    qtd_desejada: it.qtd_desejada,
-    saldo: it.saldo_no_momento,
-    minimo: it.estoque_minimo,
-    grupo: it.grupo || 'Orçamento 1',
-    opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
-  }));
-  coGaranteSlots();
-  coRender();
-  coAtualizaLabelGrupo();
-  toast('Cotação #'+id+' carregada.','sucesso');
-}
 function coOpMap(o){
   return { id:o.id, slot:o.slot, fornecedor_id:o.fornecedor_id, fornecedor_nome:o.fornecedor_nome||'',
            marca:o.marca||'', apresentacao:o.apresentacao||'', qtd_embalagem:o.qtd_embalagem,
-           preco_total:o.preco_total, escolhida:!!o.escolhida };
+           preco_total:o.preco_total, escolhida:!!o.escolhida, qtd_escolhida:o.qtd_escolhida,
+           condicao_pagamento:o.condicao_pagamento||'', prazo_entrega:o.prazo_entrega||'',
+           nao_tem:!!o.nao_tem, observacao:o.observacao||'' };
 }
 function coOpVazia(slot){
   return { slot, fornecedor_id:null, fornecedor_nome:'', marca:'', apresentacao:'',
-           qtd_embalagem:null, preco_total:null, escolhida:false };
+           qtd_embalagem:null, preco_total:null, escolhida:false, qtd_escolhida:null,
+           condicao_pagamento:'', prazo_entrega:'', nao_tem:false, observacao:'' };
 }
-function coGaranteSlots(){
-  // garante no mínimo 3 opções por item
-  for(const it of coItens){
-    while(it.opcoes.length<3) it.opcoes.push(coOpVazia(it.opcoes.length+1));
-  }
+async function coAbrir(id){
+  const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo&id=eq.${id}&limit=1`);
+  coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
+  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
+  coCotacaoId = id;
+  coItens = (its||[]).map(it=>({
+    id: it.id, material_id: it.material_id, material_nome: it.material_nome,
+    qtd_desejada: it.qtd_desejada, saldo: it.saldo_no_momento, minimo: it.estoque_minimo,
+    grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || '',
+    opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
+  }));
+  coRender(); coAtualizaLabelGrupo();
+  toast('Cotação #'+id+' carregada.','sucesso');
 }
-
 function coNova(){
-  if(coItens.length && !confirm('Isto vai limpar a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
-  coCotacaoId=null; coItens=[]; coGrupoAtual='Orçamento 1'; coAtualizaLabelGrupo(); coRender();
-  toast('Nova cotação (rascunho). Puxe os itens do alerta ou busque no catálogo.','');
+  if(coItens.length && !confirm('Isto limpa a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
+  coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1';
+  coAtualizaLabelGrupo(); coRender();
 }
-
 async function coPuxarAlerta(){
   try{
-    const rows = await sbFetch("vw_alerta_compras?select=material_id,material,saldo_total,estoque_minimo,fornecedor_padrao_id,fornecedor_padrao,marca&alerta_compra=not.is.null&order=material.asc&limit=1000");
+    if(!ccDados.length){ await acCarregar(); }
     let add=0;
-    for(const r of (rows||[])){
+    for(const r of ccDados){
+      if(!ccGatilho(r).compra) continue;
       if(coItens.find(x=>x.material_id===r.material_id)) continue;
-      const saldo=Number(r.saldo_total), minimo=Number(r.estoque_minimo);
-      const sug=Math.max(0,Math.round((minimo||0)-(saldo||0)));
-      const op1=coOpVazia(1);
-      if(r.fornecedor_padrao_id){ op1.fornecedor_id=r.fornecedor_padrao_id; }
-      if(r.marca){ op1.marca=r.marca; }
-      coItens.push({ id:null, material_id:r.material_id, material_nome:r.material,
-        qtd_desejada:sug>0?sug:null, saldo:saldo, minimo:minimo, grupo: coGrupoAtual,
-        opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
-      add++;
+      acEnviarParaCotacao(r.material_id, true); add++;
     }
     coRender();
-    toast(add?(add+' item(ns) adicionado(s) do alerta.'):'Nenhum item novo do alerta.', add?'sucesso':'');
-  }catch(e){ toast('Erro ao puxar alerta: '+e.message,'erro'); }
+    toast(add ? (add+' item(ns) pedindo compra adicionados.') : 'Nenhum item novo a puxar.', add?'sucesso':'');
+  }catch(e){ toast('Erro ao puxar itens: '+e.message,'erro'); }
 }
-
-// busca no catálogo p/ incluir item manual
+// busca no catálogo
 (function(){
   const box=document.getElementById('co-busca'), res=document.getElementById('co-busca-res');
   if(!box) return;
@@ -2912,7 +2987,7 @@ async function coPuxarAlerta(){
     const q=this.value.trim(); if(q.length<2){ res.style.display='none'; return; }
     clearTimeout(coBuscaTimer); coBuscaTimer=setTimeout(async()=>{
       try{
-        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,marca,fornecedor_padrao_id&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
+        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,marca,descricao_nf,fornecedor_padrao_id&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
         coBuscaRes=rows||[];
         res.innerHTML=(!rows||!rows.length)?'<div class="co-meta" style="justify-content:center">nada encontrado</div>'
           : rows.map((r,i)=>`<div onclick="coAddBusca(${i})"><span>${r.nome}</span><span class="co-meta">mín ${r.estoque_minimo??'—'}</span></div>`).join('');
@@ -2925,389 +3000,461 @@ async function coPuxarAlerta(){
 function coAddBusca(idx){
   const m=coBuscaRes[idx]; if(!m) return;
   if(coItens.find(x=>x.material_id===m.id)){ toast('Item já está na cotação.',''); return; }
-  const op1=coOpVazia(1); if(m.fornecedor_padrao_id) op1.fornecedor_id=m.fornecedor_padrao_id; if(m.marca) op1.marca=m.marca;
   coItens.push({ id:null, material_id:m.id, material_nome:m.nome, qtd_desejada:null,
-    saldo:null, minimo:m.estoque_minimo, grupo: coGrupoAtual, opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
+    saldo:null, minimo:m.estoque_minimo, grupo:coGrupoAtual, descricao_nf:m.descricao_nf||'',
+    opcoes:[coOpVazia(1),coOpVazia(2),coOpVazia(3)] });
   document.getElementById('co-busca').value=''; document.getElementById('co-busca-res').style.display='none';
   coRender(); toast(m.nome+' adicionado.','sucesso');
 }
+function coRemoveItem(i){ if(!confirm('Tirar "'+coItens[i].material_nome+'" da cotação?')) return; coItens.splice(i,1); coRender(); }
 
-function coRemoveItem(i){ coItens.splice(i,1); coRender(); }
-function coAddOpcao(i){ coItens[i].opcoes.push(coOpVazia(coItens[i].opcoes.length+1)); coRender(); }
-function coRemoveOpcao(i,j){ if(coItens[i].opcoes.length<=1) return; coItens[i].opcoes.splice(j,1);
-  coItens[i].opcoes.forEach((o,k)=>o.slot=k+1); coRender(); }
-
-// atualiza um campo da opção a partir do input
-function coSet(i,j,campo,val){
-  const o=coItens[i].opcoes[j];
-  if(campo==='fornecedor_id'){ o.fornecedor_id = val?Number(val):null; }
-  else if(campo==='qtd_embalagem'||campo==='preco_total'){ o[campo]=coNum(val); coAtualizaUnit(i); }
-  else { o[campo]=val; }
+// ── fornecedores do grupo (até 3) ──
+function coAddFornGrupo(g){
+  const lista = coFornGrupo[g] || [];
+  if(lista.length>=3){ toast('Máximo de 3 fornecedores por grupo.','erro'); return; }
+  const opcoes = coFornecedores.filter(f=>!lista.includes(f.id))
+    .map((f,i)=>`${i+1} — ${f.nome}`).join('\n');
+  const esc = prompt('Adicionar fornecedor ao grupo "'+g+'":\n\n'+opcoes+'\n\nDigite o número:');
+  if(esc===null) return;
+  const idx = parseInt(esc)-1;
+  const candidatos = coFornecedores.filter(f=>!lista.includes(f.id));
+  if(isNaN(idx)||!candidatos[idx]){ toast('Escolha inválida.','erro'); return; }
+  coFornGrupo[g] = [...lista, candidatos[idx].id];
+  coRender();
 }
+function coRemFornGrupo(g, fid){
+  coFornGrupo[g] = (coFornGrupo[g]||[]).filter(x=>x!==fid);
+  coRender();
+}
+function coWhatsGrupo(g, fid){
+  const forn = coFornNomeById(fid);
+  const itens = coItens.filter(it=>(it.grupo||'Orçamento 1')===g);
+  if(!itens.length){ toast('Grupo sem itens.',''); return; }
+  const linhas = itens.map(it=>`• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${(it.descricao_nf&&it.descricao_nf.trim())||it.material_nome}`).join('\n');
+  const texto = `Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!`;
+  if(navigator.clipboard){ navigator.clipboard.writeText(texto); toast('Texto do WhatsApp p/ '+forn+' copiado ✓','sucesso'); }
+  else prompt('Copie o texto:', texto);
+}
+
+// ── campos do item/opção ──
+function coSetItem(i, campo, val){
+  if(campo==='qtd_desejada') coItens[i].qtd_desejada = coNum(val);
+  else coItens[i][campo] = val;
+}
+function coOpDoFornecedor(it, fid){
+  let o = it.opcoes.find(x=>x.fornecedor_id===fid);
+  if(!o){
+    o = it.opcoes.find(x=>!x.fornecedor_id && !x.fornecedor_nome && x.preco_total==null);
+    if(!o){ o = coOpVazia(it.opcoes.length+1); it.opcoes.push(o); }
+    o.fornecedor_id = fid;
+  }
+  return o;
+}
+function coSetOp(i, fid, campo, val){
+  const o = coOpDoFornecedor(coItens[i], fid);
+  if(campo==='qtd_embalagem'||campo==='preco_total'||campo==='qtd_escolhida') o[campo]=coNum(val);
+  else if(campo==='nao_tem') o.nao_tem = !!val;
+  else o[campo]=val;
+  if(campo==='qtd_embalagem'||campo==='preco_total') coAtualizaUnit(i);
+}
+function coEscolher(i, fid){
+  const it = coItens[i];
+  const o = coOpDoFornecedor(it, fid);
+  if(o.nao_tem){ toast('Este fornecedor está marcado como "não tem".','erro'); return; }
+  o.escolhida = !o.escolhida;
+  if(o.escolhida && o.qtd_escolhida==null) o.qtd_escolhida = it.qtd_desejada;
+  coRender();
+}
+function coUnit(o){ return (o.preco_total!=null && o.qtd_embalagem) ? o.preco_total/o.qtd_embalagem : null; }
 function coAtualizaUnit(i){
-  // recalcula e destaca o menor preço unitário do item
-  const box=document.getElementById('co-item-'+i); if(!box) return;
-  let melhor=Infinity, melhorJ=-1;
-  coItens[i].opcoes.forEach((o,j)=>{
-    const u=(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null;
-    const el=document.getElementById(`co-unit-${i}-${j}`); if(el) el.textContent=(u!=null)?coMoney(u):'—';
-    if(u!=null && u<melhor){ melhor=u; melhorJ=j; }
-  });
-  coItens[i].opcoes.forEach((o,j)=>{
-    const card=document.getElementById(`co-op-${i}-${j}`);
-    if(card) card.classList.toggle('co-melhor', j===melhorJ && melhorJ>=0);
-  });
+  const it = coItens[i];
+  let melhor=Infinity, melhorFid=null;
+  const fids = coFornGrupo[it.grupo||'Orçamento 1']||[];
+  for(const fid of fids){
+    const o = it.opcoes.find(x=>x.fornecedor_id===fid); if(!o||o.nao_tem) continue;
+    const u = coUnit(o);
+    const el=document.getElementById(`co-unit-${i}-${fid}`); if(el) el.textContent = u!=null?coMoney(u):'—';
+    if(u!=null && u<melhor){ melhor=u; melhorFid=fid; }
+  }
+  for(const fid of fids){
+    const card=document.getElementById(`co-op-${i}-${fid}`);
+    if(card) card.classList.toggle('co-melhor', fid===melhorFid && melhorFid!==null);
+  }
 }
 
-function coFornOptions(sel){
-  let h='<option value="">— fornecedor —</option>';
-  for(const f of coFornecedores){ h+=`<option value="${f.id}" ${sel===f.id?'selected':''}>${f.nome}</option>`; }
-  return h;
-}
-function coCardOpcao(i,j,o){
-  const u=(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null;
-  return `<div class="co-op" id="co-op-${i}-${j}">
-    <div class="co-op-top">Fornecedor ${j+1}${coItens[i].opcoes.length>3?` <button class="co-x" onclick="coRemoveOpcao(${i},${j})" title="remover opção">✕</button>`:''}</div>
-    <select onchange="coSet(${i},${j},'fornecedor_id',this.value)">${coFornOptions(o.fornecedor_id)}</select>
-    <input placeholder="ou fornecedor novo" value="${o.fornecedor_nome||''}" oninput="coSet(${i},${j},'fornecedor_nome',this.value)">
-    <input placeholder="marca" value="${o.marca||''}" oninput="coSet(${i},${j},'marca',this.value)">
-    <input placeholder="apresentação (ex: cx 50 amp)" value="${o.apresentacao||''}" oninput="coSet(${i},${j},'apresentacao',this.value)">
+// ── render ──
+function coCardOpcao(i, it, fid){
+  const o = it.opcoes.find(x=>x.fornecedor_id===fid) || coOpVazia(0);
+  const u = coUnit(o);
+  const forn = coFornNomeById(fid);
+  const esc = o.escolhida;
+  return `<div class="co-op ${esc?'co-melhor':''}" id="co-op-${i}-${fid}" style="${o.nao_tem?'opacity:.55':''}">
+    <div class="co-op-top"><span>🏪 ${forn}</span>
+      <label style="font-size:9px;cursor:pointer"><input type="checkbox" ${o.nao_tem?'checked':''} onchange="coSetOp(${i},${fid},'nao_tem',this.checked);coRender()"> 🚫 não tem</label></div>
+    ${o.nao_tem
+      ? `<input placeholder="obs (ex: só volta em setembro)" value="${o.observacao||''}" oninput="coSetOp(${i},${fid},'observacao',this.value)">`
+      : `<input placeholder="🏷️ marca oferecida" value="${o.marca||''}" oninput="coSetOp(${i},${fid},'marca',this.value)">
+    <input placeholder="apresentação (ex: cx 6 fr)" value="${o.apresentacao||''}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)">
     <div class="co-op-row">
-      <input class="co-nn" type="number" step="any" placeholder="un/emb" value="${o.qtd_embalagem??''}" oninput="coSet(${i},${j},'qtd_embalagem',this.value)">
-      <input class="co-nn" type="number" step="any" placeholder="preço total" value="${o.preco_total??''}" oninput="coSet(${i},${j},'preco_total',this.value)">
+      <input class="co-nn" type="number" step="any" placeholder="un/emb" value="${o.qtd_embalagem??''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)">
+      <input class="co-nn" type="number" step="any" placeholder="preço total" value="${o.preco_total??''}" oninput="coSetOp(${i},${fid},'preco_total',this.value)">
     </div>
-    <div class="co-unit">unitário: <b id="co-unit-${i}-${j}">${u!=null?coMoney(u):'—'}</b></div>
+    <div class="co-op-row">
+      <input placeholder="💳 pagamento" value="${o.condicao_pagamento||''}" oninput="coSetOp(${i},${fid},'condicao_pagamento',this.value)">
+      <input placeholder="🚚 prazo" value="${o.prazo_entrega||''}" oninput="coSetOp(${i},${fid},'prazo_entrega',this.value)">
+    </div>
+    <input placeholder="observação" value="${o.observacao||''}" oninput="coSetOp(${i},${fid},'observacao',this.value)">
+    <div class="co-unit" style="display:flex;justify-content:space-between;align-items:center">
+      <span>unit: <b id="co-unit-${i}-${fid}">${u!=null?coMoney(u):'—'}</b></span>
+      <button class="co-x" style="background:${esc?'var(--verde)':'var(--azul-claro)'};color:${esc?'#fff':'var(--azul)'};border-radius:6px;padding:3px 9px;font-size:10px" onclick="coEscolher(${i},${fid})">${esc?'✔ ESCOLHIDO':'escolher'}</button>
+    </div>
+    ${esc?`<div style="margin-top:4px;font-size:11px">qtd deste fornecedor: <input class="co-nn" type="number" style="width:70px" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)"> <span style="color:var(--cinza-4)">(quebra: escolha 2 fornecedores e divida)</span></div>`:''}`}
   </div>`;
 }
-function coCardItem(i,it){
-  const ops=it.opcoes.map((o,j)=>coCardOpcao(i,j,o)).join('');
-  const info=[];
-  if(it.saldo!=null) info.push('saldo '+it.saldo);
-  if(it.minimo!=null) info.push('mín '+it.minimo);
-  return `<div class="co-item" id="co-item-${i}">
+function coCardItem(i, it){
+  const g = it.grupo||'Orçamento 1';
+  const fids = coFornGrupo[g]||[];
+  const info=[]; if(it.saldo!=null) info.push('saldo '+it.saldo); if(it.minimo!=null) info.push('mín '+it.minimo);
+  const ops = fids.length
+    ? fids.map(fid=>coCardOpcao(i,it,fid)).join('')
+    : '<div style="font-size:12px;color:var(--cinza-4);padding:8px">Adicione fornecedores ao grupo (acima) para abrir os cartões de orçamento.</div>';
+  return `<div class="co-item card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}" style="cursor:grab">
     <div class="co-ihead">
-      <div><div class="co-inome">${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}
-        <select class="co-grupo-sel" onchange="coMoverGrupo(${i},this.value)" title="mover para outro grupo de orçamento">${coGrupoOptions(it.grupo||'Orçamento 1')}</select>
-      </div></div>
-      <div class="co-iqtd">Qtd desejada <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coItens[${i}].qtd_desejada=coNum(this.value)">
-        <button class="co-x" onclick="coRemoveItem(${i})" title="remover item">✕ item</button></div>
+      <div><div class="co-inome">⠿ ${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}</div></div>
+      <div class="co-iqtd">Qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)">
+        <button class="co-x" onclick="coRemoveItem(${i})" title="tirar item">✕ tirar</button></div>
     </div>
-    <div class="co-ops">${ops}<button class="co-addop" onclick="coAddOpcao(${i})">+ opção</button></div>
+    <div style="padding:6px 14px 0;font-size:11px;color:var(--cinza-4)">📄 Descrição NF (vai no WhatsApp):
+      <input style="width:min(420px,92%);border:1px dashed var(--cinza-3);border-radius:6px;padding:3px 7px;font-size:11px;font-family:var(--fonte)" value="${it.descricao_nf||''}" oninput="coSetItem(${i},'descricao_nf',this.value)"></div>
+    <div class="co-ops">${ops}</div>
   </div>`;
 }
 function coRender(){
-  coGaranteSlots();
   coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
-  head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
+  if(head) head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
   const corpo=document.getElementById('co-corpo');
-  if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use “Puxar itens do alerta” ou a busca acima.</div>'; return; }
-
-  // Agrupa por "grupo de orçamento", preservando a ordem em que cada grupo apareceu primeiro
-  const ordemGrupos = [];
-  const porGrupo = {};
-  coItens.forEach((it,i)=>{
-    const g = it.grupo || 'Orçamento 1';
-    if(!porGrupo[g]){ porGrupo[g]=[]; ordemGrupos.push(g); }
-    porGrupo[g].push(i);
-  });
-
+  if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use "Puxar itens da Etapa 1" ou a busca acima.</div>'; return; }
+  const ordem=[]; const porGrupo={};
+  coItens.forEach((it,i)=>{ const g=it.grupo||'Orçamento 1'; if(!porGrupo[g]){porGrupo[g]=[];ordem.push(g);} porGrupo[g].push(i); });
+  for(const g of Object.keys(coFornGrupo)) if(!ordem.includes(g)){ ordem.push(g); porGrupo[g]=[]; }
   let html='';
-  for(const g of ordemGrupos){
-    const idxs = porGrupo[g];
-    html += `<div class="co-grupo-head"><span>🗂️ ${g}</span><span class="co-grupo-count">${idxs.length} ${idxs.length>1?'itens':'item'}</span></div>`;
-    html += idxs.map(i=>coCardItem(i, coItens[i])).join('');
+  for(const g of ordem){
+    const idxs=porGrupo[g]||[];
+    const fids=coFornGrupo[g]||[];
+    const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)}
+        <u style="cursor:pointer;font-size:10px" onclick="coWhatsGrupo('${g.replace(/'/g,"\\'")}',${fid})">💬</u>
+        <span style="cursor:pointer" onclick="coRemFornGrupo('${g.replace(/'/g,"\\'")}',${fid})">✕</span></span>`).join(' ');
+    html += `<div class="co-grupo-head"><span>🗂️ ${g} <span style="font-size:10px;cursor:pointer;opacity:.85" onclick="coRenomearGrupo('${g.replace(/'/g,"\\'")}')">✎</span></span>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="co-grupo-count">${idxs.length} ${idxs.length===1?'item':'itens'}</span>
+        <button class="co-b3" style="padding:5px 10px;font-size:11px" onclick="coFecharGrupo('${g.replace(/'/g,"\\'")}')">🔒 Fechar grupo → Pedidos</button>
+      </span></div>
+    <div style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:10px 14px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+      <b style="font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Enviar orçamento para (até 3):</b>
+      ${chips || '<span style="color:var(--cinza-4);font-size:11px">nenhum fornecedor ainda</span>'}
+      ${fids.length<3?`<span style="cursor:pointer;font-size:11px;font-weight:800;color:var(--azul)" onclick="coAddFornGrupo('${g.replace(/'/g,"\\'")}')">+ fornecedor ▾</span>`:''}
+    </div>
+    <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px">
+      ${idxs.map(i=>coCardItem(i, coItens[i])).join('') || '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
+    </div>`;
   }
-  corpo.innerHTML = html;
+  corpo.innerHTML=html;
   coItens.forEach((it,i)=>coAtualizaUnit(i));
+  coDnD();
+}
+// drag & drop entre grupos
+function coDnD(){
+  document.querySelectorAll('.card-item-cot').forEach(card=>{
+    card.addEventListener('dragstart', e=>{
+      // não arrastar quando o alvo é um campo editável
+      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'){ e.preventDefault(); return; }
+      coCardArrastado = Number(card.dataset.idx); card.style.opacity='0.4';
+    });
+    card.addEventListener('dragend', ()=>{ card.style.opacity=''; });
+  });
+  document.querySelectorAll('.co-drop').forEach(area=>{
+    area.addEventListener('dragover', e=>{ e.preventDefault(); area.style.background='var(--azul-claro)'; });
+    area.addEventListener('dragleave', ()=>{ area.style.background=''; });
+    area.addEventListener('drop', e=>{
+      e.preventDefault(); area.style.background='';
+      if(coCardArrastado===null) return;
+      coItens[coCardArrastado].grupo = area.dataset.grupo;
+      coCardArrastado=null; coRender();
+    });
+  });
 }
 
-async function coSalvar(){
-  if(!coItens.length){ toast('Nada para salvar.',''); return; }
+// ── salvar ──
+async function coSalvar(silencioso){
+  if(!coItens.length){ if(!silencioso) toast('Nada para salvar.',''); return false; }
   try{
-    // cria a cotação se ainda for rascunho
     if(coCotacaoId===null){
       const nome=(document.getElementById('co-criado-por')||{}).value||'';
-      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome});
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome, fornecedores_grupo: coFornGrupo});
       if(!c||!c.length) throw new Error('não retornou a cotação criada');
       coCotacaoId=c[0].id;
     } else {
-      // regrava do zero: apaga itens antigos (cascade apaga opções) e reinsere
+      await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
       await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}`,'DELETE');
     }
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
         qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo,
-        grupo: it.grupo || 'Orçamento 1' });
-      const itemId=ins&&ins[0]&&ins[0].id;
-      it.id=itemId;
+        grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || null });
+      const itemId=ins&&ins[0]&&ins[0].id; it.id=itemId;
       const ops=it.opcoes
-        .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null)
-        .map(o=>({ cotacao_item_id:itemId, slot:o.slot, fornecedor_id:o.fornecedor_id,
+        .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null||o.nao_tem)
+        .map((o,k)=>({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:o.fornecedor_id,
           fornecedor_nome:o.fornecedor_nome||null, marca:o.marca||null, apresentacao:o.apresentacao||null,
           qtd_embalagem:o.qtd_embalagem, preco_total:o.preco_total,
-          preco_unitario:(o.preco_total!=null&&o.qtd_embalagem)?o.preco_total/o.qtd_embalagem:null,
-          escolhida:o.escolhida }));
+          preco_unitario:coUnit(o), escolhida:o.escolhida, qtd_escolhida:o.qtd_escolhida,
+          condicao_pagamento:o.condicao_pagamento||null, prazo_entrega:o.prazo_entrega||null,
+          nao_tem:o.nao_tem, observacao:o.observacao||null }));
       if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
-    coRender();
-    toast('Cotação #'+coCotacaoId+' salva ✓','sucesso');
-  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
+    if(!silencioso){ coRender(); toast('Cotação #'+coCotacaoId+' salva ✓','sucesso'); }
+    return true;
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
 }
 
-function coFornNome(op){
-  if(op.fornecedor_nome) return op.fornecedor_nome;
-  const f=coFornecedores.find(x=>x.id===op.fornecedor_id); return f?f.nome:null;
-}
-function coWhatsapp(){
-  // agrupa itens por fornecedor (qualquer opção que tenha fornecedor definido)
-  const grupos={};
-  for(const it of coItens){
-    for(const o of it.opcoes){
-      const nome=coFornNome(o); if(!nome) continue;
-      (grupos[nome]=grupos[nome]||[]).push({it,o});
+// ── FECHAR GRUPO → monta os PEDIDOS por fornecedor ──
+async function coFecharGrupo(g){
+  if(!exigirSenhaCompras()) return;
+  const itens = coItens.filter(it=>(it.grupo||'Orçamento 1')===g);
+  if(!itens.length){ toast('Grupo sem itens.','erro'); return; }
+  const prontos = [], semEscolha = [];
+  for(const it of itens){
+    const escs = it.opcoes.filter(o=>o.escolhida && Number(o.qtd_escolhida)>0 && o.fornecedor_id);
+    if(escs.length) prontos.push({it, escs}); else semEscolha.push(it.material_nome);
+  }
+  if(!prontos.length){ toast('Nenhum item deste grupo tem fornecedor ESCOLHIDO com quantidade.','erro'); return; }
+  let msg = `Fechar o grupo "${g}"?\n\n${prontos.length} item(ns) viram pedido(s) por fornecedor.`;
+  if(semEscolha.length) msg += `\n\n⚠ Sem escolha (ficam na cotação): ${semEscolha.join(', ')}`;
+  if(!confirm(msg)) return;
+  try{
+    const ok = await coSalvar(true); if(!ok) return;
+    // agrupa por fornecedor
+    const porForn = {};
+    for(const {it, escs} of prontos){
+      for(const o of escs){ (porForn[o.fornecedor_id]=porForn[o.fornecedor_id]||[]).push({it,o}); }
     }
-  }
-  const nomes=Object.keys(grupos);
-  if(!nomes.length){ toast('Defina ao menos um fornecedor nas opções para gerar os textos.',''); return; }
-  let html='';
-  for(const nome of nomes){
-    const linhas=grupos[nome].map(({it,o})=>{
-      const q=it.qtd_desejada?`${it.qtd_desejada}x `:'';
-      const marca=o.marca?` (${o.marca})`:'';
-      const apr=o.apresentacao?` – ${o.apresentacao}`:'';
-      return `• ${q}${it.material_nome}${marca}${apr}`;
-    }).join('\n');
-    const texto=`Olá, ${nome}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!`;
-    const id='co-wa-'+nomes.indexOf(nome);
-    html+=`<div class="co-wa"><div class="co-wa-head">${nome} <button onclick="coCopiar('${id}')">copiar</button></div><textarea id="${id}" rows="${grupos[nome].length+6}">${texto}</textarea></div>`;
-  }
-  document.getElementById('co-wa-box').innerHTML=html;
-  document.getElementById('co-wa-box').scrollIntoView({behavior:'smooth'});
+    let nPed=0, nItens=0;
+    for(const fidStr of Object.keys(porForn)){
+      const fid = Number(fidStr);
+      // reutiliza pedido EM_MONTAGEM do mesmo fornecedor (junção automática)
+      let pedidoId=null;
+      const exist = await sbFetch(`pedidos?select=id&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM&limit=1`);
+      if(exist&&exist.length){ pedidoId=exist[0].id; }
+      else{
+        const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:coCotacaoId,
+          observacao:'Grupo: '+g });
+        pedidoId=p&&p[0]&&p[0].id; nPed++;
+      }
+      for(const {it,o} of porForn[fidStr]){
+        // código universal por material × marca (fios etc.)
+        let codigo=null;
+        try{
+          const cod = await sbFetch(`codigos_marca?select=codigo&material_id=eq.${it.material_id}&marca=ilike.${encodeURIComponent((o.marca||'—'))}&limit=1`);
+          codigo = cod&&cod[0]&&cod[0].codigo;
+        }catch(e){}
+        await sbFetch('ordens_compra','POST',{
+          material_id: it.material_id, fornecedor_id: fid, fornecedor_compra_id: fid,
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id: pedidoId,
+          saldo_no_momento: it.saldo, estoque_minimo: it.minimo,
+          qtd_a_comprar: o.qtd_escolhida, qtd_comprada: o.qtd_escolhida,
+          valor_unitario: coUnit(o), ultimo_valor_pago: null,
+          marca_escolhida: o.marca||null, codigo_escolhido: codigo,
+          observacao: 'Cotação #'+coCotacaoId+' — grupo '+g + (o.apresentacao?(' — '+o.apresentacao):''),
+        });
+        nItens++;
+      }
+    }
+    // remove da tela os itens fechados
+    const idsFechados = new Set(prontos.map(p=>p.it.material_id));
+    coItens = coItens.filter(it=>!((it.grupo||'Orçamento 1')===g && idsFechados.has(it.material_id)));
+    await coSalvar(true);
+    coRender();
+    toast(`Grupo fechado ✓ — ${nItens} item(ns) em pedido(s) por fornecedor. Abra 📦 Pedidos.`,'sucesso');
+  }catch(e){ toast('Erro ao fechar grupo: '+e.message,'erro'); }
 }
-function coCopiar(id){
-  const ta=document.getElementById(id); if(!ta) return;
-  ta.select();
+
+// textos whatsapp gerais (mantido por compatibilidade do botão)
+function coWhatsapp(){
+  const grupos = coGruposDistintos();
+  let feitos=0;
+  for(const g of grupos){ for(const fid of (coFornGrupo[g]||[])){ coWhatsGrupo(g, fid); feitos++; break; } }
+  if(!feitos) toast('Adicione fornecedores aos grupos para gerar os textos.','');
+}
+function coCopiar(id){ const ta=document.getElementById(id); if(!ta) return; ta.select();
   try{ document.execCommand('copy'); toast('Texto copiado ✓','sucesso'); }
-  catch(e){ if(navigator.clipboard){ navigator.clipboard.writeText(ta.value); toast('Texto copiado ✓','sucesso'); } }
-}
+  catch(e){ if(navigator.clipboard){ navigator.clipboard.writeText(ta.value); toast('Texto copiado ✓','sucesso'); } } }
 </script>
 
 <script>
-// ═══ ABA DECISÃO (COMPRA) — lê a cotação salva e o saldo SEMPRE em tempo real ═══
-let deCotacaoId = null;
-let deItens = [];          // [{item_id, material_id, nome, qtd_desejada, opcoes:[...], escolhidaSlot, qtdComprar}]
-let deReferencias = {};    // material_id -> linha fresca da vw_alerta_compras (saldo, última compra...)
-let deErroSaldos = null;   // mensagem de erro visível se a busca de saldo falhar (nunca falha em silêncio)
+// ═══ ABA PEDIDOS v3.2 — quadros por fornecedor (EM_MONTAGEM) · completa dados e envia p/ aprovação ═══
+let deBoards = []; // [{pedido, itens:[ordens_compra]}]
 
 function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
-function deData(d){ if(!d) return ''; const p=(''+d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
-function deUnit(o){ return (o.preco_total!=null && o.qtd_embalagem) ? o.preco_total/o.qtd_embalagem : null; }
-function deFornNome(o){ return o.fornecedor_nome || (coFornecedores.find(f=>f.id===o.fornecedor_id)||{}).nome || null; }
+function deNomeForn(id){ if(!id) return '(sem fornecedor)'; const f=coFornecedores.find(x=>x.id===id); return f?f.nome:('fornecedor #'+id); }
+function deNomeMat(id){ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id); }
 
 async function deCarregar(){
-  document.getElementById('de-corpo').innerHTML = '<div class="de-empty">Carregando cotação...</div>';
-  document.getElementById('de-resumo-box').style.display = 'none';
+  const corpo=document.getElementById('de-corpo');
+  document.getElementById('de-status').textContent='Carregando...';
+  corpo.innerHTML='<div class="de-empty">Carregando pedidos...</div>';
   try{
-    if(!coFornecedores.length){
-      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
+    const peds=(await sbFetch("pedidos?select=*&status=eq.EM_MONTAGEM&order=id.asc"))||[];
+    deBoards=[];
+    if(peds.length){
+      const ids=peds.map(p=>p.id).join(',');
+      const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&situacao=eq.PENDENTE&order=id.asc`))||[];
+      for(const p of peds){ deBoards.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
     }
-    // Pega a cotação mais recente que ainda não foi fechada
-    const cots = await sbFetch("cotacoes?select=id,status,criado_por,created_at&status=not.eq.fechada&order=id.desc&limit=1");
-    if(!cots || !cots.length){
-      deCotacaoId = null; deItens = [];
-      document.getElementById('de-status').textContent = 'Nenhuma cotação em aberto.';
-      document.getElementById('de-corpo').innerHTML = '<div class="de-empty">Nenhuma cotação salva ainda. Preencha a aba 🧾 Cotação primeiro.</div>';
-      return;
-    }
-    deCotacaoId = cots[0].id;
-    const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${deCotacaoId}&order=id.asc`);
-    deItens = (its||[]).map(it => ({
-      item_id: it.id,
-      material_id: it.material_id,
-      nome: it.material_nome,
-      qtd_desejada: it.qtd_desejada,
-      grupo: it.grupo || 'Orçamento 1',
-      opcoes: (it.cotacao_opcoes||[]).filter(o => o.fornecedor_id || o.fornecedor_nome || o.preco_total!=null).sort((a,b)=>(a.slot||0)-(b.slot||0)),
-      escolhidaId: it.opcao_escolhida_id,
-      qtdComprar: it.qtd_desejada,
-    }));
-    document.getElementById('de-status').textContent = `Cotação #${deCotacaoId} (${cots[0].criado_por||'—'}) · ${deItens.length} item(ns)`;
-    await deAtualizarSaldos(true);
-  }catch(e){
-    document.getElementById('de-corpo').innerHTML = '<div class="de-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
-  }
-}
-
-// Busca o saldo e as referências de compra SEMPRE frescas do banco — nunca usa dado salvo antigo
-async function deAtualizarSaldos(silencioso){
-  if(!deItens.length){ deRenderizar(); return; }
-  try{
-    const ids = [...new Set(deItens.map(it=>it.material_id))].join(',');
-    const rows = await sbFetch(`vw_alerta_compras?select=material_id,material,saldo_total,estoque_minimo,uc_data,uc_fornecedor,uc_valor_unitario,uc_qtd,uc_dentro_2meses&material_id=in.(${ids})`);
-    deReferencias = {};
-    for(const r of (rows||[])) deReferencias[r.material_id] = r;
-    deErroSaldos = null;
+    document.getElementById('de-status').textContent = deBoards.length
+      ? `${deBoards.length} pedido(s) em montagem` : 'Nenhum pedido em montagem';
     deRenderizar();
-    if(!silencioso) toast('Saldos atualizados agora ✓','sucesso');
   }catch(e){
-    // Não trava a tela: mostra os itens mesmo sem saldo fresco, com aviso visível do erro real
-    deErroSaldos = e.message;
-    deRenderizar();
-    toast('⚠️ Erro ao buscar saldo: ' + e.message, 'erro');
+    document.getElementById('de-status').textContent='Erro';
+    corpo.innerHTML='<div class="de-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
 
-function deCardOpcao(it, o, melhorUnit){
-  const u = deUnit(o);
-  const nome = deFornNome(o) || '(sem fornecedor)';
-  const vazia = !o.fornecedor_id && !o.fornecedor_nome && o.preco_total==null;
-  const escolhida = it.escolhidaSlot === o.slot;
-  if(vazia) return `<div class="de-op de-vazia"><div class="de-sfor">${nome}</div></div>`;
-  return `<div class="de-op ${escolhida?'de-chosen':''}" onclick="deEscolher(${it.item_id},${o.slot})">
-    <div class="de-sfor">${nome}<span class="de-pick">${escolhida?'✔ escolhido':'escolher'}</span></div>
-    ${o.marca?`<div class="de-f"><span class="de-lb">Marca</span><span>${o.marca}</span></div>`:''}
-    ${o.apresentacao?`<div class="de-f"><span class="de-lb">Apres.</span><span>${o.apresentacao}</span></div>`:''}
-    <div class="de-f"><span class="de-lb">Preço total</span><span>${deMoney(o.preco_total)}</span></div>
-    <div class="de-f"><span class="de-lb">R$/un</span><span class="de-un">${deMoney(u)}${(u!=null&&u===melhorUnit)?'<span class="de-best">menor</span>':''}</span></div>
-  </div>`;
-}
-
-function deCardItem(it){
-  const ref = deReferencias[it.material_id] || {};
-  const saldo = ref.saldo_total ?? '—';
-  const minimo = ref.estoque_minimo ?? '—';
-  const baixoCls = (typeof saldo === 'number' && typeof minimo === 'number' && saldo <= minimo) ? 'de-saldo-baixo' : '';
-  const unidades = it.opcoes.map(deUnit).filter(u=>u!=null);
-  const melhorUnit = unidades.length ? Math.min(...unidades) : null;
-  const ops = it.opcoes.map(o => deCardOpcao(it,o,melhorUnit)).join('');
-
-  let ucRef = '<span style="color:#9a6060;font-style:italic">nenhuma compra registrada</span>';
-  if(ref.uc_data){
-    const antigo = ref.uc_dentro_2meses ? '' : ' (fora dos últimos 2 meses)';
-    ucRef = `<b>${deData(ref.uc_data)}</b> · ${ref.uc_fornecedor||'—'} · qtd <b>${ref.uc_qtd??'—'}</b> · <b>${deMoney(ref.uc_valor_unitario)}/un</b>${antigo}`;
-  }
-
-  return `<div class="de-item" id="de-item-${it.item_id}">
-    <div class="de-ihead">
-      <div class="de-inome">${it.nome}</div>
-      <div class="de-iref">
-        <span>Saldo agora: <b class="${baixoCls}">${saldo}</b></span>
-        <span>Mínimo: <b>${minimo}</b></span>
-        <span>Última compra: ${ucRef}</span>
-      </div>
-      <div class="de-qtd-desejada">Quantidade a comprar:
-        <input type="number" min="0" value="${it.qtdComprar??''}" onchange="deSetQtd(${it.item_id},this.value)">
-      </div>
-    </div>
-    <div class="de-ops">${ops}</div>
-  </div>`;
-}
+function deTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
 
 function deRenderizar(){
-  const corpo = document.getElementById('de-corpo');
-  if(!deItens.length){ corpo.innerHTML = '<div class="de-empty">Nenhum item nesta cotação.</div>'; document.getElementById('de-resumo-box').style.display='none'; return; }
-
-  let html = '';
-  if(deErroSaldos){
-    html += `<div style="background:#FDEDEC;border:1.5px solid var(--vermelho);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--vermelho)">
-      ⚠️ <b>Não foi possível buscar o saldo atualizado.</b> Os itens abaixo são mostrados sem saldo/referência de compra.<br>
-      <span style="font-size:11px;font-family:monospace">${deErroSaldos}</span><br>
-      <span style="font-size:11px">Provável causa: falta rodar o SQL que adiciona <code>uc_qtd</code> à view <code>vw_alerta_compras</code>.</span>
+  const corpo=document.getElementById('de-corpo');
+  if(!deBoards.length){
+    corpo.innerHTML='<div class="de-empty">Nenhum pedido em montagem. ✓<br><span style="font-size:12px">Feche um grupo na aba 🧾 Orçamentos para os pedidos por fornecedor aparecerem aqui.</span></div>';
+    return;
+  }
+  corpo.innerHTML = deBoards.map(b=>{
+    const p=b.pedido, pid=p.id;
+    const linhas = b.itens.map(o=>`<tr>
+      <td>${deNomeMat(o.material_id)}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
+      <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
+      <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
+      <td style="text-align:right">${deMoney(o.valor_unitario)}</td>
+      <td style="text-align:right;font-weight:600">${deMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="ordemEditarQtd(${o.id}, deCarregar)" title="Ajustar quantidade/valor">✎</button>
+        <button style="background:#FDEDEC;color:var(--vermelho);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="deRemoverItem(${o.id})" title="Tirar item deste pedido">🗑</button>
+      </td>
+    </tr>`).join('');
+    const totItens=deTotalItens(b);
+    return `<div class="de-item">
+      <div class="de-ihead" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
+          <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span></div>
+        </div>
+        <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Material</th>
+          <th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Marca</th>
+          <th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Código</th>
+          <th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Qtd</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Unit.</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">Subtotal</th>
+          <th style="border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)"></th>
+        </tr></thead>
+        <tbody>${linhas || '<tr><td colspan="7" style="padding:14px;text-align:center;color:var(--cinza-4)">pedido sem itens — cancele ou feche outro grupo</td></tr>'}</tbody>
+      </table></div>
+      <div style="padding:12px 14px;background:var(--cinza-1);border-top:1px solid var(--cinza-2);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:12px">
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">🚛 Frete (R$)
+          <input id="de-frete-${pid}" type="number" step="0.01" min="0" value="${p.frete??0}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px" oninput="deAtualizaTotal(${pid})"></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">💳 Forma de pagamento
+          <input id="de-pag-${pid}" type="text" placeholder="ex: boleto 28d / 3x" value="${p.condicao_pagamento||''}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px"></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">🚚 Prazo de entrega
+          <input id="de-prazo-${pid}" type="text" placeholder="ex: 5 dias úteis" value="${p.prazo_previsto||''}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px"></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">👤 Pedido realizado por
+          <select id="de-por-${pid}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px;font-family:var(--fonte)">
+            <option value="">— selecione —</option>
+            ${EQUIPE.map(n=>`<option ${p.pedido_por===n?'selected':''}>${n}</option>`).join('')}
+          </select></label>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid var(--cinza-1)">
+        <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(totItens+(Number(p.frete)||0))}</span></div>
+        <div style="display:flex;gap:8px">
+          <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deSalvarPedido(${pid},false)">💾 Salvar dados</button>
+          <button class="de-confirmar" onclick="deConfirmar(${pid})">✅ Enviar para Aprovação</button>
+        </div>
+      </div>
     </div>`;
-  }
-
-  // Agrupar visualmente por "grupo de orçamento" (mesmos grupos definidos na aba Cotação)
-  const ordemGrupos = [];
-  const porGrupo = {};
-  for(const it of deItens){
-    const g = it.grupo || 'Orçamento 1';
-    if(!porGrupo[g]){ porGrupo[g]=[]; ordemGrupos.push(g); }
-    porGrupo[g].push(it);
-  }
-  for(const g of ordemGrupos){
-    html += `<div class="co-grupo-head" style="background:var(--azul-medio)"><span>🗂️ ${g}</span><span class="co-grupo-count">${porGrupo[g].length} item(ns)</span></div>`;
-    html += porGrupo[g].map(deCardItem).join('');
-  }
-  corpo.innerHTML = html;
-  deResumo();
-}
-
-function deEscolher(itemId, slot){
-  const it = deItens.find(x=>x.item_id===itemId); if(!it) return;
-  it.escolhidaSlot = (it.escolhidaSlot===slot) ? null : slot;
-  deRenderizar();
-}
-function deSetQtd(itemId, val){
-  const it = deItens.find(x=>x.item_id===itemId); if(!it) return;
-  const n = parseFloat((''+val).replace(',','.'));
-  it.qtdComprar = isNaN(n) ? null : n;
-  deResumo();
-}
-
-function deResumo(){
-  const box = document.getElementById('de-resumo-box');
-  const escolhidos = deItens.filter(it => it.escolhidaSlot!=null && it.qtdComprar>0);
-  if(!escolhidos.length){ box.style.display='none'; return; }
-  box.style.display = '';
-  const grupos = {};
-  let total = 0;
-  for(const it of escolhidos){
-    const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot); if(!o) continue;
-    const u = deUnit(o) || 0;
-    const sub = u * it.qtdComprar;
-    total += sub;
-    const nome = deFornNome(o) || '(sem fornecedor)';
-    (grupos[nome]=grupos[nome]||[]).push({nome:it.nome, qtd:it.qtdComprar, sub});
-  }
-  document.getElementById('de-resumo').innerHTML = Object.keys(grupos).map(fo=>{
-    const st = grupos[fo].reduce((a,b)=>a+b.sub,0);
-    return `<div class="de-rgrp"><div class="de-rf"><span>${fo}</span><span>${deMoney(st)}</span></div>${grupos[fo].map(i=>`<div class="de-ri"><span>${i.nome} · ${i.qtd} un</span><span>${deMoney(i.sub)}</span></div>`).join('')}</div>`;
   }).join('');
-  document.getElementById('de-total').textContent = 'Total da compra: ' + deMoney(total);
 }
 
-async function deConfirmarCompra(){
-  const escolhidos = deItens.filter(it => it.escolhidaSlot!=null && it.qtdComprar>0);
-  if(!escolhidos.length){ toast('Escolha ao menos um item com fornecedor e quantidade.','erro'); return; }
+function deAtualizaTotal(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  const frete=parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0;
+  const el=document.getElementById('de-total-'+pid);
+  if(el) el.textContent=deMoney(deTotalItens(b)+frete);
+}
 
-  const semFornCadastrado = escolhidos.filter(it => {
-    const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot);
-    return o && !o.fornecedor_id && o.fornecedor_nome;
-  });
-  let msg = `Confirmar compra de ${escolhidos.length} item(ns)?`;
-  if(semFornCadastrado.length) msg += `\n\n⚠️ ${semFornCadastrado.length} item(ns) têm fornecedor digitado manualmente (não cadastrado) — serão criados sem vínculo de fornecedor na ordem.`;
-  if(!confirm(msg)) return;
+function deLerCampos(pid){
+  return {
+    frete: parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0,
+    condicao_pagamento: ((document.getElementById('de-pag-'+pid)||{}).value||'').trim()||null,
+    prazo_previsto: ((document.getElementById('de-prazo-'+pid)||{}).value||'').trim()||null,
+    pedido_por: ((document.getElementById('de-por-'+pid)||{}).value||'').trim()||null,
+  };
+}
 
+async function deSalvarPedido(pid, silencioso){
   try{
-    for(const it of escolhidos){
-      const o = it.opcoes.find(x=>x.slot===it.escolhidaSlot); if(!o) continue;
-      const u = deUnit(o);
-      const ref = deReferencias[it.material_id] || {};
-      await sbFetch('ordens_compra','POST',{
-        material_id: it.material_id,
-        fornecedor_id: o.fornecedor_id || null,
-        fornecedor_compra_id: o.fornecedor_id || null,
-        status: 'COMPRAR',
-        situacao: 'PENDENTE',
-        aprovado_pedido: false,
-        saldo_no_momento: ref.saldo_total ?? null,
-        estoque_minimo: ref.estoque_minimo ?? null,
-        qtd_a_comprar: it.qtdComprar,
-        qtd_comprada: it.qtdComprar,
-        valor_unitario: u,
-        ultimo_valor_pago: ref.uc_valor_unitario ?? null,
-        observacao: 'Gerado pela Decisão — Cotação #' + deCotacaoId + (o.marca?(' — marca: '+o.marca):'') + (o.apresentacao?(' — '+o.apresentacao):''),
-      });
-      // marca a opção escolhida e o item decidido (histórico)
-      await sbFetch(`cotacao_opcoes?id=eq.${o.id}`,'PATCH',{ escolhida:true });
-      await sbFetch(`cotacao_itens?id=eq.${it.item_id}`,'PATCH',{ opcao_escolhida_id:o.id, qtd_desejada: it.qtdComprar });
-    }
-    await sbFetch(`cotacoes?id=eq.${deCotacaoId}`,'PATCH',{ status:'fechada' });
-    toast(`Compra confirmada — ${escolhidos.length} ordem(ns) de compra criada(s) ✓`,'sucesso');
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH', deLerCampos(pid));
+    const b=deBoards.find(x=>x.pedido.id===pid);
+    if(b) Object.assign(b.pedido, deLerCampos(pid));
+    if(!silencioso) toast('Pedido #'+pid+' salvo ✓','sucesso');
+    return true;
+  }catch(e){ toast('Erro ao salvar pedido: '+e.message,'erro'); return false; }
+}
+
+async function deConfirmar(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid);
+  if(!b||!b.itens.length){ toast('Pedido sem itens.','erro'); return; }
+  const c=deLerCampos(pid);
+  if(!c.pedido_por){ toast('Informe quem realizou o pedido.','erro'); return; }
+  const tot=deTotalItens(b)+(c.frete||0);
+  if(!confirm(`Enviar para Aprovação?\n\n🏪 ${deNomeForn(b.pedido.fornecedor_id)}\n${b.itens.length} item(ns) · Total ${deMoney(tot)}${c.frete?` (frete ${deMoney(c.frete)})`:''}\n👤 ${c.pedido_por}`)) return;
+  try{
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH', Object.assign({}, c, { status:'AGUARDANDO_APROVACAO' }));
+    toast('Pedido #'+pid+' enviado para Aprovação 🔏','sucesso');
     deCarregar();
-  }catch(e){ toast('Erro ao confirmar compra: '+e.message,'erro'); }
+  }catch(e){ toast('Erro ao enviar: '+e.message,'erro'); }
+}
+
+async function deRemoverItem(ordemId){
+  let ordem=null; for(const b of deBoards){ ordem = b.itens.find(o=>o.id===ordemId) || ordem; }
+  if(!ordem){ toast('Item não encontrado.','erro'); return; }
+  if(!confirm(`Tirar "${deNomeMat(ordem.material_id)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
+  try{
+    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
+      pedido_id: null, situacao:'NAO COMPRAR AGORA',
+      observacao:(ordem.observacao?ordem.observacao+' | ':'')+'Removido do pedido em montagem',
+    });
+    toast('Item removido do pedido ✓','sucesso');
+    deCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function deCancelarPedido(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  if(!confirm(`Cancelar o pedido #${pid} (${deNomeForn(b.pedido.fornecedor_id)}) com ${b.itens.length} item(ns)?\n\nOs itens saem da fila de compra.`)) return;
+  const motivo=prompt('Motivo do cancelamento (opcional):')||'';
+  try{
+    await sbFetch(`ordens_compra?pedido_id=eq.${pid}&situacao=eq.PENDENTE`,'PATCH',{ situacao:'NAO COMPRAR AGORA' });
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
+      observacao:((b.pedido.observacao||'')+(motivo?' | Cancelado: '+motivo:' | Cancelado')).trim() });
+    toast('Pedido #'+pid+' cancelado.','sucesso');
+    deCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 </script>
 
@@ -3576,8 +3723,7 @@ async function rcConfirmarNF(fid){
       status: dataEntrega ? 'ENTREGUE' : 'AGUARDANDO ENTREGA',
     });
     const nfId = nfArr && nfArr[0] && nfArr[0].id;
-    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
-    const localId = localRows[0].id;
+    const localId = await getEstoqueGeralId();
 
     // 2. Item por item: nf_itens -> movimentacao (pendente -> aprovada, sobe estoque) -> atualiza ordem
     for(const {ordem, qtd, val, item} of itensParaGravar){
@@ -3706,8 +3852,7 @@ async function rcAbrirDevolucao(nfId){
     const registrante = document.getElementById('rc-registrado-por').value;
     if(!registrante){ toast('Selecione "Registrado por" no topo da aba antes de continuar.','erro'); return; }
 
-    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
-    const localId = localRows[0].id;
+    const localId = await getEstoqueGeralId();
     const movArr = await sbFetch('movimentacoes','POST',{
       tipo: 'DEVOLUCAO', material_id: item.material_id, local_id: localId,
       qtd: -qtdDevolver, valor_unitario: item.valor_unitario, nf_item_id: item.id,
@@ -3750,8 +3895,7 @@ async function rcRegistrarExtravio(){
 
   if(!confirm(`Confirmar baixa de ${qtd}x ${nomeMat} — motivo: ${motivo}?`)) return;
   try{
-    const localRows = await sbFetch(`locais?select=id&nome=eq.ARSENAL&limit=1`);
-    const localId = localRows[0].id;
+    const localId = await getEstoqueGeralId();
     const movArr = await sbFetch('movimentacoes','POST',{
       tipo: 'AJUSTE_INVENTARIO', material_id: mat.id, local_id: localId,
       qtd: -qtd, aprovado: false, registrado_por: registrante,
@@ -3765,13 +3909,17 @@ async function rcRegistrarExtravio(){
 </script>
 
 <script>
-// ═══ ABA APROVAR PEDIDO — segunda camada antes de liberar para Receber NF ═══
-let apOrdens = [];
+// ═══ ABA APROVAR PEDIDO v3.2 — aprovação formal por pedido · histórico da cotação · PDF comparativo ═══
+let apPedidos = []; // [{pedido, itens:[ordens_compra]}]
+let apHist = {};    // cotacao_id -> [{item, opcoes:[...]}]
 
-// Editar quantidade/valor de um pedido pendente — usa em Aprovar Pedido E em Receber NF
+// Editar quantidade/valor — usada aqui, em 📦 Pedidos e em Receber NF
 // (resolve o caso "fornecedor avisou que não vai conseguir entregar a quantidade combinada")
 async function ordemEditarQtd(ordemId, recarregarFn){
-  const ordem = (apOrdens.find(o=>o.id===ordemId)) || (typeof rcOrdens!=='undefined' ? rcOrdens.find(o=>o.id===ordemId) : null);
+  let ordem = null;
+  for(const b of (typeof apPedidos!=='undefined'?apPedidos:[])){ ordem = (b.itens||[]).find(o=>o.id===ordemId) || ordem; }
+  if(!ordem && typeof deBoards!=='undefined'){ for(const b of deBoards){ ordem = (b.itens||[]).find(o=>o.id===ordemId) || ordem; } }
+  if(!ordem && typeof rcOrdens!=='undefined'){ ordem = rcOrdens.find(o=>o.id===ordemId) || null; }
   if(!ordem){ toast('Pedido não encontrado.','erro'); return; }
   const qtdAtual = ordem.qtd_a_comprar ?? ordem.qtd_comprada ?? '';
   const novaQtdStr = prompt('Nova quantidade para "'+rcNomeMaterial(ordem.material_id)+'":', qtdAtual);
@@ -3787,79 +3935,195 @@ async function ordemEditarQtd(ordemId, recarregarFn){
       qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
       observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
     });
-    toast('Pedido ajustado ✓','sucesso');
+    toast('Item ajustado ✓','sucesso');
     if(typeof recarregarFn === 'function') recarregarFn();
   }catch(e){ toast('Erro ao ajustar: '+e.message,'erro'); }
 }
 
+function apTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
+
 async function apCarregar(){
-  document.getElementById('ap-corpo').innerHTML = '<div class="ap-empty">Carregando pedidos...</div>';
+  const corpo=document.getElementById('ap-corpo');
+  corpo.innerHTML = '<div class="ap-empty">Carregando pedidos...</div>';
   try{
-    if(!catalogoMateriais.length){
-      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
-      todosOsMateriais = catalogoMateriais.map(m=>m.nome);
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
+    const peds=(await sbFetch("pedidos?select=*&status=eq.AGUARDANDO_APROVACAO&order=id.asc"))||[];
+    apPedidos=[];
+    if(peds.length){
+      const ids=peds.map(p=>p.id).join(',');
+      const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&order=id.asc`))||[];
+      for(const p of peds){ apPedidos.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
     }
-    if(!coFornecedores.length){
-      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
-    }
-    apOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc")) || [];
-    // Só mostra pedidos que realmente vieram da Decisão — exclui sugestões antigas da migração
-    apOrdens = apOrdens.filter(o => (o.observacao||'').includes('Gerado pela Decisão'));
     apRenderizar();
   }catch(e){
-    document.getElementById('ap-corpo').innerHTML = '<div class="ap-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
+    corpo.innerHTML = '<div class="ap-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
 
 function apRenderizar(){
-  const corpo = document.getElementById('ap-corpo');
-  if(!apOrdens.length){
-    corpo.innerHTML = '<div class="ap-empty">Nenhum pedido aguardando aprovação. ✓<br><span style="font-size:12px">Pedidos aparecem aqui assim que confirmados na aba 📋 Decisão.</span></div>';
+  const corpo=document.getElementById('ap-corpo');
+  if(!apPedidos.length){
+    corpo.innerHTML = '<div class="ap-empty">Nenhum pedido aguardando aprovação. ✓<br><span style="font-size:12px">Pedidos chegam aqui quando enviados na aba 📦 Pedidos.</span></div>';
     return;
   }
-  const grupos = {};
-  for(const o of apOrdens){
-    const fid = o.fornecedor_compra_id || o.fornecedor_id || 0;
-    (grupos[fid] = grupos[fid] || []).push(o);
-  }
-  corpo.innerHTML = Object.keys(grupos).map(fid => {
-    const itens = grupos[fid];
-    const nomeForn = rcNomeFornecedor(Number(fid) || null);
-    const linhas = itens.map(o => `<tr>
+  corpo.innerHTML = apPedidos.map(b=>{
+    const p=b.pedido, pid=p.id;
+    const linhas = b.itens.map(o=>`<tr>
       <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
-      <td style="text-align:center">${o.qtd_a_comprar ?? '—'}</td>
+      <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
+      <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
+      <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
       <td style="text-align:right;font-weight:600">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
-      <td style="white-space:nowrap">
-        <button class="ap-btn-editar" onclick="ordemEditarQtd(${o.id}, apCarregar)">✎</button>
-        <button class="ap-btn-aprovar" onclick="apAprovar(${o.id})">✔ Aprovar</button>
-        <button class="ap-btn-rejeitar" onclick="apRejeitar(${o.id})">🚫</button>
-      </td>
+      <td style="white-space:nowrap;text-align:right"><button class="ap-btn-editar" onclick="ordemEditarQtd(${o.id}, apCarregar)" title="Ajustar quantidade/valor">✎</button></td>
     </tr>`).join('');
+    const totItens=apTotalItens(b), frete=Number(p.frete)||0;
     return `<div class="ap-grupo">
-      <div class="ap-ghead">${nomeForn} <span class="ap-count">${itens.length} pedido(s)</span></div>
+      <div class="ap-ghead">
+        <span>🏪 ${rcNomeFornecedor(p.fornecedor_id)} <span style="font-size:11px;font-weight:600;opacity:.85">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></span>
+        <span class="ap-count">${b.itens.length} item(ns)</span>
+      </div>
+      <div style="padding:8px 16px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2);display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--cinza-5)">
+        <span>👤 <b>${p.pedido_por||'—'}</b></span>
+        <span>💳 ${p.condicao_pagamento||'—'}</span>
+        <span>🚚 ${p.prazo_previsto||'—'}</span>
+        <span>🚛 Frete: <b>${rcMoney(frete)}</b></span>
+      </div>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>Material</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
+        <thead><tr><th>Material</th><th style="text-align:center">Marca</th><th style="text-align:center">Código</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
+        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 10px">Total (itens ${rcMoney(totItens)}${frete?` + frete ${rcMoney(frete)}`:''}):</td>
+          <td style="text-align:right;font-weight:800;color:var(--azul);padding:8px 10px">${rcMoney(totItens+frete)}</td><td></td></tr></tfoot>
       </table></div>
+      ${p.cotacao_id?`<details style="margin:0 16px 10px" ontoggle="if(this.open) apMostrarHist(${pid},${p.cotacao_id})">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--azul);padding:8px 0">📋 Histórico da cotação (todas as ofertas recebidas) ▾</summary>
+        <div id="ap-hist-${pid}" style="font-size:12px;color:var(--cinza-4)">Carregando...</div>
+      </details>`:''}
+      <div style="padding:0 16px 8px">
+        <label style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">📝 Justificativa da escolha (vai para o PDF)</label>
+        <textarea id="ap-just-${pid}" rows="2" placeholder="ex: menor preço no conjunto; fornecedor B só para os fios porque A não tinha" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical"></textarea>
+      </div>
+      <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
+        <div style="display:flex;gap:8px">
+          <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
+          <button class="ap-btn-rejeitar" style="padding:8px 12px" onclick="apRejeitarPedido(${pid})">🚫 Rejeitar</button>
+          <button class="ap-btn-aprovar" style="padding:8px 14px" onclick="apAprovarPedido(${pid})">✔ Aprovar pedido</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
 
-async function apAprovar(ordemId){
+async function apCarregarHist(cid){
+  if(apHist[cid]) return apHist[cid];
+  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${cid}&order=id.asc`);
+  apHist[cid] = its||[];
+  return apHist[cid];
+}
+
+function apHistHtml(its){
+  if(!its.length) return '<div style="padding:8px 0">Sem registros desta cotação.</div>';
+  return its.map(it=>{
+    const ops=(it.cotacao_opcoes||[]);
+    if(!ops.length) return '';
+    const linhas=ops.map(o=>{
+      const forn=rcNomeFornecedor(o.fornecedor_id)||o.fornecedor_nome||'—';
+      if(o.nao_tem) return `<tr style="opacity:.6"><td>🏪 ${forn}</td><td colspan="4">🚫 não tem${o.observacao?' — '+o.observacao:''}</td><td></td></tr>`;
+      const unit=o.preco_unitario!=null?rcMoney(o.preco_unitario):'—';
+      return `<tr${o.escolhida?' style="background:var(--verde-claro);font-weight:700"':''}>
+        <td>🏪 ${forn}${o.escolhida?' ✔':''}</td>
+        <td>🏷️ ${o.marca||'—'}${o.apresentacao?' · '+o.apresentacao:''}</td>
+        <td style="text-align:right">${rcMoney(o.preco_total)}${o.qtd_embalagem?` <span style="font-size:10px;color:var(--cinza-4)">(${unit}/un)</span>`:''}</td>
+        <td>💳 ${o.condicao_pagamento||'—'}</td>
+        <td>🚚 ${o.prazo_entrega||'—'}</td>
+        <td style="font-size:10px;color:var(--cinza-4)">${o.observacao||''}</td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin:8px 0"><b style="color:var(--cinza-5)">${it.material_nome||rcNomeMaterial(it.material_id)}</b> <span style="font-size:10px">(qtd desejada: ${it.qtd_desejada??'—'})</span>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px">
+        <tbody>${linhas}</tbody></table></div>`;
+  }).join('');
+}
+
+async function apMostrarHist(pid, cid){
+  const div=document.getElementById('ap-hist-'+pid); if(!div||div.dataset.ok) return;
+  try{ div.innerHTML=apHistHtml(await apCarregarHist(cid)); div.dataset.ok='1'; }
+  catch(e){ div.innerHTML='Erro ao carregar histórico: '+e.message; }
+}
+
+async function apGerarPDF(pid){
+  const b=apPedidos.find(x=>x.pedido.id===pid); if(!b) return;
+  const p=b.pedido;
+  const just=((document.getElementById('ap-just-'+pid)||{}).value||'').trim();
+  let histHtml='';
+  if(p.cotacao_id){
+    try{ histHtml=apHistHtml(await apCarregarHist(p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
+  }
+  const totItens=apTotalItens(b), frete=Number(p.frete)||0;
+  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
+  const w=window.open('','_blank');
+  if(!w){ toast('Bloqueador de pop-up impediu o PDF. Libere pop-ups para este site.','erro'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px}h2{font-size:13px;margin:16px 0 6px}
+  table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}
+  th{background:#f0f3f7;text-transform:uppercase;font-size:10px}.tot{text-align:right;font-weight:bold;font-size:13px;margin-top:6px}
+  .meta{color:#555}.just{border:1px solid #ccc;border-radius:6px;padding:10px;background:#fafafa;white-space:pre-wrap}
+  @media print{button{display:none}}</style></head><body>
+  <h1>HOG — Comparativo de compra · Pedido #${pid}</h1>
+  <p class="meta"><b>Fornecedor:</b> ${rcNomeFornecedor(p.fornecedor_id)} &nbsp;·&nbsp; <b>Pedido por:</b> ${p.pedido_por||'—'} &nbsp;·&nbsp;
+  <b>Pagamento:</b> ${p.condicao_pagamento||'—'} &nbsp;·&nbsp; <b>Prazo:</b> ${p.prazo_previsto||'—'} &nbsp;·&nbsp; <b>Data:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
+  <h2>Itens do pedido</h2>
+  <table><thead><tr><th>Material</th><th>Marca</th><th>Código</th><th>Qtd</th><th>Unit.</th><th>Subtotal</th></tr></thead><tbody>${linhas}</tbody></table>
+  <p class="tot">Itens: ${rcMoney(totItens)} &nbsp; Frete: ${rcMoney(frete)} &nbsp; <u>Total: ${rcMoney(totItens+frete)}</u></p>
+  ${histHtml?`<h2>Histórico da cotação (ofertas recebidas)</h2>${histHtml}`:''}
+  <h2>Justificativa da escolha</h2><div class="just">${just||'(não informada)'}</div>
+  <p class="meta" style="margin-top:20px">Aprovação: ______________________________ &nbsp;&nbsp; Data: ____/____/______</p>
+  <button onclick="window.print()" style="margin-top:14px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>
+  </body></html>`);
+  w.document.close();
+}
+
+async function apAprovarPedido(pid){
+  const b=apPedidos.find(x=>x.pedido.id===pid); if(!b) return;
+  const p=b.pedido, totItens=apTotalItens(b), frete=Number(p.frete)||0;
+  if(!confirm(`Aprovar o pedido #${pid}?\n\n🏪 ${rcNomeFornecedor(p.fornecedor_id)}\n${b.itens.length} item(ns) · Total ${rcMoney(totItens+frete)}\n\nApós aprovar, o pedido fica AGUARDANDO ENTREGA e liberado para a entrada da NF.`)) return;
+  const aprovador=prompt('Aprovado por:','Evelise (Gestora)');
+  if(aprovador===null) return;
+  const just=((document.getElementById('ap-just-'+pid)||{}).value||'').trim();
   try{
-    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{ aprovado_pedido:true });
-    toast('Pedido aprovado — liberado para Receber NF ✓','sucesso');
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{
+      status:'AGUARDANDO_ENTREGA', aprovado_por:(aprovador.trim()||'Evelise (Gestora)'), aprovado_em:new Date().toISOString(),
+      observacao:((p.observacao||'')+(just?' | Justificativa: '+just:'')).trim()||null,
+    });
+    await sbFetch(`ordens_compra?pedido_id=eq.${pid}`,'PATCH',{ aprovado_pedido:true });
+    toast('Pedido #'+pid+' aprovado ✓ — aguardando entrega. Entrada pela aba 📥 Receber NF.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro ao aprovar: '+e.message,'erro'); }
 }
 
-async function apRejeitar(ordemId){
-  const motivo = prompt('Motivo da rejeição:');
+async function apDevolver(pid){
+  if(!confirm('Devolver o pedido #'+pid+' para a montagem (aba 📦 Pedidos)?')) return;
+  const motivo=prompt('O que precisa ser revisto? (vai como observação)')||'';
+  const b=apPedidos.find(x=>x.pedido.id===pid);
+  try{
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'EM_MONTAGEM',
+      observacao:(((b&&b.pedido.observacao)||'')+(motivo?' | Devolvido: '+motivo:'')).trim()||null });
+    toast('Pedido devolvido para montagem.','sucesso');
+    apCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function apRejeitarPedido(pid){
+  const motivo=prompt('Motivo da rejeição:');
   if(motivo===null) return;
   if(!motivo.trim()){ toast('Informe um motivo.','erro'); return; }
+  const b=apPedidos.find(x=>x.pedido.id===pid);
   try{
-    await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{ situacao:'NAO COMPRAR AGORA', observacao: motivo.trim() });
+    await sbFetch(`ordens_compra?pedido_id=eq.${pid}`,'PATCH',{ situacao:'NAO COMPRAR AGORA', aprovado_pedido:false });
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
+      observacao:(((b&&b.pedido.observacao)||'')+' | Rejeitado: '+motivo.trim()).trim() });
     toast('Pedido rejeitado.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -3871,7 +4135,8 @@ async function apRejeitar(ordemId){
 let invLocais = [];
 let invBuscaRes = [];
 let invMaterialSelecionado = null;
-let invPendentesImport = []; // [{material_id, local_id, nome, localNome, saldoAtual, contagem, delta, incluir}]
+let invPendentesImport = [];  // por MATERIAL: [{material_id, nome, contagemTotal, saldoGeral, delta, incluir, locais:[{local_id, localNome, contagem}]}]
+let invContagensPorLocal = []; // todas as contagens lidas da planilha: [{material_id, local_id, localNome, nome, contagem}] — vira a foto por local + inventario_itens
 
 async function invCarregar(){
   if(!invLocais.length){
@@ -3923,22 +4188,21 @@ async function invAplicarAjusteAvulso(){
   const registrante = document.getElementById('inv-registrado-por').value;
   if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
   if(!invMaterialSelecionado){ toast('Busque e selecione um material.','erro'); return; }
-  const localId = document.getElementById('inv-ajuste-local').value;
-  if(!localId){ toast('Selecione o local.','erro'); return; }
   const novoSaldoStr = document.getElementById('inv-ajuste-novo-saldo').value;
   if(novoSaldoStr===''){ toast('Informe o novo saldo.','erro'); return; }
   const novoSaldo = parseFloat(novoSaldoStr);
   const motivo = document.getElementById('inv-ajuste-motivo').value.trim() || 'não informado';
 
   try{
-    const est = await sbFetch(`estoque?select=saldo&material_id=eq.${invMaterialSelecionado.id}&local_id=eq.${localId}&limit=1`);
+    const geralId = await getEstoqueGeralId();
+    const est = await sbFetch(`estoque?select=saldo&material_id=eq.${invMaterialSelecionado.id}&local_id=eq.${geralId}&limit=1`);
     const saldoAtual = (est && est.length) ? Number(est[0].saldo) : 0;
     const delta = novoSaldo - saldoAtual;
-    if(delta===0){ toast('Saldo informado é igual ao saldo atual — nada a ajustar.',''); return; }
-    if(!confirm(`Ajustar "${invMaterialSelecionado.nome}" de ${saldoAtual} para ${novoSaldo} (diferença: ${delta>0?'+':''}${delta})?`)) return;
+    if(delta===0){ toast('Saldo informado é igual ao saldo atual do Estoque Geral — nada a ajustar.',''); return; }
+    if(!confirm(`Ajustar "${invMaterialSelecionado.nome}" no ESTOQUE GERAL: de ${saldoAtual} para ${novoSaldo} (diferença: ${delta>0?'+':''}${delta})?`)) return;
 
     const movArr = await sbFetch('movimentacoes','POST',{
-      tipo:'AJUSTE_INVENTARIO', material_id:invMaterialSelecionado.id, local_id:Number(localId),
+      tipo:'AJUSTE_INVENTARIO', material_id:invMaterialSelecionado.id, local_id:geralId,
       qtd: delta, aprovado:false, registrado_por:registrante,
       observacao: 'Ajuste avulso — ' + motivo,
     });
@@ -4035,7 +4299,7 @@ async function invExportar(){
     const nomesUsados = new Set();
     for(const local of locaisAlvo){
       const materiaisDoLocal = invMateriaisDoLocal(local.nome);
-      const linhas = [['ID','Material','Descrição NF','Marca','Unidade','Qtd/Pacote','Saldo Sistema','Contagem Física']];
+      const linhas = [['ID','Material','Descrição NF','Marca','Unidade','Qtd/Pacote','Foto Últ. Contagem','Contagem Física']];
       for(const m of materiaisDoLocal){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
         linhas.push([m.id, m.nome, m.descricao_nf||'', m.marca||'', m.unidade_medida||'', m.qtd_kit??'', saldo, '']);
@@ -4058,14 +4322,17 @@ async function invImportar(file){
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, {type:'array'});
     invPendentesImport = [];
+    invContagensPorLocal = [];
     const avisos = [];
 
     // Sempre busca o saldo FRESCO do banco (nunca usa o saldo que estava na planilha exportada)
+    const geralId = await getEstoqueGeralId();
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = Number(e.saldo);
 
-    const CABECALHO_ESPERADO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE','SALDO SISTEMA','CONTAGEM FÍSICA'];
+    // Aceita tanto o cabeçalho novo ('FOTO ÚLT. CONTAGEM') quanto o antigo ('SALDO SISTEMA')
+    const CABECALHO_ESPERADO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE',['FOTO ÚLT. CONTAGEM','SALDO SISTEMA'],'CONTAGEM FÍSICA'];
 
     for(const sheetName of wb.SheetNames){
       const nomeLimpo = s => s.replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
@@ -4080,9 +4347,10 @@ async function invImportar(file){
 
       // Valida as colunas antes de confiar nos dados — evita ler número errado por planilha fora do padrão
       const cabecalho = (linhas[0] || []).map(c => (c===undefined||c===null) ? '' : String(c).trim().toUpperCase());
-      const cabecalhoOk = CABECALHO_ESPERADO.every((esperado, i) => cabecalho[i] === esperado);
+      const cabecalhoOk = CABECALHO_ESPERADO.every((esperado, i) =>
+        Array.isArray(esperado) ? esperado.includes(cabecalho[i]) : cabecalho[i] === esperado);
       if(!cabecalhoOk){
-        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado (esperado: ${CABECALHO_ESPERADO.join(' | ')}). Aba ignorada. Se editou a planilha, use sempre o arquivo gerado pelo botão "Exportar".`);
+        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado (esperado: ${CABECALHO_ESPERADO.map(e=>Array.isArray(e)?e[0]:e).join(' | ')}). Aba ignorada. Se editou a planilha, use sempre o arquivo gerado pelo botão "Exportar".`);
         continue;
       }
 
@@ -4105,15 +4373,28 @@ async function invImportar(file){
           continue; // linha sem ID e sem nome, nada a fazer
         }
 
-        const saldoAtual = saldoMap[materialId+'_'+local.id] ?? 0;
-        const delta = contagem - saldoAtual;
-        if(delta === 0) continue; // sem diferença, não precisa ajustar
-        invPendentesImport.push({
-          material_id: materialId, local_id: local.id, nome: nome || rcNomeMaterial(materialId),
-          localNome: local.nome, saldoAtual, contagem, delta, incluir: true,
+        // MODELO ESTOQUE GERAL: a contagem por local vira a FOTO de alocação;
+        // o ajuste de saldo é calculado depois, por material, contra o Estoque Geral.
+        invContagensPorLocal.push({
+          material_id: materialId, local_id: local.id, localNome: local.nome,
+          nome: (nome && String(nome).trim()) || rcNomeMaterial(materialId), contagem,
         });
       }
     }
+
+    // Agrega por material: soma das contagens de TODOS os locais vs saldo do ESTOQUE GERAL
+    const porMaterial = {};
+    for(const c of invContagensPorLocal){
+      if(!porMaterial[c.material_id]){
+        porMaterial[c.material_id] = { material_id: c.material_id, nome: c.nome, contagemTotal: 0, locais: [] };
+      }
+      porMaterial[c.material_id].contagemTotal += c.contagem;
+      porMaterial[c.material_id].locais.push(c);
+    }
+    invPendentesImport = Object.values(porMaterial).map(m => {
+      const saldoGeral = saldoMap[m.material_id + '_' + geralId] ?? 0;
+      return { ...m, saldoGeral, delta: m.contagemTotal - saldoGeral, incluir: true };
+    }).sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta));
 
     if(avisos.length){
       toast(avisos.length + ' aba(s) com problema — veja detalhes na revisão abaixo.', 'erro');
@@ -4133,57 +4414,101 @@ function invRenderizarRevisao(avisos){
       </div>`
     : '';
   if(!invPendentesImport.length){
-    corpo.innerHTML = avisosHtml + '<div class="inv-empty">Nenhuma diferença encontrada entre a contagem e o saldo atual do sistema. ✓</div>';
+    corpo.innerHTML = avisosHtml + '<div class="inv-empty">Nenhuma contagem preenchida encontrada na planilha.</div>';
     box.style.display = '';
     return;
   }
   box.style.display = '';
-  const porLocal = {};
-  for(const it of invPendentesImport){ (porLocal[it.localNome]=porLocal[it.localNome]||[]).push(it); }
+
+  const divergentes = invPendentesImport.filter(it => it.delta !== 0).length;
+  const batendo = invPendentesImport.length - divergentes;
 
   let html = avisosHtml;
-  for(const localNome of Object.keys(porLocal)){
-    const itens = porLocal[localNome];
-    html += `<div class="inv-loc-head">${localNome} — ${itens.length} diferença(s)</div>
-      <table><thead><tr><th></th><th>Material</th><th style="text-align:right">Saldo sistema</th><th style="text-align:right">Contagem</th><th style="text-align:right">Diferença</th></tr></thead><tbody>`;
-    for(const it of itens){
-      const idx = invPendentesImport.indexOf(it);
-      const cls = it.delta>0?'inv-delta-pos':'inv-delta-neg';
-      html += `<tr>
-        <td><input type="checkbox" checked onchange="invPendentesImport[${idx}].incluir=this.checked"></td>
-        <td>${it.nome}</td>
-        <td style="text-align:right">${it.saldoAtual}</td>
-        <td style="text-align:right">${it.contagem}</td>
-        <td style="text-align:right" class="${cls}">${it.delta>0?'+':''}${it.delta}</td>
-      </tr>`;
-    }
-    html += `</tbody></table>`;
-  }
+  html += `<div class="inv-loc-head">CONFERÊNCIA vs ESTOQUE GERAL — ${invPendentesImport.length} material(is) contado(s) · ${divergentes} divergência(s) · ${batendo} batendo ✓</div>
+    <table><thead><tr><th></th><th>Material</th><th>Onde foi contado</th><th style="text-align:right">Contagem (soma)</th><th style="text-align:right">Estoque Geral</th><th style="text-align:right">Diferença</th></tr></thead><tbody>`;
+  invPendentesImport.forEach((it, idx) => {
+    const cls = it.delta>0?'inv-delta-pos':(it.delta<0?'inv-delta-neg':'');
+    const locaisTxt = it.locais.map(l => `${l.localNome}: ${l.contagem}`).join(' · ');
+    html += `<tr>
+      <td><input type="checkbox" ${it.incluir?'checked':''} onchange="invPendentesImport[${idx}].incluir=this.checked"></td>
+      <td>${it.nome}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${locaisTxt}</td>
+      <td style="text-align:right;font-weight:600">${it.contagemTotal}</td>
+      <td style="text-align:right">${it.saldoGeral}</td>
+      <td style="text-align:right" class="${cls}">${it.delta===0?'✓ bate':((it.delta>0?'+':'')+it.delta)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>
+    <p style="font-size:12px;color:var(--cinza-4);margin-top:10px">Ao aplicar: a contagem por local vira a nova <b>foto de alocação</b>, tudo é registrado no <b>histórico de inventários</b>, e cada divergência marcada gera <b>um ajuste no Estoque Geral</b>. Materiais não contados mantêm o saldo atual.</p>`;
   corpo.innerHTML = html;
 }
 
 async function invAplicarAjustesImportados(){
   const registrante = document.getElementById('inv-registrado-por').value;
   if(!registrante){ toast('Selecione quem está registrando no topo da aba.','erro'); return; }
-  const selecionados = invPendentesImport.filter(it=>it.incluir);
-  if(!selecionados.length){ toast('Nenhum ajuste marcado.','erro'); return; }
-  if(!confirm(`Aplicar ${selecionados.length} ajuste(s) de inventário? Isso altera o saldo real do estoque.`)) return;
+  const selecionados = invPendentesImport.filter(it => it.incluir);
+  if(!selecionados.length){ toast('Nenhum material marcado.','erro'); return; }
+  const comAjuste = selecionados.filter(it => it.delta !== 0);
+  if(!confirm(`Fechar este inventário?\n\n• ${selecionados.length} material(is) contado(s) — a contagem por local vira a nova foto de alocação\n• ${comAjuste.length} ajuste(s) no ESTOQUE GERAL (divergências)\n\nIsso altera o saldo real do estoque.`)) return;
 
   try{
-    for(const it of selecionados){
+    const geralId = await getEstoqueGeralId();
+    const hoje = new Date().toISOString().split('T')[0];
+    const agora = new Date().toISOString();
+    const idsSelecionados = new Set(selecionados.map(it => it.material_id));
+    const contagens = invContagensPorLocal.filter(c => idsSelecionados.has(c.material_id));
+
+    // 1) Registra o inventário no histórico (tabela inventarios + inventario_itens)
+    let inventarioId = null;
+    try{
+      const invArr = await sbFetch('inventarios','POST',{
+        mes_referencia: hoje, status: 'fechado',
+        criado_por: registrante, fechado_por: registrante, fechado_em: agora,
+      });
+      inventarioId = invArr && invArr[0] && invArr[0].id;
+      if(inventarioId && contagens.length){
+        // insere em lotes de 50 para não estourar a URL/payload
+        for(let i=0; i<contagens.length; i+=50){
+          const lote = contagens.slice(i, i+50).map(c => ({
+            inventario_id: inventarioId, material_id: c.material_id, local_id: c.local_id,
+            qtd_contada: c.contagem, contado_por: registrante,
+          }));
+          await sbFetch('inventario_itens','POST', lote);
+        }
+      }
+    }catch(e){
+      // histórico é desejável mas não pode travar o fechamento — segue com aviso
+      console.warn('inventarios/inventario_itens indisponível:', e.message);
+    }
+
+    // 2) Atualiza a FOTO de alocação por local (estoque nos locais físicos)
+    for(const c of contagens){
+      const est = await sbFetch(`estoque?select=id&material_id=eq.${c.material_id}&local_id=eq.${c.local_id}&limit=1`);
+      if(est && est.length){
+        await sbFetch(`estoque?id=eq.${est[0].id}`,'PATCH',{ saldo: c.contagem });
+      } else {
+        await sbFetch('estoque','POST',{ material_id: c.material_id, local_id: c.local_id, saldo: c.contagem });
+      }
+    }
+
+    // 3) Ajusta o ESTOQUE GERAL — um AJUSTE_INVENTARIO por material divergente
+    //    (nasce pendente e é aprovado em seguida: a aprovação dispara o trigger que corrige o saldo)
+    for(const it of comAjuste){
       const movArr = await sbFetch('movimentacoes','POST',{
-        tipo:'AJUSTE_INVENTARIO', material_id:it.material_id, local_id:it.local_id,
-        qtd: it.delta, aprovado:false, registrado_por:registrante,
-        observacao: 'Inventário físico — contagem: '+it.contagem+' (sistema tinha '+it.saldoAtual+')',
+        tipo:'AJUSTE_INVENTARIO', material_id: it.material_id, local_id: geralId,
+        qtd: it.delta, aprovado:false, registrado_por: registrante,
+        observacao: 'Inventário físico '+hoje+' — contado (todos os locais): '+it.contagemTotal+' | Estoque Geral tinha: '+it.saldoGeral + (inventarioId ? ' | inventário #'+inventarioId : ''),
       });
       const movId = movArr && movArr[0] && movArr[0].id;
-      await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+      await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em: agora });
     }
-    toast(selecionados.length + ' ajuste(s) aplicado(s) — estoque atualizado ✓','sucesso');
+
+    toast(`Inventário fechado ✓ — foto de ${contagens.length} contagem(ns) gravada, ${comAjuste.length} ajuste(s) no Estoque Geral`,'sucesso');
     invPendentesImport = [];
+    invContagensPorLocal = [];
     document.getElementById('inv-revisao-box').style.display = 'none';
     document.getElementById('inv-file-input').value = '';
-  }catch(e){ toast('Erro ao aplicar ajustes: '+e.message,'erro'); }
+  }catch(e){ toast('Erro ao aplicar o inventário: '+e.message,'erro'); }
 }
 </script>
 
