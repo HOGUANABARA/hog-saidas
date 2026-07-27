@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.9.1 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.10 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -913,6 +913,39 @@ details[open] summary { margin-bottom: 6px; }
     <select id="inv-registrado-por" style="margin-left:8px;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)" onchange="localStorage.setItem('hog_inv_registrante', this.value)">
       <option value="">Selecione...</option>
     </select>
+
+  <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
+  <div class="inv-card" id="rel-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📄 Relatório de estoque — filtre e gere para conferência</span>
+      <button onclick="relCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar saldos</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">🔍 Filtrar itens (separe termos com vírgula — ex: fio, metil, luva)</label>
+        <input id="rel-busca" placeholder="vazio = todos os itens" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)" oninput="relRender()">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Classe</label>
+        <select id="rel-classe" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)" onchange="relRender()">
+          <option value="">todas</option>
+          <option value="RECORRENTE">🔁 Recorrente</option>
+          <option value="POR_PROCEDIMENTO">🎯 Por procedimento</option>
+          <option value="CRITICO">🚑 Crítico</option>
+          <option value="ESPORADICO">💤 Esporádico</option>
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:9px 0"><input type="checkbox" id="rel-comsaldo" onchange="relRender()" style="width:15px;height:15px;accent-color:var(--azul-medio)"> só com saldo</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:9px 0"><input type="checkbox" id="rel-lote" onchange="relRender()" style="width:15px;height:15px;accent-color:var(--azul-medio)"> só controla lote</label>
+    </div>
+    <div id="rel-resumo" style="font-size:12px;color:var(--cinza-4);margin-bottom:8px"></div>
+    <div id="rel-corpo" style="max-height:440px;overflow:auto"><div style="text-align:center;padding:24px;color:var(--cinza-4);font-size:13px">Clique em 🔄 Atualizar saldos para carregar.</div></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      <button onclick="relImprimir()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🖨 Imprimir / PDF</button>
+      <button onclick="relExportar()" style="background:var(--verde);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">📄 Exportar planilha</button>
+    </div>
+  </div>
+
   </div>
 
   <!-- AJUSTE AVULSO -->
@@ -6193,6 +6226,100 @@ async function ocAbaterCreditos(fornId, valor){
 function ocSaldoCredito(fornId){
   return (ocCreditos||[]).filter(c=>c.status==='ABERTO'&&c.fornecedor_id===Number(fornId))
     .reduce((s,c)=>s+(c.valor-(c.valor_utilizado||0)),0);
+}
+</script>
+
+
+<script>
+// ═══ RELATÓRIO DE ESTOQUE — filtra e gera p/ conferências pontuais ═══
+let relDados = [];   // [{id,nome,marca,descricao_nf,unidade,classe,controla_lote,saldo,lotes:[]}]
+let relFiltrados = [];
+
+async function relCarregar(){
+  const corpo=document.getElementById('rel-corpo');
+  corpo.innerHTML='<div style="text-align:center;padding:24px;color:var(--cinza-4)">Carregando…</div>';
+  try{
+    const geralId = await getEstoqueGeralId();
+    const mats=(await sbFetch('materiais?select=id,nome,marca,descricao_nf,unidade_medida,classe_compra,controla_lote&ativo=eq.true&order=nome.asc&limit=1000'))||[];
+    const est=(await sbFetch(`estoque?select=material_id,saldo&local_id=eq.${geralId}&limit=2000`))||[];
+    const saldoMap={}; for(const e of est) saldoMap[e.material_id]=Number(e.saldo)||0;
+    let lotesMap={};
+    try{
+      const lts=(await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000'))||[];
+      for(const l of lts){ (lotesMap[l.material_id]=lotesMap[l.material_id]||[]).push(l); }
+    }catch(e){}
+    relDados=mats.map(m=>({ id:m.id, nome:m.nome, marca:m.marca||'', descricao_nf:m.descricao_nf||'',
+      unidade:m.unidade_medida||'', classe:m.classe_compra||'ESPORADICO', controla_lote:!!m.controla_lote,
+      saldo:saldoMap[m.id]??0, lotes:lotesMap[m.id]||[] }));
+    relRender();
+  }catch(e){ corpo.innerHTML='<div style="text-align:center;padding:24px;color:var(--vermelho)">Erro: '+e.message+'</div>'; }
+}
+function relData(d){ if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return `${p[2]}/${p[1]}/${p[0].slice(2)}`; }
+function relRender(){
+  if(!relDados.length) return;
+  const termos=(document.getElementById('rel-busca').value||'').split(',').map(t=>normNome(t.trim())).filter(Boolean);
+  const classe=document.getElementById('rel-classe').value;
+  const soSaldo=document.getElementById('rel-comsaldo').checked;
+  const soLote=document.getElementById('rel-lote').checked;
+  relFiltrados=relDados.filter(m=>{
+    if(termos.length && !termos.some(t=>normNome(m.nome).includes(t)||normNome(m.descricao_nf).includes(t))) return false;
+    if(classe && m.classe!==classe) return false;
+    if(soSaldo && m.saldo<=0) return false;
+    if(soLote && !m.controla_lote) return false;
+    return true;
+  });
+  const totalUn=relFiltrados.reduce((s,m)=>s+m.saldo,0);
+  document.getElementById('rel-resumo').innerHTML=`<b>${relFiltrados.length}</b> item(ns) · <b>${Math.round(totalUn).toLocaleString('pt-BR')}</b> unidades no Estoque Geral · gerado em ${new Date().toLocaleString('pt-BR').slice(0,16)}`;
+  document.getElementById('rel-corpo').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Material</th>
+      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Marca</th>
+      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Unid.</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Saldo</th>
+      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Lotes / validades</th>
+    </tr></thead><tbody>
+    ${relFiltrados.map(m=>`<tr>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-weight:600">${m.nome}${m.descricao_nf?`<div style="font-size:10px;color:var(--cinza-4);font-weight:400">${m.descricao_nf}</div>`:''}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.marca||'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.unidade||'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:800;${m.saldo<0?'color:var(--vermelho)':''}">${m.saldo.toLocaleString('pt-BR')}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">${m.lotes.length?m.lotes.map(l=>`${l.lote} · val ${relData(l.validade)} (${l.qtd})`).join('<br>'):(m.controla_lote?'<span style="color:var(--amarelo)">sem lote registrado</span>':'—')}</td>
+    </tr>`).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--cinza-4)">nenhum item com esses filtros</td></tr>'}
+  </tbody></table>`;
+}
+function relExportar(){
+  if(!relFiltrados.length){ toast('Nada para exportar — ajuste os filtros.','erro'); return; }
+  const linhas=[['ID','Material','Descrição NF','Marca','Unidade','Classe','Saldo Estoque Geral','Lotes / Validades','Conferido (✓)','Observação']];
+  for(const m of relFiltrados){
+    linhas.push([m.id, m.nome, m.descricao_nf, m.marca, m.unidade, m.classe,
+      m.saldo, m.lotes.map(l=>`${l.lote} val ${relData(l.validade)} (${l.qtd})`).join(' | '), '', '']);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(linhas);
+  ws['!cols']=[{wch:6},{wch:38},{wch:34},{wch:16},{wch:10},{wch:16},{wch:14},{wch:34},{wch:11},{wch:20}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Relatório Estoque');
+  XLSX.writeFile(wb, 'Relatorio_Estoque_HOG_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('Relatório exportado — confira seus downloads ✓','sucesso');
+}
+function relImprimir(){
+  if(!relFiltrados.length){ toast('Nada para imprimir — ajuste os filtros.','erro'); return; }
+  const w=window.open('','_blank');
+  if(!w){ toast('Libere pop-ups para imprimir.','erro'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Estoque HOG</title>
+  <style>body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:20px}h1{font-size:16px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}td,th{border:1px solid #ccc;padding:4px 6px;text-align:left}
+  th{background:#f0f3f7;text-transform:uppercase;font-size:9px}.num{text-align:right}
+  @media print{button{display:none}}</style></head><body>
+  <h1>HOG — Relatório de Estoque (conferência)</h1>
+  <p>${relFiltrados.length} item(ns) · gerado em ${new Date().toLocaleString('pt-BR')}</p>
+  <table><thead><tr><th>Material</th><th>Marca</th><th>Unid.</th><th class="num">Saldo</th><th>Lotes/Validades</th><th style="width:60px">Conferido</th><th style="width:110px">Obs.</th></tr></thead><tbody>
+  ${relFiltrados.map(m=>`<tr><td><b>${m.nome}</b>${m.descricao_nf?('<br><span style="font-size:9px;color:#666">'+m.descricao_nf+'</span>'):''}</td>
+    <td>${m.marca||'—'}</td><td>${m.unidade||'—'}</td><td class="num"><b>${m.saldo.toLocaleString('pt-BR')}</b></td>
+    <td style="font-size:9px">${m.lotes.map(l=>`${l.lote} val ${relData(l.validade)} (${l.qtd})`).join('<br>')||'—'}</td><td></td><td></td></tr>`).join('')}
+  </tbody></table>
+  <button onclick="window.print()" style="margin-top:14px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>
+  </body></html>`);
+  w.document.close();
 }
 </script>
 
