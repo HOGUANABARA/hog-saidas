@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.8.1 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.9.1 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -360,6 +360,7 @@ details[open] summary { margin-bottom: 6px; }
   <div class="aba aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-inventario" onclick="trocarAba('inventario')">📐 Inventário</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-ocorrencias" onclick="trocarAba('ocorrencias')">⚠️ Ocorrências</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-painel" onclick="trocarAba('painel')">📊 Painel</div>
   <div class="aba" id="aba-btn-cadeado" onclick="desbloquearRestrito()" title="Área restrita (senha)" style="margin-left:auto">🔒</div>
 </div>
@@ -727,6 +728,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
     <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
+    <button class="co-b2" onclick="coNovoFornecedor()">🏪➕ Novo fornecedor</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
@@ -2354,7 +2356,7 @@ function trocarAba(aba) {
   // • Aprovação de saídas: senha de GESTÃO (memoriza no dispositivo)
   // • Aprovar Pedido: senha de GESTÃO pedida SEMPRE (não memoriza)
   // • Receber NF / Inventário: senha de ENTRADA (memoriza)
-  if ((aba === 'cotacao' || aba === 'decisao' || aba === 'historico') && !exigirSenhaCompras()) return;
+  if ((aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'ocorrencias') && !exigirSenhaCompras()) return;
   if (aba === 'aprovacao' && localStorage.getItem('hog_aprov_ok') !== '1') {
     const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
     if (s === null) return; // cancelou
@@ -2398,6 +2400,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-historico').classList.toggle('ativa', aba==='historico');
   document.getElementById('aba-btn-receber').classList.toggle('ativa', aba==='receber');
   document.getElementById('aba-btn-inventario').classList.toggle('ativa', aba==='inventario');
+  document.getElementById('aba-btn-ocorrencias').classList.toggle('ativa', aba==='ocorrencias');
   document.getElementById('aba-btn-painel').classList.toggle('ativa', aba==='painel');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
@@ -2409,6 +2412,7 @@ function trocarAba(aba) {
   document.getElementById('aba-historico').style.display  = aba==='historico'  ? '' : 'none';
   document.getElementById('aba-receber').style.display    = aba==='receber'    ? '' : 'none';
   document.getElementById('aba-inventario').style.display = aba==='inventario' ? '' : 'none';
+  document.getElementById('aba-ocorrencias').style.display = aba==='ocorrencias' ? '' : 'none';
   document.getElementById('aba-painel').style.display = aba==='painel' ? '' : 'none';
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
@@ -2419,6 +2423,7 @@ function trocarAba(aba) {
   if (aba==='receber')   { rcCarregar(); }
   if (aba==='inventario'){ invCarregar(); }
   if (aba==='painel'){ pnCarregar(); }
+  if (aba==='ocorrencias'){ ocCarregar(); }
 }
 
 function limparForm() {
@@ -3262,15 +3267,36 @@ function coRemoveItem(i){ if(!confirm('Tirar "'+coItens[i].material_nome+'" da c
 function coAddFornGrupo(g){
   const lista = coFornGrupo[g] || [];
   if(lista.length>=3){ toast('Máximo de 3 fornecedores por grupo.','erro'); return; }
-  const opcoes = coFornecedores.filter(f=>!lista.includes(f.id))
-    .map((f,i)=>`${i+1} — ${f.nome}`).join('\n');
-  const esc = prompt('Adicionar fornecedor ao grupo "'+g+'":\n\n'+opcoes+'\n\nDigite o número:');
-  if(esc===null) return;
-  const idx = parseInt(esc)-1;
   const candidatos = coFornecedores.filter(f=>!lista.includes(f.id));
+  const opcoes = candidatos.map((f,i)=>`${i+1} — ${f.nome}`).join('\n');
+  const esc = prompt('Adicionar fornecedor ao grupo "'+g+'":\n\n0 — ➕ CADASTRAR NOVO FORNECEDOR\n'+opcoes+'\n\nDigite o número:');
+  if(esc===null) return;
+  if(esc.trim()==='0'){ coNovoFornecedor(g); return; }
+  const idx = parseInt(esc)-1;
   if(isNaN(idx)||!candidatos[idx]){ toast('Escolha inválida.','erro'); return; }
   coFornGrupo[g] = [...lista, candidatos[idx].id];
   coRender();
+}
+// cadastrar fornecedor novo direto da tela de orçamento
+async function coNovoFornecedor(g){
+  const nome = prompt('Nome do novo fornecedor:');
+  if(nome===null || !nome.trim()) return;
+  const n = nome.trim().toUpperCase();
+  const jaExiste = coFornecedores.find(f=>f.nome.trim().toUpperCase()===n);
+  if(jaExiste){
+    toast('"'+jaExiste.nome+'" já está cadastrado — adicionado ao grupo.','');
+    if(g){ const lista=coFornGrupo[g]||[]; if(lista.length<3 && !lista.includes(jaExiste.id)){ coFornGrupo[g]=[...lista,jaExiste.id]; coRender(); } }
+    return;
+  }
+  try{
+    const r = await sbFetch('fornecedores','POST',{ nome:n });
+    if(!r||!r.length) throw new Error('sem permissão (RLS)');
+    coFornecedores.push({ id:r[0].id, nome:n });
+    coFornecedores.sort((a,b)=>a.nome.localeCompare(b.nome));
+    toast('Fornecedor "'+n+'" cadastrado ✓','sucesso');
+    if(g){ const lista=coFornGrupo[g]||[]; if(lista.length<3){ coFornGrupo[g]=[...lista,r[0].id]; } }
+    coRender();
+  }catch(e){ toast('Erro ao cadastrar fornecedor: '+e.message,'erro'); }
 }
 function coRemFornGrupo(g, fid){
   coFornGrupo[g] = (coFornGrupo[g]||[]).filter(x=>x!==fid);
@@ -3557,6 +3583,7 @@ async function deCarregar(){
   try{
     if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
     if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
+    try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
     const peds=(await sbFetch("pedidos?select=*&status=eq.EM_MONTAGEM&order=id.asc"))||[];
     deBoards=[];
     if(peds.length){
@@ -3600,7 +3627,7 @@ function deRenderizar(){
       <div class="de-ihead" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div>
           <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
-          <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span></div>
+          <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
         <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
       </div>
@@ -3830,6 +3857,7 @@ async function rcCarregar(){
         rcControlaLote = new Set((cl||[]).map(x=>x.id));
       }catch(e){}
     }
+    try{ ocCreditos = (await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200')) || []; }catch(e){ ocCreditos = null; }
     rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
     rcRenderizar();
@@ -3887,6 +3915,8 @@ function rcRenderizar(){
         <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${fid}"></div>
         <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${fid}" value="${new Date().toISOString().split('T')[0]}"></div>
         <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${fid}" value="0" oninput="rcAtualizaTotais('${fid}')"></div>
+        <div class="campo"><label>💳 Crédito utilizado (R$)</label><input type="number" step="0.01" min="0" id="rc-nf-cred-${fid}" value="0" oninput="rcAtualizaTotais('${fid}')">
+          <span style="font-size:10px;color:var(--azul);font-weight:700">${(typeof ocSaldoCredito==='function'&&ocCreditos)?('disponível: '+rcMoney(ocSaldoCredito(fid))):''}</span></div>
         <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${fid}"></div>
       </div>
       <div style="overflow-x:auto">
@@ -3963,8 +3993,9 @@ function rcAtualizaTotais(fid){
     if(chk && chk.checked){ totalItens += tot; marcados++; }
   });
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+fid)||{}).value)||0;
+  const cred = parseFloat((document.getElementById('rc-nf-cred-'+fid)||{}).value)||0;
   const res = document.getElementById('rc-resumo-'+fid);
-  if(res) res.innerHTML = `${marcados} item(ns) marcado(s) · Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''} · <span style="font-size:15px">Total da NF: <b style="color:var(--azul)">${rcMoney(totalItens+frete)}</b></span>`;
+  if(res) res.innerHTML = `${marcados} item(ns) marcado(s) · Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}${cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>`:''} · <span style="font-size:15px">${cred?'A pagar':'Total da NF'}: <b style="color:var(--azul)">${rcMoney(Math.max(0,totalItens+frete-cred))}</b></span>${cred?`<br><span style="font-size:10px;color:var(--cinza-4)">valor da NF (custos): ${rcMoney(totalItens+frete)} — o crédito abate só o financeiro</span>`:''}`;
 }
 
 async function rcMarcarProblema(ordemId){
@@ -4004,7 +4035,12 @@ async function rcConfirmarNF(fid){
   const dataEmissao = document.getElementById(`rc-nf-emissao-${fid}`).value || null;
   const dataEntrega = document.getElementById(`rc-nf-entrega-${fid}`).value || null;
   const frete = parseFloat(document.getElementById(`rc-nf-frete-${fid}`).value) || 0;
-  const obs = document.getElementById(`rc-nf-obs-${fid}`).value.trim();
+  const cred = parseFloat((document.getElementById(`rc-nf-cred-${fid}`)||{}).value) || 0;
+  if(cred>0){
+    const saldoCred = (typeof ocSaldoCredito==='function'&&ocCreditos)?ocSaldoCredito(fid):0;
+    if(cred > saldoCred+0.001){ toast('Crédito informado ('+rcMoney(cred)+') maior que o disponível ('+rcMoney(saldoCred)+').','erro'); return; }
+  }
+  let obs = document.getElementById(`rc-nf-obs-${fid}`).value.trim();
 
   const itensParaGravar = [];
   let valorTotal = 0;
@@ -4031,7 +4067,9 @@ async function rcConfirmarNF(fid){
   }
   valorTotal += frete;
 
-  if(!confirm(`Confirmar recebimento de ${itensParaGravar.length} item(ns) — NF ${numeroNf||'(sem número)'} — total ${rcMoney(valorTotal)}?`)) return;
+  if(cred>0 && cred>valorTotal+0.001){ toast('Crédito maior que o total da NF.','erro'); return; }
+  if(!confirm(`Confirmar recebimento de ${itensParaGravar.length} item(ns) — NF ${numeroNf||'(sem número)'} — total ${rcMoney(valorTotal)}${cred?` (💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorTotal-cred)})`:''}?`)) return;
+  if(cred>0){ obs = (obs?obs+' | ':'')+'CRÉDITO UTILIZADO: '+rcMoney(cred)+' — a pagar '+rcMoney(valorTotal-cred); }
 
   try{
     // 1. Cabeçalho da NF
@@ -4097,6 +4135,10 @@ async function rcConfirmarNF(fid){
       });
     }
 
+    if(cred>0 && typeof ocAbaterCreditos==='function'){
+      try{ await ocAbaterCreditos(fid, cred); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
+      catch(e){ toast('⚠ NF ok, mas o crédito não foi baixado: '+e.message,'erro'); }
+    }
     toast(`NF registrada — ${itensParaGravar.length} item(ns) receb​ido(s), estoque atualizado ✓`,'sucesso');
     rcCarregar();
   }catch(e){ toast('Erro ao registrar NF: '+e.message,'erro'); }
@@ -4998,6 +5040,7 @@ let pnCotAbertas = [];
 let pnPedidos = [];
 let pnNfItens = [];
 let pnSnaps = [];      // painel_snapshots (comparativos mensais)
+let pnOcorrencias = [];
 let pnSimLinhas = [{tipo:'',medico:'',qtd:1,protocolo:''}];
 let pnSimResultado = null;
 let pnPerDrillAberto = null;
@@ -5074,6 +5117,8 @@ async function pnCarregar(){
     try{ pnNfItens=(await sbFetch('nf_itens?select=id,material_id,valor_unitario,nota_fiscal_id&order=id.asc&limit=3000'))||[]; }catch(e){ pnNfItens=[]; }
     try{ pnSnaps=(await sbFetch('painel_snapshots?select=*&order=mes.asc&limit=36'))||[]; }catch(e){ pnSnaps=[]; }
     try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }catch(e){ pnHistRows=[]; }
+    try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
+    try{ pnOcorrencias=(await sbFetch('ocorrencias?select=*&status=eq.aberta&order=id.desc&limit=100'))||[]; }catch(e){ pnOcorrencias=[]; }
     pnMontaHist();
     document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
     pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
@@ -5161,6 +5206,21 @@ function pnAlertas(){
       d:empAtras.map(e=>`${pnUvp[e.material_id]?pnUvp[e.material_id].nome:'#'+e.material_id} — ${e.parceiro}, ${e.qtd-(e.qtd_devolvida||0)} un pendente(s), combinado p/ ${pnData(e.data_combinada)}`).join(' · '),
       a:'🤝 Ver empréstimos',fn:`pnIr('emprestimos',document.querySelector('#aba-painel .pn-pill[data-sec=emprestimos]'))`});
   }
+  // créditos parados e ocorrências atrasadas
+  if(ocCreditos&&ocCreditos.length){
+    const abertos=ocCreditos.filter(c=>c.status==='ABERTO'&&(c.valor-(c.valor_utilizado||0))>0.001);
+    if(abertos.length){
+      const tot=abertos.reduce((s,c)=>s+(c.valor-(c.valor_utilizado||0)),0);
+      const velho=abertos.some(c=>pnDiasDesde(c.created_at)>30);
+      cards.push({cor:velho?'ama':'azul',n:abertos.length,t:'💳 CRÉDITO COM FORNECEDOR EM ABERTO — usar na próxima compra',
+        d:abertos.slice(0,3).map(c=>{const f=coFornecedores.find(x=>x.id===c.fornecedor_id);return (f?f.nome:'#'+c.fornecedor_id)+': R$ '+(c.valor-(c.valor_utilizado||0)).toFixed(2).replace('.',',');}).join(' · ')+` — total R$ ${tot.toFixed(2).replace('.',',')}${velho?' · há mais de 30 dias!':''}`,
+        a:'⚠️ Ver ocorrências',fn:`trocarAba('ocorrencias')`});
+    }
+  }
+  const ocAtras=(pnOcorrencias||[]).filter(o=>o.data_prometida&&o.data_prometida<hoje);
+  if(ocAtras.length) cards.push({cor:'ama',n:ocAtras.length,t:'⚠️ OCORRÊNCIA COM PRAZO VENCIDO',
+    d:ocAtras.slice(0,3).map(o=>'#'+o.id+' ('+o.situacao.replace(/_/g,' ').toLowerCase()+', combinado p/ '+pnData(o.data_prometida)+')').join(' · '),
+    a:'⚠️ Ver ocorrências',fn:`trocarAba('ocorrencias')`});
   // triagem
   const triagem=ccDados.filter(r=>!r.classe_confirmada).length;
   if(triagem) cards.push({cor:'azul',n:triagem,t:'🏷️ ITENS AGUARDANDO CLASSIFICAÇÃO',
@@ -5894,6 +5954,247 @@ function pnSimEnviarFaltas(){
 
 </script>
 
+
+<!-- ═══ ABA OCORRÊNCIAS v3.9 — problema → ação · créditos com fornecedor ═══ -->
+<style>
+  #aba-ocorrencias .oc-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:18px 20px;margin-bottom:16px}
+  #aba-ocorrencias .oc-ct{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  #aba-ocorrencias .oc-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  #aba-ocorrencias .oc-c{display:flex;flex-direction:column;gap:4px}
+  #aba-ocorrencias .oc-c label{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)}
+  #aba-ocorrencias .oc-c input,#aba-ocorrencias .oc-c select,#aba-ocorrencias .oc-c textarea{border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)}
+  #aba-ocorrencias .oc-btn{padding:10px 18px;border-radius:8px;border:none;font-size:13px;font-family:var(--fonte);font-weight:700;cursor:pointer}
+  #aba-ocorrencias .oc-btn-azul{background:var(--azul);color:#fff}
+  #aba-ocorrencias .oc-pend{border-left:4px solid var(--amarelo);border-radius:8px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:13px 16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  #aba-ocorrencias .oc-pend.atrasada{border-left-color:var(--vermelho)}
+  #aba-ocorrencias .oc-pt{font-size:13px;font-weight:800}
+  #aba-ocorrencias .oc-pd{font-size:12px;color:var(--cinza-4);margin-top:3px;line-height:1.6}
+  #aba-ocorrencias .oc-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  #aba-ocorrencias .occ-verm{background:#FDEDEC;color:var(--vermelho);border:1px solid #E6B0AA}
+  #aba-ocorrencias .occ-ama{background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F}
+  #aba-ocorrencias .occ-verd{background:var(--verde-claro);color:var(--verde);border:1px solid #A9DFBF}
+  #aba-ocorrencias .occ-azul{background:var(--azul-claro);color:var(--azul);border:1px solid #AED6F1}
+  #aba-ocorrencias table{width:100%;border-collapse:collapse;font-size:12.5px}
+  #aba-ocorrencias th{text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-ocorrencias td{padding:7px 9px;border-bottom:1px solid var(--cinza-2)}
+  #aba-ocorrencias .oc-empty{text-align:center;padding:26px;color:var(--cinza-4);font-size:13px}
+</style>
+<div id="aba-ocorrencias" class="container" style="display:none">
+  <div class="oc-card">
+    <div class="oc-ct"><span>➕ Registrar ocorrência</span><span style="font-size:10px;font-weight:600;text-transform:none;color:var(--cinza-4)">um problema → uma ação. Se for crédito, ele nasce daqui.</span></div>
+    <div class="oc-form">
+      <div class="oc-c" style="grid-column:span 2"><label>Situação</label>
+        <select id="oc-situacao" onchange="ocSituacaoMudou()"></select></div>
+      <div class="oc-c"><label>Fornecedor</label><select id="oc-fornecedor"><option value="">—</option></select></div>
+      <div class="oc-c"><label>Material (se houver)</label><input id="oc-material" list="pn-mat-datalist" placeholder="digite o nome…"></div>
+      <div class="oc-c"><label>Nº da NF (se houver)</label><input id="oc-nf" placeholder="ex: 4432"></div>
+      <div class="oc-c" id="oc-valor-box" style="display:none"><label id="oc-valor-label">Valor (R$)</label><input id="oc-valor" type="number" step="0.01" min="0"></div>
+      <div class="oc-c"><label>Combinado para</label><input id="oc-data" type="date"></div>
+      <div class="oc-c"><label>Registrado por</label><select id="oc-por"></select></div>
+      <div class="oc-c" style="grid-column:1/-1"><label>Ação combinada / observação</label>
+        <textarea id="oc-acao" rows="2" placeholder="ex: fornecedor confirmou crédito de R$ 38,40 para abater na próxima compra"></textarea></div>
+    </div>
+    <div style="text-align:right;margin-top:12px"><button class="oc-btn oc-btn-azul" onclick="ocRegistrar()">💾 Registrar ocorrência</button></div>
+  </div>
+  <div id="oc-pendencias"></div>
+  <div class="oc-card">
+    <div class="oc-ct"><span>💳 Créditos com fornecedor</span><button class="oc-btn" style="background:var(--azul-claro);color:var(--azul);padding:7px 12px;font-size:12px" onclick="ocCreditoManual()">➕ crédito manual</button></div>
+    <div id="oc-creditos"></div>
+  </div>
+  <div class="oc-card">
+    <details><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--cinza-4)">✅ Ocorrências resolvidas / canceladas ▸</summary>
+    <div id="oc-resolvidas" style="margin-top:10px"></div></details>
+  </div>
+</div>
+
+<script>
+// ═══ OCORRÊNCIAS — catálogo dos casos (problema → ação sugerida) ═══
+const OC_SITUACOES = [
+  { k:'ERRO_QUANTIDADE',                rot:'📦 Veio quantidade diferente do pedido',        acao:'Ajustar a NF na conferência; o restante vira pedido remanescente.' },
+  { k:'PEDIDO_ERRADO_SEM_DEVOLUCAO',    rot:'❌ Pedido errado — fornecedor NÃO aceita devolução', acao:'Decidir aproveitamento interno ou perda; registrar no estoque.' },
+  { k:'PEDIDO_ERRADO_COM_DEVOLUCAO',    rot:'↩️ Pedido errado — COM devolução',              acao:'Devolver pela aba Receber NF (botão Devolução) e cobrar reposição/crédito.' },
+  { k:'VEIO_DIFERENTE',                 rot:'🔄 Veio item/apresentação diferente',           acao:'Avaliar aceite; se aceitar, ajustar descrição/marca na Ficha do Item.' },
+  { k:'ERRADO_COM_DESCONTO',            rot:'💸 Veio errado — fica COM desconto',            acao:'Registrar o desconto no valor unitário da NF.', valor:'Valor do desconto (R$)' },
+  { k:'VALOR_ERRADO_CREDITO',           rot:'💳 Valores cobrados errados → CRÉDITO com fornecedor', acao:'Crédito criado automaticamente — abater na próxima NF deste fornecedor.', valor:'Valor do crédito (R$)' },
+  { k:'TROCA_POR_VALIDADE',             rot:'⏰ Troca de lote por validade',                 acao:'Combinar troca com o fornecedor; registrar lote novo na entrada.' },
+  { k:'TROCA_OUTRAS_RAZOES',            rot:'🔁 Troca por outras razões',                    acao:'Combinar a troca e acompanhar o prazo.' },
+  { k:'NAO_CHEGOU_CANCELAR',            rot:'🚫 Não chegou — cancelar',                      acao:'Cancelar o pedido (aba Receber NF, botão 🚫) e recomprar se necessário.' },
+  { k:'FORNECEDOR_NAO_TEM_REDIRECIONAR',rot:'🏪 Fornecedor sem estoque — redirecionar',      acao:'Cancelar no fornecedor e reorçar com outro (a cotação guarda as alternativas).' },
+  { k:'ITEM_FORA_DO_CADASTRO',          rot:'🆕 Item não está no cadastro',                  acao:'Cadastrar pelo ➕ da aba Compras (com classe) e reprocessar a entrada.' },
+  { k:'MARCA_FORA_DO_CADASTRO',         rot:'🏷️ Marca não está no cadastro',                acao:'Registrar a marca na Ficha do Item e seguir a entrada.' },
+  { k:'VALIDADE_MUITO_PROXIMA',         rot:'⌛ Chegou com validade muito próxima',          acao:'Negociar troca/devolução ou priorizar uso imediato (FEFO).' },
+];
+let ocLista = [];
+let ocCreditos = [];
+
+function ocRot(k){ const s=OC_SITUACOES.find(x=>x.k===k); return s?s.rot:k; }
+function ocMoney(v){ return 'R$ '+Number(v||0).toFixed(2).replace('.',','); }
+function ocForn(id){ if(!id) return '—'; const f=coFornecedores.find(x=>x.id===id); return f?f.nome:('#'+id); }
+function ocMat(id){ if(!id) return null; const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('#'+id); }
+function ocDias(d){ return Math.round((new Date(new Date().toISOString().slice(0,10)) - new Date((''+d).slice(0,10)))/86400000); }
+function ocData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return `${p[2]}/${p[1]}/${p[0].slice(2)}`; }
+
+async function ocCarregar(){
+  try{
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
+    const dl=document.getElementById('pn-mat-datalist');
+    if(dl && !dl.children.length) dl.innerHTML=catalogoMateriais.map(m=>`<option value="${m.nome}">`).join('');
+    const sel=document.getElementById('oc-situacao');
+    if(sel && sel.children.length<2){
+      sel.innerHTML='<option value="">— escolha a situação —</option>'+OC_SITUACOES.map(s=>`<option value="${s.k}">${s.rot}</option>`).join('');
+    }
+    const sf=document.getElementById('oc-fornecedor');
+    if(sf) sf.innerHTML='<option value="">—</option>'+coFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+    const sp=document.getElementById('oc-por');
+    if(sp && !sp.children.length) sp.innerHTML='<option value="">—</option>'+EQUIPE.map(n=>`<option>${n}</option>`).join('');
+    ocLista=(await sbFetch('ocorrencias?select=*&order=id.desc&limit=200'))||[];
+    try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.desc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
+    ocRender();
+  }catch(e){
+    document.getElementById('oc-pendencias').innerHTML='<div class="oc-card"><div class="oc-empty" style="color:var(--vermelho)">Erro: '+e.message+'<br><span style="font-size:11px">Rode o ocorrencias_creditos.sql no Supabase.</span></div></div>';
+  }
+}
+function ocSituacaoMudou(){
+  const k=document.getElementById('oc-situacao').value;
+  const s=OC_SITUACOES.find(x=>x.k===k);
+  const box=document.getElementById('oc-valor-box');
+  box.style.display = s&&s.valor ? '' : 'none';
+  if(s&&s.valor) document.getElementById('oc-valor-label').textContent=s.valor;
+  const ac=document.getElementById('oc-acao');
+  if(s && !ac.value.trim()) ac.placeholder='Ação sugerida: '+s.acao;
+}
+async function ocRegistrar(){
+  const k=document.getElementById('oc-situacao').value;
+  if(!k){ toast('Escolha a situação.','erro'); return; }
+  const s=OC_SITUACOES.find(x=>x.k===k);
+  const fornId=document.getElementById('oc-fornecedor').value?Number(document.getElementById('oc-fornecedor').value):null;
+  const matNome=document.getElementById('oc-material').value.trim();
+  const matId=matNome?(catalogoMateriais.find(m=>m.nome.toUpperCase()===matNome.toUpperCase())||{}).id||null:null;
+  if(matNome && !matId){ toast('Material não encontrado — escolha da lista (ou deixe em branco).','erro'); return; }
+  const nf=document.getElementById('oc-nf').value.trim()||null;
+  const valor=parseFloat(document.getElementById('oc-valor').value)||null;
+  const dataC=document.getElementById('oc-data').value||null;
+  const por=document.getElementById('oc-por').value||null;
+  const acao=document.getElementById('oc-acao').value.trim()||s.acao;
+  if(s.valor && (!valor||valor<=0)){ toast('Informe o '+s.valor.toLowerCase()+'.','erro'); return; }
+  if(k==='VALOR_ERRADO_CREDITO' && !fornId){ toast('Crédito precisa do fornecedor.','erro'); return; }
+  try{
+    const oc=await sbFetch('ocorrencias','POST',{ situacao:k, fornecedor_id:fornId, material_id:matId,
+      numero_nf:nf, valor, data_prometida:dataC, criado_por:por, acao_aplicada:acao, status:'aberta' });
+    if(!oc||!oc.length) throw new Error('sem permissão (RLS) ou SQL da v3.9 não rodado');
+    if(k==='VALOR_ERRADO_CREDITO'){
+      await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:fornId, valor,
+        origem:'Ocorrência #'+oc[0].id+(nf?(' — NF '+nf):''), ocorrencia_id:oc[0].id, status:'ABERTO' });
+      toast('Ocorrência registrada e crédito de '+ocMoney(valor)+' criado 💳','sucesso');
+    } else {
+      toast('Ocorrência registrada ✓','sucesso');
+    }
+    ['oc-situacao','oc-fornecedor','oc-material','oc-nf','oc-valor','oc-data','oc-acao'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+    document.getElementById('oc-valor-box').style.display='none';
+    ocCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+function ocRender(){
+  const abertas=ocLista.filter(o=>o.status==='aberta');
+  const fechadas=ocLista.filter(o=>o.status!=='aberta');
+  const hoje=new Date().toISOString().slice(0,10);
+  document.getElementById('oc-pendencias').innerHTML =
+    `<div class="oc-ct" style="border:none;margin-bottom:8px"><span>⚠️ Pendências abertas (${abertas.length})</span></div>`+
+    (abertas.length?abertas.map(o=>{
+      const atrasada=o.data_prometida&&o.data_prometida<hoje;
+      return `<div class="oc-pend ${atrasada?'atrasada':''}">
+        <div style="flex:1;min-width:240px">
+          <div class="oc-pt">#${o.id} · ${ocRot(o.situacao)}</div>
+          <div class="oc-pd">🏪 ${ocForn(o.fornecedor_id)}${o.material_id?(' · 📦 '+ocMat(o.material_id)):''}${o.numero_nf?(' · NF '+o.numero_nf):''}${o.valor?(' · <b>'+ocMoney(o.valor)+'</b>'):''}
+          <br>➜ ${o.acao_aplicada||'—'}
+          <br><span style="font-size:11px">aberta há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
+        </div>
+        <div style="display:flex;gap:6px;align-self:center">
+          <button class="oc-btn" style="background:var(--verde-claro);color:var(--verde);padding:7px 11px;font-size:12px" onclick="ocResolver(${o.id})">✔ Resolver</button>
+          <button class="oc-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:12px" onclick="ocCancelar(${o.id})">✕</button>
+        </div>
+      </div>`;
+    }).join(''):'<div class="oc-card"><div class="oc-empty">Nenhuma pendência aberta. ✓</div></div>');
+  // créditos
+  const elC=document.getElementById('oc-creditos');
+  if(ocCreditos===null){ elC.innerHTML='<div class="oc-empty">Rode o <b>ocorrencias_creditos.sql</b> no Supabase para ativar os créditos.</div>'; }
+  else{
+    const abertos=ocCreditos.filter(c=>c.status==='ABERTO');
+    elC.innerHTML = abertos.length
+      ? `<table><thead><tr><th>Fornecedor</th><th>Origem</th><th style="text-align:right">Valor</th><th style="text-align:right">Usado</th><th style="text-align:right">Saldo</th><th></th></tr></thead><tbody>
+        ${abertos.map(c=>{const saldo=c.valor-(c.valor_utilizado||0);
+          return `<tr><td style="font-weight:600">${ocForn(c.fornecedor_id)}</td><td style="font-size:11px;color:var(--cinza-4)">${c.origem||'—'} · ${ocData(c.created_at)}</td>
+          <td style="text-align:right">${ocMoney(c.valor)}</td><td style="text-align:right">${ocMoney(c.valor_utilizado||0)}</td>
+          <td style="text-align:right;font-weight:800;color:var(--azul)">${ocMoney(saldo)}</td>
+          <td><button class="oc-btn" style="background:var(--azul-claro);color:var(--azul);padding:5px 9px;font-size:11px" onclick="ocBaixarCredito(${c.id})">baixar</button></td></tr>`;}).join('')}
+        </tbody></table><div style="font-size:11px;color:var(--cinza-4);margin-top:8px">O crédito também é abatido automaticamente pelo campo 💳 da tela Receber NF do fornecedor.</div>`
+      : '<div class="oc-empty">Nenhum crédito em aberto. ✓</div>';
+  }
+  document.getElementById('oc-resolvidas').innerHTML = fechadas.length
+    ? `<table><thead><tr><th>#</th><th>Situação</th><th>Fornecedor</th><th>Resolução</th><th>Quando</th></tr></thead><tbody>
+      ${fechadas.slice(0,30).map(o=>`<tr style="opacity:.75"><td>${o.id}</td><td>${ocRot(o.situacao)}</td><td>${ocForn(o.fornecedor_id)}</td>
+      <td style="font-size:11px">${o.resolucao||o.acao_aplicada||'—'}</td><td style="font-size:11px">${ocData(o.resolvido_em||o.created_at)}</td></tr>`).join('')}
+      </tbody></table>`
+    : '<div class="oc-empty">Nada resolvido ainda.</div>';
+}
+async function ocResolver(id){
+  const res=prompt('Como foi resolvida? (ex: crédito recebido, item trocado, NF ajustada)');
+  if(res===null) return;
+  try{
+    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:res.trim()||null, resolvido_em:new Date().toISOString() });
+    toast('Ocorrência #'+id+' resolvida ✓','sucesso'); ocCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function ocCancelar(id){
+  if(!confirm('Cancelar a ocorrência #'+id+'?')) return;
+  try{ await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'cancelada', resolvido_em:new Date().toISOString() });
+    toast('Cancelada.','sucesso'); ocCarregar(); }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function ocCreditoManual(){
+  if(ocCreditos===null){ toast('Rode o ocorrencias_creditos.sql primeiro.','erro'); return; }
+  const fornNome=prompt('Fornecedor do crédito (nome exato):');
+  if(fornNome===null) return;
+  const f=coFornecedores.find(x=>x.nome.toUpperCase()===fornNome.trim().toUpperCase());
+  if(!f){ toast('Fornecedor não encontrado.','erro'); return; }
+  const v=parseFloat(prompt('Valor do crédito (R$):')||'');
+  if(!v||v<=0){ toast('Valor inválido.','erro'); return; }
+  const origem=prompt('Origem/motivo:')||'crédito manual';
+  try{
+    await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:f.id, valor:v, origem, status:'ABERTO' });
+    toast('Crédito de '+ocMoney(v)+' criado p/ '+f.nome+' 💳','sucesso'); ocCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function ocBaixarCredito(id){
+  const c=ocCreditos.find(x=>x.id===id); if(!c) return;
+  const saldo=c.valor-(c.valor_utilizado||0);
+  const v=parseFloat(prompt('Valor a baixar deste crédito (saldo '+ocMoney(saldo)+'):', saldo)||'');
+  if(!v||v<=0||v>saldo+0.001){ toast('Valor inválido.','erro'); return; }
+  const novoUsado=(c.valor_utilizado||0)+v;
+  try{
+    await sbFetch(`creditos_fornecedor?id=eq.${id}`,'PATCH',{ valor_utilizado:novoUsado, status:novoUsado>=c.valor-0.001?'UTILIZADO':'ABERTO' });
+    toast('Crédito baixado ✓','sucesso'); ocCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+// abate créditos de um fornecedor (FIFO) — usado pela Receber NF
+async function ocAbaterCreditos(fornId, valor){
+  let resta=valor;
+  const abertos=(ocCreditos||[]).filter(c=>c.status==='ABERTO'&&c.fornecedor_id===Number(fornId)).sort((a,b)=>a.id-b.id);
+  for(const c of abertos){
+    if(resta<=0.001) break;
+    const saldo=c.valor-(c.valor_utilizado||0);
+    const usa=Math.min(saldo,resta);
+    const novoUsado=(c.valor_utilizado||0)+usa;
+    await sbFetch(`creditos_fornecedor?id=eq.${c.id}`,'PATCH',{ valor_utilizado:novoUsado, status:novoUsado>=c.valor-0.001?'UTILIZADO':'ABERTO' });
+    c.valor_utilizado=novoUsado; resta-=usa;
+  }
+  return valor-resta; // quanto foi de fato abatido
+}
+function ocSaldoCredito(fornId){
+  return (ocCreditos||[]).filter(c=>c.status==='ABERTO'&&c.fornecedor_id===Number(fornId))
+    .reduce((s,c)=>s+(c.valor-(c.valor_utilizado||0)),0);
+}
+</script>
 
 </body>
 </html>
