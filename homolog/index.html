@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.5 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.6 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -4854,6 +4854,7 @@ async function invAplicarAjustesImportados(){
   #aba-painel .pn-tb th{text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1)}
   #aba-painel .pn-tb td{padding:7px 9px;border-bottom:1px solid var(--cinza-2)}
   #aba-painel .num{text-align:right}
+  #aba-painel .pn-tb th.num, #aba-painel .pn-tb td.num{text-align:right}
   #aba-painel .pn-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
   #aba-painel .pc-verm{background:#FDEDEC;color:var(--vermelho);border:1px solid #E6B0AA}
   #aba-painel .pc-lar{background:#FDF2E9;color:#D35400;border:1px solid #EDBB99}
@@ -4890,6 +4891,7 @@ async function invAplicarAjustesImportados(){
     <button class="pn-pill" data-sec="custos" onclick="pnIr('custos',this)">💰 Custos <span class="pb">SÓCIOS/FIN</span></button>
     <button class="pn-pill" data-sec="emprestimos" onclick="pnIr('emprestimos',this)">🤝 Empréstimos <span class="pb">OPERAÇÃO</span></button>
     <button class="pn-pill" data-sec="simulador" onclick="pnIr('simulador',this)">🔮 Simulador <span class="pb">COMPRAS</span></button>
+    <button class="pn-pill" data-sec="base" onclick="pnIr('base',this)">🔧 Base <span class="pb">OPERAÇÃO</span></button>
     <span id="pn-status" style="margin-left:auto;font-size:11px;color:var(--cinza-4);align-self:center"></span>
   </div>
   <div class="pn-sec on" id="pn-sec-alertas"><div class="pn-empty">Carregando…</div></div>
@@ -4897,6 +4899,7 @@ async function invAplicarAjustesImportados(){
   <div class="pn-sec" id="pn-sec-custos"></div>
   <div class="pn-sec" id="pn-sec-emprestimos"></div>
   <div class="pn-sec" id="pn-sec-simulador"></div>
+  <div class="pn-sec" id="pn-sec-base"></div>
   <datalist id="pn-mat-datalist"></datalist>
 </div>
 
@@ -4985,8 +4988,10 @@ async function pnCarregar(){
     try{ pnPedidos=(await sbFetch('pedidos?select=*&status=in.(EM_MONTAGEM,AGUARDANDO_APROVACAO,AGUARDANDO_ENTREGA,EM_CONFERENCIA)&order=id.asc&limit=100'))||[]; }catch(e){ pnPedidos=[]; }
     try{ pnNfItens=(await sbFetch('nf_itens?select=id,material_id,valor_unitario,nota_fiscal_id&order=id.asc&limit=3000'))||[]; }catch(e){ pnNfItens=[]; }
     try{ pnSnaps=(await sbFetch('painel_snapshots?select=*&order=mes.asc&limit=36'))||[]; }catch(e){ pnSnaps=[]; }
+    try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }catch(e){ pnHistRows=[]; }
+    pnMontaHist();
     document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
-    pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador();
+    pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
     pnGravarSnapshot();
   }catch(e){
     st.textContent='erro';
@@ -5191,72 +5196,111 @@ function pnCobertura(){
 }
 function pnCobDrill(k){ pnCobBandSel=(pnCobBandSel===k?null:k); pnCobertura(); }
 
-// ══ 3 · CUSTOS por período/médico/tipo ══
+// ══ 3 · CUSTOS por período/médico/tipo (v3.6: histórico da planilha + gráfico novo) ══
+let pnHistRows = [];   // staging_saidas_hist cru
+let pnHistPer = [];    // períodos históricos montados [{key,data,mes,medico,tipo,pac,custo,itens:[]}]
+let pnCustosMes = null; // mês selecionado na tabela de períodos
+
+function pnMontaHist(){
+  const APP_VIVO_DESDE = '2026-07-21'; // planilha vale ATÉ 20/07; do dia 21 em diante, só o app
+  const porKey = {};
+  for(const r of pnHistRows){
+    const d = (r.data||'').slice(0,10);
+    if(!d || d >= APP_VIVO_DESDE) continue;
+    const key = d+'|'+(r.medico||'')+'|'+(r.tipo||'');
+    if(!porKey[key]) porKey[key] = { key, data:d, mes:d.slice(0,7), medico:r.medico||'—', tipo:r.tipo||'—',
+      pac:Number(r.qtd_pacientes)||0, custo:0, itens:[] };
+    const mid = pnNomeId[pnN(r.nome)];
+    const vu = (r.valor_unit!=null && Number(r.valor_unit)>0) ? Number(r.valor_unit)
+             : (mid && pnUvp[mid] ? pnUvp[mid].uvp : 0);
+    const custo = Number(r.qtd) * vu;
+    porKey[key].custo += custo;
+    porKey[key].itens.push({ nome:r.nome, qtd:Number(r.qtd), vu, custo, mid });
+  }
+  pnHistPer = Object.values(porKey).sort((a,b)=>b.data.localeCompare(a.data));
+}
+
+function pnMesesDisponiveis(){
+  const s = new Set(pnMovs.map(m=>m.mes).filter(Boolean));
+  for(const h of pnHistPer) s.add(h.mes);
+  return [...s].sort();
+}
+
+// períodos unificados (histórico + vivos) de um mês: [{origem, key/pid, data, medico, tipo, pac, custo}]
+function pnPeriodosDoMes(mes){
+  const out = [];
+  for(const h of pnHistPer){ if(h.mes===mes) out.push({ origem:'planilha', id:h.key, data:h.data, medico:h.medico, tipo:h.tipo, pac:h.pac, custo:h.custo }); }
+  const porPer = {};
+  for(const m of pnMovs){ if(m.mes!==mes || !m.periodoId) continue; (porPer[m.periodoId]=porPer[m.periodoId]||[]).push(m); }
+  for(const [pid,ms] of Object.entries(porPer)){
+    const per = pnPeriodos.find(p=>p.id===Number(pid));
+    out.push({ origem:'app', id:Number(pid), data:per?per.data:'', medico:per&&per.medicos?per.medicos.nome:'—',
+      tipo:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:'—', pac:per?Number(per.qtd_pacientes)||0:0,
+      custo:ms.reduce((s,x)=>s+x.custo,0) });
+  }
+  return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+}
+
+function pnCustoDoMes(mes){
+  let tot = pnMovs.filter(m=>m.mes===mes).reduce((s,m)=>s+m.custo,0);
+  for(const h of pnHistPer){ if(h.mes===mes) tot += h.custo; }
+  return tot;
+}
+
 function pnCustos(){
-  const mes=pnHojeMes();
-  const movMes=pnMovs.filter(m=>m.mes===mes);
+  const mes = pnHojeMes();
+  if(!pnCustosMes) pnCustosMes = mes;
+  const meses = pnMesesDisponiveis();
+  const movMes = pnMovs.filter(m=>m.mes===mes);
   // qualidade da base
-  const semPreco=new Set(movMes.filter(m=>!(pnUvp[m.material_id]&&pnUvp[m.material_id].uvp>0)).map(m=>m.material_id));
-  const negativos=ccDados.filter(r=>(Number(r.saldo)||0)<0).length;
-  const triagem=ccDados.filter(r=>!r.classe_confirmada).length;
-  // custo por mês (meses vivos)
-  const meses=[...new Set(pnMovs.map(m=>m.mes))].sort();
-  const custoPorMes=meses.map(m=>({mes:m, v:pnMovs.filter(x=>x.mes===m).reduce((s,x)=>s+x.custo,0)}));
-  const mxMes=Math.max(1,...custoPorMes.map(x=>x.v));
-  // custo por período
-  const porPer={};
-  for(const m of movMes){ if(!m.periodoId) continue; (porPer[m.periodoId]=porPer[m.periodoId]||[]).push(m); }
-  const perRows=Object.entries(porPer).map(([pid,ms])=>{
-    const per=pnPeriodos.find(p=>p.id===Number(pid));
-    const custo=ms.reduce((s,x)=>s+x.custo,0);
-    const pac=per?Number(per.qtd_pacientes)||0:0;
-    return { pid:Number(pid), data:per?per.data:'', medico:per&&per.medicos?per.medicos.nome:'—',
-      tipo:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:'—', pac, custo, cpp:pac>0?custo/pac:null };
-  }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-  // média R$/pac por tipo (todos os meses vivos) p/ comparação
-  const cppTipo={};
+  const semPreco = new Set(movMes.filter(m=>!(pnUvp[m.material_id]&&pnUvp[m.material_id].uvp>0)).map(m=>m.material_id));
+  const negativos = ccDados.filter(r=>(Number(r.saldo)||0)<0).length;
+  const triagem = ccDados.filter(r=>!r.classe_confirmada).length;
+  // custo por mês (planilha + vivo)
+  const custoPorMes = meses.map(m=>({mes:m, v:pnCustoDoMes(m)}));
+  const mxMes = Math.max(1,...custoPorMes.map(x=>x.v));
+  // média R$/pac por tipo (todas as fontes) p/ comparação
+  const cppTipo = {};
   {
-    const agg={};
-    for(const m of pnMovs){ if(!m.periodoId) continue; (agg[m.periodoId]=agg[m.periodoId]||[]).push(m); }
-    const porTipo={};
-    for(const [pid,ms] of Object.entries(agg)){
-      const per=pnPeriodos.find(p=>p.id===Number(pid)); if(!per||!per.tipos_cirurgia) continue;
-      const t=per.tipos_cirurgia.nome, pac=Number(per.qtd_pacientes)||0; if(pac<=0) continue;
-      (porTipo[t]=porTipo[t]||{c:0,p:0}); porTipo[t].c+=ms.reduce((s,x)=>s+x.custo,0); porTipo[t].p+=pac;
+    const porTipo = {};
+    for(const m of meses){
+      for(const p of pnPeriodosDoMes(m)){
+        if(!p.tipo || p.tipo==='—' || p.pac<=0) continue;
+        (porTipo[p.tipo]=porTipo[p.tipo]||{c:0,p:0});
+        porTipo[p.tipo].c += p.custo; porTipo[p.tipo].p += p.pac;
+      }
     }
     for(const [t,v] of Object.entries(porTipo)) cppTipo[t]=v.p>0?v.c/v.p:null;
   }
-  // tabelas tipo × mês e médico × mês (R$/paciente)
-  function tabelaCppPor(campo){
-    const agg={}; // chave -> mes -> {c,p}
-    const perAgg={};
-    for(const m of pnMovs){ if(!m.periodoId) continue; (perAgg[m.periodoId]=perAgg[m.periodoId]||[]).push(m); }
-    for(const [pid,ms] of Object.entries(perAgg)){
-      const per=pnPeriodos.find(p=>p.id===Number(pid)); if(!per) continue;
-      const chave=campo==='tipo'?(per.tipos_cirurgia?per.tipos_cirurgia.nome:null):(per.medicos?per.medicos.nome:null);
-      if(!chave) continue;
-      const pmes=(per.data||'').slice(0,7), pac=Number(per.qtd_pacientes)||0; if(pac<=0) continue;
-      agg[chave]=agg[chave]||{}; agg[chave][pmes]=agg[chave][pmes]||{c:0,p:0};
-      agg[chave][pmes].c+=ms.reduce((s,x)=>s+x.custo,0); agg[chave][pmes].p+=pac;
+  const perRows = pnPeriodosDoMes(pnCustosMes);
+  // tabelas R$/pac por tipo/médico × mês (planilha + vivo)
+  function aggCpp(campo){
+    const agg = {};
+    for(const m of meses){
+      for(const p of pnPeriodosDoMes(m)){
+        const chave = campo==='tipo'?p.tipo:p.medico;
+        if(!chave || chave==='—' || p.pac<=0) continue;
+        agg[chave]=agg[chave]||{}; agg[chave][m]=agg[chave][m]||{c:0,p:0};
+        agg[chave][m].c+=p.custo; agg[chave][m].p+=p.pac;
+      }
     }
     return agg;
   }
   function htmlCpp(agg, titulo, funcao, nota){
-    const chaves=Object.keys(agg).sort((a,b)=>{
-      const va=agg[a][mes]?agg[a][mes].c/agg[a][mes].p:0, vb=agg[b][mes]?agg[b][mes].c/agg[b][mes].p:0; return vb-va; });
-    if(!chaves.length) return `<div class="pn-card"><div class="pn-ct"><span>${titulo}</span></div><div class="pn-empty">sem períodos registrados ainda</div></div>`;
-    const ths=meses.map(m=>`<th class="num">${pnMesLabel(m)}</th>`).join('');
-    const linhas=chaves.map(k=>{
-      const tds=meses.map(m=>{
-        const v=agg[k][m]; return `<td class="num">${v&&v.p>0?('<b>'+Math.round(v.c/v.p)+'</b>'):'—'}</td>`; }).join('');
-      // Δ vs média dos meses anteriores
-      const antes=meses.slice(0,-1).map(m=>agg[k][m]).filter(Boolean);
-      const mAtu=agg[k][mes];
+    const chaves = Object.keys(agg).sort((a,b)=>{
+      const ult = ms => { for(let i=meses.length-1;i>=0;i--){ const v=agg[ms][meses[i]]; if(v&&v.p>0) return v.c/v.p; } return 0; };
+      return ult(b)-ult(a); });
+    if(!chaves.length) return `<div class="pn-card"><div class="pn-ct"><span>${titulo}</span></div><div class="pn-empty">sem períodos registrados</div></div>`;
+    const ths = meses.map(m=>`<th class="num">${pnMesLabel(m)}</th>`).join('');
+    const linhas = chaves.map(k=>{
+      const tds = meses.map(m=>{ const v=agg[k][m]; return `<td class="num">${v&&v.p>0?('<b>'+Math.round(v.c/v.p)+'</b>'):'—'}</td>`; }).join('');
+      const antes = meses.slice(0,-1).map(m=>agg[k][m]).filter(v=>v&&v.p>0);
+      const mAtu = agg[k][meses[meses.length-1]];
       let delta='—';
       if(mAtu&&mAtu.p>0&&antes.length){
-        const mediaAnt=antes.reduce((s,v)=>s+v.c/v.p,0)/antes.length;
+        const mediaAnt = antes.reduce((s,v)=>s+v.c/v.p,0)/antes.length;
         if(mediaAnt>0){ const d=Math.round((mAtu.c/mAtu.p-mediaAnt)/mediaAnt*100);
-          delta=d>3?`<span class="var-up">▲ +${d}%</span>`:(d<-3?`<span class="var-dn">▼ ${d}%</span>`:'<span style="color:var(--cinza-4)">＝</span>'); }
+          delta = d>3?`<span class="var-up">▲ +${d}%</span>`:(d<-3?`<span class="var-dn">▼ ${d}%</span>`:'<span style="color:var(--cinza-4)">＝</span>'); }
       }
       return `<tr><td style="font-weight:600">${k}</td>${tds}<td class="num">${delta}</td></tr>`;
     }).join('');
@@ -5264,10 +5308,10 @@ function pnCustos(){
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th>${ths}<th class="num">Δ</th></tr></thead><tbody>${linhas}</tbody></table></div>
       <div class="pn-nota">${nota}</div></div>`;
   }
-  // preços subindo (nf_itens: última vs anterior)
-  const porMatNf={};
+  // preços subindo
+  const porMatNf = {};
   for(const it of pnNfItens){ if(it.valor_unitario==null) continue; (porMatNf[it.material_id]=porMatNf[it.material_id]||[]).push(Number(it.valor_unitario)); }
-  const subindo=[];
+  const subindo = [];
   for(const [mid,vals] of Object.entries(porMatNf)){
     if(vals.length<2) continue;
     const ult=vals[vals.length-1], ant=vals[vals.length-2];
@@ -5275,46 +5319,60 @@ function pnCustos(){
   }
   subindo.sort((a,b)=>b.pct-a.pct);
   // compra vs consumo
-  const nfsMes=pnNfs.filter(n=>((n.data_entrega||n.data_emissao||'')+'').slice(0,7)===mes&&n.status!=='DEVOLVIDO');
-  const compraMes=nfsMes.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
-  const consumoMes=movMes.reduce((s,m)=>s+m.custo,0);
-  const razao=consumoMes>0?(compraMes/consumoMes):null;
+  const nfsMes = pnNfs.filter(n=>((n.data_entrega||n.data_emissao||'')+'').slice(0,7)===mes&&n.status!=='DEVOLVIDO');
+  const compraMes = nfsMes.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
+  const consumoMes = pnCustoDoMes(mes);
+  const razao = consumoMes>0?(compraMes/consumoMes):null;
 
   document.getElementById('pn-sec-custos').innerHTML=`
     <div class="pn-card" style="border-left:4px solid var(--amarelo);padding:12px 16px">
       <div style="font-size:12px;font-weight:800">🔎 QUALIDADE DA BASE — leia antes de confiar nos números</div>
       <div style="font-size:12px;color:var(--cinza-4);margin-top:5px;line-height:1.6">
-        💰 <b>${semPreco.size} item(ns) com saída no mês sem valor de última compra</b> → entram como R$ 0 (números SUBESTIMADOS)
+        💰 <b>${semPreco.size} item(ns) com saída no mês sem valor de compra</b> → entram como R$ 0 (subestimado — corrija na aba 🔧 Base)
         · ⚖️ ${negativos} saldo(s) negativo(s) · 🏷️ ${triagem} classe(s) em triagem<br>
-        📅 Só movimentações vivas do app (desde 21/07) — a migração da planilha fica fora. <b>Comparativos mensais acumulam a partir de agora.</b></div>
+        📅 Junho e julho até 20/07 vêm da <b>planilha</b> (com os valores dela); de 21/07 em diante, dados vivos do app.</div>
+    </div>
+    <div class="pn-card">
+      <div class="pn-ct"><span>Custo CC por mês</span><span class="pn-funcao">"a tendência está sob controle?" · planilha + app</span></div>
+      <div style="display:flex;align-items:flex-end;gap:18px;height:150px;padding:6px 8px 0">
+        ${custoPorMes.map(x=>`<div style="flex:1;max-width:130px;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
+          <div style="font-size:12px;font-weight:800;color:${x.mes===mes?'var(--azul)':'var(--cinza-4)'};margin-bottom:4px">${pnMoney0(x.v)}</div>
+          <div style="background:${x.mes===mes?'var(--azul-medio)':'var(--cinza-3)'};height:${Math.max(6,Math.round(x.v/mxMes*96))}px;border-radius:6px 6px 0 0"></div>
+          <div style="font-size:11px;font-weight:700;color:var(--cinza-4);margin-top:6px;border-top:2px solid var(--cinza-2);padding-top:4px">${pnMesLabel(x.mes)}/26</div>
+        </div>`).join('')}
+      </div>
     </div>
     <div class="pn-kpis">
-      <div class="pn-kpi"><div class="pn-kl">Custo CC por mês (dados vivos)</div>
-        <div style="display:flex;align-items:flex-end;gap:6px;height:52px;margin-top:8px">
-          ${custoPorMes.map(x=>`<div style="flex:1;text-align:center"><div style="background:${x.mes===mes?'var(--azul-medio)':'var(--cinza-3)'};height:${Math.max(4,Math.round(x.v/mxMes*44))}px;border-radius:3px 3px 0 0"></div><div style="font-size:9px;color:var(--cinza-4);margin-top:2px">${pnMesLabel(x.mes)}<br><b>${pnK(x.v)}</b></div></div>`).join('')}
-        </div>
-        <div class="pn-kq">"A tendência do custo está sob controle?" <span class="pn-chip pc-ama" style="font-size:9px">base parcial</span></div></div>
       <div class="pn-kpi ama"><div class="pn-kl">Preços subindo</div><div class="pn-kv" style="color:var(--amarelo)">${subindo.length}</div><div class="pn-ks">itens c/ última compra +10% mais cara</div><div class="pn-kq">"O que renegociar este mês?"</div></div>
       <div class="pn-kpi verd"><div class="pn-kl">Compra vs consumo — ${pnMesLabel(mes)}</div><div class="pn-kv" style="color:var(--verde)">${razao===null?'—':razao.toFixed(2)+'×'}</div><div class="pn-ks">comprou ${pnMoney0(compraMes)} · consumiu ${pnMoney0(consumoMes)}</div><div class="pn-kq">"Estou inflando ou queimando estoque?"</div></div>
     </div>
     <div class="pn-card">
-      <div class="pn-ct"><span>Custo por PERÍODO — o número-mãe</span><span class="pn-funcao">função: cada dia de cirurgia com seu custo real · clique ▸ explode os materiais</span></div>
-      <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th></tr></thead><tbody id="pn-per-tbody">
+      <div class="pn-ct"><span>Custo por PERÍODO — o número-mãe</span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <select onchange="pnCustosMes=this.value;pnCustos()" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">
+            ${meses.map(m=>`<option value="${m}" ${m===pnCustosMes?'selected':''}>${pnMesLabel(m)}/26</option>`).join('')}
+          </select>
+          <span class="pn-funcao">clique ▸ explode os materiais</span>
+        </span></div>
+      <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th><th>Fonte</th></tr></thead><tbody>
       ${perRows.length?perRows.map(r=>{
-        const media=cppTipo[r.tipo];
+        const cpp = r.pac>0?r.custo/r.pac:null;
+        const media = cppTipo[r.tipo];
         let delta='—';
-        if(r.cpp!=null&&media){ const d=Math.round((r.cpp-media)/media*100);
-          delta=d>3?`<span class="var-up">▲ +${d}%</span>`:(d<-3?`<span class="var-dn">▼ ${d}%</span>`:'<span style="color:var(--cinza-4)">＝</span>'); }
-        const aberto=pnPerDrillAberto===r.pid;
-        return `<tr class="pn-drill" onclick="pnPerDrill(${r.pid})"><td>${aberto?'▾':'▸'}</td><td>${pnData(r.data)}</td><td>${r.medico}</td><td>${r.tipo}</td>
-          <td class="num">${r.pac||'—'}</td><td class="num">${pnMoney0(r.custo)}</td><td class="num"><b>${r.cpp!=null?pnMoney0(r.cpp):'—'}</b></td><td class="num">${delta}</td></tr>
-          ${aberto?`<tr><td></td><td colspan="7" style="background:#F8FBFE;padding:10px 14px" id="pn-per-det-${r.pid}">carregando materiais…</td></tr>`:''}`;
-      }).join(''):'<tr><td colspan="8" class="pn-empty">nenhum período com saídas neste mês</td></tr>'}
+        if(cpp!=null&&media){ const d=Math.round((cpp-media)/media*100);
+          delta = d>3?`<span class="var-up">▲ +${d}%</span>`:(d<-3?`<span class="var-dn">▼ ${d}%</span>`:'<span style="color:var(--cinza-4)">＝</span>'); }
+        const idJs = typeof r.id==='number'?r.id:`'${r.id.replace(/'/g,"\\'")}'`;
+        const aberto = pnPerDrillAberto===r.id;
+        return `<tr class="pn-drill" onclick="pnPerDrill(${idJs},'${r.origem}')"><td>${aberto?'▾':'▸'}</td><td>${pnData(r.data)}</td><td>${r.medico}</td><td>${r.tipo}</td>
+          <td class="num">${r.pac||'—'}</td><td class="num">${pnMoney0(r.custo)}</td><td class="num"><b>${cpp!=null?pnMoney0(cpp):'—'}</b></td><td class="num">${delta}</td>
+          <td>${r.origem==='planilha'?'<span class="pn-chip pc-ama" style="font-size:9px">planilha</span>':'<span class="pn-chip pc-azul" style="font-size:9px">app</span>'}</td></tr>
+          ${aberto?`<tr><td></td><td colspan="8" style="background:#F8FBFE;padding:10px 14px" id="pn-per-det">carregando materiais…</td></tr>`:''}`;
+      }).join(''):'<tr><td colspan="9" class="pn-empty">nenhum período neste mês</td></tr>'}
       </tbody></table></div>
     </div>
     <div class="pn-duo">
-      ${htmlCpp(tabelaCppPor('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o mês atual com a média dos meses anteriores.')}
-      ${htmlCpp(tabelaCppPor('medico'),'R$/paciente por MÉDICO × mês','função: comparar o médico com ele mesmo','Cada médico comparado com ELE MESMO nos meses anteriores — nunca médicos de tipos diferentes entre si.')}
+      ${htmlCpp(aggCpp('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o último mês com a média dos anteriores. Junho vem da planilha.')}
+      ${htmlCpp(aggCpp('medico'),'R$/paciente por MÉDICO × mês','função: comparar o médico com ele mesmo','Cada médico comparado com ELE MESMO — nunca médicos de tipos diferentes entre si.')}
     </div>
     <div class="pn-card">
       <div class="pn-ct"><span>📈 Preços subindo — pauta de renegociação</span><span class="pn-funcao">função: chegar na conversa com o histórico na mão</span></div>
@@ -5323,28 +5381,128 @@ function pnCustos(){
         const f=ccFontes[pnN(pnUvp[s.mid]?pnUvp[s.mid].nome:'')];
         return `<tr><td style="font-weight:600">${pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid)}</td><td class="num">${pnMoney(s.ant)}</td><td class="num">${pnMoney(s.ult)}</td>
         <td class="num var-up">▲ +${s.pct}%</td><td style="font-size:11px;color:var(--cinza-4)">${f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—'}</td></tr>`;
-      }).join('')}</tbody></table>`:'<div class="pn-empty">Nenhuma alta de preço acima de 10% entre as duas últimas compras registradas. ✓<br><span style="font-size:11px">A lista cresce conforme as NFs entram pelo app.</span></div>'}
+      }).join('')}</tbody></table>`:'<div class="pn-empty">Nenhuma alta acima de 10% entre as duas últimas compras registradas. ✓<br><span style="font-size:11px">A lista cresce conforme as NFs entram pelo app.</span></div>'}
     </div>`;
 }
-async function pnPerDrill(pid){
-  pnPerDrillAberto=(pnPerDrillAberto===pid?null:pid);
+
+async function pnPerDrill(id, origem){
+  pnPerDrillAberto = (pnPerDrillAberto===id?null:id);
   pnCustos();
-  if(pnPerDrillAberto!==pid) return;
+  if(pnPerDrillAberto!==id) return;
+  const el = document.getElementById('pn-per-det'); if(!el) return;
   try{
-    const movs=(await sbFetch(`movimentacoes?select=qtd,material_id&periodo_cirurgico_id=eq.${pid}&aprovado=eq.true&qtd=lt.0&limit=500`))||[];
-    const agg={};
-    for(const m of movs) agg[m.material_id]=(agg[m.material_id]||0)+Math.abs(m.qtd);
-    const linhas=Object.entries(agg).map(([mid,q])=>{
-      const u=pnUvp[mid]; const uvp=u?u.uvp:0;
-      return { nome:u?u.nome:('#'+mid), q, uvp, custo:q*uvp };
-    }).sort((a,b)=>b.custo-a.custo);
-    const el=document.getElementById('pn-per-det-'+pid); if(!el) return;
+    let linhas = [];
+    if(origem==='planilha'){
+      const h = pnHistPer.find(x=>x.key===id);
+      linhas = (h?h.itens:[]).map(it=>({ nome:it.nome, q:it.qtd, uvp:it.vu, custo:it.custo, mid:it.mid })).sort((a,b)=>b.custo-a.custo);
+    } else {
+      const movs = (await sbFetch(`movimentacoes?select=qtd,material_id&periodo_cirurgico_id=eq.${id}&aprovado=eq.true&qtd=lt.0&limit=500`))||[];
+      const agg = {};
+      for(const m of movs) agg[m.material_id]=(agg[m.material_id]||0)+Math.abs(m.qtd);
+      linhas = Object.entries(agg).map(([mid,q])=>{
+        const u=pnUvp[mid]; const uvp=u?u.uvp:0;
+        return { nome:u?u.nome:('#'+mid), q, uvp, custo:q*uvp, mid:Number(mid) };
+      }).sort((a,b)=>b.custo-a.custo);
+    }
     el.innerHTML=`<div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--azul);margin-bottom:6px">📦 Materiais deste período — a base do número</div>
-      <table class="pn-tb" style="font-size:11.5px"><thead><tr><th>Material</th><th class="num">Qtd</th><th class="num">Últ. compra</th><th class="num">Custo</th><th></th></tr></thead><tbody>
+      <table class="pn-tb" style="font-size:11.5px"><thead><tr><th>Material</th><th class="num">Qtd</th><th class="num">Valor un.</th><th class="num">Custo</th><th></th></tr></thead><tbody>
       ${linhas.map(l=>`<tr><td>${l.nome}</td><td class="num">${l.q}</td><td class="num">${l.uvp>0?pnMoney(l.uvp):'—'}</td><td class="num">${pnMoney0(l.custo)}</td>
-        <td>${l.uvp>0?'':'<span class="pn-chip pc-ama" style="font-size:9px">sem preço na base</span>'}</td></tr>`).join('')}
+        <td>${l.uvp>0?'':(l.mid?`<span class="pn-chip pc-ama" style="font-size:9px;cursor:pointer" onclick="event.stopPropagation();pnSetPreco(${l.mid})" title="clique para informar o valor">sem preço — corrigir ✎</span>`:'<span class="pn-chip pc-ama" style="font-size:9px">sem preço na base</span>')}</td></tr>`).join('')}
       </tbody></table>`;
-  }catch(e){ const el=document.getElementById('pn-per-det-'+pid); if(el) el.textContent='Erro: '+e.message; }
+  }catch(e){ el.textContent='Erro: '+e.message; }
+}
+
+// ══ 🔧 BASE — limpeza rápida do que dispara alerta errado ══
+async function pnSetPreco(mid){
+  const nome = pnUvp[mid]?pnUvp[mid].nome:('#'+mid);
+  const atual = pnUvp[mid]&&pnUvp[mid].uvp?pnUvp[mid].uvp:'';
+  const s = prompt(`Valor da última compra de "${nome}" (R$ por unidade):`, atual);
+  if(s===null) return;
+  const v = parseFloat(String(s).replace(',','.'));
+  if(isNaN(v)||v<0){ toast('Valor inválido.','erro'); return; }
+  try{
+    const r = await sbFetch(`materiais?id=eq.${mid}`,'PATCH',{ ultimo_valor_pago:v });
+    if(!r||!r.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); return; }
+    if(pnUvp[mid]) pnUvp[mid].uvp=v;
+    toast(nome+' → '+pnMoney(v)+' ✓','sucesso');
+    pnCustos(); pnBase(); pnCobertura();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function pnCorrigirSaldo(mid){
+  if(localStorage.getItem('hog_entrada_ok')!=='1'){
+    const s=prompt('🔒 Corrigir saldo MOVE o estoque real.\n\nDigite a senha de entrada:');
+    if(s===null) return;
+    if(s!==SENHA_ENTRADA){ toast('Senha incorreta.','erro'); return; }
+    localStorage.setItem('hog_entrada_ok','1');
+  }
+  const r = ccDados.find(x=>x.material_id===mid); if(!r) return;
+  const s = prompt(`Saldo correto de "${r.material}" (contagem real):`, Math.max(0,Number(r.saldo)||0));
+  if(s===null) return;
+  const novo = parseFloat(String(s).replace(',','.'));
+  if(isNaN(novo)||novo<0){ toast('Valor inválido.','erro'); return; }
+  const delta = novo-(Number(r.saldo)||0);
+  if(delta===0){ toast('Saldo já está assim.',''); return; }
+  try{
+    const localId = await getEstoqueGeralId();
+    await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:mid, local_id:localId,
+      qtd:delta, aprovado:true, registrado_por:'Evelise (Gestora)', aprovado_por:'Evelise (Gestora)',
+      aprovado_em:new Date().toISOString(), observacao:'Correção rápida pela aba Base do Painel' });
+    r.saldo = novo;
+    toast(`${r.material}: saldo corrigido para ${novo} ✓`,'sucesso');
+    pnBase(); pnAlertas(); pnCobertura();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+function pnBase(){
+  const el = document.getElementById('pn-sec-base'); if(!el) return;
+  // 1) itens com saída (vivo ou planilha) sem preço
+  const comSaida = new Set(pnMovs.map(m=>m.material_id));
+  for(const h of pnHistPer) for(const it of h.itens) if(it.mid) comSaida.add(it.mid);
+  const semPreco = [...comSaida].filter(mid=>!(pnUvp[mid]&&pnUvp[mid].uvp>0))
+    .map(mid=>({mid, nome:pnUvp[mid]?pnUvp[mid].nome:('#'+mid)})).sort((a,b)=>a.nome.localeCompare(b.nome));
+  // 2) saldos negativos
+  const negativos = ccDados.filter(r=>(Number(r.saldo)||0)<0);
+  // 3) triagem
+  const triagem = ccDados.filter(r=>!r.classe_confirmada).sort((a,b)=>(a.material||'').localeCompare(b.material||''));
+  // 4) críticos sem mínimo
+  const semMin = ccDados.filter(r=>r.classe_compra==='CRITICO'&&!(Number(r.estoque_minimo)>0));
+  el.innerHTML = `
+    <div class="pn-card" style="padding:12px 16px;font-size:12px;color:var(--cinza-4)">🔧 <b>Limpeza rápida da base</b> — tudo que dispara alerta errado ou aparece torto nos detalhes, corrigível daqui mesmo. As listas somem conforme você limpa.</div>
+    <div class="pn-duo">
+      <div class="pn-card">
+        <div class="pn-ct"><span>💰 Sem valor de compra (${semPreco.length})</span><span class="pn-funcao">entram como R$ 0 nos custos — clique ✎</span></div>
+        ${semPreco.length?`<div style="max-height:340px;overflow:auto"><table class="pn-tb"><tbody>
+          ${semPreco.map(x=>`<tr><td>${x.nome}</td><td class="num"><button class="pn-btn" style="background:var(--azul-claro);color:var(--azul);padding:5px 10px;font-size:11px" onclick="pnSetPreco(${x.mid})">✎ informar valor</button></td></tr>`).join('')}
+        </tbody></table></div>`:'<div class="pn-empty">Todos os itens com saída têm valor. ✓</div>'}
+      </div>
+      <div class="pn-card">
+        <div class="pn-ct"><span>⚖️ Saldos negativos (${negativos.length})</span><span class="pn-funcao">🔒 corrigir move o estoque (senha de entrada)</span></div>
+        ${negativos.length?`<table class="pn-tb"><tbody>
+          ${negativos.map(r=>`<tr><td>${r.material}</td><td class="num" style="color:var(--vermelho);font-weight:800">${Number(r.saldo).toLocaleString('pt-BR')}</td>
+            <td class="num"><button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:5px 10px;font-size:11px" onclick="pnCorrigirSaldo(${r.material_id})">✔ corrigir saldo</button></td></tr>`).join('')}
+        </tbody></table>`:'<div class="pn-empty">Nenhum saldo negativo. ✓</div>'}
+      </div>
+    </div>
+    <div class="pn-duo">
+      <div class="pn-card">
+        <div class="pn-ct"><span>🏷️ Classes em triagem (${triagem.length})</span><span class="pn-funcao">confirme a classe — os gatilhos ficam precisos</span></div>
+        ${triagem.length?`<div style="max-height:340px;overflow:auto"><table class="pn-tb"><tbody>
+          ${triagem.map(r=>`<tr><td>${r.material}</td><td class="num">${ccTagClasse(r)}</td></tr>`).join('')}
+        </tbody></table></div><div class="pn-nota">Escolher no seletor grava na hora (mesmo controle da aba Compras).</div>`:'<div class="pn-empty">Classificação em dia. ✓</div>'}
+      </div>
+      <div class="pn-card">
+        <div class="pn-ct"><span>🚑 Críticos sem mínimo (${semMin.length})</span><span class="pn-funcao">sem mínimo o gatilho de segurança não dispara</span></div>
+        ${semMin.length?`<div style="max-height:340px;overflow:auto"><table class="pn-tb"><tbody>
+          ${semMin.map(r=>`<tr><td>${r.material}</td><td class="num"><input class="ac-min" style="width:70px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 6px;text-align:right;font-size:13px;background:#FFFDF3;font-family:var(--fonte)" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this);setTimeout(pnBase,600)"></td></tr>`).join('')}
+        </tbody></table></div>`:'<div class="pn-empty">Todos os críticos têm mínimo. ✓</div>'}
+      </div>
+    </div>
+    <div class="pn-card">
+      <div class="pn-ct"><span>🔍 Corrigir valor de qualquer item</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="pn-base-busca" list="pn-mat-datalist" placeholder="digite o nome do material…" style="flex:1;min-width:220px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)">
+        <button class="pn-btn pn-btn-azul" onclick="(function(){ const n=document.getElementById('pn-base-busca').value.trim(); const id=pnNomeId[pnN(n)]; if(!id){ toast('Material não encontrado — escolha da lista.','erro'); return; } pnSetPreco(id); })()">✎ Editar valor</button>
+      </div>
+    </div>`;
 }
 
 // ── EMPRÉSTIMOS ──
