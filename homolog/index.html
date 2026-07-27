@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.6 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.7 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -4962,9 +4962,12 @@ async function pnCarregar(){
   st.textContent='carregando…';
   try{
     if(!ccDados.length){ await acCarregar(); }
-    const mats=(await sbFetch('materiais?select=id,nome,ultimo_valor_pago,ativo&limit=1000'))||[];
-    pnUvp={}; pnNomeId={};
-    for(const m of mats){ pnUvp[m.id]={nome:m.nome,uvp:Number(m.ultimo_valor_pago)||0,ativo:m.ativo!==false}; pnNomeId[pnN(m.nome)]=m.id; }
+    const mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo&limit=1000'))||[];
+    pnUvp={}; pnNomeId={}; pnMatFull={};
+    for(const m of mats){
+      pnUvp[m.id]={nome:m.nome,uvp:Number(m.ultimo_valor_pago)||0,ativo:m.ativo!==false};
+      pnNomeId[pnN(m.nome)]=m.id; pnMatFull[m.id]=m;
+    }
     document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
     pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
     const perMap={}; for(const p of pnPeriodos) perMap[p.id]=p;
@@ -4974,6 +4977,7 @@ async function pnCarregar(){
       if((mv.registrado_por||'')==='MIGRAÇÃO') continue; // só dados vivos
       const per=mv.periodo_cirurgico_id?perMap[mv.periodo_cirurgico_id]:null;
       const dia=(per&&per.data?per.data:(mv.created_at||'').slice(0,10))||'';
+      if(!pnStatOk(mv.material_id)) continue; // fora das estatísticas do painel
       pnMovs.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
         periodoId:mv.periodo_cirurgico_id||null,
         medico:per&&per.medicos?per.medicos.nome:null,
@@ -5130,6 +5134,7 @@ function pnCalcCobertura(){
   const comConsumo=[], semConsumo=[];
   for(const r of ccDados){
     if(ccOculto[r.material_id]) continue;
+    if(!pnStatOk(r.material_id)) continue;
     const cm=Number(r.consumo_medio_mensal)||0;
     if(cm>0) comConsumo.push({r, cob:(Number(r.saldo)||0)/cm, cm});
     else semConsumo.push(r);
@@ -5197,6 +5202,8 @@ function pnCobertura(){
 function pnCobDrill(k){ pnCobBandSel=(pnCobBandSel===k?null:k); pnCobertura(); }
 
 // ══ 3 · CUSTOS por período/médico/tipo (v3.6: histórico da planilha + gráfico novo) ══
+let pnMatFull = {};    // material_id -> cadastro completo (ficha)
+function pnStatOk(mid){ const m=pnMatFull[mid]; return !m || m.exibir_dashboard!==false; }
 let pnHistRows = [];   // staging_saidas_hist cru
 let pnHistPer = [];    // períodos históricos montados [{key,data,mes,medico,tipo,pac,custo,itens:[]}]
 let pnCustosMes = null; // mês selecionado na tabela de períodos
@@ -5211,6 +5218,7 @@ function pnMontaHist(){
     if(!porKey[key]) porKey[key] = { key, data:d, mes:d.slice(0,7), medico:r.medico||'—', tipo:r.tipo||'—',
       pac:Number(r.qtd_pacientes)||0, custo:0, itens:[] };
     const mid = pnNomeId[pnN(r.nome)];
+    if(mid && !pnStatOk(mid)) continue; // fora das estatísticas do painel
     const vu = (r.valor_unit!=null && Number(r.valor_unit)>0) ? Number(r.valor_unit)
              : (mid && pnUvp[mid] ? pnUvp[mid].uvp : 0);
     const custo = Number(r.qtd) * vu;
@@ -5452,6 +5460,97 @@ async function pnCorrigirSaldo(mid){
     pnBase(); pnAlertas(); pnCobertura();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
+
+// ══ FICHA DO ITEM — pesquisa e corrige TUDO num lugar só ══
+let pnFichaMid = null;
+function pnFichaAbrir(){
+  const n=document.getElementById('pn-ficha-busca').value.trim();
+  const id=pnNomeId[pnN(n)];
+  if(!id){ toast('Material não encontrado — escolha da lista.','erro'); return; }
+  pnFichaMid=id; pnBase();
+  setTimeout(()=>{ const el=document.getElementById('pn-ficha-card'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },100);
+}
+function pnFichaHtml(){
+  if(!pnFichaMid) return '';
+  const m=pnMatFull[pnFichaMid]; if(!m) return '';
+  const cc=ccDados.find(x=>x.material_id===m.id);
+  const saldo=cc?Number(cc.saldo)||0:null;
+  const f=ccFontes[pnN(m.nome)]||{};
+  const forns=(typeof coFornecedores!=='undefined'&&coFornecedores.length)?coFornecedores:[];
+  const campo=(label,inner)=>`<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">${label}</label>${inner}</div>`;
+  const inp=(id,val,tipo,extra)=>`<input id="${id}" type="${tipo||'text'}" value="${val==null?'':String(val).replace(/"/g,'&quot;')}" ${extra||''} style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">`;
+  return `<div class="pn-card" id="pn-ficha-card" style="border:2px solid var(--azul-medio)">
+    <div class="pn-ct"><span>📇 Ficha do item — ${m.nome}</span><span class="pn-funcao" style="cursor:pointer" onclick="pnFichaMid=null;pnBase()">✕ fechar</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+      ${campo('Nome (cuidado: renomear afeta os vínculos com a planilha)', inp('pf-nome',m.nome))}
+      ${campo('Descrição NF', inp('pf-descnf',m.descricao_nf))}
+      ${campo('Marca principal (cadastro)', inp('pf-marca',m.marca))}
+      ${campo('Unidade de medida', inp('pf-unid',m.unidade_medida))}
+      ${campo('Qtd por pacote/kit', inp('pf-kit',m.qtd_kit,'number','step="any" min="0"'))}
+      ${campo('Último valor pago (R$/un)', inp('pf-uvp',m.ultimo_valor_pago,'number','step="0.01" min="0"'))}
+      ${campo('Estoque mínimo', inp('pf-min',m.estoque_minimo,'number','step="any" min="0"'))}
+      ${campo('Classe de compra', `<select id="pf-classe" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">
+        ${CC_ORDEM.map(c=>`<option value="${c}" ${c===(m.classe_compra||'ESPORADICO')?'selected':''}>${CC_INFO[c].emoji} ${CC_INFO[c].nome}</option>`).join('')}</select>`)}
+      ${campo('Fornecedor padrão', `<select id="pf-fornpad" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">
+        <option value="">—</option>${forns.map(x=>`<option value="${x.id}" ${x.id===m.fornecedor_padrao_id?'selected':''}>${x.nome}</option>`).join('')}</select>`)}
+      ${campo('Marcas já compradas (separe com ·)', inp('pf-marcas',f.marcas))}
+      ${campo('Fornecedores já usados (separe com ·)', inp('pf-forns',f.fornecedores))}
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:13px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-stat" type="checkbox" ${m.exibir_dashboard!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> 📊 Entra nas estatísticas do Painel</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-lote" type="checkbox" ${m.controla_lote?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> 🔒 Controla lote/validade</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-oculto" type="checkbox" ${m.ocultar_compra?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> 🚫 Fora da lista de compras</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-ativo" type="checkbox" ${m.ativo!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> ✅ Ativo no catálogo</label>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--cinza-2);padding-top:12px">
+      <div style="font-size:13px">Saldo no Estoque Geral: <b style="${saldo!=null&&saldo<0?'color:var(--vermelho)':''}">${saldo!=null?saldo.toLocaleString('pt-BR'):'—'}</b>
+        <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:6px 10px;font-size:11px;margin-left:8px" onclick="pnCorrigirSaldo(${m.id})">✔ corrigir saldo 🔒</button></div>
+      <button class="pn-btn pn-btn-azul" onclick="pnFichaSalvar()">💾 Salvar ficha</button>
+    </div>
+  </div>`;
+}
+async function pnFichaSalvar(){
+  const m=pnMatFull[pnFichaMid]; if(!m) return;
+  const v=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const num=id=>{ const s=v(id); if(s==='') return null; const x=parseFloat(s.replace(',','.')); return isNaN(x)?null:x; };
+  const chk=id=>{ const el=document.getElementById(id); return el?el.checked:false; };
+  const novoNome=v('pf-nome');
+  if(!novoNome){ toast('O nome não pode ficar vazio.','erro'); return; }
+  if(pnN(novoNome)!==pnN(m.nome)&&pnNomeId[pnN(novoNome)]){ toast('Já existe outro material com esse nome.','erro'); return; }
+  const renomeou=pnN(novoNome)!==pnN(m.nome);
+  if(renomeou&&!confirm(`Renomear "${m.nome}" para "${novoNome}"?\n\nOs vínculos com as planilhas de consumo/histórico usam o nome antigo — os números históricos deste item podem deixar de aparecer até a próxima carga.`)) return;
+  const body={ nome:novoNome, descricao_nf:v('pf-descnf')||null, marca:v('pf-marca')||null,
+    unidade_medida:v('pf-unid')||null, qtd_kit:num('pf-kit'), ultimo_valor_pago:num('pf-uvp'),
+    estoque_minimo:num('pf-min'), classe_compra:v('pf-classe')||m.classe_compra, classe_confirmada:true,
+    fornecedor_padrao_id:v('pf-fornpad')?Number(v('pf-fornpad')):null,
+    exibir_dashboard:chk('pf-stat'), controla_lote:chk('pf-lote'),
+    ocultar_compra:chk('pf-oculto'), ativo:chk('pf-ativo') };
+  try{
+    const r=await sbFetch(`materiais?id=eq.${m.id}`,'PATCH',body);
+    if(!r||!r.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); return; }
+    // marcas/fornecedores históricos (staging_fontes_compra por nome)
+    const marcas=v('pf-marcas')||null, fonForns=v('pf-forns')||null;
+    const chaveAntiga=pnN(m.nome), chaveNova=pnN(novoNome);
+    try{
+      const up=await sbFetch(`staging_fontes_compra?nome=eq.${encodeURIComponent(chaveAntiga)}`,'PATCH',{ nome:chaveNova, marcas, fornecedores:fonForns });
+      if(!up||!up.length){ if(marcas||fonForns) await sbFetch('staging_fontes_compra','POST',{ nome:chaveNova, marcas, fornecedores:fonForns }); }
+      delete ccFontes[chaveAntiga];
+      ccFontes[chaveNova]={ nome:chaveNova, marcas, fornecedores:fonForns };
+    }catch(e){}
+    // atualiza caches locais
+    Object.assign(m, body);
+    if(pnUvp[m.id]){ pnUvp[m.id].nome=novoNome; pnUvp[m.id].uvp=Number(body.ultimo_valor_pago)||0; pnUvp[m.id].ativo=body.ativo; }
+    delete pnNomeId[chaveAntiga]; pnNomeId[chaveNova]=m.id;
+    if(body.ocultar_compra) ccOculto[m.id]=true; else delete ccOculto[m.id];
+    const cc=ccDados.find(x=>x.material_id===m.id);
+    if(cc){ cc.material=novoNome; cc.estoque_minimo=body.estoque_minimo; cc.classe_compra=body.classe_compra; cc.classe_confirmada=true; }
+    const cat=catalogoMateriais.find(x=>x.id===m.id); if(cat) cat.nome=novoNome;
+    toast('Ficha de "'+novoNome+'" salva ✓','sucesso');
+    pnBase(); pnCustos(); pnCobertura(); pnAlertas();
+    if(typeof ccRender==='function') ccRender();
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
+}
+
 function pnBase(){
   const el = document.getElementById('pn-sec-base'); if(!el) return;
   // 1) itens com saída (vivo ou planilha) sem preço
@@ -5466,7 +5565,15 @@ function pnBase(){
   // 4) críticos sem mínimo
   const semMin = ccDados.filter(r=>r.classe_compra==='CRITICO'&&!(Number(r.estoque_minimo)>0));
   el.innerHTML = `
-    <div class="pn-card" style="padding:12px 16px;font-size:12px;color:var(--cinza-4)">🔧 <b>Limpeza rápida da base</b> — tudo que dispara alerta errado ou aparece torto nos detalhes, corrigível daqui mesmo. As listas somem conforme você limpa.</div>
+    <div class="pn-card" style="padding:12px 16px;font-size:12px;color:var(--cinza-4)">🔧 <b>Limpeza rápida da base</b> — pesquise um item para abrir a ficha completa, ou use as listas de problemas abaixo. As listas somem conforme você limpa.</div>
+    <div class="pn-card">
+      <div class="pn-ct"><span>📇 Ficha do item — pesquisar e corrigir tudo</span><span class="pn-funcao">nome · valores · pacote · fornecedores · marcas · estatística · saldo</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="pn-ficha-busca" list="pn-mat-datalist" placeholder="digite o nome do material…" style="flex:1;min-width:220px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--fonte)" onkeydown="if(event.key==='Enter')pnFichaAbrir()">
+        <button class="pn-btn pn-btn-azul" onclick="pnFichaAbrir()">🔎 Abrir ficha</button>
+      </div>
+    </div>
+    ${pnFichaHtml()}
     <div class="pn-duo">
       <div class="pn-card">
         <div class="pn-ct"><span>💰 Sem valor de compra (${semPreco.length})</span><span class="pn-funcao">entram como R$ 0 nos custos — clique ✎</span></div>
@@ -5494,13 +5601,6 @@ function pnBase(){
         ${semMin.length?`<div style="max-height:340px;overflow:auto"><table class="pn-tb"><tbody>
           ${semMin.map(r=>`<tr><td>${r.material}</td><td class="num"><input class="ac-min" style="width:70px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 6px;text-align:right;font-size:13px;background:#FFFDF3;font-family:var(--fonte)" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this);setTimeout(pnBase,600)"></td></tr>`).join('')}
         </tbody></table></div>`:'<div class="pn-empty">Todos os críticos têm mínimo. ✓</div>'}
-      </div>
-    </div>
-    <div class="pn-card">
-      <div class="pn-ct"><span>🔍 Corrigir valor de qualquer item</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="pn-base-busca" list="pn-mat-datalist" placeholder="digite o nome do material…" style="flex:1;min-width:220px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)">
-        <button class="pn-btn pn-btn-azul" onclick="(function(){ const n=document.getElementById('pn-base-busca').value.trim(); const id=pnNomeId[pnN(n)]; if(!id){ toast('Material não encontrado — escolha da lista.','erro'); return; } pnSetPreco(id); })()">✎ Editar valor</button>
       </div>
     </div>`;
 }
