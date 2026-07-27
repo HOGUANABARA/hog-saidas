@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.7 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v3.8.1 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -3862,15 +3862,16 @@ function rcRenderizar(){
       const valPadrao = o.valor_unitario ?? o.ultimo_valor_pago ?? '';
       const exigeLote = rcControlaLote.has(o.material_id);
       return `<tr data-ordem="${o.id}">
-        <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}"></td>
+        <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}" checked onchange="rcAtualizaTotais('${fid}')"></td>
         <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
         <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
-        <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd"></td>
-        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un"></td>
+        <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${fid}')"></td>
+        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un" oninput="rcAtualizaTotais('${fid}')"></td>
+        <td style="text-align:right;font-weight:700;white-space:nowrap" id="rc-tot-${o.id}">—</td>
         <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
         <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
       </tr>
-      <tr><td></td><td colspan="5" style="padding:4px 10px 10px">
+      <tr><td></td><td colspan="6" style="padding:4px 10px 10px">
         <div id="rc-lotes-${o.id}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:${exigeLote?'var(--vermelho)':'var(--cinza-4)'}">${exigeLote?'🔒 lote e validade obrigatórios':'lote/validade (se houver)'}</span>
           ${rcLoteBloco()}
@@ -3885,20 +3886,22 @@ function rcRenderizar(){
         <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${fid}"></div>
         <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${fid}"></div>
         <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${fid}" value="${new Date().toISOString().split('T')[0]}"></div>
-        <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${fid}" value="0"></div>
+        <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${fid}" value="0" oninput="rcAtualizaTotais('${fid}')"></div>
         <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${fid}"></div>
       </div>
       <div style="overflow-x:auto">
       <table>
-        <thead><tr><th></th><th>Material</th><th style="text-align:center">Saldo</th><th>Qtd recebida</th><th>Valor unit.</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Material</th><th style="text-align:center">Saldo</th><th>Qtd recebida</th><th>Valor unit.</th><th style="text-align:right">Total item</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
       </table>
       </div>
-      <div class="rc-rodape">
+      <div class="rc-rodape" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div id="rc-resumo-${fid}" style="font-size:13px;color:var(--cinza-5)">—</div>
         <button class="rc-confirmar" onclick="rcConfirmarNF('${fid}')">✔ Confirmar recebimento desta NF</button>
       </div>
     </div>`;
   }).join('') + rcHtmlPausados();
+  Object.keys(grupos).forEach(fid=>rcAtualizaTotais(fid));
 }
 
 function rcHtmlPausados(){
@@ -3942,6 +3945,26 @@ function rcColherLotes(ordemId, qtdRecebida){
   })).filter(l=>l.lote || l.validade || l.qtd);
   if(lotes.length===1 && !lotes[0].qtd) lotes[0].qtd = qtdRecebida; // um lote só = a NF inteira
   return lotes;
+}
+
+// resumo vivo da NF: total por item + total geral (itens marcados + frete)
+function rcAtualizaTotais(fid){
+  const grupo = document.querySelector(`.rc-grupo[data-forn="${fid}"]`);
+  if(!grupo) return;
+  let totalItens = 0, marcados = 0;
+  grupo.querySelectorAll('tr[data-ordem]').forEach(tr=>{
+    const oid = tr.dataset.ordem;
+    const qtd = parseFloat((document.getElementById('rc-qtd-'+oid)||{}).value)||0;
+    const val = parseFloat((document.getElementById('rc-val-'+oid)||{}).value)||0;
+    const tot = qtd*val;
+    const cel = document.getElementById('rc-tot-'+oid);
+    if(cel) cel.textContent = tot>0 ? rcMoney(tot) : '—';
+    const chk = document.getElementById('rc-chk-'+oid);
+    if(chk && chk.checked){ totalItens += tot; marcados++; }
+  });
+  const frete = parseFloat((document.getElementById('rc-nf-frete-'+fid)||{}).value)||0;
+  const res = document.getElementById('rc-resumo-'+fid);
+  if(res) res.innerHTML = `${marcados} item(ns) marcado(s) · Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''} · <span style="font-size:15px">Total da NF: <b style="color:var(--azul)">${rcMoney(totalItens+frete)}</b></span>`;
 }
 
 async function rcMarcarProblema(ordemId){
@@ -4562,6 +4585,7 @@ async function invCadastrarMaterial(){
 // base (aba INVENTARIO POR LOCAL). Usado para filtrar a exportação do
 // inventário — só lista o que realmente é contado naquele local.
 const ITENS_POR_LOCAL = {
+  'DML': ['ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AVENTAL DESCARTÁVEL SEM MANGA','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CLOREXIDINA 0,2% AQUOSA 100 ML','DESCARPACK 13L','DESCARPACK 3L','ESCOVA CLOROHEX','LENÇOL COM ELASTICO','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA 8.5','PROPE DESCARTÁVEL','RINGER COM LACTATO','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','TOUCA DESCARTÁVEL'],
   'ARSENAL': ['ADRENALINA','AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 20X55 (ROXA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','AHMED','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AMIODARONA 3 ML','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','AZUL DE TRYPAN','BIOLOGICO','BISTURI 15','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BLOOD STOP','BOBINA RIBBON (CME) TONNER','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO COM BAG VITRE','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (ESTERILENO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CASSETE FACO','CATÉTER O2','CEDILANID','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO ATROPINA','COLÍRIO CICLOMIDRIN TROPICAMIDA','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COLÍRIO PILOCARPINA PILOCAN','COLÍRIO SOLUCEL METILCELULOSE 2% 10 ML','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','COTONETE NÃO ESTÉRIL','CÂNULA HIDRO 25','CÂNULA HIDRO 27 - CINZA (ESTERILENO)','DETERGENTE CLOREX 2%','DEXAMETASONA DECADRON 4 MG/ML','DIAMOX ACETAZOLAMIDA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DIPIRONA','DUAL BORE 23 G MEDIONE','DUAL BORE 25 G MEDIONE','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','ETIQUETA DUPLA - INTEGRADOR QUIMICO - ROLO','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO CATGUT 2-0','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 4-0 MONO','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO POLIPROPILENO 10-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO POLIPROPILENO 6-0 MONO','FIO SEDA 4-0 MONO','FIO SEDA 5-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 5-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','FIO VICRYL 8-0 BI PGLA90','FLAT TIP 27G ANGLED','FLEX TIP 25 G MEDONE','FLUORESCEÍNA 10%','FUROSEMIDA 20 MG/2 ML','GAS C3F8','GEL DE CONTATO','GENTAMICINA','GLICOSE 50% AMP','HIDROCORTISONA 500 MG','HYALOZIMA (HIALURONIDASE)','INJETOR ZEISS','INTEGRADOR','JELCO ABOCATH 20','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KEFAZOL (FAZOLON)','KIT COMBINADO','KIT PUNÇÃO','KIT VITRECTOMIA 25 GAUGE (ESTERILENO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 11','LAMINA 15','LANCETAS','LENTE DE CONTATO -10.00','LENTE DE CONTATO -5.00','LENTE TERAPÊUTICA','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA 8.5','MANITOL','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BEJE','MICROPORE 25 BRANCO','NALOXONA AMPOLA 0.4MG/ML','NAUSEDRON 2 MG/ML','OLEO 5000','OPHTAAC 40','PERFLUOCTANO','PINÇA ALCON','PINÇA MÁCULA','PNEU 279','PNEU 287','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRA FACO 30 GRAUS 20G AMARELA (ESTERILENO)','PONTEIRA FACO 30 GRAUS 20G AMARELA (NOVA)','PONTEIRA FACO CONST.','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','PROPOFOL 20MG/ML','PROTESE PARA PREENCHIMENTO ESFERA','RETRATOR DE IRIS','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','ROPIVACAÍNA 2 MG/ML','SCALPE 23','SCALPE 25','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SERINGA 60 ML L.LOCK','SOFT TIP 23 G ALCON','SOFT TIP 25 G ALCON','SONDA ASPIRAÇÃO 08','SONDA ASPIRAÇÃO 10','SONDA ASPIRAÇÃO 12','SONDA ASPIRAÇÃO 14','SONDA AVULSA VITRE','SONDA DACRIO','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TESOURA MORRIS','TIRAS REAGENTES TESTE GLICEMIA','TISSEL LYO 4 ML NOVA','TISSEL LYO 4 ML PREPARADA','TORNEIRA DUAS VIAS','TORNEIRA TRÊS VIAS','TRANSOFIX','TRANSPORE 100MMX4,5 MM','TRANSPORE 100MMX4,5MM','TREPANO 7.75','TREPANO 8,0','TREPANO 8,25','TUBO HAMED','VANCOMICINA','VESTIMENTA HOSPITALAR G - NÃO ESTERIL','VESTIMENTA HOSPITALAR GG - NÃO ESTERIL','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO GEL','XYLO PESADA','ÁGUA DESTILADA 250 ML','ÁLCOOL 70 100 ML'],
   'ARSENAL CC': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X7 (CINZA)','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CATÉTER O2','COLÍRIO MAXIFLOX-D','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','CÂNULA 22G ANGULAR (ESTERILENO)','CÂNULA HIDRO 27 - CINZA (ESTERILENO)','CÂNULA METIL AVULSA - AZUL (ESTERILENO)','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FACOBA','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO SEDA 4-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 8-0 BI PGLA90','GEL DE CONTATO','INJETOR DE LENTE','LAMINA 11','LAMINA 15','LENTE TERAPÊUTICA','LENÇOL COM ELASTICO','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA IA ROSA','LUVA IA ROXA','LUVA IA VERDE','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BRANCO','MITOMICINA COLÍRIO','MITOMICINA INJETÁVEL','NITROGENIO N50','OXIGÊNIO GASOSO MEDICINAL','POMADA MAXIFLOX-D','PONTEIRA FACO AZUL','PONTEIRAS IA (ESTERILENO)','PONTEIRAS IA (NOVA)','POVIDINE - IODO','RETRATOR DE IRIS','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','TRANSPORE 100MMX4,5 MM','TUBO ENDOTRAQUEAL 6.0','TUBO ENDOTRAQUEAL 6.5','TUBO ENDOTRAQUEAL 7.5','TUBO ENDOTRAQUEAL 8.5','VIGAMOX','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
   'CAIXA DE EMERGENCIA': ['ADRENALINA','AGULHA 40X12 (ROSA)','ATROPINA 0,25MG/ML','CAPTROPIL - COMPRIMIDO','CETOPROFENO','DEXAMETASONA DECADRON 4 MG/ML','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DIPIRONA','HIDROCORTISONA 500 MG','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','NAUSEDRON 2 MG/ML','SERINGA 10 ML L. LOCK','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO'],
@@ -4587,15 +4611,21 @@ async function invExportar(){
     const localId = document.getElementById('inv-export-local').value;
     const locaisAlvo = localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais;
 
-    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit&ativo=eq.true&order=nome.asc&limit=1000')) || [];
+    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,controla_lote&ativo=eq.true&order=nome.asc&limit=1000')) || [];
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = e.saldo;
+    // lotes ativos conhecidos — pré-preenche LOTE/VAL (a equipe só confere e conta)
+    let lotesPorMat = {};
+    try{
+      const lts = (await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000')) || [];
+      for(const l of lts){ (lotesPorMat[l.material_id]=lotesPorMat[l.material_id]||[]).push(l); }
+    }catch(e){}
+    const fmtD = d => { if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
 
-    // Resolve os nomes da planilha original contra o catálogo atual (mesma normalização usada no resto do app)
     function invMateriaisDoLocal(nomeLocal){
       const chave = Object.keys(ITENS_POR_LOCAL).find(k => normNome(k) === normNome(nomeLocal));
-      if(!chave) return materiais; // local sem mapeamento original (ex: DML) — mostra todos, por segurança
+      if(!chave) return materiais;
       const nomesOriginais = ITENS_POR_LOCAL[chave];
       const ids = new Set();
       for(const nomeOriginal of nomesOriginais){
@@ -4607,23 +4637,38 @@ async function invExportar(){
       return materiais.filter(m => ids.has(m.id));
     }
 
+    const HDR = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF','FOTO ÚLT. CONTAGEM','CONTAGEM',
+                 'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
     const wb = XLSX.utils.book_new();
     const nomesUsados = new Set();
     for(const local of locaisAlvo){
       const materiaisDoLocal = invMateriaisDoLocal(local.nome);
-      const linhas = [['ID','Material','Descrição NF','Marca','Unidade','Qtd/Pacote','Foto Últ. Contagem','Contagem Física']];
+      const linhas = [HDR];
       for(const m of materiaisDoLocal){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
-        linhas.push([m.id, m.nome, m.descricao_nf||'', m.marca||'', m.unidade_medida||'', m.qtd_kit??'', saldo, '']);
+        let loteCols = ['','','','','','','','',''];
+        if(m.controla_lote){
+          const lts = (lotesPorMat[m.id]||[]).slice(0,3);
+          loteCols = [];
+          for(let k=0;k<3;k++){
+            const l = lts[k];
+            loteCols.push(l?(l.lote||''):'', l?fmtD(l.validade):'', '');
+          }
+        } else {
+          // itens sem controle de lote: colunas marcadas para não preencher
+          loteCols = ['—','—','—','—','—','—','—','—','—'];
+        }
+        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldo, '', ...loteCols, '']);
       }
       const ws = XLSX.utils.aoa_to_sheet(linhas);
-      ws['!cols'] = [{wch:6},{wch:40},{wch:40},{wch:18},{wch:12},{wch:11},{wch:14},{wch:16}];
+      ws['!cols'] = [{wch:6},{wch:14},{wch:38},{wch:14},{wch:34},{wch:12},{wch:11},
+                     {wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:22}];
       const nomeAba = invNomeAbaSeguro(local.nome, nomesUsados);
       XLSX.utils.book_append_sheet(wb, ws, nomeAba);
     }
     const dataStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, 'Inventario_HOG_'+dataStr+'.xlsx');
-    toast('Planilha exportada — confira seus downloads ✓','sucesso');
+    toast('Planilha exportada — itens com 🔒 lote vêm com LOTE/VAL pré-preenchidos ✓','sucesso');
   }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
 }
 
@@ -4637,71 +4682,96 @@ async function invImportar(file){
     invContagensPorLocal = [];
     const avisos = [];
 
-    // Sempre busca o saldo FRESCO do banco (nunca usa o saldo que estava na planilha exportada)
     const geralId = await getEstoqueGeralId();
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = Number(e.saldo);
 
-    // Aceita tanto o cabeçalho novo ('FOTO ÚLT. CONTAGEM') quanto o antigo ('SALDO SISTEMA')
-    const CABECALHO_ESPERADO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE',['FOTO ÚLT. CONTAGEM','SALDO SISTEMA'],'CONTAGEM FÍSICA'];
+    const CAB_ANTIGO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE',['FOTO ÚLT. CONTAGEM','SALDO SISTEMA'],'CONTAGEM FÍSICA'];
+    const CAB_NOVO   = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF','FOTO ÚLT. CONTAGEM','CONTAGEM',
+                        'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
+    const bate = (cab, esperado) => esperado.every((e,i)=> Array.isArray(e)?e.includes(cab[i]):cab[i]===e);
+
+    // datas da planilha: dd/mm/aaaa, aaaa-mm-dd, serial do Excel ou Date
+    function invParseDataCel(v){
+      if(v===undefined||v===null||v==='') return null;
+      if(v instanceof Date) return v.toISOString().slice(0,10);
+      if(typeof v==='number' && v>20000 && v<80000){
+        const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10);
+      }
+      const s=String(v).trim();
+      let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if(m){ const a=m[3].length===2?('20'+m[3]):m[3]; return `${a}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; }
+      m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m) return s.slice(0,10);
+      return null;
+    }
 
     for(const sheetName of wb.SheetNames){
       const nomeLimpo = s => s.replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
       const local = invLocais.find(l => nomeLimpo(l.nome) === nomeLimpo(sheetName));
-      if(!local){
-        avisos.push(`Aba "${sheetName}" não corresponde a nenhum local cadastrado — ignorada.`);
-        continue;
-      }
+      if(!local){ avisos.push(`Aba "${sheetName}" não corresponde a nenhum local cadastrado — ignorada.`); continue; }
 
       const ws = wb.Sheets[sheetName];
       const linhas = XLSX.utils.sheet_to_json(ws, {header:1});
-
-      // Valida as colunas antes de confiar nos dados — evita ler número errado por planilha fora do padrão
       const cabecalho = (linhas[0] || []).map(c => (c===undefined||c===null) ? '' : String(c).trim().toUpperCase());
-      const cabecalhoOk = CABECALHO_ESPERADO.every((esperado, i) =>
-        Array.isArray(esperado) ? esperado.includes(cabecalho[i]) : cabecalho[i] === esperado);
-      if(!cabecalhoOk){
-        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado (esperado: ${CABECALHO_ESPERADO.map(e=>Array.isArray(e)?e[0]:e).join(' | ')}). Aba ignorada. Se editou a planilha, use sempre o arquivo gerado pelo botão "Exportar".`);
+      const formato = bate(cabecalho, CAB_NOVO) ? 'novo' : (bate(cabecalho, CAB_ANTIGO) ? 'antigo' : null);
+      if(!formato){
+        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado. Aba ignorada. Use sempre o arquivo gerado pelo botão "Exportar".`);
         continue;
       }
 
-      let itensNaoEncontrados = 0;
-      for(let i=1; i<linhas.length; i++){ // pula cabeçalho
-        const [id, nome, , , , , , contagemStr] = linhas[i];
-        if(contagemStr===undefined || contagemStr==='' || contagemStr===null) continue; // não preenchido, pula
-        const contagem = parseFloat(contagemStr);
-        if(isNaN(contagem)) continue;
+      for(let i=1; i<linhas.length; i++){
+        const r = linhas[i] || [];
+        const id = r[0];
+        const nome = formato==='novo' ? r[2] : r[1];
+        const contagemStr = formato==='novo' ? r[6] : r[7];
+        const obs = formato==='novo' ? (r[16]!==undefined&&r[16]!==null?String(r[16]).trim():'') : '';
 
-        let materialId = null;
-        if(id!==undefined && id!==''){
-          materialId = Number(id);
-        } else if(nome && String(nome).trim()){
-          // Linha adicionada à mão durante a contagem — busca o material pelo nome digitado
-          const mat = resolverMaterial(String(nome).trim());
-          if(mat){ materialId = mat.id; }
-          else { itensNaoEncontrados++; avisos.push(`"${nome}" (aba ${sheetName}) — material não encontrado no catálogo, linha ignorada.`); continue; }
-        } else {
-          continue; // linha sem ID e sem nome, nada a fazer
+        // lotes (só no formato novo): 3 blocos LOTE/VAL/QTD
+        let lotes = [];
+        if(formato==='novo'){
+          for(let k=0;k<3;k++){
+            const lote=(r[7+k*3]!==undefined&&r[7+k*3]!==null)?String(r[7+k*3]).trim():'';
+            const val=invParseDataCel(r[8+k*3]);
+            const q=parseFloat(r[9+k*3]);
+            if(lote==='—'||lote==='') { if(!val && isNaN(q)) continue; }
+            if(lote!=='—' && (lote || val || !isNaN(q))) lotes.push({lote, validade:val, qtd:isNaN(q)?0:q});
+          }
+        }
+        const somaLotes = lotes.reduce((s,l)=>s+(l.qtd||0),0);
+        let contagem = parseFloat(contagemStr);
+        if(isNaN(contagem) && somaLotes>0) contagem = somaLotes; // contou pelos lotes
+        if(isNaN(contagem)) continue; // linha não preenchida
+        if(somaLotes>0 && !isNaN(parseFloat(contagemStr)) && Math.abs(somaLotes-contagem)>0.001){
+          avisos.push(`"${nome}" (aba ${sheetName}) — CONTAGEM (${contagem}) difere da soma dos lotes (${somaLotes}). Usando a soma dos lotes.`);
+          contagem = somaLotes;
         }
 
-        // MODELO ESTOQUE GERAL: a contagem por local vira a FOTO de alocação;
-        // o ajuste de saldo é calculado depois, por material, contra o Estoque Geral.
+        let materialId = null;
+        if(id!==undefined && id!==''){ materialId = Number(id); }
+        else if(nome && String(nome).trim()){
+          const mat = resolverMaterial(String(nome).trim());
+          if(mat){ materialId = mat.id; }
+          else { avisos.push(`"${nome}" (aba ${sheetName}) — material não encontrado no catálogo, linha ignorada.`); continue; }
+        } else { continue; }
+
         invContagensPorLocal.push({
           material_id: materialId, local_id: local.id, localNome: local.nome,
           nome: (nome && String(nome).trim()) || rcNomeMaterial(materialId), contagem,
+          lotes: lotes.filter(l=>l.lote&&l.lote!=='—'&&l.validade&&l.qtd>0), obs,
         });
       }
     }
 
-    // Agrega por material: soma das contagens de TODOS os locais vs saldo do ESTOQUE GERAL
     const porMaterial = {};
     for(const c of invContagensPorLocal){
       if(!porMaterial[c.material_id]){
-        porMaterial[c.material_id] = { material_id: c.material_id, nome: c.nome, contagemTotal: 0, locais: [] };
+        porMaterial[c.material_id] = { material_id: c.material_id, nome: c.nome, contagemTotal: 0, locais: [], lotes: [] };
       }
       porMaterial[c.material_id].contagemTotal += c.contagem;
       porMaterial[c.material_id].locais.push(c);
+      if(c.lotes && c.lotes.length) porMaterial[c.material_id].lotes.push(...c.lotes);
     }
     invPendentesImport = Object.values(porMaterial).map(m => {
       const saldoGeral = saldoMap[m.material_id + '_' + geralId] ?? 0;
@@ -4709,7 +4779,7 @@ async function invImportar(file){
     }).sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta));
 
     if(avisos.length){
-      toast(avisos.length + ' aba(s) com problema — veja detalhes na revisão abaixo.', 'erro');
+      toast(avisos.length + ' aviso(s) — veja os detalhes na revisão abaixo.', 'erro');
     }
     invRenderizarRevisao(avisos);
   }catch(e){ toast('Erro ao ler a planilha: '+e.message,'erro'); }
@@ -4740,7 +4810,8 @@ function invRenderizarRevisao(avisos){
     <table><thead><tr><th></th><th>Material</th><th>Onde foi contado</th><th style="text-align:right">Contagem (soma)</th><th style="text-align:right">Estoque Geral</th><th style="text-align:right">Diferença</th></tr></thead><tbody>`;
   invPendentesImport.forEach((it, idx) => {
     const cls = it.delta>0?'inv-delta-pos':(it.delta<0?'inv-delta-neg':'');
-    const locaisTxt = it.locais.map(l => `${l.localNome}: ${l.contagem}`).join(' · ');
+    let locaisTxt = it.locais.map(l => `${l.localNome}: ${l.contagem}`).join(' · ');
+    if(it.lotes && it.lotes.length) locaisTxt += `<br><span style="color:var(--azul)">🔒 ${it.lotes.length} lote(s): ${it.lotes.map(l=>l.lote+' ('+l.qtd+')').join(' · ')}</span>`;
     html += `<tr>
       <td><input type="checkbox" ${it.incluir?'checked':''} onchange="invPendentesImport[${idx}].incluir=this.checked"></td>
       <td>${it.nome}</td>
@@ -4813,6 +4884,16 @@ async function invAplicarAjustesImportados(){
       });
       const movId = movArr && movArr[0] && movArr[0].id;
       await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em: agora });
+    }
+
+    // 4) Lotes contados viram a nova FOTO de lotes do material (validade alimenta os críticos)
+    for(const it of selecionados){
+      const lts = (it.lotes||[]).filter(l=>l.lote&&l.validade&&l.qtd>0);
+      if(!lts.length) continue;
+      try{
+        await sbFetch(`lotes?material_id=eq.${it.material_id}&status=eq.ativo`,'PATCH',{ status:'baixado' });
+        await sbFetch('lotes','POST', lts.map(l=>({ material_id: it.material_id, lote: l.lote, validade: l.validade, qtd: l.qtd, status:'ativo' })));
+      }catch(e){ console.warn('lotes não gravados p/ material '+it.material_id+': '+e.message); }
     }
 
     toast(`Inventário fechado ✓ — foto de ${contagens.length} contagem(ns) gravada, ${comAjuste.length} ajuste(s) no Estoque Geral`,'sucesso');
