@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v3.10 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.0-A · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -357,7 +357,7 @@ details[open] summary { margin-bottom: 6px; }
   <div class="aba aba-restrita" style="display:none" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">🧾 Cotação</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-decisao" onclick="trocarAba('decisao')">📦 Pedidos</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')">🔏 Aprovar Pedido</div>
-  <div class="aba aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico</div>
+  <div class="aba aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">📚 Histórico de Compras</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-receber" onclick="trocarAba('receber')">📥 Receber NF</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-inventario" onclick="trocarAba('inventario')">📐 Inventário</div>
   <div class="aba aba-restrita" style="display:none" id="aba-btn-ocorrencias" onclick="trocarAba('ocorrencias')">⚠️ Ocorrências</div>
@@ -665,7 +665,7 @@ details[open] summary { margin-bottom: 6px; }
       <button id="cc-btn-orcar-sel" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px" onclick="ccOrcarSelecionados()">📤 Orçar selecionados (0) 🔒</button>
     </div>
     <div id="cc-prio-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"></div>
-    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">☑ marque os itens que pretende orçar (em qualquer classe) e clique no botão acima. Itens 🔄 em andamento ficam bloqueados até o pedido terminar. 🚫 tira o item da lista (não dispara alerta; volta pelo chip "fora da lista").</div>
+    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">⠿ <b>arraste as linhas</b> para colocar na sua ordem (fica salva) · <span style="color:var(--azul);cursor:pointer;font-weight:700" onclick="ccLimparOrdemManual()">restaurar ordem padrão</span> · ☑ marque os itens que pretende orçar (em qualquer classe) e clique no botão acima. Itens 🔄 em andamento ficam bloqueados até o pedido terminar. 🚫 tira o item da lista (não dispara alerta; volta pelo chip "fora da lista").</div>
   </div>
   <div class="ac-search">
     <label>➕ Incluir item na compra (fora da regra) — busca no catálogo</label>
@@ -708,6 +708,7 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-empty{text-align:center;padding:34px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
   #aba-cotacao .co-grupo-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;margin:18px 0 8px;background:var(--azul);color:#fff;border-radius:8px;font-size:13px;font-weight:700}
   #aba-cotacao .co-grupo-head:first-child{margin-top:0}
+  #aba-cotacao .co-selgrupo{font-size:10px;font-family:var(--fonte);border:1px solid var(--cinza-2);border-radius:6px;padding:3px 5px;background:#fff;color:var(--cinza-4);cursor:pointer;max-width:150px}
   #aba-cotacao .co-grupo-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
   #aba-cotacao .co-grupo-sel{width:auto !important;display:inline-block;font-size:11px !important;padding:2px 5px !important;margin:0 !important;border-radius:5px !important}
   #aba-cotacao .co-wa{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:12px}
@@ -738,6 +739,15 @@ details[open] summary { margin-bottom: 6px; }
     <input id="co-busca" placeholder="buscar por nome… ex: xylo, propofol, colírio">
     <div class="co-res" id="co-busca-res"></div>
   </div>
+  <div class="co-card" style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:7px">🏪 Comprar por fornecedor — fechar pedido mínimo</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="fv-busca" placeholder="digite o fornecedor… ex: rioclarense, alcon, ophtalmed" style="flex:1;min-width:230px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--fonte)" onkeydown="if(event.key==='Enter')fvBuscar()">
+      <button class="co-b1" onclick="fvBuscar()">🔎 Ver o que já compramos dele</button>
+    </div>
+    <div id="fv-corpo" style="margin-top:12px"></div>
+  </div>
+  <div id="co-textos" style="display:none;margin-bottom:14px"></div>
   <div id="co-corpo"><div class="co-empty">Carregando…</div></div>
   <div id="co-wa-box" style="margin-top:16px"></div>
 </div>
@@ -786,7 +796,7 @@ details[open] summary { margin-bottom: 6px; }
   <div id="de-corpo"><div class="de-empty">Carregando pedidos...</div></div>
 </div>
 
-<!-- ═══ ABA HISTÓRICO (COTAÇÕES FECHADAS) ═══ -->
+<!-- ═══ ABA HISTÓRICO DE COMPRAS (NOTAS FISCAIS) ═══ -->
 <style>
   #aba-historico .hi-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:12px;overflow:hidden}
   #aba-historico .hi-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;background:var(--cinza-1)}
@@ -806,6 +816,16 @@ details[open] summary { margin-bottom: 6px; }
   #aba-historico .hi-sem{color:var(--cinza-3);font-style:italic;font-size:11px}
 </style>
 <div id="aba-historico" class="container" style="display:none">
+  <div class="hi-card" style="padding:14px 16px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:8px">🔎 Buscar compras — nota fiscal, fornecedor ou material</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="hi-busca" placeholder="ex: 220546, alcon, metil 4%…" style="flex:1;min-width:220px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--fonte)" oninput="hiRenderizarLista()">
+      <input id="hi-de" type="date" title="de" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 10px;font-size:13px;font-family:var(--fonte)" onchange="hiRenderizarLista()">
+      <input id="hi-ate" type="date" title="até" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 10px;font-size:13px;font-family:var(--fonte)" onchange="hiRenderizarLista()">
+      <button class="rc-btn-editar" style="padding:9px 13px;font-size:12px" onclick="hiCarregarLista()">🔄 Atualizar</button>
+    </div>
+    <div id="hi-resumo" style="font-size:12px;color:var(--cinza-4);margin-top:8px"></div>
+  </div>
   <div id="hi-lista"><div class="hi-empty">Carregando histórico...</div></div>
 </div>
 
@@ -2559,6 +2579,9 @@ let ccFontes = {};      // NOME (maiúsculo) -> {marcas, fornecedores} das compr
 let ccAndamento = {};   // material_id -> rótulo da etapa em andamento (cotação/pedido)
 let ccSel = new Set();  // itens marcados ☑ para orçar
 let ccOculto = {};      // material_id -> true (tirado da lista pela gestora)
+let ccCadastro = {};    // material_id -> {descricao_nf, qtd_kit, unidade_medida}
+let ccOrdem = {};       // material_id -> posição manual (arrastar na lista de compras)
+let ccDragMid = null;
 let ccFiltroPrio = '';  // '' | URGENTE | COMPRAR | ATENCAO
 let ccVerOcultos = false;
 
@@ -2589,6 +2612,12 @@ async function acCarregar(){
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
     ccDados = (await sbFetch('vw_compras_classes?select=*&limit=1000')) || [];
+    // cadastro complementar (descrição NF, embalagem) — a view não traz
+    try{
+      const cad = await sbFetch('materiais?select=id,descricao_nf,qtd_kit,unidade_medida,ordem_compra&limit=1000');
+      ccCadastro = {}; ccOrdem = {};
+      for(const m of (cad||[])){ ccCadastro[m.id] = m; if(m.ordem_compra!=null) ccOrdem[m.id]=Number(m.ordem_compra); }
+    }catch(e){ ccCadastro = {}; }
     try{
       const f = await sbFetch('staging_fontes_compra?select=*&limit=500');
       ccFontes = {}; for(const x of (f||[])) ccFontes[x.nome] = x;
@@ -2817,7 +2846,8 @@ function ccRender(){
     const ocultos = ccDados.filter(r=>ccOculto[r.material_id])
       .sort((a,b)=>ccOrdemForm(a.material)-ccOrdemForm(b.material) || (a.material||'').localeCompare(b.material||''));
     lista.innerHTML = ocultos.length
-      ? `<div class="cc-bloco"><div class="cc-bhead" style="background:linear-gradient(135deg,#5D6D7E,#7F8C8D)"><span>🚫 FORA DA LISTA DE COMPRAS (${ocultos.length}) — estes itens não disparam alerta; para comprar, use a busca</span></div>
+      ? `<div class="cc-bloco"><div class="cc-bhead" style="background:linear-gradient(135deg,#5D6D7E,#7F8C8D)"><span>🚫 FORA DA LISTA DE COMPRAS (${ocultos.length}) — estes itens não disparam alerta; para comprar, use a busca</span>
+        <button class="ac-orcar" style="background:#fff;color:var(--cinza-5);font-weight:800" onclick="ccReexibirTodos()">↩ Trazer todos de volta</button></div>
         <div class="cc-bbody"><table><thead><tr><th>Item</th><th class="num">Saldo</th><th>Classe</th><th></th></tr></thead><tbody>
         ${ocultos.map(r=>`<tr><td><div class="ac-item">${r.material}</div></td><td class="num">${acN0(r.saldo)}</td>
           <td>${(CC_INFO[r.classe_compra]||CC_INFO.ESPORADICO).emoji} ${(CC_INFO[r.classe_compra]||CC_INFO.ESPORADICO).nome}</td>
@@ -2883,8 +2913,9 @@ function ccChk(r){
 function ccTabela(classe, rows){
   const g = r => ccGatilho(r);
   // ordem canônica: a mesma do formulário de saídas (em todos os detalhamentos)
+  const pos = r => (ccOrdem[r.material_id]!=null ? ccOrdem[r.material_id] : ccOrdemForm(r.material));
   const ord = [...rows].sort((a,b)=>{
-    const ia = ccOrdemForm(a.material), ib = ccOrdemForm(b.material);
+    const ia = pos(a), ib = pos(b);
     if(ia !== ib) return ia - ib;
     return (a.material||'').localeCompare(b.material||'');
   });
@@ -2908,7 +2939,7 @@ function ccTabela(classe, rows){
                   : `<span class="cc-chip cc-verd">${acData(r.proxima_validade)} ✓</span>`))
           : `<span class="cc-chip cc-cz">— sem lote</span>`;
         const status = gt.compra ? `<span class="cc-chip ${gt.chip}">${gt.motivo}</span>` : `<span class="cc-chip cc-verd">✓ ok</span>`;
-        return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
           <td class="num"><input class="ac-min" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
           <td>${val}</td><td>${status}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`;
@@ -2924,7 +2955,7 @@ function ccTabela(classe, rows){
         const falta = gt.compra ? `<b style="color:var(--vermelho)">${acN0(gt.sugestao)}</b>` : '—';
         const sit = gt.compra ? `<span class="cc-chip cc-verm">⛔ não cobre o mês</span>`
                               : `<span class="cc-chip cc-verd">✓ cobre</span>`;
-        return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num">${cpp}</td><td class="num">${nec}</td><td class="num">${acN0(r.saldo)}</td>
           <td class="num">${falta}</td><td>${sit}</td><td>${ccFontesHtml(r)}</td></tr>`;
       }).join('') + '</tbody></table>';
@@ -2932,7 +2963,7 @@ function ccTabela(classe, rows){
 
   if(classe==='ESPORADICO'){
     return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Meses c/ consumo (5m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
-      visiveis.map(r=>`<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+      visiveis.map(r=>`<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
         <td class="num">${acN0(r.saldo)}</td><td class="num">${r.meses_com_consumo??0}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`).join('') + '</tbody></table>';
   }
 
@@ -2940,7 +2971,7 @@ function ccTabela(classe, rows){
   return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura (dias)</th><th class="num">Sugerido (2m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
     visiveis.map(r=>{
       const gt=g(r);
-      return `<tr data-mid="${r.material_id}">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+      return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
         <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
         <td class="num">${acN0(r.consumo_medio_mensal)}</td>
         <td class="num">${ccCob(r)}</td>
@@ -2948,6 +2979,52 @@ function ccTabela(classe, rows){
         <td>${ccFontesHtml(r)}</td>
         <td>${ccUc(r)}</td></tr>`;
     }).join('') + '</tbody></table>';
+}
+
+// ── arrastar item para cima/baixo na lista de compras (ordem manual) ──
+function ccDragStart(ev, mid){
+  const t=ev.target;
+  if(t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='BUTTON')){ ev.preventDefault(); return; }
+  ccDragMid = mid;
+  const tr = ev.currentTarget; if(tr) tr.style.opacity='.4';
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', String(mid)); }catch(e){}
+}
+function ccDragOver(ev){ ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(e){} }
+function ccDragEnd(){ document.querySelectorAll('#ac-lista tr[data-mid]').forEach(tr=>tr.style.opacity=''); ccDragMid=null; }
+async function ccDrop(ev, alvoMid){
+  ev.preventDefault();
+  const origem = ccDragMid; ccDragEnd();
+  if(!origem || origem===alvoMid) return;
+  // sequência atual do bloco onde o item foi solto
+  const corpo = ev.currentTarget.closest('tbody');
+  if(!corpo) return;
+  const ids = [...corpo.querySelectorAll('tr[data-mid]')].map(tr=>Number(tr.dataset.mid));
+  const de = ids.indexOf(origem), para = ids.indexOf(alvoMid);
+  if(de<0 || para<0) return;
+  ids.splice(para, 0, ids.splice(de,1)[0]);
+  ids.forEach((id,i)=>{ ccOrdem[id] = i+1; });
+  ccRender();
+  try{
+    for(const id of ids) await sbFetch(`materiais?id=eq.${id}`,'PATCH',{ ordem_compra: ccOrdem[id] });
+    toast('Ordem da lista salva ✓','sucesso');
+  }catch(e){ toast('Ordem aplicada na tela, mas não salvou no banco: '+e.message,'erro'); }
+}
+async function ccLimparOrdemManual(){
+  if(!confirm('Voltar a lista para a ordem do formulário de saídas?')) return;
+  const ids=Object.keys(ccOrdem).map(Number);
+  ccOrdem={}; ccRender();
+  try{ for(const id of ids) await sbFetch(`materiais?id=eq.${id}`,'PATCH',{ ordem_compra:null }); toast('Ordem restaurada ✓','sucesso'); }
+  catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function ccReexibirTodos(){
+  const ids=Object.keys(ccOculto).map(Number);
+  if(!ids.length) return;
+  if(!confirm(`Trazer os ${ids.length} item(ns) de volta para a lista de compras?`)) return;
+  try{
+    for(const id of ids) await sbFetch(`materiais?id=eq.${id}`,'PATCH',{ ocultar_compra:false });
+    ccOculto={}; ccVerOcultos=false; ccRender();
+    toast('Itens de volta na lista ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
 // ── filtro de prioridade + tirar da lista ──
@@ -3096,9 +3173,11 @@ function acEnviarParaCotacao(materialId, silencioso){
   const op1 = coOpVazia(1);
   if (r.fornecedor_padrao_id) op1.fornecedor_id = r.fornecedor_padrao_id;
   if (r.marca) op1.marca = r.marca;
+  const cad = ccCadastro[r.material_id] || {};
   coItens.push({
     id: null, material_id: r.material_id, material_nome: r.material,
     qtd_desejada: sug > 0 ? sug : null, saldo: Number(r.saldo)||0, minimo: Number(r.estoque_minimo)||0,
+    descricao_nf: cad.descricao_nf || '',   // já vem do cadastro (vai no texto do WhatsApp)
     grupo: (typeof coGrupoAtual !== 'undefined' ? coGrupoAtual : 'Orçamento 1'),
     opcoes: [op1, coOpVazia(2), coOpVazia(3)]
   });
@@ -3294,6 +3373,39 @@ function coAddBusca(idx){
   document.getElementById('co-busca').value=''; document.getElementById('co-busca-res').style.display='none';
   coRender(); toast(m.nome+' adicionado.','sucesso');
 }
+// mover item entre grupos pelo seletor (alternativa ao arrastar)
+function coMoverItem(i, destino){
+  if(!coItens[i]) return;
+  if(destino==='__novo__'){
+    const nome=prompt('Nome do novo orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
+    if(nome===null || !nome.trim()){ coRender(); return; }
+    destino=nome.trim();
+    if(!coFornGrupo[destino]) coFornGrupo[destino]=[];
+  }
+  coItens[i].grupo = destino;
+  coRender();
+  toast(coItens[i].material_nome+' → 📁 '+destino,'sucesso');
+}
+// devolver item para a lista de compras (desfaz o envio individual)
+function coDevolverParaCompras(i){
+  const it=coItens[i]; if(!it) return;
+  if(!confirm(`Devolver "${it.material_nome}" para a lista de compras?\n\nEle sai deste orçamento e volta a aparecer na aba 🛒 Compras.`)) return;
+  coItens.splice(i,1);
+  if(typeof ccAndamento!=='undefined') delete ccAndamento[it.material_id];
+  coRender();
+  if(typeof ccRender==='function' && typeof ccDados!=='undefined' && ccDados.length) ccRender();
+  toast(it.material_nome+' devolvido para a lista de compras ↩','sucesso');
+}
+// excluir grupo vazio (some da tela e dos fornecedores salvos)
+function coExcluirGrupo(g){
+  const temItens = coItens.some(it=>(it.grupo||'Orçamento 1')===g);
+  if(temItens){ toast('O grupo ainda tem itens — mova ou tire os itens antes.','erro'); return; }
+  if(!confirm('Excluir o grupo "'+g+'"?')) return;
+  delete coFornGrupo[g];
+  if(coGrupoAtual===g){ const restantes=coGruposDistintos().filter(x=>x!==g); coGrupoAtual = restantes[0]||'Orçamento 1'; }
+  coRender();
+  toast('Grupo "'+g+'" excluído.','sucesso');
+}
 function coRemoveItem(i){ if(!confirm('Tirar "'+coItens[i].material_nome+'" da cotação?')) return; coItens.splice(i,1); coRender(); }
 
 // ── fornecedores do grupo (até 3) ──
@@ -3335,14 +3447,40 @@ function coRemFornGrupo(g, fid){
   coFornGrupo[g] = (coFornGrupo[g]||[]).filter(x=>x!==fid);
   coRender();
 }
-function coWhatsGrupo(g, fid){
+function coTextoGrupo(g, fid){
   const forn = coFornNomeById(fid);
   const itens = coItens.filter(it=>(it.grupo||'Orçamento 1')===g);
-  if(!itens.length){ toast('Grupo sem itens.',''); return; }
+  if(!itens.length) return null;
   const linhas = itens.map(it=>`• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${(it.descricao_nf&&it.descricao_nf.trim())||it.material_nome}`).join('\n');
-  const texto = `Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!`;
-  if(navigator.clipboard){ navigator.clipboard.writeText(texto); toast('Texto do WhatsApp p/ '+forn+' copiado ✓','sucesso'); }
-  else prompt('Copie o texto:', texto);
+  return { forn, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
+}
+// mostra o texto na tela (conferir/editar antes de enviar) + copiar + abrir WhatsApp
+function coWhatsGrupo(g, fid){
+  const r = coTextoGrupo(g, fid);
+  if(!r){ toast('Grupo sem itens.',''); return; }
+  const box = document.getElementById('co-textos');
+  if(!box){ if(navigator.clipboard) navigator.clipboard.writeText(r.texto); toast('Texto copiado ✓','sucesso'); return; }
+  const id = 'co-tx-'+g.replace(/[^a-zA-Z0-9]/g,'')+'-'+fid;
+  const bloco = `<div class="co-card" style="margin-bottom:10px" data-tx="${id}">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <b style="font-size:13px">💬 ${g} → 🏪 ${r.forn}</b>
+      <span style="display:flex;gap:6px">
+        <button class="co-b1" style="padding:6px 10px;font-size:11px" onclick="coCopiar('${id}')">📋 Copiar</button>
+        <button class="co-b3" style="padding:6px 10px;font-size:11px" onclick="coAbrirWhats('${id}')">💬 Abrir WhatsApp</button>
+        <button class="co-b2" style="padding:6px 10px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="this.closest('[data-tx]').remove()">✕</button>
+      </span>
+    </div>
+    <textarea id="${id}" rows="7" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--fonte);resize:vertical">${r.texto}</textarea>
+    <div style="font-size:10px;color:var(--cinza-4);margin-top:4px">Pode editar o texto aqui antes de copiar/enviar.</div>
+  </div>`;
+  const existente = box.querySelector('[data-tx="'+id+'"]');
+  if(existente) existente.outerHTML = bloco; else box.insertAdjacentHTML('afterbegin', bloco);
+  box.style.display='';
+  document.getElementById(id).scrollIntoView({behavior:'smooth',block:'center'});
+}
+function coAbrirWhats(id){
+  const ta=document.getElementById(id); if(!ta) return;
+  window.open('https://wa.me/?text='+encodeURIComponent(ta.value),'_blank');
 }
 
 // ── campos do item/opção ──
@@ -3431,6 +3569,11 @@ function coCardItem(i, it){
     <div class="co-ihead">
       <div><div class="co-inome">⠿ ${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}</div></div>
       <div class="co-iqtd">Qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)">
+        <select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
+          ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
+          <option value="__novo__">📁 + novo grupo…</option>
+        </select>
+        <button class="co-x" style="background:var(--azul-claro);color:var(--azul);border-color:var(--azul-claro)" onclick="coDevolverParaCompras(${i})" title="devolver para a lista de compras">↩ voltar</button>
         <button class="co-x" onclick="coRemoveItem(${i})" title="tirar item">✕ tirar</button></div>
     </div>
     <div style="padding:6px 14px 0;font-size:11px;color:var(--cinza-4)">📄 Descrição NF (vai no WhatsApp):
@@ -3457,6 +3600,7 @@ function coRender(){
     html += `<div class="co-grupo-head"><span>🗂️ ${g} <span style="font-size:10px;cursor:pointer;opacity:.85" onclick="coRenomearGrupo('${g.replace(/'/g,"\\'")}')">✎</span></span>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="co-grupo-count">${idxs.length} ${idxs.length===1?'item':'itens'}</span>
+        ${idxs.length===0?`<button class="co-b3" style="padding:5px 10px;font-size:11px;background:#FDEDEC;color:var(--vermelho)" onclick="coExcluirGrupo('${g.replace(/'/g,"\\'")}')">🗑 Excluir grupo vazio</button>`:''}
         <button class="co-b3" style="padding:5px 10px;font-size:11px" onclick="coFecharGrupo('${g.replace(/'/g,"\\'")}')">🔒 Fechar grupo → Pedidos</button>
       </span></div>
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:10px 14px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
@@ -3554,10 +3698,23 @@ async function coFecharGrupo(g){
       const fid = Number(fidStr);
       // reutiliza pedido EM_MONTAGEM do mesmo fornecedor (junção automática)
       let pedidoId=null;
-      const exist = await sbFetch(`pedidos?select=id&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM&limit=1`);
-      if(exist&&exist.length){ pedidoId=exist[0].id; }
+      const exist = await sbFetch(`pedidos?select=id,condicao_pagamento,prazo_previsto&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM&limit=1`);
+      if(exist&&exist.length){
+        pedidoId=exist[0].id;
+        // pedido que já existia: preenche o que ainda estiver em branco com o combinado agora
+        const escolhasForn = porForn[fidStr].map(x=>x.o);
+        const patch={};
+        if(!exist[0].condicao_pagamento){ const c=(escolhasForn.find(o=>o.condicao_pagamento)||{}).condicao_pagamento; if(c) patch.condicao_pagamento=c; }
+        if(!exist[0].prazo_previsto){ const pz=(escolhasForn.find(o=>o.prazo_entrega)||{}).prazo_entrega; if(pz) patch.prazo_previsto=pz; }
+        if(Object.keys(patch).length) await sbFetch(`pedidos?id=eq.${pedidoId}`,'PATCH',patch);
+      }
       else{
+        // herda as condições combinadas na cotação (primeira opção escolhida que trouxer o dado)
+        const escolhasForn = porForn[fidStr].map(x=>x.o);
+        const condPag = (escolhasForn.find(o=>o.condicao_pagamento && String(o.condicao_pagamento).trim())||{}).condicao_pagamento || null;
+        const prazoEnt = (escolhasForn.find(o=>o.prazo_entrega && String(o.prazo_entrega).trim())||{}).prazo_entrega || null;
         const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:coCotacaoId,
+          condicao_pagamento: condPag, prazo_previsto: prazoEnt,
           observacao:'Grupo: '+g });
         pedidoId=p&&p[0]&&p[0].id; nPed++;
       }
@@ -3596,6 +3753,197 @@ function coWhatsapp(){
   for(const g of grupos){ for(const fid of (coFornGrupo[g]||[])){ coWhatsGrupo(g, fid); feitos++; break; } }
   if(!feitos) toast('Adicione fornecedores aos grupos para gerar os textos.','');
 }
+
+// ═══ COMPRAR POR FORNECEDOR — fechar pedido mínimo (v4.0) ═══
+// Digita o fornecedor → lista tudo que já foi comprado dele, com consumo do mês
+// fechado, consumo do mês em exercício, saldo e última compra. Manda direto p/ o orçamento.
+let fvItens = [];
+let fvFornecedor = null;
+let fvSel = new Set();
+
+function fvMesAtual(){ return new Date().toISOString().slice(0,7); }
+function fvMesAnterior(){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); }
+function fvMesNome(m){ const n=['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']; return (n[parseInt((m||'').slice(5,7))]||'')+'/'+(m||'').slice(2,4); }
+function fvData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
+function fvNorm(s){ return (s||'').toUpperCase().replace(/\s+/g,' ').trim(); }
+
+async function fvBuscar(){
+  const termo = (document.getElementById('fv-busca').value||'').trim();
+  if(termo.length<2){ toast('Digite ao menos 2 letras do fornecedor.','erro'); return; }
+  const corpo = document.getElementById('fv-corpo');
+  corpo.innerHTML = '<div style="text-align:center;padding:22px;color:var(--cinza-4)">Buscando compras deste fornecedor…</div>';
+  try{
+    // 1) resolve o fornecedor
+    if(!coFornecedores.length) coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[];
+    const cands = coFornecedores.filter(f=>fvNorm(f.nome).includes(fvNorm(termo)));
+    if(!cands.length){ corpo.innerHTML='<div style="text-align:center;padding:22px;color:var(--cinza-4)">Nenhum fornecedor com esse nome.</div>'; return; }
+    let forn = cands[0];
+    if(cands.length>1){
+      const esc = prompt('Vários fornecedores encontrados:\n\n'+cands.map((f,i)=>`${i+1} — ${f.nome}`).join('\n')+'\n\nDigite o número:','1');
+      if(esc===null) { corpo.innerHTML=''; return; }
+      forn = cands[parseInt(esc)-1] || cands[0];
+    }
+    fvFornecedor = forn;
+
+    // 2) materiais já comprados deste fornecedor (NFs + ordens + histórico da planilha)
+    const compras = {}; // material_id -> {ultima, valor}
+    try{
+      const nfs = (await sbFetch(`notas_fiscais?select=id,data_entrega,data_emissao&fornecedor_id=eq.${forn.id}&limit=300`))||[];
+      if(nfs.length){
+        const mapaNf={}; for(const n of nfs) mapaNf[n.id]=(n.data_entrega||n.data_emissao||'').slice(0,10);
+        const its = (await sbFetch(`nf_itens?select=material_id,valor_unitario,nota_fiscal_id&nota_fiscal_id=in.(${nfs.map(n=>n.id).join(',')})&limit=2000`))||[];
+        for(const it of its){
+          const d = mapaNf[it.nota_fiscal_id]||'';
+          const c = compras[it.material_id] || (compras[it.material_id]={ultima:'',valor:null});
+          if(d > (c.ultima||'')){ c.ultima=d; c.valor=it.valor_unitario; }
+        }
+      }
+    }catch(e){}
+    try{
+      const ords = (await sbFetch(`ordens_compra?select=material_id,valor_unitario,data_pedido,created_at&or=(fornecedor_compra_id.eq.${forn.id},fornecedor_id.eq.${forn.id})&limit=1000`))||[];
+      for(const o of ords){
+        const d=((o.data_pedido||o.created_at||'')+'').slice(0,10);
+        const c = compras[o.material_id] || (compras[o.material_id]={ultima:'',valor:null});
+        if(d > (c.ultima||'')){ c.ultima=d; if(o.valor_unitario!=null) c.valor=o.valor_unitario; }
+      }
+    }catch(e){}
+    // histórico da planilha (fornecedores já usados por material)
+    try{
+      if(!Object.keys(ccFontes||{}).length){
+        const f=(await sbFetch('staging_fontes_compra?select=*&limit=500'))||[];
+        ccFontes={}; for(const x of f) ccFontes[x.nome]=x;
+      }
+      if(!ccDados.length) await acCarregar();
+      for(const r of ccDados){
+        const src = ccFontes[fvNorm(r.material)];
+        if(src && src.fornecedores && fvNorm(src.fornecedores).includes(fvNorm(forn.nome))){
+          if(!compras[r.material_id]) compras[r.material_id]={ultima:(r.uc_data||''),valor:r.uc_valor_unitario??null};
+        }
+      }
+    }catch(e){}
+
+    const ids = Object.keys(compras).map(Number);
+    if(!ids.length){
+      corpo.innerHTML=`<div style="text-align:center;padding:22px;color:var(--cinza-4)">Nenhuma compra registrada para <b>${forn.nome}</b> ainda.<br><span style="font-size:11px">Assim que uma NF ou pedido deste fornecedor entrar, os itens aparecem aqui.</span></div>`;
+      return;
+    }
+
+    // 3) consumo do mês fechado e do mês em exercício
+    const mesAtual=fvMesAtual(), mesAnt=fvMesAnterior();
+    const consumo={}; // material_id -> {ant, atual}
+    const add=(mid,mes,q)=>{ const c=consumo[mid]||(consumo[mid]={ant:0,atual:0}); if(mes===mesAnt)c.ant+=q; else if(mes===mesAtual)c.atual+=q; };
+    try{
+      const movs=(await sbFetch(`movimentacoes?select=qtd,material_id,created_at,periodo_cirurgico_id&aprovado=eq.true&qtd=lt.0&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&material_id=in.(${ids.join(',')})&limit=3000`))||[];
+      const perIds=[...new Set(movs.map(m=>m.periodo_cirurgico_id).filter(Boolean))];
+      const perData={};
+      if(perIds.length){
+        const pers=(await sbFetch(`periodos_cirurgicos?select=id,data&id=in.(${perIds.join(',')})&limit=500`))||[];
+        for(const p of pers) perData[p.id]=(p.data||'').slice(0,10);
+      }
+      for(const m of movs){
+        const d=(m.periodo_cirurgico_id&&perData[m.periodo_cirurgico_id])||(m.created_at||'').slice(0,10);
+        add(m.material_id, d.slice(0,7), Math.abs(m.qtd));
+      }
+    }catch(e){}
+    try{ // histórico da planilha (jun + jul até 20/07)
+      const hist=(await sbFetch('staging_saidas_hist?select=data,nome,qtd&limit=3000'))||[];
+      const nomeId={}; for(const r of ccDados) nomeId[fvNorm(r.material)]=r.material_id;
+      for(const h of hist){
+        const d=(h.data||'').slice(0,10); if(d>='2026-07-21') continue;
+        const mid=nomeId[fvNorm(h.nome)];
+        if(mid && ids.includes(mid)) add(mid, d.slice(0,7), Number(h.qtd)||0);
+      }
+    }catch(e){}
+
+    // 4) monta as linhas
+    const porId={}; for(const r of ccDados) porId[r.material_id]=r;
+    fvItens = ids.map(id=>{
+      const r=porId[id]||{}; const c=consumo[id]||{ant:0,atual:0};
+      return { material_id:id, nome:r.material||('#'+id), saldo:Number(r.saldo)||0,
+        minimo:Number(r.estoque_minimo)||0, classe:r.classe_compra||'',
+        consAnt:c.ant, consAtual:c.atual, ultima:compras[id].ultima, valor:compras[id].valor,
+        emAndamento: (typeof ccAndamento!=='undefined' && ccAndamento[id]) || null,
+        naCotacao: coItens.some(x=>x.material_id===id) };
+    }).sort((a,b)=>{
+      const ca=a.saldo>0&&a.consAnt>0?a.saldo/a.consAnt:99, cb=b.saldo>0&&b.consAnt>0?b.saldo/b.consAnt:99;
+      return ca-cb;
+    });
+    fvSel.clear();
+    fvRender();
+  }catch(e){ corpo.innerHTML='<div style="text-align:center;padding:22px;color:var(--vermelho)">Erro: '+e.message+'</div>'; }
+}
+
+function fvRender(){
+  const corpo=document.getElementById('fv-corpo');
+  if(!fvItens.length){ corpo.innerHTML=''; return; }
+  const mesAnt=fvMesNome(fvMesAnterior()), mesAtu=fvMesNome(fvMesAtual());
+  const chip=it=>{
+    if(it.naCotacao) return '<span class="co-chip" style="background:var(--azul-claro);color:var(--azul)">já no orçamento</span>';
+    if(it.emAndamento) return `<span class="co-chip" style="background:#EBEAFC;color:#6f42c1">${it.emAndamento}</span>`;
+    if(it.saldo<=0) return '<span class="co-chip" style="background:#FDEDEC;color:var(--vermelho)">zerado</span>';
+    if(it.minimo>0 && it.saldo<it.minimo) return '<span class="co-chip" style="background:#FDF2E9;color:#D35400">abaixo do mínimo</span>';
+    if(it.consAnt>0 && it.saldo/it.consAnt < 2) return '<span class="co-chip" style="background:#FEF9E7;color:#B7950B">cobre &lt; 2 meses</span>';
+    return '';
+  };
+  corpo.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div style="font-size:13px"><b>🏪 ${fvFornecedor.nome}</b> · ${fvItens.length} item(ns) já comprados deste fornecedor</div>
+      <button class="co-b3" style="padding:8px 13px;font-size:12px" onclick="fvEnviar()">📤 Enviar selecionados (<span id="fv-n">0</span>) para o orçamento</button>
+    </div>
+    <div style="max-height:380px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr>
+        <th style="width:30px;padding:7px 8px;background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)"></th>
+        <th style="text-align:left;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Material</th>
+        <th style="text-align:right;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Consumo ${mesAnt}</th>
+        <th style="text-align:right;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Consumo ${mesAtu}</th>
+        <th style="text-align:right;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Saldo</th>
+        <th style="text-align:left;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Últ. compra</th>
+        <th style="text-align:right;padding:7px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Qtd a orçar</th>
+      </tr></thead><tbody>
+      ${fvItens.map((it,i)=>`<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
+          <input type="checkbox" style="width:15px;height:15px;accent-color:var(--azul-medio)" ${it.naCotacao?'disabled title="já está no orçamento"':''} onchange="fvToggle(${it.material_id},this.checked)"></td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)"><b>${it.nome}</b> ${chip(it)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.consAnt?Math.round(it.consAnt):'—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.consAtual?Math.round(it.consAtual):'—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;${it.saldo<=0?'color:var(--vermelho);font-weight:800':''}">${Math.round(it.saldo)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:11px">${fvData(it.ultima)}${it.valor?` · <span style="color:var(--verde)">R$ ${Number(it.valor).toFixed(2).replace('.',',')}</span>`:''}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">
+          <input class="co-nn" type="number" step="any" style="width:74px" id="fv-q-${it.material_id}" value="${it.consAnt?Math.max(1,Math.ceil(it.consAnt*2-it.saldo)):''}" placeholder="qtd"></td>
+      </tr>`).join('')}
+    </tbody></table></div>
+    <div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Ordenado por urgência (menor cobertura primeiro). A quantidade sugerida cobre ~2 meses do consumo do mês fechado — ajuste à vontade antes de enviar.</div>`;
+  fvAtualizaN();
+}
+function fvToggle(mid,on){ if(on) fvSel.add(mid); else fvSel.delete(mid); fvAtualizaN(); }
+function fvAtualizaN(){ const el=document.getElementById('fv-n'); if(el) el.textContent=fvSel.size; }
+
+function fvEnviar(){
+  if(!fvSel.size){ toast('Marque os itens que quer levar para o orçamento.',''); return; }
+  let n=0;
+  for(const mid of fvSel){
+    const it=fvItens.find(x=>x.material_id===mid); if(!it) continue;
+    if(coItens.some(x=>x.material_id===mid)) continue;
+    const q=parseFloat((document.getElementById('fv-q-'+mid)||{}).value);
+    const cad=(typeof ccCadastro!=='undefined'&&ccCadastro[mid])||{};
+    const op1=coOpVazia(1);
+    if(fvFornecedor) op1.fornecedor_id=fvFornecedor.id;
+    coItens.push({ id:null, material_id:mid, material_nome:it.nome,
+      qtd_desejada: (!isNaN(q)&&q>0)?q:null, saldo:it.saldo, minimo:it.minimo,
+      descricao_nf: cad.descricao_nf||'',
+      grupo: coGrupoAtual, opcoes:[op1, coOpVazia(2), coOpVazia(3)] });
+    n++;
+  }
+  // garante o fornecedor no grupo (é dele que estamos fechando o pedido mínimo)
+  if(n && fvFornecedor){
+    const g=coGrupoAtual; const lista=coFornGrupo[g]||[];
+    if(!lista.includes(fvFornecedor.id) && lista.length<3) coFornGrupo[g]=[...lista, fvFornecedor.id];
+  }
+  fvSel.clear();
+  coRender();
+  toast(`${n} item(ns) de ${fvFornecedor.nome} no orçamento ✓ — o fornecedor já entrou no grupo.`,'sucesso');
+}
+
 function coCopiar(id){ const ta=document.getElementById(id); if(!ta) return; ta.select();
   try{ document.execCommand('copy'); toast('Texto copiado ✓','sucesso'); }
   catch(e){ if(navigator.clipboard){ navigator.clipboard.writeText(ta.value); toast('Texto copiado ✓','sucesso'); } } }
@@ -3769,92 +4117,140 @@ async function deCancelarPedido(pid){
 </script>
 
 <script>
-// ═══ ABA HISTÓRICO — cotações fechadas, só leitura (nada aqui pode ser apagado) ═══
-let hiCotacoes = [];
-let hiDetalhes = {}; // cotacao_id -> itens carregados
+// ═══ HISTÓRICO DE COMPRAS (v4.0) — notas fiscais + pedidos, com busca e correção ═══
+// Antes esta aba lia "cotações fechadas", mas o fluxo novo nunca fecha a cotação —
+// por isso aparecia vazia. Agora mostra o que interessa: o que foi comprado.
+let hiNfs = [];
+let hiItensPorNf = {};
+let hiPedidos = [];
 
-function hiData(d){ if(!d) return '—'; return new Date(d).toLocaleString('pt-BR'); }
-function hiMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+function hiData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function hiMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function hiNorm(s){ return (s||'').toString().toUpperCase().replace(/\s+/g,' ').trim(); }
 
 async function hiCarregarLista(){
-  document.getElementById('hi-lista').innerHTML = '<div class="hi-empty">Carregando histórico...</div>';
+  document.getElementById('hi-lista').innerHTML = '<div class="hi-empty">Carregando histórico de compras...</div>';
   try{
-    const rows = await sbFetch("cotacoes?select=id,criado_por,created_at,updated_at&status=eq.fechada&order=id.desc&limit=100");
-    hiCotacoes = rows || [];
+    if(!catalogoMateriais.length) catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000'))||[];
+    if(!coFornecedores.length) coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[];
+    hiNfs = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=500')) || [];
+    const ids = hiNfs.map(n=>n.id);
+    hiItensPorNf = {};
+    if(ids.length){
+      for(let i=0;i<ids.length;i+=100){
+        const lote = ids.slice(i,i+100);
+        const its = (await sbFetch(`nf_itens?select=*&nota_fiscal_id=in.(${lote.join(',')})&limit=3000`))||[];
+        for(const it of its) (hiItensPorNf[it.nota_fiscal_id]=hiItensPorNf[it.nota_fiscal_id]||[]).push(it);
+      }
+    }
+    try{ hiPedidos = (await sbFetch('pedidos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ hiPedidos=[]; }
     hiRenderizarLista();
   }catch(e){
     document.getElementById('hi-lista').innerHTML = '<div class="hi-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
   }
 }
 
+function hiFiltrar(){
+  const termo = hiNorm((document.getElementById('hi-busca')||{}).value);
+  const de = (document.getElementById('hi-de')||{}).value || '';
+  const ate = (document.getElementById('hi-ate')||{}).value || '';
+  return hiNfs.filter(nf=>{
+    const data = ((nf.data_entrega||nf.data_emissao||'')+'').slice(0,10);
+    if(de && data && data < de) return false;
+    if(ate && data && data > ate) return false;
+    if(!termo) return true;
+    if(hiNorm(nf.numero_nf).includes(termo)) return true;
+    if(hiNorm(rcNomeFornecedor(nf.fornecedor_id)).includes(termo)) return true;
+    const its = hiItensPorNf[nf.id]||[];
+    return its.some(it=>hiNorm(rcNomeMaterial(it.material_id)).includes(termo));
+  });
+}
+
 function hiRenderizarLista(){
   const div = document.getElementById('hi-lista');
-  if(!hiCotacoes.length){
-    div.innerHTML = '<div class="hi-empty">Nenhuma cotação fechada ainda. Cotações confirmadas na aba Decisão aparecem aqui.</div>';
+  if(!hiNfs.length){
+    div.innerHTML = '<div class="hi-empty">Nenhuma nota fiscal registrada ainda.<br><span style="font-size:12px">As NFs entram pela aba 📥 Receber NF. O histórico de junho/julho pode ser importado da planilha.</span></div>';
+    document.getElementById('hi-resumo').textContent='';
     return;
   }
-  div.innerHTML = hiCotacoes.map(c => `
-    <div class="hi-card">
-      <div class="hi-head" id="hi-head-${c.id}" onclick="hiToggle(${c.id})">
+  const lista = hiFiltrar();
+  const total = lista.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
+  document.getElementById('hi-resumo').innerHTML =
+    `<b>${lista.length}</b> nota(s) · total <b>${hiMoney(total)}</b>${lista.length!==hiNfs.length?` <span style="color:var(--azul)">(de ${hiNfs.length})</span>`:''}`;
+  if(!lista.length){ div.innerHTML='<div class="hi-empty">Nada encontrado com esse filtro.</div>'; return; }
+  div.innerHTML = lista.map(nf=>{
+    const its = hiItensPorNf[nf.id]||[];
+    const daPlanilha = (nf.origem==='PLANILHA');
+    return `<div class="hi-card">
+      <div class="hi-head" onclick="hiToggle(${nf.id})">
         <div>
-          <div class="hi-titulo">Cotação #${c.id} — ${c.criado_por || 'sem nome'}</div>
-          <div class="hi-meta">Fechada em: ${hiData(c.updated_at || c.created_at)}</div>
+          <div class="hi-titulo">NF ${nf.numero_nf||'—'} · ${rcNomeFornecedor(nf.fornecedor_id)}
+            ${daPlanilha?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:2px 7px;border-radius:10px;margin-left:6px">planilha</span>':''}</div>
+          <div class="hi-meta">Entrega ${hiData(nf.data_entrega)} · emissão ${hiData(nf.data_emissao)} · ${its.length} item(ns)
+            ${nf.vencimentos_obs?` · <span style="color:var(--azul)">${nf.vencimentos_obs}</span>`:''}</div>
         </div>
-        <span class="hi-seta">▶</span>
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:15px">${hiMoney(nf.valor_total)}</div>
+          <div class="hi-meta">${nf.frete?('frete '+hiMoney(nf.frete)+' · '):''}${nf.status||''}</div>
+        </div>
       </div>
-      <div class="hi-corpo" id="hi-corpo-${c.id}"><div class="hi-empty" style="padding:16px">Carregando itens...</div></div>
-    </div>
-  `).join('');
-}
-
-async function hiToggle(id){
-  const head = document.getElementById('hi-head-'+id);
-  const corpo = document.getElementById('hi-corpo-'+id);
-  const abrindo = !corpo.classList.contains('aberto');
-  head.classList.toggle('aberto', abrindo);
-  corpo.classList.toggle('aberto', abrindo);
-  if(abrindo && !hiDetalhes[id]) await hiCarregarDetalhe(id);
-}
-
-async function hiCarregarDetalhe(id){
-  const corpo = document.getElementById('hi-corpo-'+id);
-  try{
-    const its = await sbFetch(`cotacao_itens?select=id,material_nome,qtd_desejada,opcao_escolhida_id,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
-    hiDetalhes[id] = its || [];
-    hiRenderizarDetalhe(id);
-  }catch(e){
-    corpo.innerHTML = '<div class="hi-empty" style="color:var(--vermelho)">Erro ao carregar itens: '+e.message+'</div>';
-  }
-}
-
-function hiRenderizarDetalhe(id){
-  const corpo = document.getElementById('hi-corpo-'+id);
-  const its = hiDetalhes[id] || [];
-  if(!its.length){ corpo.innerHTML = '<div class="hi-empty">Sem itens registrados.</div>'; return; }
-
-  let total = 0;
-  const linhas = its.map(it => {
-    const escolhida = (it.cotacao_opcoes||[]).find(o => o.id === it.opcao_escolhida_id);
-    const fornNome = escolhida ? (escolhida.fornecedor_nome || '—') : null;
-    const unit = (escolhida && escolhida.preco_total!=null && escolhida.qtd_embalagem) ? escolhida.preco_total/escolhida.qtd_embalagem : (escolhida?.preco_unitario ?? null);
-    const sub = (unit!=null && it.qtd_desejada) ? unit * it.qtd_desejada : null;
-    if(sub) total += sub;
-    return `<tr>
-      <td>${it.material_nome}</td>
-      <td>${it.qtd_desejada ?? '—'}</td>
-      <td>${escolhida ? `<span class="hi-forn">${fornNome}</span>${escolhida.marca?' · '+escolhida.marca:''}` : '<span class="hi-sem">nenhuma opção escolhida</span>'}</td>
-      <td>${unit!=null ? hiMoney(unit)+'/un' : '—'}</td>
-      <td style="text-align:right;font-weight:600">${sub!=null ? hiMoney(sub) : '—'}</td>
-    </tr>`;
+      <div class="hi-corpo" id="hi-corpo-${nf.id}" style="display:none;padding:0 16px 14px">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead><tr>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Material</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Qtd</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Valor un.</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Total</th>
+            <th style="border-bottom:1px solid var(--cinza-2)"></th>
+          </tr></thead>
+          <tbody>${its.map(it=>`<tr>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1)">${rcNomeMaterial(it.material_id)}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">${it.qtd??'—'}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">${hiMoney(it.valor_unitario)}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">
+              <button class="rc-btn-editar" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})" title="corrigir quantidade ou valor">✎</button></td>
+          </tr>`).join('')||'<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>'}</tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button class="rc-btn-editar" style="padding:7px 11px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
-
-  corpo.innerHTML = `
-    <table>
-      <thead><tr><th>Item</th><th>Qtd</th><th>Fornecedor escolhido</th><th>Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
-      <tbody>${linhas}</tbody>
-    </table>
-    <div class="hi-total">Total da cotação: ${hiMoney(total)}</div>
-  `;
+}
+function hiToggle(id){
+  const el=document.getElementById('hi-corpo-'+id); if(!el) return;
+  el.style.display = el.style.display==='none' ? '' : 'none';
+}
+async function hiCorrigirItem(itemId, nfId){
+  const its = hiItensPorNf[nfId]||[];
+  const it = its.find(x=>x.id===itemId); if(!it) return;
+  const q = prompt('Quantidade de "'+rcNomeMaterial(it.material_id)+'":', it.qtd??'');
+  if(q===null) return;
+  const v = prompt('Valor unitário (R$):', it.valor_unitario??'');
+  if(v===null) return;
+  const qtd=parseFloat(String(q).replace(',','.')), val=parseFloat(String(v).replace(',','.'));
+  if(isNaN(qtd)||isNaN(val)){ toast('Valores inválidos.','erro'); return; }
+  try{
+    await sbFetch(`nf_itens?id=eq.${itemId}`,'PATCH',{ qtd:qtd, valor_unitario:val, valor_item:qtd*val });
+    toast('Item corrigido ✓ (o saldo do estoque não muda por aqui)','sucesso');
+    hiCarregarLista();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function hiCorrigirNf(nfId){
+  const nf = hiNfs.find(n=>n.id===nfId); if(!nf) return;
+  const num = prompt('Número da NF:', nf.numero_nf||''); if(num===null) return;
+  const ent = prompt('Data de entrega (aaaa-mm-dd):', (nf.data_entrega||'').slice(0,10)); if(ent===null) return;
+  const tot = prompt('Valor total da nota (R$):', nf.valor_total??''); if(tot===null) return;
+  const obs = prompt('Vencimentos / observação:', nf.vencimentos_obs||''); if(obs===null) return;
+  const body={ numero_nf:num.trim()||null, vencimentos_obs:obs.trim()||null };
+  if(ent.trim()) body.data_entrega=ent.trim();
+  const t=parseFloat(String(tot).replace(',','.')); if(!isNaN(t)) body.valor_total=t;
+  try{
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',body);
+    toast('Nota corrigida ✓','sucesso'); hiCarregarLista();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 </script>
 
@@ -3862,9 +4258,16 @@ function hiRenderizarDetalhe(id){
 // ═══ ABA RECEBER NF — fecha o ciclo: ordem pendente -> NF -> sobe estoque ═══
 let rcOrdens = [];       // ordens_compra com situacao='PENDENTE'
 let rcControlaLote = new Set(); // materiais que exigem lote/validade na entrada
+let rcOrfas = [];              // ordens pendentes nunca liberadas (limbo)
 let rcNfsRecentes = [];
 
 function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
+// Fornecedor sem custo (amostra grátis / bonificação / doação / cortesia).
+// Entrada por esse fornecedor NÃO gera custo e NÃO altera o preço de reposição do item.
+function rcSemCusto(fid){
+  const n = (rcNomeFornecedor(Number(fid)||null)||'').toUpperCase();
+  return /AMOSTRA|BONIFICA|DOA[CÇ]|CORTESIA|GRATIS|GRÁTIS/.test(n);
+}
 function rcNomeFornecedor(id){ if(!id) return '(sem fornecedor)'; const f = coFornecedores.find(x=>x.id===id); return f ? f.nome : ('fornecedor #'+id); }
 function rcMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function rcMesRef(dataStr){
@@ -3892,6 +4295,11 @@ async function rcCarregar(){
     }
     try{ ocCreditos = (await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200')) || []; }catch(e){ ocCreditos = null; }
     rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
+    // pendências ÓRFÃS: ordens antigas/migradas que nunca foram liberadas (não aparecem em lugar nenhum
+    // e ainda bloqueiam o item na lista de compras) — ex.: METIL 4% OPHTHALMOS
+    try{
+      rcOrfas = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc&limit=200")) || [];
+    }catch(e){ rcOrfas = []; }
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
     rcRenderizar();
     rcCarregarNfsRecentes();
@@ -3905,7 +4313,7 @@ let rcPausados = [];
 function rcRenderizar(){
   const corpo = document.getElementById('rc-corpo');
   if(!rcOrdens.length){
-    corpo.innerHTML = '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de confirmados na aba 📋 Decisão.</span></div>';
+    corpo.innerHTML = rcHtmlOrfas() + '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de aprovados na aba 🔏 Aprovar Pedido.</span></div>';
     corpo.innerHTML += rcHtmlPausados();
     return;
   }
@@ -3927,7 +4335,7 @@ function rcRenderizar(){
         <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
         <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${fid}')"></td>
-        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${valPadrao}" placeholder="R$/un" oninput="rcAtualizaTotais('${fid}')"></td>
+        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${fid}')"></td>
         <td style="text-align:right;font-weight:700;white-space:nowrap" id="rc-tot-${o.id}">—</td>
         <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
         <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
@@ -3941,8 +4349,10 @@ function rcRenderizar(){
       </td></tr>`;
     }).join('');
 
+    const semCusto = rcSemCusto(fid);
     return `<div class="rc-grupo" data-forn="${fid}">
       <div class="rc-ghead">${nomeForn} <span class="rc-count">${itens.length} pedido(s)</span></div>
+      ${semCusto?`<div style="background:#EAF7EE;border-bottom:1.5px solid #A9DFBF;color:var(--verde);padding:8px 16px;font-size:12px;font-weight:700">🎁 ENTRADA SEM CUSTO (amostra grátis / bonificação) — valores ficam zerados, o nº da NF é opcional e o <b>preço de referência do item é preservado</b> para quando precisar comprar.</div>`:''}
       <div class="rc-nfform">
         <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${fid}"></div>
         <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${fid}"></div>
@@ -3964,7 +4374,56 @@ function rcRenderizar(){
       </div>
     </div>`;
   }).join('') + rcHtmlPausados();
+  corpo.innerHTML = rcHtmlOrfas() + corpo.innerHTML;
   Object.keys(grupos).forEach(fid=>rcAtualizaTotais(fid));
+}
+
+// ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
+function rcHtmlOrfas(){
+  if(!rcOrfas || !rcOrfas.length) return '';
+  const dias = d => d ? Math.round((Date.now()-new Date(d).getTime())/86400000) : null;
+  const linhas = rcOrfas.map(o=>{
+    const dd = dias(o.created_at);
+    return `<tr>
+      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
+      <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
+      <td style="text-align:center;font-size:11px;${dd&&dd>30?'color:var(--vermelho);font-weight:700':'color:var(--cinza-4)'}">${dd!==null?dd+' dias':'—'}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde)" onclick="rcLiberarOrfa(${o.id})" title="a compra aconteceu: liberar para dar entrada da NF">✔ recebi</button>
+        <button class="rc-btn-problema" onclick="rcDescartarOrfa(${o.id})" title="não vai chegar: devolve o item para a lista de compras">🚫 não veio</button>
+      </td></tr>`;
+  }).join('');
+  return `<div class="rc-grupo" style="border:2px solid var(--amarelo)">
+    <div class="rc-ghead" style="background:#B7950B">⚠️ PENDÊNCIAS ANTIGAS SEM DONO <span class="rc-count">${rcOrfas.length}</span></div>
+    <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7a6408;border-bottom:1px solid #F9E79F">
+      Compras que ficaram marcadas como pendentes mas nunca foram liberadas — elas <b>não apareciam em nenhuma tela</b> e ainda seguravam o item na lista de compras.
+      Diga o que aconteceu com cada uma: <b>✔ recebi</b> abre a entrada da NF · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Material</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+  </div>`;
+}
+async function rcLiberarOrfa(id){
+  const o=rcOrfas.find(x=>x.id===id); if(!o) return;
+  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — confirmar que essa compra chegou?\n\nEla vai para a lista de entrada de NF logo abaixo.`)) return;
+  try{
+    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ aprovado_pedido:true });
+    toast('Liberada — agora dê entrada da NF abaixo ✓','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function rcDescartarOrfa(id){
+  const o=rcOrfas.find(x=>x.id===id); if(!o) return;
+  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — essa compra não vai chegar?\n\nO item volta a aparecer na lista de compras normalmente.`)) return;
+  const motivo=prompt('Motivo (opcional):')||'';
+  try{
+    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ situacao:'NAO COMPRAR AGORA',
+      observacao:((o.observacao?o.observacao+' | ':'')+'Pendência antiga encerrada'+(motivo?': '+motivo:'')) });
+    toast('Encerrada — o item voltou para a lista de compras ✓','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
 function rcHtmlPausados(){
@@ -4028,6 +4487,10 @@ function rcAtualizaTotais(fid){
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+fid)||{}).value)||0;
   const cred = parseFloat((document.getElementById('rc-nf-cred-'+fid)||{}).value)||0;
   const res = document.getElementById('rc-resumo-'+fid);
+  if(rcSemCusto(fid) && res){
+    res.innerHTML = `${marcados} item(ns) marcado(s) · <span class="rc-status-entregue" style="font-weight:800">🎁 ENTRADA SEM CUSTO — Total R$ 0,00</span> <span style="font-size:10px;color:var(--cinza-4)">(não entra em contas a pagar nem altera o preço de referência)</span>`;
+    return;
+  }
   if(res) res.innerHTML = `${marcados} item(ns) marcado(s) · Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}${cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>`:''} · <span style="font-size:15px">${cred?'A pagar':'Total da NF'}: <b style="color:var(--azul)">${rcMoney(Math.max(0,totalItens+frete-cred))}</b></span>${cred?`<br><span style="font-size:10px;color:var(--cinza-4)">valor da NF (custos): ${rcMoney(totalItens+frete)} — o crédito abate só o financeiro</span>`:''}`;
 }
 
@@ -4064,6 +4527,7 @@ async function rcConfirmarNF(fid){
   });
   if(!linhasMarcadas.length){ toast('Marque ao menos um item recebido nesta NF.','erro'); return; }
 
+  const semCusto = rcSemCusto(fid);
   const numeroNf = document.getElementById(`rc-nf-num-${fid}`).value.trim();
   const dataEmissao = document.getElementById(`rc-nf-emissao-${fid}`).value || null;
   const dataEntrega = document.getElementById(`rc-nf-entrega-${fid}`).value || null;
@@ -4083,7 +4547,8 @@ async function rcConfirmarNF(fid){
     const qtd = parseFloat(document.getElementById(`rc-qtd-${ordemId}`).value);
     const val = parseFloat(document.getElementById(`rc-val-${ordemId}`).value);
     if(!qtd || qtd<=0){ toast('Informe a quantidade recebida de todos os itens marcados.','erro'); return; }
-    if(isNaN(val) || val<0){ toast('Informe o valor unitário de todos os itens marcados.','erro'); return; }
+    if(semCusto){ val = 0; }
+    else if(isNaN(val) || val<0){ toast('Informe o valor unitário de todos os itens marcados.','erro'); return; }
     const lotes = rcColherLotes(ordemId, qtd);
     if(rcControlaLote.has(ordem.material_id)){
       const nome = rcNomeMaterial(ordem.material_id);
@@ -4139,13 +4604,21 @@ async function rcConfirmarNF(fid){
         }catch(e){ toast('⚠ Lote não gravado ('+(l.lote||'—')+'): '+e.message,'erro'); }
       }
 
-      const movArr = await sbFetch('movimentacoes','POST',{
-        tipo: 'ENTRADA_COMPRA', material_id: ordem.material_id, local_id: localId,
+      let movArr;
+      const movBase = { material_id: ordem.material_id, local_id: localId,
         qtd: qtd, valor_unitario: val, nf_item_id: nfItemId,
         fornecedor_id: Number(fid) || null,
         aprovado: false, registrado_por: registrante,
-        observacao: 'Recebimento NF ' + (numeroNf||'—'),
-      });
+        observacao: (semCusto?'🎁 Entrada SEM CUSTO (amostra/bonificação) — ':'Recebimento NF ') + (numeroNf||'—') };
+      if(semCusto){
+        // tipo próprio para separar nos relatórios; se o banco não aceitar, entra como compra com a observação
+        try{ movArr = await sbFetch('movimentacoes','POST', Object.assign({tipo:'ENTRADA_AMOSTRA'}, movBase)); }
+        catch(e){ movArr = await sbFetch('movimentacoes','POST', Object.assign({tipo:'ENTRADA_COMPRA'}, movBase)); }
+      } else {
+        movArr = await sbFetch('movimentacoes','POST', Object.assign({tipo:'ENTRADA_COMPRA'}, movBase));
+        // compra real atualiza o preço de referência do item (custo de reposição)
+        try{ await sbFetch(`materiais?id=eq.${ordem.material_id}`,'PATCH',{ ultimo_valor_pago: val }); }catch(e){}
+      }
       const movId = movArr && movArr[0] && movArr[0].id;
       // Aprova em seguida — só a mudança de aprovado (via UPDATE) dispara o trigger que soma o estoque
       await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
