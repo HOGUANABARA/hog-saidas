@@ -7153,12 +7153,28 @@ async function relCarregar(){
       relMesIni=iniStr;
       const movs=(await sbFetch(`movimentacoes?select=material_id,qtd,tipo&aprovado=eq.true&created_at=gte.${iniStr}&limit=8000`))||[];
       for(const mv of movs){
-        const m=relMov[mv.material_id]||(relMov[mv.material_id]={compra:0,consumo:0,outros:0});
+        const m=relMov[mv.material_id]||(relMov[mv.material_id]={compra:0,consumo:0,outros:0,consumoPlan:0});
         const q=Number(mv.qtd)||0, t=(mv.tipo||'').toUpperCase();
         if(t.startsWith('ENTRADA') && q>0) m.compra+=q;
         else if(t.startsWith('SAIDA') && q<0) m.consumo+=Math.abs(q);
         else m.outros+=q;
       }
+      // consumo do mês que ficou na PLANILHA (antes do app entrar no ar) — completa o mês
+      try{
+        const mesAtual=iniStr.slice(0,7);
+        const hist=(await sbFetch('staging_saidas_hist?select=data,nome,qtd&limit=3000'))||[];
+        if(hist.length){
+          const idPorNome={};
+          for(const mm of mats) idPorNome[(mm.nome||'').toUpperCase().replace(/\s+/g,' ').trim()]=mm.id;
+          for(const h of hist){
+            if(((h.data||'')+'').slice(0,7)!==mesAtual) continue;
+            const mid=idPorNome[(h.nome||'').toUpperCase().replace(/\s+/g,' ').trim()];
+            if(!mid) continue;
+            const m=relMov[mid]||(relMov[mid]={compra:0,consumo:0,outros:0,consumoPlan:0});
+            m.consumoPlan=(m.consumoPlan||0)+(Number(h.qtd)||0);
+          }
+        }
+      }catch(e){}
     }catch(e){}
     // última contagem fechada: total, data e onde estava alocado (ajuda a achar problema)
     relUltContagem={}; relUltData=null;
@@ -7179,13 +7195,15 @@ async function relCarregar(){
     relDados=mats.map(m=>{
       const c=relUltContagem[m.id];
       const saldo=saldoMap[m.id]??0;
-      const mv=relMov[m.id]||{compra:0,consumo:0,outros:0};
-      const anterior = saldo - mv.compra + mv.consumo - mv.outros;
+      const mv=relMov[m.id]||{compra:0,consumo:0,outros:0,consumoPlan:0};
+      const consumoTotal = (mv.consumo||0) + (mv.consumoPlan||0);
+      const anterior = saldo - mv.compra + consumoTotal - mv.outros;
       const emb = (m.unidade_medida||'') + ((Number(m.qtd_kit)||0)>1 ? ` c/ ${Number(m.qtd_kit)}` : '');
       return { id:m.id, nome:m.nome, marca:m.marca||'', descricao_nf:m.descricao_nf||'',
         unidade:m.unidade_medida||'', qtd_kit:Number(m.qtd_kit)||null, embalagem: emb.trim(),
         classe:m.classe_compra||'ESPORADICO', controla_lote:!!m.controla_lote,
-        saldo, anterior, compraMes:mv.compra, consumoMes:mv.consumo, ajusteMes:mv.outros,
+        saldo, anterior, compraMes:mv.compra, consumoMes:consumoTotal,
+        consumoApp:mv.consumo||0, consumoPlanilha:mv.consumoPlan||0, ajusteMes:mv.outros,
         lotes:lotesMap[m.id]||[],
         ultContagem: c?c.total:null, ondeEstava: c?c.onde.join(' · '):'',
         movimento: c?(saldo-c.total):null };
@@ -7209,7 +7227,7 @@ function relRender(){
   });
   const totalUn=relFiltrados.reduce((s,m)=>s+m.saldo,0);
   document.getElementById('rel-resumo').innerHTML=`<b>${relFiltrados.length}</b> item(ns) · <b>${Math.round(totalUn).toLocaleString('pt-BR')}</b> unidades no Estoque Geral · gerado em ${new Date().toLocaleString('pt-BR').slice(0,16)}
-    <br><span style="font-size:11px">A conta fecha assim: <b>estoque do mês anterior + compra − consumo ± ajustes = saldo real</b>. Onde não fechar com a contagem física, há problema para investigar.</span>`;
+    <br><span style="font-size:11px">A conta fecha assim: <b>estoque do mês anterior + compra − consumo ± ajustes = saldo real</b>. O consumo do mês soma o que foi lançado no app <b>e</b> o que ficou na planilha antes do app entrar no ar. Onde não fechar com a contagem física, há problema para investigar.</span>`;
   document.getElementById('rel-corpo').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12.5px">
     <thead><tr>
       <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Material</th>
@@ -7228,7 +7246,7 @@ function relRender(){
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.embalagem||'<span style="color:var(--cinza-3)">—</span>'}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;color:var(--cinza-4)">${m.anterior.toLocaleString('pt-BR')}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.compraMes?'color:var(--azul);font-weight:600':'color:var(--cinza-3)'}">${m.compraMes?('+'+m.compraMes.toLocaleString('pt-BR')):'—'}</td>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.consumoMes?'color:#D35400;font-weight:600':'color:var(--cinza-3)'}">${m.consumoMes?('−'+m.consumoMes.toLocaleString('pt-BR')):'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.consumoMes?'color:#D35400;font-weight:600':'color:var(--cinza-3)'}">${m.consumoMes?('−'+m.consumoMes.toLocaleString('pt-BR')):'—'}${(m.consumoPlanilha&&m.consumoApp)?`<div style="font-size:9px;font-weight:400;color:var(--cinza-4)">app ${m.consumoApp} + planilha ${m.consumoPlanilha}</div>`:''}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.ajusteMes?'color:var(--amarelo);font-weight:600':'color:var(--cinza-3)'}">${m.ajusteMes?((m.ajusteMes>0?'+':'')+m.ajusteMes.toLocaleString('pt-BR')):'—'}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:800;${m.saldo<0?'color:var(--vermelho)':''}">${m.saldo.toLocaleString('pt-BR')}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">${m.lotes.length?m.lotes.map(l=>`${l.lote} · val ${relData(l.validade)} (${l.qtd})`).join('<br>'):(m.controla_lote?'<span style="color:var(--amarelo)">sem lote registrado</span>':'—')}</td>
@@ -7239,17 +7257,17 @@ function relExportar(){
   if(!relFiltrados.length){ toast('Nada para exportar — ajuste os filtros.','erro'); return; }
   const rotUlt='Últ. contagem'+(relUltData?' '+relData(relUltData):'');
   const linhas=[['ID','Material','Descrição NF','Marca','Embalagem (un/pacote)','Classe',
-                 'Estoque mês anterior','Compra no mês','Consumo no mês','Ajustes no mês','SALDO REAL',
+                 'Estoque mês anterior','Compra no mês','Consumo no mês','(consumo app)','(consumo planilha)','Ajustes no mês','SALDO REAL',
                  rotUlt,'Onde estava (por local)','Lote / Validade','Contagem física','Diferença','Observação']];
   for(const m of relFiltrados){
     linhas.push([m.id, m.nome, m.descricao_nf, m.marca, m.embalagem, m.classe,
-      m.anterior, m.compraMes||'', m.consumoMes||'', m.ajusteMes||'', m.saldo,
+      m.anterior, m.compraMes||'', m.consumoMes||'', m.consumoApp||'', m.consumoPlanilha||'', m.ajusteMes||'', m.saldo,
       m.ultContagem===null?'':m.ultContagem, m.ondeEstava,
       m.lotes.map(l=>`${l.lote} val ${relData(l.validade)} (${l.qtd})`).join(' | '), '', '', '']);
   }
   const ws=XLSX.utils.aoa_to_sheet(linhas);
   ws['!cols']=[{wch:6},{wch:38},{wch:32},{wch:15},{wch:18},{wch:15},
-               {wch:16},{wch:13},{wch:13},{wch:12},{wch:12},
+               {wch:16},{wch:13},{wch:13},{wch:12},{wch:14},{wch:12},{wch:12},
                {wch:15},{wch:28},{wch:30},{wch:14},{wch:11},{wch:18}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Relatório Estoque');
