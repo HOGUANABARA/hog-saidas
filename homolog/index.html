@@ -304,7 +304,7 @@ details[open] summary { margin-bottom: 6px; }
 
 /* ═══ MENU LATERAL ═══ */
 .hog-shell{display:flex;align-items:flex-start;min-height:calc(100vh - 64px)}
-.hog-side{width:214px;flex-shrink:0;background:#fff;border-right:1px solid var(--cinza-2);padding:14px 0 30px;position:sticky;top:0;max-height:100vh;overflow-y:auto}
+.hog-side{width:214px;flex-shrink:0;background:#fff;border-right:1px solid var(--cinza-2);padding:14px 0 30px;position:sticky;top:0;min-height:calc(100vh - 64px);max-height:100vh;overflow-y:auto}
 .hog-main{flex:1;min-width:0}
 .hog-main > .container{max-width:1180px}
 .hs-grupo{margin-bottom:2px}
@@ -365,14 +365,16 @@ details[open] summary { margin-bottom: 6px; }
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
+
 <div style="background:#E67E22;color:#fff;text-align:center;font-weight:800;font-size:13px;padding:8px 12px;letter-spacing:.5px;position:sticky;top:0;z-index:999">
   🧪 AMBIENTE DE HOMOLOGAÇÃO — versão de teste. O app oficial da equipe é <a href="https://hoguanabara.github.io/hog-saidas/" style="color:#fff;text-decoration:underline">este link</a>.
 </div>
 
+
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.4 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.4b · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -424,7 +426,6 @@ details[open] summary { margin-bottom: 6px; }
   </nav>
 </aside>
 <main class="hog-main">
-</div>
 
 <div class="container">
 
