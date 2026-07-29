@@ -1022,6 +1022,7 @@ details[open] summary { margin-bottom: 6px; }
   <div id="rm-aguardando-nf"></div>
   <div id="rm-pend-fisica"></div>
   <div id="rm-pend-nf"></div>
+  <div id="rm-nf-lavanderia"></div>
   <div id="rm-saldo"></div>
 
 </div>
@@ -1081,6 +1082,21 @@ details[open] summary { margin-bottom: 6px; }
       <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
     </div>
     <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
+  </div>
+
+  <!-- ═══ CONTAGEM DO LIVRO DE REMESSAS (v4.6c) ═══
+       O livro tem saldo próprio e não aparece no inventário de estoque.
+       Esta é a contagem dele: o que está em casa, limpo, pronto para usar. -->
+  <div class="inv-card" id="rmc-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6f42c1;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📚 Contagem do livro de remessas — pijamas e itens que circulam</span>
+      <button onclick="rmcCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#F4ECF7;border-left:4px solid #6f42c1;padding:10px 14px;font-size:12px;color:#4A235A;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      Conte só o que está <b>em casa</b> — limpo, na prateleira, pronto para usar. O que está sujo esperando remessa e o que está fora
+      já têm conta própria e não entram aqui. A <b>cor não divide o saldo</b>: se precisar registrar, escreva na observação da linha.
+    </div>
+    <div id="rmc-corpo"><div class="inv-empty">Carregando o livro…</div></div>
   </div>
 
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
@@ -2736,7 +2752,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); ivCarregar(); }
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   hsSincronizar();
@@ -8168,7 +8184,7 @@ function relImprimir(){
 // reprocessamento/lavagem e tem que voltar. Três lugares: CASA · SUJO · FORA.
 // Nada aqui mexe no saldo do estoque. Só a perda definitiva pede assinatura.
 // ═══════════════════════════════════════════════════════════════════════════
-let rmBens = [], rmSaldo = [], rmSujos = [], rmRemessas = [], rmPend = [], rmNfPend = [];
+let rmBens = [], rmSaldo = [], rmSujos = [], rmRemessas = [], rmPend = [], rmNfPend = [], rmNfLav = [];
 let rmSemBanco = false;   // true quando o SQL da v4.6 ainda não foi rodado
 
 function rmQuem(){
@@ -8214,6 +8230,8 @@ async function rmCarregar(){
       sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,data_emissao,status_pagamento,motivo_tratativa,natureza,remessa_id&status_pagamento=eq.PENDENTE_TRATATIVA&order=id.desc&limit=100'),
     ]);
     rmSaldo = saldo || []; rmSujos = sujos || []; rmRemessas = remessas || []; rmPend = pend || []; rmNfPend = nfPend || [];
+    try{ rmNfLav = (await sbFetch('notas_fiscais?select=*&natureza=eq.SERVICO_LAVANDERIA&order=id.desc&limit=14')) || []; }
+    catch(e){ rmNfLav = []; }
     if(!(typeof coFornecedores !== 'undefined' && coFornecedores && coFornecedores.length)){
       try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || []; }catch(e){}
     }
@@ -8245,6 +8263,7 @@ function rmRenderizar(){
   rmRenderAguardandoNf();
   rmRenderPendFisica();
   rmRenderPendNf();
+  rmRenderNotaLavanderia();
   rmRenderSaldo();
 }
 
@@ -8405,6 +8424,91 @@ function rmRenderPendNf(){
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Nota</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Motivo</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div></div>`;
+}
+
+// ── NOTA MENSAL DA LAVANDERIA ─────────────────────────────────────────────
+// Valor fixo por mês: não se confere item a item nem se amarra a uma remessa.
+// O livro continua contando o que saiu e voltou — isso é o controle físico.
+// A nota é só o custo do mês, e o que ela informa é o valor.
+function rmMesRefAtual(){
+  const d = new Date();
+  return d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase() + '/' + String(d.getFullYear()).slice(2);
+}
+function rmRenderNotaLavanderia(){
+  const box = document.getElementById('rm-nf-lavanderia');
+  if(!box) return;
+  const temLavanderia = rmBens.some(b=>b.tipo==='LAVANDERIA');
+  if(!temLavanderia && !rmNfLav.length){ box.innerHTML=''; return; }
+
+  const mesAtual = rmMesRefAtual();
+  const jaTemDoMes = rmNfLav.some(n=>(n.mes_referencia||'').toUpperCase()===mesAtual);
+  const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:'—'; };
+
+  const linhas = rmNfLav.length ? rmNfLav.map(n=>`<tr>
+      <td style="font-weight:700">${rmEsc(n.mes_referencia||'—')}</td>
+      <td>NF ${rmEsc(n.numero_nf||'(sem número)')}</td>
+      <td>${rmEsc(nomeForn(n.fornecedor_id))}</td>
+      <td style="text-align:right;font-weight:700">${rmMoney(n.valor_total)}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${rmEsc((''+(n.vencimentos_obs||'')).slice(0,60))}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" class="rm-empty">Nenhuma nota da lavanderia lançada ainda.</td></tr>';
+
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head azul"><span>🧺 Nota mensal da lavanderia</span>
+      <span class="rm-count">${jaTemDoMes ? mesAtual+' já lançado ✓' : mesAtual+' ainda não chegou'}</span></div>
+    <div style="padding:10px 16px;background:${jaTemDoMes?'var(--cinza-1)':'#FEF9E7'};font-size:12px;color:${jaTemDoMes?'var(--cinza-5)':'#7D6608'};line-height:1.55">
+      A lavanderia cobra <b>valor fixo por mês</b> — não se confere item a item nem se amarra a uma remessa.
+      O controle físico do que saiu e voltou continua no livro; aqui entra só o custo do mês.
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Mês</th><th>Nota</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Obs.</th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+    <div style="padding:12px 16px"><button class="rm-b verde" onclick="rmLancarNotaLavanderia()">➕ Lançar a nota do mês</button></div>
+  </div>`;
+}
+
+async function rmLancarNotaLavanderia(){
+  if(!(coFornecedores && coFornecedores.length)){
+    try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000')) || []; }catch(e){}
+  }
+  const forn = await pkEscolher({
+    titulo: 'Qual lavanderia?',
+    subtitulo: 'Digite qualquer pedaço do nome para filtrar.',
+    itens: (coFornecedores||[]).map(f=>({ id:f.id, nome:f.nome })),
+  });
+  if(!forn) return;
+
+  const mes = prompt('Mês de referência da nota:', rmMesRefAtual());
+  if(mes===null || !mes.trim()) return;
+  const mesN = mes.trim().toUpperCase();
+  const repetida = rmNfLav.find(n=>(n.mes_referencia||'').toUpperCase()===mesN && n.fornecedor_id===forn.id);
+  if(repetida && !confirm(`Já existe nota de ${mesN} desta lavanderia (NF ${repetida.numero_nf||'—'}, ${rmMoney(repetida.valor_total)}).\n\nLançar outra assim mesmo?`)) return;
+
+  const numero = prompt('Número da NF:');
+  if(numero===null || !numero.trim()) return;
+  const valorTxt = prompt('Valor da nota (R$):');
+  if(valorTxt===null) return;
+  const valor = parseFloat((valorTxt||'').replace(/\./g,'').replace(',','.'));
+  if(isNaN(valor) || valor<=0){ toast('Valor inválido.','erro'); return; }
+  const obs = prompt('Vencimento / observação (opcional):','') || '';
+
+  if(!confirm(`Lançar a nota da lavanderia?\n\n${mesN} · NF ${numero.trim()} · ${rmMoney(valor)}\n${forn.nome}\n\nNão mexe em estoque nem no saldo do livro — é só o custo do mês.`)) return;
+  try{
+    await sbFetch('notas_fiscais','POST',{
+      fornecedor_id: forn.id,
+      numero_nf: numero.trim(),
+      mes_referencia: mesN,
+      valor_total: valor,
+      natureza: 'SERVICO_LAVANDERIA',
+      confirmada: true,
+      status_pagamento: 'LIBERADA',
+      status: 'ENTREGUE',
+      data_emissao: new Date().toISOString().slice(0,10),
+      vencimentos_obs: (obs.trim() ? obs.trim()+' | ' : '') + 'Lavanderia — valor fixo mensal. Não gera entrada de estoque.',
+    });
+    toast('Nota da lavanderia de '+mesN+' lançada ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao lançar: '+e.message,'erro'); }
 }
 
 function rmRenderSaldo(){
@@ -8679,8 +8783,14 @@ async function rmRegistrarRetorno(remessaId){
           qtd:falta, status:'ABERTA', observacao:'Saiu na remessa '+(r.numero_bloco||'#'+remessaId)+' e não voltou' });
       }
     }
-    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'RETORNADA', data_retorno:hoje, recebido_por:rmQuem() });
-    toast(faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). Agora dê entrada na nota.` : 'Baixa registrada ✓ — agora dê entrada na nota.','sucesso');
+    // A lavanderia cobra valor fixo por mês, não por remessa: o ciclo físico
+    // fecha aqui mesmo. A nota entra uma vez por mês, no card próprio.
+    // A Esterileno cobra por peça reprocessada, então espera a nota para conferir.
+    const mensal = r.tipo === 'LAVANDERIA';
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{
+      status: mensal ? 'CONFERIDA' : 'RETORNADA', data_retorno:hoje, recebido_por:rmQuem() });
+    const fim = mensal ? 'A nota da lavanderia é mensal — lance no card do mês.' : 'Agora dê entrada na nota.';
+    toast((faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). ` : 'Baixa registrada ✓ — ') + fim,'sucesso');
     rmCarregar();
   }catch(e){ toast('Erro ao dar baixa: '+e.message,'erro'); }
 }
@@ -8785,6 +8895,127 @@ async function rmPendPerda(pendId){
     toast('Perda registrada no livro.','');
     rmCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ═══ CONTAGEM DO LIVRO (v4.6c) ═══════════════════════════════════════════
+// Fica na aba Inventário porque é a mesma cabeça: contar o que existe e
+// acertar o sistema com a prateleira. Mas mexe no livro, não no estoque.
+let rmcSaldo = [], rmcBens = [];
+
+async function rmcCarregar(){
+  const corpo = document.getElementById('rmc-corpo');
+  if(!corpo) return;
+  if(!sbUrl || !sbKey){ corpo.innerHTML = '<div class="inv-empty">Conecte ao banco.</div>'; return; }
+  corpo.innerHTML = '<div class="inv-empty">Carregando o livro…</div>';
+  try{
+    rmcBens  = (await sbFetch('remessa_bens?select=id,nome,tipo,peca,tamanho,ativo&order=nome.asc&limit=500')) || [];
+    rmcSaldo = (await sbFetch('vw_remessa_saldo?select=*&limit=500')) || [];
+  }catch(e){
+    corpo.innerHTML = '<div class="inv-empty">O livro de remessas ainda não existe no banco. Rode o <b>v46_remessas.sql</b>.</div>';
+    return;
+  }
+  rmcRenderizar();
+}
+
+function rmcOrdemTam(t){ return ({PP:1,P:2,M:3,G:4,GG:5,XG:6})[(t||'').toUpperCase()] || 9; }
+
+function rmcRenderizar(){
+  const corpo = document.getElementById('rmc-corpo');
+  const ativos = rmcBens.filter(b=>b.ativo!==false);
+  if(!ativos.length){ corpo.innerHTML = '<div class="inv-empty">Nenhum bem cadastrado no livro ainda.</div>'; return; }
+
+  const saldoDe = id => rmcSaldo.find(s=>Number(s.bem_id)===Number(id)) || {em_casa:0,sujo:0,fora:0};
+  const grupos = {};
+  for(const b of ativos){
+    const g = b.peca ? ('PIJAMA — '+b.peca) : (b.tipo==='LAVANDERIA' ? '🧺 Lavanderia' : '♻️ Esterilização');
+    (grupos[g] = grupos[g] || []).push(b);
+  }
+  const nomes = Object.keys(grupos).sort();
+
+  let html = '';
+  for(const g of nomes){
+    const linhas = grupos[g]
+      .sort((a,b)=> rmcOrdemTam(a.tamanho)-rmcOrdemTam(b.tamanho) || (a.nome||'').localeCompare(b.nome||''))
+      .map(b=>{
+        const s = saldoDe(b.id);
+        const rotulo = b.tamanho ? b.tamanho : b.nome;
+        return `<tr data-bem="${b.id}">
+          <td style="font-weight:${b.tamanho?'800':'500'}">${rotulo}</td>
+          <td style="text-align:center;color:var(--cinza-4)">${Number(s.em_casa)||0}</td>
+          <td style="text-align:center">
+            <input type="number" step="any" min="0" class="rmc-cont" id="rmc-c-${b.id}"
+                   style="width:80px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte);text-align:center"
+                   oninput="rmcDelta(${b.id})"></td>
+          <td style="text-align:center;font-weight:800" id="rmc-d-${b.id}">—</td>
+          <td><input id="rmc-o-${b.id}" placeholder="cor, estado, onde estava…"
+                   style="width:100%;min-width:150px;border:1px dashed var(--cinza-3);border-radius:6px;padding:5px 7px;font-size:11px;font-family:var(--fonte)"></td>
+          <td style="text-align:center;font-size:11px;color:var(--cinza-4)">${Number(s.sujo)||0} sujo · ${Number(s.fora)||0} fora</td>
+        </tr>`;
+      }).join('');
+    html += `<div class="inv-loc-head">${g}</div>
+      <table><thead><tr>
+        <th>Item</th><th style="text-align:center">Sistema</th><th style="text-align:center">Contado</th>
+        <th style="text-align:center">Diferença</th><th>Observação</th><th style="text-align:center">Fora de casa</th>
+      </tr></thead><tbody>${linhas}</tbody></table>`;
+  }
+  html += `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px">
+      <span style="font-size:12px;color:var(--cinza-5)">Deixe em branco o que você não contou hoje — linha vazia não é tratada como zero.</span>
+      <button class="inv-btn roxo" style="margin-left:auto" onclick="rmcGravar()">🖊 Gravar contagem do livro</button>
+    </div>`;
+  corpo.innerHTML = html;
+}
+
+function rmcDelta(bemId){
+  const s = rmcSaldo.find(x=>Number(x.bem_id)===Number(bemId)) || {em_casa:0};
+  const el = document.getElementById('rmc-c-'+bemId);
+  const cel = document.getElementById('rmc-d-'+bemId);
+  if(!el || !cel) return;
+  if(el.value === ''){ cel.textContent = '—'; cel.className = ''; return; }
+  const d = (parseFloat(el.value)||0) - (Number(s.em_casa)||0);
+  cel.textContent = d === 0 ? 'bate ✓' : (d>0 ? '+'+d : String(d));
+  cel.className = d === 0 ? '' : (d>0 ? 'inv-delta-pos' : 'inv-delta-neg');
+}
+
+async function rmcGravar(){
+  const quem = (document.getElementById('rm-registrado-por')||{}).value
+            || (document.getElementById('inv-registrado-por')||{}).value
+            || localStorage.getItem('hog_registrante') || 'Equipe CC';
+  const mudancas = [];
+  for(const b of rmcBens){
+    const el = document.getElementById('rmc-c-'+b.id);
+    if(!el || el.value === '') continue;            // não contou: não mexe
+    const contado = parseFloat(el.value);
+    if(isNaN(contado) || contado < 0){ toast('Quantidade inválida em "'+b.nome+'".','erro'); return; }
+    const s = rmcSaldo.find(x=>Number(x.bem_id)===Number(b.id)) || {em_casa:0};
+    const atual = Number(s.em_casa)||0;
+    const obs = ((document.getElementById('rmc-o-'+b.id)||{}).value||'').trim();
+    if(contado === atual && !obs) continue;
+    mudancas.push({ bem:b, contado, atual, delta: contado-atual, obs, primeira: atual===0 && !Number(s.sujo) && !Number(s.fora) });
+  }
+  if(!mudancas.length){ toast('Nada mudou — nenhuma contagem para gravar.',''); return; }
+
+  const resumo = mudancas.slice(0,10).map(m=>`• ${m.bem.nome}: ${m.atual} → ${m.contado}`).join('\n');
+  if(!confirm(`Gravar a contagem de ${mudancas.length} item(ns) do livro?\n\n${resumo}${mudancas.length>10?`\n• +${mudancas.length-10}`:''}\n\nO saldo do livro passa a ser o que você contou. O estoque não é afetado.`)) return;
+  if(!exigirAssinatura('Contagem do livro de remessas')) return;
+
+  let ok = 0;
+  try{
+    for(const m of mudancas){
+      if(m.delta === 0) continue;
+      await sbFetch('remessa_mov','POST',{
+        bem_id: m.bem.id,
+        tipo: m.primeira ? 'CARGA_INICIAL' : 'AJUSTE',
+        d_casa: m.delta,
+        registrado_por: quem,
+        observacao: (m.primeira ? 'Carga inicial pela contagem' : 'Ajuste de contagem: sistema '+m.atual+', contado '+m.contado)
+                    + (m.obs ? ' — '+m.obs : ''),
+      });
+      ok++;
+    }
+    toast(`Contagem gravada ✓ — ${ok} item(ns) acertados no livro.`,'sucesso');
+    rmcCarregar();
+    if(typeof rmCarregar === 'function' && document.getElementById('aba-remessas').style.display !== 'none') rmCarregar();
+  }catch(e){ toast('Erro ao gravar contagem: '+e.message,'erro'); }
 }
 
 async function rmLiberarNf(nfId){
