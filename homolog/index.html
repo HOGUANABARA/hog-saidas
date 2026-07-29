@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.2 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.3 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -4137,6 +4137,11 @@ let hiPedidos = [];
 
 function hiData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
 function hiMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function rcNumNf(v){
+  const s=(v===null||v===undefined)?'':String(v).trim();
+  if(!s || s.toLowerCase()==='nan' || s.toLowerCase()==='null') return '(sem número)';
+  return s;
+}
 function hiNorm(s){ return (s||'').toString().toUpperCase().replace(/\s+/g,' ').trim(); }
 
 async function hiCarregarLista(){
@@ -4249,7 +4254,7 @@ function hiRenderizarLista(){
         const nf=x.o, its2=hiItensPorNf[nf.id]||[];
         return `<div style="border-bottom:1px solid var(--cinza-1)">
           <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="hiToggle(${nf.id})">
-            <div><b style="font-size:13px">NF ${nf.numero_nf||'—'}</b> · ${rcNomeFornecedor(nf.fornecedor_id)}
+            <div><b style="font-size:13px">NF ${rcNumNf(nf.numero_nf)}</b> · ${rcNomeFornecedor(nf.fornecedor_id)}
               ${nf.origem==='PLANILHA'?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:1px 6px;border-radius:10px;margin-left:5px">planilha</span>':''}
               <div style="font-size:11px;color:var(--cinza-4)">entrega ${hiData(nf.data_entrega)} · ${its2.length} item(ns)${nf.vencimentos_obs?' · '+nf.vencimentos_obs:''}</div></div>
             <b style="font-size:14px">${hiMoney(nf.valor_total)}</b></div>
@@ -4326,6 +4331,7 @@ async function hiCorrigirNf(nfId){
 let rcOrdens = [];       // ordens_compra com situacao='PENDENTE'
 let rcControlaLote = new Set(); // materiais que exigem lote/validade na entrada
 let rcOrfas = [];              // ordens pendentes nunca liberadas (limbo)
+let rcPedidos = [];            // pedidos, para abrir a compra por pedido
 let rcNfsRecentes = [];
 
 function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
@@ -4361,6 +4367,7 @@ async function rcCarregar(){
       }catch(e){}
     }
     try{ ocCreditos = (await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200')) || []; }catch(e){ ocCreditos = null; }
+    try{ rcPedidos = (await sbFetch('pedidos?select=*&order=id.desc&limit=200')) || []; }catch(e){ rcPedidos = []; }
     rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
     // pendências ÓRFÃS: ordens antigas/migradas que nunca foram liberadas (não aparecem em lugar nenhum
     // e ainda bloqueiam o item na lista de compras) — ex.: METIL 4% OPHTHALMOS
@@ -4384,26 +4391,31 @@ function rcRenderizar(){
     corpo.innerHTML += rcHtmlPausados();
     return;
   }
-  // Agrupar por fornecedor (usa fornecedor_compra_id, cai para fornecedor_id se vazio)
+  // Agrupa por PEDIDO (cada NF corresponde a um pedido). Ordens sem pedido caem
+  // num grupo do fornecedor, como antes.
   const grupos = {};
   for(const o of rcOrdens){
     const fid = o.fornecedor_compra_id || o.fornecedor_id || 0;
-    (grupos[fid] = grupos[fid] || []).push(o);
+    const chave = o.pedido_id ? ('P'+o.pedido_id) : ('F'+fid);
+    (grupos[chave] = grupos[chave] || []).push(o);
   }
-  corpo.innerHTML = Object.keys(grupos).map(fid => {
-    const itens = grupos[fid];
+  corpo.innerHTML = Object.keys(grupos).map(chave => {
+    const itens = grupos[chave];
+    const ped = chave[0]==='P' ? (rcPedidos.find(p=>p.id===Number(chave.slice(1)))||null) : null;
+    const fid = ped ? (ped.fornecedor_id||0) : Number(chave.slice(1));
     const nomeForn = rcNomeFornecedor(Number(fid) || null);
     const semCusto = rcSemCusto(fid);
+    const totalPedido = itens.reduce((s,o)=>s+((Number(o.qtd_a_comprar)||0)*(Number(o.valor_unitario)||0)),0);
     const linhas = itens.map(o => {
       const qtdPadrao = o.qtd_comprada ?? o.qtd_a_comprar ?? '';
       const valPadrao = o.valor_unitario ?? o.ultimo_valor_pago ?? '';
       const exigeLote = rcControlaLote.has(o.material_id);
       return `<tr data-ordem="${o.id}">
-        <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}" checked onchange="rcAtualizaTotais('${fid}')"></td>
+        <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}" checked onchange="rcAtualizaTotais('${chave}')"></td>
         <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
-        <td style="text-align:center;color:var(--cinza-4)">${o.saldo_no_momento ?? '—'}</td>
-        <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${fid}')"></td>
-        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${fid}')"></td>
+        <td style="text-align:center;font-weight:700;color:var(--azul)">${o.qtd_a_comprar ?? '—'}</td>
+        <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${chave}')"></td>
+        <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${chave}')"></td>
         <td style="text-align:right;font-weight:700;white-space:nowrap" id="rc-tot-${o.id}">—</td>
         <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
         <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
@@ -4417,32 +4429,43 @@ function rcRenderizar(){
       </td></tr>`;
     }).join('');
 
-    return `<div class="rc-grupo" data-forn="${fid}">
-      <div class="rc-ghead">${nomeForn} <span class="rc-count">${itens.length} pedido(s)</span></div>
+    return `<div class="rc-grupo" data-forn="${chave}">
+      <div class="rc-ghead">
+        <span>${ped?`📦 Pedido #${ped.id} · `:''}🏪 ${nomeForn}</span>
+        <span class="rc-count">${itens.length} item(ns)${totalPedido?' · '+rcMoney(totalPedido):''}</span>
+      </div>
+      ${ped?`<div style="padding:9px 16px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2);display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--cinza-5)">
+        <span>👤 ${ped.pedido_por||'—'}</span>
+        <span>💳 ${ped.condicao_pagamento||'—'}</span>
+        <span>🚚 ${ped.prazo_previsto||'—'}</span>
+        ${ped.frete?`<span>🚛 frete ${rcMoney(ped.frete)}</span>`:''}
+        ${ped.aprovado_em?`<span>✔ aprovado ${(''+ped.aprovado_em).slice(0,10).split('-').reverse().join('/')}${ped.aprovado_por?' por '+ped.aprovado_por:''}</span>`:''}
+        <span style="margin-left:auto;color:var(--cinza-4)">confira o que foi pedido e marque o que chegou</span>
+      </div>`:''}
       ${semCusto?`<div style="background:#EAF7EE;border-bottom:1.5px solid #A9DFBF;color:var(--verde);padding:8px 16px;font-size:12px;font-weight:700">🎁 ENTRADA SEM CUSTO (amostra grátis / bonificação) — valores ficam zerados, o nº da NF é opcional e o <b>preço de referência do item é preservado</b> para quando precisar comprar.</div>`:''}
       <div class="rc-nfform">
-        <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${fid}"></div>
-        <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${fid}"></div>
-        <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${fid}" value="${new Date().toISOString().split('T')[0]}"></div>
-        <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${fid}" value="0" oninput="rcAtualizaTotais('${fid}')"></div>
-        <div class="campo"><label>💳 Crédito utilizado (R$)</label><input type="number" step="0.01" min="0" id="rc-nf-cred-${fid}" value="0" oninput="rcAtualizaTotais('${fid}')">
+        <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${chave}"></div>
+        <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${chave}"></div>
+        <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${chave}" value="${new Date().toISOString().split('T')[0]}"></div>
+        <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${chave}" value="0" oninput="rcAtualizaTotais('${chave}')"></div>
+        <div class="campo"><label>💳 Crédito utilizado (R$)</label><input type="number" step="0.01" min="0" id="rc-nf-cred-${chave}" value="0" oninput="rcAtualizaTotais('${chave}')">
           <span style="font-size:10px;color:var(--azul);font-weight:700">${(typeof ocSaldoCredito==='function'&&ocCreditos)?('disponível: '+rcMoney(ocSaldoCredito(fid))):''}</span></div>
-        <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${fid}"></div>
+        <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${chave}"></div>
       </div>
       <div style="overflow-x:auto">
       <table>
-        <thead><tr><th></th><th>Material</th><th style="text-align:center">Saldo</th><th>Qtd recebida</th><th>Valor unit.</th><th style="text-align:right">Total item</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Material</th><th style="text-align:center">Pedido</th><th>Qtd recebida</th><th>Valor unit.</th><th style="text-align:right">Total item</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
       </table>
       </div>
       <div class="rc-rodape" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div id="rc-resumo-${fid}" style="font-size:13px;color:var(--cinza-5)">—</div>
-        <button class="rc-confirmar" onclick="rcConfirmarNF('${fid}')">✔ Confirmar recebimento desta NF</button>
+        <div id="rc-resumo-${chave}" style="font-size:13px;color:var(--cinza-5)">—</div>
+        <button class="rc-confirmar" onclick="rcConfirmarNF('${chave}')">✔ Confirmar recebimento desta NF</button>
       </div>
     </div>`;
   }).join('') + rcHtmlPausados();
   corpo.innerHTML = rcHtmlOrfas() + corpo.innerHTML;
-  Object.keys(grupos).forEach(fid=>rcAtualizaTotais(fid));
+  Object.keys(grupos).forEach(k=>rcAtualizaTotais(k));
 }
 
 // ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
@@ -4537,9 +4560,10 @@ function rcColherLotes(ordemId, qtdRecebida){
 }
 
 // resumo vivo da NF: total por item + total geral (itens marcados + frete)
-function rcAtualizaTotais(fid){
-  const grupo = document.querySelector(`.rc-grupo[data-forn="${fid}"]`);
+function rcAtualizaTotais(chave){
+  const grupo = document.querySelector(`.rc-grupo[data-forn="${chave}"]`);
   if(!grupo) return;
+  const fid = rcFidDaChave(chave);
   let totalItens = 0, marcados = 0;
   grupo.querySelectorAll('tr[data-ordem]').forEach(tr=>{
     const oid = tr.dataset.ordem;
@@ -4551,9 +4575,9 @@ function rcAtualizaTotais(fid){
     const chk = document.getElementById('rc-chk-'+oid);
     if(chk && chk.checked){ totalItens += tot; marcados++; }
   });
-  const frete = parseFloat((document.getElementById('rc-nf-frete-'+fid)||{}).value)||0;
-  const cred = parseFloat((document.getElementById('rc-nf-cred-'+fid)||{}).value)||0;
-  const res = document.getElementById('rc-resumo-'+fid);
+  const frete = parseFloat((document.getElementById('rc-nf-frete-'+chave)||{}).value)||0;
+  const cred = parseFloat((document.getElementById('rc-nf-cred-'+chave)||{}).value)||0;
+  const res = document.getElementById('rc-resumo-'+chave);
   if(rcSemCusto(fid) && res){
     res.innerHTML = `${marcados} item(ns) marcado(s) · <span class="rc-status-entregue" style="font-weight:800">🎁 ENTRADA SEM CUSTO — Total R$ 0,00</span> <span style="font-size:10px;color:var(--cinza-4)">(não entra em contas a pagar nem altera o preço de referência)</span>`;
     return;
@@ -4584,27 +4608,36 @@ async function rcReabrirPedido(ordemId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
-async function rcConfirmarNF(fid){
+// resolve o fornecedor a partir da chave do grupo (P<pedido> ou F<fornecedor>)
+function rcFidDaChave(chave){
+  const s=String(chave);
+  if(s[0]==='P'){ const p=rcPedidos.find(x=>x.id===Number(s.slice(1))); return p?p.fornecedor_id:0; }
+  if(s[0]==='F') return Number(s.slice(1))||0;
+  return Number(s)||0;
+}
+async function rcConfirmarNF(chave){
+  const fid = rcFidDaChave(chave);
+  const pedidoDoGrupo = String(chave)[0]==='P' ? Number(String(chave).slice(1)) : null;
   const registrante = document.getElementById('rc-registrado-por').value;
   if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
 
-  const grupo = document.querySelector(`.rc-grupo[data-forn="${fid}"]`);
+  const grupo = document.querySelector(`.rc-grupo[data-forn="${chave}"]`);
   const linhasMarcadas = [...grupo.querySelectorAll('tr[data-ordem]')].filter(tr => {
     const chk = tr.querySelector('.rc-check'); return chk && chk.checked;
   });
   if(!linhasMarcadas.length){ toast('Marque ao menos um item recebido nesta NF.','erro'); return; }
 
   const semCusto = rcSemCusto(fid);
-  const numeroNf = document.getElementById(`rc-nf-num-${fid}`).value.trim();
-  const dataEmissao = document.getElementById(`rc-nf-emissao-${fid}`).value || null;
-  const dataEntrega = document.getElementById(`rc-nf-entrega-${fid}`).value || null;
-  const frete = parseFloat(document.getElementById(`rc-nf-frete-${fid}`).value) || 0;
-  const cred = parseFloat((document.getElementById(`rc-nf-cred-${fid}`)||{}).value) || 0;
+  const numeroNf = document.getElementById(`rc-nf-num-${chave}`).value.trim();
+  const dataEmissao = document.getElementById(`rc-nf-emissao-${chave}`).value || null;
+  const dataEntrega = document.getElementById(`rc-nf-entrega-${chave}`).value || null;
+  const frete = parseFloat(document.getElementById(`rc-nf-frete-${chave}`).value) || 0;
+  const cred = parseFloat((document.getElementById(`rc-nf-cred-${chave}`)||{}).value) || 0;
   if(cred>0){
     const saldoCred = (typeof ocSaldoCredito==='function'&&ocCreditos)?ocSaldoCredito(fid):0;
     if(cred > saldoCred+0.001){ toast('Crédito informado ('+rcMoney(cred)+') maior que o disponível ('+rcMoney(saldoCred)+').','erro'); return; }
   }
-  let obs = document.getElementById(`rc-nf-obs-${fid}`).value.trim();
+  let obs = document.getElementById(`rc-nf-obs-${chave}`).value.trim();
 
   const itensParaGravar = [];
   let valorTotal = 0;
@@ -4711,6 +4744,13 @@ async function rcConfirmarNF(fid){
     if(cred>0 && typeof ocAbaterCreditos==='function'){
       try{ await ocAbaterCreditos(fid, cred); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
       catch(e){ toast('⚠ NF ok, mas o crédito não foi baixado: '+e.message,'erro'); }
+    }
+    // pedido totalmente recebido → conclui
+    if(pedidoDoGrupo){
+      try{
+        const rest=(await sbFetch(`ordens_compra?select=id&pedido_id=eq.${pedidoDoGrupo}&situacao=eq.PENDENTE&limit=5`))||[];
+        if(!rest.length) await sbFetch(`pedidos?id=eq.${pedidoDoGrupo}`,'PATCH',{ status:'CONCLUIDO' });
+      }catch(e){}
     }
     toast(`NF registrada — ${itensParaGravar.length} item(ns) receb​ido(s), estoque atualizado ✓`,'sucesso');
     rcCarregar();
