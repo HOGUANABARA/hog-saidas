@@ -995,6 +995,15 @@ details[open] summary { margin-bottom: 6px; }
   #aba-remessas .rm-tag.ok{background:#EAF7EE;color:var(--verde)}
   #aba-remessas .rm-tag.falta{background:#FDEDEC;color:var(--vermelho)}
   #aba-remessas .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
+  #aba-remessas .rm-filtros{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px}
+  #aba-remessas .rm-flin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  #aba-remessas .rm-flin:last-child{margin-bottom:0}
+  #aba-remessas .rm-flab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);min-width:78px}
+  #aba-remessas .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-remessas .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul)}
+  #aba-remessas .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
+  #aba-remessas .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22}
+  #aba-remessas .rm-fbusca{flex:1;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 11px;font-size:13px;font-family:var(--fonte)}
 </style>
 <div id="aba-remessas" class="container" style="display:none">
 
@@ -1015,6 +1024,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="rm-b claro" onclick="rmCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
 
+  <div id="rm-filtros"></div>
   <div class="rm-tiles" id="rm-tiles"></div>
 
   <div id="rm-sujos"></div>
@@ -8187,6 +8197,89 @@ function relImprimir(){
 let rmBens = [], rmSaldo = [], rmSujos = [], rmRemessas = [], rmPend = [], rmNfPend = [], rmNfLav = [];
 let rmSemBanco = false;   // true quando o SQL da v4.6 ainda não foi rodado
 
+// ── FILTROS DA LISTA (v4.6d) ──────────────────────────────────────────────
+// Duas perguntas diferentes, dois filtros: "de quem é isso?" (fornecedor) e
+// "o que está pendente?" (situação). Não separam nada no banco — só o que
+// aparece na tela.
+let rmFiltroForn = 'TODOS';   // TODOS | ESTERILIZACAO | LAVANDERIA | f<id>
+let rmFiltroSit  = 'TUDO';    // TUDO | FORA | SUJO | NOTA | PENDENCIA
+let rmBusca      = '';
+
+function rmSetFiltro(campo, valor){
+  if(campo==='forn') rmFiltroForn = valor;
+  if(campo==='sit')  rmFiltroSit  = (rmFiltroSit === valor ? 'TUDO' : valor);
+  rmRenderizar();
+}
+function rmSetBusca(v){ rmBusca = v||''; rmRenderizar(); }
+function rmLimparFiltros(){ rmFiltroForn='TODOS'; rmFiltroSit='TUDO'; rmBusca=''; rmRenderizar(); }
+
+function rmNorm(s){ return (typeof pkNorm==='function') ? pkNorm(s) : (''+(s||'')).toUpperCase(); }
+function rmCasaBusca(txt){ return !rmBusca || rmNorm(txt).includes(rmNorm(rmBusca)); }
+
+// o filtro de fornecedor é por tipo (Esterileno x lavanderia) ou por um
+// fornecedor específico, quando a remessa tiver um gravado
+// que tipos de remessa esse fornecedor recebe — é assim que um fornecedor
+// específico alcança a lista de bens, que não tem fornecedor próprio
+function rmTiposDoFornecedor(fid){
+  return [...new Set(rmRemessas.filter(r=>String(r.fornecedor_id||'')===String(fid)).map(r=>r.tipo))];
+}
+function rmBemPassa(bemId){
+  if(rmFiltroForn==='TODOS') return true;
+  const b = rmBens.find(x=>x.id===Number(bemId));
+  if(!b) return false;
+  if(rmFiltroForn==='ESTERILIZACAO' || rmFiltroForn==='LAVANDERIA') return b.tipo===rmFiltroForn;
+  const tipos = rmTiposDoFornecedor(rmFiltroForn.slice(1));
+  return tipos.length ? tipos.includes(b.tipo) : true;
+}
+function rmRemessaPassa(r){
+  if(rmFiltroForn!=='TODOS'){
+    if(rmFiltroForn.charAt(0)==='f'){ if(String(r.fornecedor_id||'') !== rmFiltroForn.slice(1)) return false; }
+    else if(r.tipo !== rmFiltroForn) return false;
+  }
+  if(!rmBusca) return true;
+  if(rmCasaBusca(r.numero_bloco)) return true;
+  return (r.remessa_itens||[]).some(i=>rmCasaBusca(rmBem(i.bem_id)));
+}
+function rmMostra(secao){ return rmFiltroSit==='TUDO' || rmFiltroSit===secao; }
+
+function rmRenderFiltros(){
+  const box = document.getElementById('rm-filtros');
+  if(!box) return;
+  const fornsUsados = [...new Set(rmRemessas.map(r=>r.fornecedor_id).filter(Boolean))];
+  const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:('#'+id); };
+  const chip = (campo, valor, rotulo, ativo, cor) =>
+    `<button class="rm-chip ${ativo?'on':''} ${cor||''}" onclick="rmSetFiltro('${campo}','${valor}')">${rotulo}</button>`;
+
+  const nFora = rmRemessas.filter(r=>r.status==='ENVIADA').length;
+  const nSujo = rmSujos.length + rmRemessas.filter(r=>r.status==='MONTAGEM').length;
+  const nNota = rmRemessas.filter(r=>r.status==='RETORNADA').length;
+  const nPend = rmPend.length + rmNfPend.length;
+  const filtrando = rmFiltroForn!=='TODOS' || rmFiltroSit!=='TUDO' || rmBusca;
+
+  box.innerHTML = `<div class="rm-filtros">
+    <div class="rm-flin">
+      <span class="rm-flab">Fornecedor</span>
+      ${chip('forn','TODOS','Todos', rmFiltroForn==='TODOS')}
+      ${chip('forn','ESTERILIZACAO','♻️ Esterilização', rmFiltroForn==='ESTERILIZACAO')}
+      ${chip('forn','LAVANDERIA','🧺 Lavanderia', rmFiltroForn==='LAVANDERIA')}
+      ${fornsUsados.map(id=>chip('forn','f'+id,'🏪 '+rmEsc(nomeForn(id)), rmFiltroForn==='f'+id)).join('')}
+    </div>
+    <div class="rm-flin">
+      <span class="rm-flab">Situação</span>
+      ${chip('sit','FORA','🚚 Pendente de retorno'+(nFora?' ('+nFora+')':''), rmFiltroSit==='FORA','laranja')}
+      ${chip('sit','SUJO','🧺 Esperando envio'+(nSujo?' ('+nSujo+')':''), rmFiltroSit==='SUJO','laranja')}
+      ${chip('sit','NOTA','🧾 Aguardando nota'+(nNota?' ('+nNota+')':''), rmFiltroSit==='NOTA','laranja')}
+      ${chip('sit','PENDENCIA','⚠️ Com pendência'+(nPend?' ('+nPend+')':''), rmFiltroSit==='PENDENCIA','laranja')}
+    </div>
+    <div class="rm-flin">
+      <span class="rm-flab">Item</span>
+      <input class="rm-fbusca" placeholder="filtrar por nome do item ou nº do bloco…" value="${rmEsc(rmBusca)}"
+             oninput="clearTimeout(window._rmT); window._rmT=setTimeout(()=>rmSetBusca(this.value),250)">
+      ${filtrando?`<button class="rm-chip" onclick="rmLimparFiltros()">✕ limpar filtros</button>`:''}
+    </div>
+  </div>`;
+}
+
 function rmQuem(){
   const el = document.getElementById('rm-registrado-por');
   return (el && el.value) || localStorage.getItem('hog_rm_registrante') || 'Equipe CC';
@@ -8243,9 +8336,12 @@ async function rmCarregar(){
 
 // ── TELA ───────────────────────────────────────────────────────────────────
 function rmRenderizar(){
-  const foraTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.fora),0);
-  const sujoTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.sujo),0);
-  const casaTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.em_casa),0);
+  rmRenderFiltros();
+  // os números do topo acompanham o filtro de fornecedor, não o de situação
+  const saldoVis = rmSaldo.filter(b=>rmBemPassa(b.bem_id));
+  const foraTotal = saldoVis.reduce((s,b)=>s+rmNum(b.fora),0);
+  const sujoTotal = saldoVis.reduce((s,b)=>s+rmNum(b.sujo),0);
+  const casaTotal = saldoVis.reduce((s,b)=>s+rmNum(b.em_casa),0);
 
   document.getElementById('rm-tiles').innerHTML = `
     <div class="rm-tile"><span>Em casa</span><b style="color:var(--verde)">${casaTotal}</b></div>
@@ -8269,12 +8365,14 @@ function rmRenderizar(){
 
 function rmRenderSujos(){
   const box = document.getElementById('rm-sujos');
-  if(!rmSujos.length){
+  if(!rmMostra('SUJO')){ box.innerHTML=''; return; }
+  const sujosVis = rmSujos.filter(s=>rmBemPassa(s.bem_id) && rmCasaBusca(rmBem(s.bem_id)));
+  if(!sujosVis.length){
     box.innerHTML = `<div class="rm-card"><div class="rm-head laranja"><span>🧺 Sujo, esperando envio</span><span class="rm-count">0</span></div>
       <div class="rm-empty">Nada sujo esperando. A saída cirúrgica joga aqui sozinha o que foi usado.</div></div>`;
     return;
   }
-  const linhas = rmSujos.map(s=>`<tr>
+  const linhas = sujosVis.map(s=>`<tr>
       <td>${rmEsc(rmBem(s.bem_id))}</td>
       <td style="text-align:center;font-weight:700">${rmNum(s.qtd)}</td>
       <td style="font-size:11px;color:var(--cinza-4)">${rmData(s.data)}</td>
@@ -8282,7 +8380,7 @@ function rmRenderSujos(){
       <td style="text-align:right"><button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmApagarSujo(${s.id})" title="tirar da fila">✕</button></td>
     </tr>`).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head laranja"><span>🧺 Sujo, esperando envio</span><span class="rm-count">${rmSujos.length} linha(s)</span></div>
+    <div class="rm-head laranja"><span>🧺 Sujo, esperando envio</span><span class="rm-count">${sujosVis.length} linha(s)</span></div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th style="text-align:center">Qtd</th><th>Data</th><th>Origem</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div>
@@ -8292,7 +8390,8 @@ function rmRenderSujos(){
 }
 
 function rmRenderMontagem(){
-  const emMontagem = rmRemessas.filter(r=>r.status==='MONTAGEM');
+  if(!rmMostra('SUJO')) return;
+  const emMontagem = rmRemessas.filter(r=>r.status==='MONTAGEM' && rmRemessaPassa(r));
   if(!emMontagem.length) return;
   const html = emMontagem.map(r=>{
     const itens = (r.remessa_itens||[]);
@@ -8319,7 +8418,8 @@ function rmRenderMontagem(){
 
 function rmRenderFora(){
   const box = document.getElementById('rm-fora');
-  const enviadas = rmRemessas.filter(r=>r.status==='ENVIADA');
+  if(!rmMostra('FORA')){ box.innerHTML=''; return; }
+  const enviadas = rmRemessas.filter(r=>r.status==='ENVIADA' && rmRemessaPassa(r));
   if(!enviadas.length){
     box.innerHTML = `<div class="rm-card"><div class="rm-head roxo"><span>🚚 Fora de casa</span><span class="rm-count">0</span></div>
       <div class="rm-empty">Nada fora de casa. Tudo que saiu já voltou. ✓</div></div>`;
@@ -8349,7 +8449,8 @@ function rmRenderFora(){
 
 function rmRenderAguardandoNf(){
   const box = document.getElementById('rm-aguardando-nf');
-  const retornadas = rmRemessas.filter(r=>r.status==='RETORNADA');
+  if(!rmMostra('NOTA')){ box.innerHTML=''; return; }
+  const retornadas = rmRemessas.filter(r=>r.status==='RETORNADA' && rmRemessaPassa(r));
   if(!retornadas.length){ box.innerHTML=''; return; }
   box.innerHTML = retornadas.map(r=>{
     const itens = r.remessa_itens||[];
@@ -8385,8 +8486,10 @@ function rmRenderAguardandoNf(){
 
 function rmRenderPendFisica(){
   const box = document.getElementById('rm-pend-fisica');
-  if(!rmPend.length){ box.innerHTML=''; return; }
-  const linhas = rmPend.map(p=>{
+  if(!rmMostra('PENDENCIA')){ box.innerHTML=''; return; }
+  const pendVis = rmPend.filter(p=>rmBemPassa(p.bem_id) && rmCasaBusca(rmBem(p.bem_id)));
+  if(!pendVis.length){ box.innerHTML=''; return; }
+  const linhas = pendVis.map(p=>{
     const r = rmRemessas.find(x=>x.id===p.remessa_id);
     const dias = p.aberta_em ? Math.round((Date.now()-new Date(p.aberta_em+'T12:00:00').getTime())/86400000) : null;
     return `<tr>
@@ -8400,7 +8503,7 @@ function rmRenderPendFisica(){
       </td></tr>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${rmPend.length}</span></div>
+    <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${pendVis.length}</span></div>
     <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento.</div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th style="text-align:center">Falta</th><th>Remessa</th><th>Aberta em</th><th></th></tr></thead>
@@ -8409,6 +8512,7 @@ function rmRenderPendFisica(){
 
 function rmRenderPendNf(){
   const box = document.getElementById('rm-pend-nf');
+  if(!(rmMostra('PENDENCIA') || rmFiltroSit==='NOTA')){ box.innerHTML=''; return; }
   if(!rmNfPend.length){ box.innerHTML=''; return; }
   const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:'—'; };
   const linhas = rmNfPend.map(n=>`<tr>
@@ -8437,6 +8541,8 @@ function rmMesRefAtual(){
 function rmRenderNotaLavanderia(){
   const box = document.getElementById('rm-nf-lavanderia');
   if(!box) return;
+  if(!(rmMostra('NOTA'))){ box.innerHTML=''; return; }
+  if(rmFiltroForn==='ESTERILIZACAO'){ box.innerHTML=''; return; }
   const temLavanderia = rmBens.some(b=>b.tipo==='LAVANDERIA');
   if(!temLavanderia && !rmNfLav.length){ box.innerHTML=''; return; }
 
@@ -8513,8 +8619,16 @@ async function rmLancarNotaLavanderia(){
 
 function rmRenderSaldo(){
   const box = document.getElementById('rm-saldo');
+  let saldoVis = rmSaldo.filter(b=>rmBemPassa(b.bem_id) && rmCasaBusca(b.nome));
+  if(rmFiltroSit==='FORA') saldoVis = saldoVis.filter(b=>rmNum(b.fora)>0);
+  if(rmFiltroSit==='SUJO') saldoVis = saldoVis.filter(b=>rmNum(b.sujo)>0);
   if(!rmSaldo.length){ box.innerHTML=''; return; }
-  const linhas = rmSaldo.map(b=>`<tr>
+  if(!saldoVis.length){
+    box.innerHTML = `<div class="rm-card"><div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">0 de ${rmSaldo.length}</span></div>
+      <div class="rm-empty">Nenhum item com esse filtro. <span style="color:var(--azul);cursor:pointer;font-weight:700" onclick="rmLimparFiltros()">limpar filtros</span></div></div>`;
+    return;
+  }
+  const linhas = saldoVis.map(b=>`<tr>
       <td>${rmEsc(b.nome)}${b.material_id?'':' <span class="rm-tag dinheiro">só no livro</span>'}</td>
       <td style="font-size:11px;color:var(--cinza-4)">${b.tipo==='LAVANDERIA'?'🧺 lavanderia':'♻️ esterilização'}</td>
       <td style="text-align:center;color:var(--verde);font-weight:700">${rmNum(b.em_casa)}</td>
@@ -8523,7 +8637,7 @@ function rmRenderSaldo(){
       <td style="text-align:center;font-weight:700">${rmNum(b.total)}</td>
     </tr>`).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">${rmSaldo.length} bem(ns)</span></div>
+    <div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">${saldoVis.length===rmSaldo.length ? rmSaldo.length+' bem(ns)' : saldoVis.length+' de '+rmSaldo.length}</span></div>
     <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">
       A diferença entre o que saiu e o que voltou aparece aqui como perda — visível, em vez de virar ajuste sem explicação.
       Para o pijama cirúrgico, é este saldo que diz quando comprar mais.</div>
@@ -8662,10 +8776,20 @@ async function rmMontarRemessa(){
   const tipo = t.trim()==='2' ? 'LAVANDERIA' : 'ESTERILIZACAO';
   const idsTipo = new Set(rmBens.filter(b=>b.tipo===tipo).map(b=>b.id));
   const sujosDoTipo = rmSujos.filter(s=>idsTipo.has(s.bem_id));
+  // fornecedor é opcional, mas quando informado vira filtro na lista
+  if(!(coFornecedores && coFornecedores.length)){
+    try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000')) || []; }catch(e){}
+  }
+  const forn = await pkEscolher({
+    titulo: tipo==='LAVANDERIA' ? 'Para qual lavanderia?' : 'Para qual esterilizadora?',
+    subtitulo: 'Serve para filtrar a lista depois. Pode cancelar se ainda não souber.',
+    itens: (coFornecedores||[]).map(f=>({ id:f.id, nome:f.nome })),
+  });
   const bloco = prompt('Número do bloco de remessa (o bloco físico que fica com o hospital):');
   if(bloco===null || !bloco.trim()){ toast('A remessa precisa do número do bloco.','erro'); return; }
   try{
-    const arr = await sbFetch('remessas','POST',{ numero_bloco:bloco.trim(), tipo, status:'MONTAGEM', criado_por:rmQuem() });
+    const arr = await sbFetch('remessas','POST',{ numero_bloco:bloco.trim(), tipo, status:'MONTAGEM',
+      fornecedor_id: forn ? forn.id : null, criado_por:rmQuem() });
     const rid = arr && arr[0] && arr[0].id;
     // junta os sujos do dia por bem
     const porBem = {};
