@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.0-A · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.1 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -389,6 +389,7 @@ details[open] summary { margin-bottom: 6px; }
 
   <!-- ABA REGISTRO -->
   <div id="aba-registro">
+  <div id="iv-aviso-saidas" style="display:none;background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7a6408"></div>
 
     <!-- MÉDICO -->
     <div class="card">
@@ -491,6 +492,7 @@ details[open] summary { margin-bottom: 6px; }
 
   <!-- ABA SAÍDAS DIVERSAS -->
   <div id="aba-diversas" style="display:none">
+  <div id="iv-aviso-saidas2" style="display:none;background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7a6408"></div>
     <div class="card">
       <div class="card-titulo">1. Dados da Saída</div>
       <div class="grid-3">
@@ -933,6 +935,14 @@ details[open] summary { margin-bottom: 6px; }
     <select id="inv-registrado-por" style="margin-left:8px;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)" onchange="localStorage.setItem('hog_inv_registrante', this.value)">
       <option value="">Selecione...</option>
     </select>
+
+  <div class="inv-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📋 Contagem do mês — por local, com fechamento</span>
+      <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
+  </div>
 
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
   <div class="inv-card" id="rel-card">
@@ -2474,7 +2484,8 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); }
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); }
+  if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   if (aba==='ocorrencias'){ ocCarregar(); }
 }
@@ -5220,6 +5231,21 @@ async function invExportar(){
   }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
 }
 
+// datas de planilha: dd/mm/aaaa, aaaa-mm-dd, serial do Excel ou Date
+function invParseDataCel(v){
+  if(v===undefined||v===null||v==='') return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v==='number' && v>20000 && v<80000){
+    const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10);
+  }
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(m){ const a=m[3].length===2?('20'+m[3]):m[3]; return `${a}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; }
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return s.slice(0,10);
+  return null;
+}
+
 // ── IMPORTAR PLANILHA PREENCHIDA ────────────────────────────────
 async function invImportar(file){
   if(!file) return;
@@ -5240,20 +5266,6 @@ async function invImportar(file){
                         'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
     const bate = (cab, esperado) => esperado.every((e,i)=> Array.isArray(e)?e.includes(cab[i]):cab[i]===e);
 
-    // datas da planilha: dd/mm/aaaa, aaaa-mm-dd, serial do Excel ou Date
-    function invParseDataCel(v){
-      if(v===undefined||v===null||v==='') return null;
-      if(v instanceof Date) return v.toISOString().slice(0,10);
-      if(typeof v==='number' && v>20000 && v<80000){
-        const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10);
-      }
-      const s=String(v).trim();
-      let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-      if(m){ const a=m[3].length===2?('20'+m[3]):m[3]; return `${a}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; }
-      m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if(m) return s.slice(0,10);
-      return null;
-    }
 
     for(const sheetName of wb.SheetNames){
       const nomeLimpo = s => s.replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
@@ -6704,6 +6716,414 @@ function ocSaldoCredito(fornId){
 
 
 <script>
+
+// ═══ INVENTÁRIO v4 — contagem por local · divergências por tipo · fechamento datado ═══
+// Fluxo: abrir contagem → baixar/subir planilha local a local → apurar divergências →
+// corrigir → 🔒 confirmar (aplica ajustes e o saldo confirmado vira a base das próximas saídas).
+let ivAtual = null;      // inventário aberto
+let ivItens = [];        // inventario_itens do inventário aberto
+let ivDiverg = null;     // apuração
+let ivFiltroTipo = '';
+
+const IV_TIPOS = {
+  FALTA:     { rot:'🔴 Falta no estoque',       desc:'contou MENOS que o sistema — material saiu sem registro',       cor:'var(--vermelho)', bg:'#FDEDEC' },
+  SOBRA:     { rot:'🔵 Sobra no estoque',       desc:'contou MAIS que o sistema — entrada não registrada',            cor:'var(--azul)',     bg:'#EAF2FB' },
+  NAO_CONTADO:{rot:'⚫ Não contado',            desc:'tem saldo no sistema e não apareceu em nenhuma contagem',       cor:'var(--cinza-5)',  bg:'#EFF1F4' },
+  NEGATIVO:  { rot:'⛔ Saldo negativo',         desc:'o sistema está negativo — erro de lançamento anterior',         cor:'#7B241C',         bg:'#FADBD8' },
+  SEM_LOTE:  { rot:'🟡 Sem lote/validade',      desc:'item que controla lote foi contado sem informar lote',          cor:'#B7950B',         bg:'#FEF9E7' },
+  OK:        { rot:'✅ Bate certo',             desc:'contagem igual ao sistema',                                     cor:'var(--verde)',    bg:'#EAF7EE' },
+};
+
+function ivHoje(){ return new Date().toISOString().slice(0,10); }
+function ivData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function ivN(v){ return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:2}); }
+
+async function ivCarregar(){
+  const box=document.getElementById('iv-painel');
+  if(!box) return;
+  box.innerHTML='<div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando contagem…</div>';
+  try{
+    if(!invLocais.length) invLocais=(await sbFetch('locais?select=id,nome,tipo&order=nome.asc'))||[];
+    if(!catalogoMateriais.length) catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[];
+    const abertos=(await sbFetch("inventarios?select=*&status=eq.aberto&order=id.desc&limit=1"))||[];
+    ivAtual = abertos[0]||null;
+    ivItens = [];
+    if(ivAtual){
+      ivItens=(await sbFetch(`inventario_itens?select=*&inventario_id=eq.${ivAtual.id}&limit=5000`))||[];
+    }
+    ivDiverg=null; ivRender();
+  }catch(e){ box.innerHTML='<div style="text-align:center;padding:20px;color:var(--vermelho)">Erro: '+e.message+'<br><span style="font-size:11px">Rode o inventario_v4.sql no Supabase.</span></div>'; }
+}
+
+function ivLocaisFisicos(){ return invLocais.filter(l=>(l.tipo||'fisico')!=='virtual'); }
+
+function ivRender(){
+  const box=document.getElementById('iv-painel'); if(!box) return;
+  if(!ivAtual){
+    box.innerHTML=`
+      <div style="text-align:center;padding:26px 18px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px">Nenhuma contagem em andamento</div>
+        <div style="font-size:12px;color:var(--cinza-4);margin-bottom:16px">Comece uma contagem para baixar as planilhas por local, subir os números contados e fechar o inventário com data.</div>
+        <button class="inv-btn azul" onclick="ivIniciar()">▶ Iniciar contagem</button>
+      </div>`;
+    return;
+  }
+  const locais=ivLocaisFisicos();
+  const porLocal={};
+  for(const it of ivItens){ (porLocal[it.local_id]=porLocal[it.local_id]||[]).push(it); }
+  const contados=locais.filter(l=>(porLocal[l.id]||[]).length>0).length;
+  const cards=locais.map(l=>{
+    const its=porLocal[l.id]||[];
+    const feito=its.length>0;
+    const quem=feito?(its[0].contado_por||''):'';
+    const quando=feito?(its[0].contado_em||''):'';
+    return `<div style="border:1.5px solid ${feito?'#A9DFBF':'var(--cinza-2)'};background:${feito?'#EAF7EE':'#fff'};border-radius:8px;padding:11px 13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="min-width:150px">
+        <div style="font-size:13px;font-weight:700">${feito?'✅':'⬜'} ${l.nome}</div>
+        <div style="font-size:11px;color:var(--cinza-4)">${feito?`${its.length} item(ns)${quem?' · '+quem:''}${quando?' · '+ivData(quando):''}`:'aguardando contagem'}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="inv-btn" style="background:var(--azul-claro);color:var(--azul);padding:6px 10px;font-size:11px" onclick="ivBaixarLocal(${l.id})">⬇ planilha</button>
+        <label class="inv-btn" style="background:${feito?'var(--cinza-2)':'var(--verde)'};color:${feito?'var(--cinza-5)':'#fff'};padding:6px 10px;font-size:11px;cursor:pointer;margin:0">
+          ⬆ ${feito?'recontar':'subir contagem'}
+          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="ivSubirLocal(${l.id}, this.files[0]); this.value='';">
+        </label>
+        ${feito?`<button class="inv-btn" style="background:#FDEDEC;color:var(--vermelho);padding:6px 9px;font-size:11px" onclick="ivLimparLocal(${l.id})" title="apagar a contagem deste local">✕</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML=`
+    <div style="background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#7a6408">
+      🔒 <b>Contagem aberta desde ${ivData(ivAtual.data_contagem||ivAtual.created_at)}</b> — enquanto ela estiver aberta, <b>não lance saídas no sistema</b>.
+      As cirurgias do período são registradas depois da confirmação, para o saldo não ficar diferente.
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="font-size:13px"><b>Contagem #${ivAtual.id}</b> · data ${ivData(ivAtual.data_contagem)} · ${contados} de ${locais.length} locais contados${ivAtual.criado_por?' · aberta por '+ivAtual.criado_por:''}</div>
+      <button class="inv-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:11px" onclick="ivCancelar()">✕ cancelar contagem</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px;margin-bottom:14px">${cards}</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button class="inv-btn azul" onclick="ivApurar()" ${contados?'':'disabled style="opacity:.5"'}>🔍 Apurar divergências (${ivItens.length} contagens)</button>
+    </div>
+    <div id="iv-diverg" style="margin-top:16px"></div>`;
+  if(ivDiverg) ivRenderDivergencias();
+}
+
+async function ivIniciar(){
+  const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
+  if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  const data=prompt('Data da contagem (aaaa-mm-dd) — é a data que vai valer como saldo base:', ivHoje());
+  if(data===null) return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.trim())){ toast('Data inválida. Use aaaa-mm-dd.','erro'); return; }
+  try{
+    const r=await sbFetch('inventarios','POST',{ mes_referencia:data.trim(), data_contagem:data.trim(),
+      status:'aberto', criado_por:quem });
+    if(!r||!r.length) throw new Error('sem permissão (RLS)');
+    toast('Contagem aberta ✓ — baixe as planilhas por local.','sucesso');
+    ivCarregar();
+  }catch(e){ toast('Erro ao abrir contagem: '+e.message,'erro'); }
+}
+
+async function ivCancelar(){
+  if(!ivAtual) return;
+  if(!confirm(`Cancelar a contagem #${ivAtual.id}?\n\nAs contagens já subidas serão descartadas. Nada do estoque é alterado.`)) return;
+  try{
+    await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}`,'DELETE');
+    await sbFetch(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'cancelado' });
+    toast('Contagem cancelada.','sucesso'); ivCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+function ivBaixarLocal(localId){
+  const sel=document.getElementById('inv-export-local');
+  if(sel){ sel.value=String(localId); }
+  invExportar();
+}
+
+async function ivLimparLocal(localId){
+  const l=invLocais.find(x=>x.id===localId);
+  if(!confirm(`Apagar a contagem de ${l?l.nome:'#'+localId}?`)) return;
+  try{
+    await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}`,'DELETE');
+    toast('Contagem do local apagada.','sucesso'); ivCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// sobe a planilha de UM local (aceita a aba do local ou a primeira aba do arquivo)
+async function ivSubirLocal(localId, file){
+  if(!file || !ivAtual) return;
+  const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
+  if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  const local=invLocais.find(l=>l.id===localId);
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const limpo=s=>(s||'').replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
+    let aba=wb.SheetNames.find(n=>limpo(n)===limpo(local.nome)) || wb.SheetNames[0];
+    const linhas=XLSX.utils.sheet_to_json(wb.Sheets[aba],{header:1});
+    const cab=(linhas[0]||[]).map(c=>String(c||'').trim().toUpperCase());
+    const iCont=cab.indexOf('CONTAGEM')>=0?cab.indexOf('CONTAGEM'):cab.indexOf('CONTAGEM FÍSICA');
+    const iId=cab.indexOf('ID'), iMat=cab.indexOf('MATERIAL');
+    if(iId<0 || iCont<0){ toast('Planilha fora do modelo — use a que o botão ⬇ planilha gera.','erro'); return; }
+    const iL1=cab.indexOf('LOTE 1');
+    const regs=[]; let ignoradas=0;
+    for(let i=1;i<linhas.length;i++){
+      const r=linhas[i]||[];
+      let mid=r[iId]!==undefined&&r[iId]!==''?Number(r[iId]):null;
+      if(!mid && iMat>=0 && r[iMat]){ const m=resolverMaterial(String(r[iMat]).trim()); mid=m?m.id:null; }
+      if(!mid){ continue; }
+      // lotes (3 blocos) quando existirem
+      const lotes=[];
+      if(iL1>=0){
+        for(let k=0;k<3;k++){
+          const lote=String(r[iL1+k*3]??'').trim();
+          const val=r[iL1+1+k*3];
+          const q=parseFloat(r[iL1+2+k*3]);
+          if(lote && lote!=='—' && !isNaN(q) && q>0) lotes.push({lote, validade:invParseDataCel?invParseDataCel(val):null, qtd:q});
+        }
+      }
+      const somaLotes=lotes.reduce((s,l)=>s+l.qtd,0);
+      let cont=parseFloat(r[iCont]);
+      if(isNaN(cont) && somaLotes>0) cont=somaLotes;
+      if(isNaN(cont)){ ignoradas++; continue; }
+      regs.push({ inventario_id:ivAtual.id, material_id:mid, local_id:localId, qtd_contada:cont,
+                  contado_por:quem, contado_em:new Date().toISOString(),
+                  lotes: lotes.length?lotes:null });
+    }
+    if(!regs.length){ toast('Nenhuma contagem preenchida nessa planilha.','erro'); return; }
+    if(!confirm(`${local.nome}: ${regs.length} item(ns) contados${ignoradas?` (${ignoradas} linha(s) em branco ignoradas)`:''}.\n\nGravar esta contagem?`)) return;
+    // recontagem: limpa o local antes
+    await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}`,'DELETE');
+    for(let i=0;i<regs.length;i+=50) await sbFetch('inventario_itens','POST', regs.slice(i,i+50));
+    toast(`${local.nome}: ${regs.length} contagem(ns) gravada(s) ✓`,'sucesso');
+    ivCarregar();
+  }catch(e){ toast('Erro ao ler a planilha: '+e.message,'erro'); }
+}
+
+// ── apuração das divergências, agrupada por tipo de problema ──
+async function ivApurar(){
+  const alvo=document.getElementById('iv-diverg');
+  alvo.innerHTML='<div style="text-align:center;padding:18px;color:var(--cinza-4)">Comparando com o estoque…</div>';
+  try{
+    const geralId=await getEstoqueGeralId();
+    const est=(await sbFetch(`estoque?select=material_id,saldo&local_id=eq.${geralId}&limit=3000`))||[];
+    const saldo={}; for(const e of est) saldo[e.material_id]=Number(e.saldo)||0;
+    let controla=new Set();
+    try{ const cl=await sbFetch('materiais?select=id&controla_lote=eq.true&limit=500'); controla=new Set((cl||[]).map(x=>x.id)); }catch(e){}
+    const nome=id=>{ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('#'+id); };
+    const locNome=id=>{ const l=invLocais.find(x=>x.id===id); return l?l.nome:('#'+id); };
+
+    // soma as contagens de todos os locais, por material
+    const cont={};
+    for(const it of ivItens){
+      const c=cont[it.material_id]||(cont[it.material_id]={qtd:0,locais:[],lotes:[]});
+      c.qtd+=Number(it.qtd_contada)||0;
+      c.locais.push(`${locNome(it.local_id)}: ${ivN(it.qtd_contada)}`);
+      if(it.lotes) c.lotes.push(...it.lotes);
+    }
+    const linhas=[];
+    for(const midStr of Object.keys(cont)){
+      const mid=Number(midStr), c=cont[mid];
+      const sis=saldo[mid]??0, dif=c.qtd-sis;
+      let tipo = dif===0 ? 'OK' : (dif<0 ? 'FALTA' : 'SOBRA');
+      if(sis<0) tipo='NEGATIVO';
+      if(controla.has(mid) && !c.lotes.length && c.qtd>0 && tipo==='OK') tipo='SEM_LOTE';
+      linhas.push({ mid, nome:nome(mid), contado:c.qtd, sistema:sis, dif, tipo,
+                    locais:c.locais.join(' · '), lotes:c.lotes, controla:controla.has(mid) });
+    }
+    // itens com saldo no sistema que ninguém contou
+    for(const midStr of Object.keys(saldo)){
+      const mid=Number(midStr);
+      if(cont[mid]) continue;
+      const sis=saldo[mid];
+      if(sis===0) continue;
+      linhas.push({ mid, nome:nome(mid), contado:null, sistema:sis, dif:null,
+                    tipo: sis<0?'NEGATIVO':'NAO_CONTADO', locais:'—', lotes:[], controla:controla.has(mid) });
+    }
+    linhas.sort((a,b)=>Math.abs(b.dif||0)-Math.abs(a.dif||0));
+    ivDiverg=linhas; ivFiltroTipo='';
+    ivRenderDivergencias();
+  }catch(e){ alvo.innerHTML='<div style="text-align:center;padding:18px;color:var(--vermelho)">Erro: '+e.message+'</div>'; }
+}
+
+function ivContaPorTipo(){
+  const c={}; for(const t of Object.keys(IV_TIPOS)) c[t]=0;
+  for(const l of ivDiverg||[]) c[l.tipo]=(c[l.tipo]||0)+1;
+  return c;
+}
+
+function ivRenderDivergencias(){
+  const alvo=document.getElementById('iv-diverg'); if(!alvo||!ivDiverg) return;
+  const cont=ivContaPorTipo();
+  const problemas=(ivDiverg||[]).filter(l=>l.tipo!=='OK');
+  const chips=Object.keys(IV_TIPOS).map(t=>{
+    const i=IV_TIPOS[t];
+    return `<span onclick="ivFiltroTipo='${ivFiltroTipo===t?'':t}';ivRenderDivergencias()" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:6px 12px;border-radius:20px;background:${i.bg};color:${i.cor};border:1.5px solid ${ivFiltroTipo===t?i.cor:'transparent'}">${i.rot} (${cont[t]||0})</span>`;
+  }).join('');
+  const lista=ivFiltroTipo?ivDiverg.filter(l=>l.tipo===ivFiltroTipo):ivDiverg;
+  // agrupado por tipo
+  const ordem=['FALTA','SOBRA','NEGATIVO','SEM_LOTE','NAO_CONTADO','OK'];
+  const grupos=ordem.filter(t=>lista.some(l=>l.tipo===t)).map(t=>{
+    const i=IV_TIPOS[t], its=lista.filter(l=>l.tipo===t);
+    return `<div style="margin-bottom:14px">
+      <div style="background:${i.bg};color:${i.cor};font-size:12px;font-weight:800;padding:8px 12px;border-radius:8px 8px 0 0;border:1.5px solid ${i.cor}33">
+        ${i.rot} — ${its.length} item(ns) <span style="font-weight:600;opacity:.85">· ${i.desc}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid var(--cinza-2);border-top:none">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Material</th>
+          <th style="text-align:right;padding:6px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Contado</th>
+          <th style="text-align:right;padding:6px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Sistema</th>
+          <th style="text-align:right;padding:6px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Diferença</th>
+          <th style="text-align:left;padding:6px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Onde foi contado</th>
+          <th style="background:var(--cinza-1)"></th>
+        </tr></thead>
+        <tbody>${its.map(l=>`<tr>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);font-weight:600">${l.nome}${l.controla?' <span style="font-size:9px;color:#B7950B">🔒 lote</span>':''}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">${l.contado===null?'—':ivN(l.contado)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">${ivN(l.sistema)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right;font-weight:800;color:${l.dif===null?'var(--cinza-4)':(l.dif<0?'var(--vermelho)':(l.dif>0?'var(--azul)':'var(--verde)'))}">${l.dif===null?'—':(l.dif>0?'+':'')+ivN(l.dif)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);font-size:11px;color:var(--cinza-4)">${l.locais}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">
+            <button class="inv-btn" style="background:var(--azul-claro);color:var(--azul);padding:4px 8px;font-size:10px" onclick="ivCorrigir(${l.mid})">✎ recontar</button></td>
+        </tr>`).join('')}</tbody></table></div>`;
+  }).join('');
+
+  alvo.innerHTML=`
+    <div style="background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800">📋 Conferência da contagem — ${problemas.length} caso(s) para tratar</div>
+        <div style="display:flex;gap:8px">
+          <button class="inv-btn" style="background:var(--azul-claro);color:var(--azul);padding:8px 12px;font-size:12px" onclick="ivImprimir()">🖨 Imprimir lista</button>
+          <button class="inv-btn verde" style="padding:8px 14px;font-size:12px" onclick="ivConfirmar()">🔒 Confirmar inventário de ${ivData(ivAtual.data_contagem)}</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px">${chips}</div>
+      <div style="max-height:520px;overflow:auto">${grupos||'<div style="text-align:center;padding:20px;color:var(--cinza-4)">nada neste filtro</div>'}</div>
+      <div style="font-size:11px;color:var(--cinza-4);margin-top:10px">Clique num tipo para filtrar. Use ✎ recontar para corrigir a contagem antes de confirmar. Ao confirmar, o saldo passa a ser o contado e vira a base das próximas saídas.</div>
+    </div>`;
+}
+
+async function ivCorrigir(mid){
+  const l=(ivDiverg||[]).find(x=>x.mid===mid); if(!l) return;
+  const its=ivItens.filter(x=>x.material_id===mid);
+  let localId=null;
+  if(its.length===1) localId=its[0].local_id;
+  else if(its.length>1){
+    const op=prompt('Este item foi contado em mais de um local. Qual corrigir?\n\n'+
+      its.map((x,i)=>`${i+1} — ${(invLocais.find(l2=>l2.id===x.local_id)||{}).nome}: ${x.qtd_contada}`).join('\n'),'1');
+    if(op===null) return;
+    const idx=parseInt(op)-1; if(!its[idx]) return; localId=its[idx].local_id;
+  } else {
+    // não contado: escolher o local
+    const locais=ivLocaisFisicos();
+    const op=prompt('Em qual local você contou este item?\n\n'+locais.map((x,i)=>`${i+1} — ${x.nome}`).join('\n'),'1');
+    if(op===null) return;
+    const idx=parseInt(op)-1; if(!locais[idx]) return; localId=locais[idx].id;
+  }
+  const atual=its.find(x=>x.local_id===localId);
+  const q=prompt(`Quantidade contada de "${l.nome}"${atual?'':' (novo lançamento)'}:`, atual?atual.qtd_contada:'');
+  if(q===null) return;
+  const qtd=parseFloat(String(q).replace(',','.'));
+  if(isNaN(qtd)||qtd<0){ toast('Quantidade inválida.','erro'); return; }
+  const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
+  try{
+    if(atual) await sbFetch(`inventario_itens?id=eq.${atual.id}`,'PATCH',{ qtd_contada:qtd, contado_por:quem, contado_em:new Date().toISOString() });
+    else await sbFetch('inventario_itens','POST',{ inventario_id:ivAtual.id, material_id:mid, local_id:localId,
+      qtd_contada:qtd, contado_por:quem, contado_em:new Date().toISOString() });
+    ivItens=(await sbFetch(`inventario_itens?select=*&inventario_id=eq.${ivAtual.id}&limit=5000`))||[];
+    toast('Contagem corrigida ✓','sucesso');
+    ivApurar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+function ivImprimir(){
+  if(!ivDiverg){ toast('Apure as divergências primeiro.','erro'); return; }
+  const w=window.open('','_blank');
+  if(!w){ toast('Libere pop-ups para imprimir.','erro'); return; }
+  const ordem=['FALTA','SOBRA','NEGATIVO','SEM_LOTE','NAO_CONTADO'];
+  const secoes=ordem.filter(t=>ivDiverg.some(l=>l.tipo===t)).map(t=>{
+    const i=IV_TIPOS[t], its=ivDiverg.filter(l=>l.tipo===t);
+    return `<h2>${i.rot} — ${its.length} item(ns)</h2><p class="d">${i.desc}</p>
+    <table><thead><tr><th>Material</th><th class="n">Contado</th><th class="n">Sistema</th><th class="n">Dif.</th><th>Onde</th><th style="width:90px">Recontagem</th></tr></thead><tbody>
+    ${its.map(l=>`<tr><td>${l.nome}</td><td class="n">${l.contado===null?'—':ivN(l.contado)}</td><td class="n">${ivN(l.sistema)}</td>
+      <td class="n"><b>${l.dif===null?'—':(l.dif>0?'+':'')+ivN(l.dif)}</b></td><td style="font-size:9px">${l.locais}</td><td></td></tr>`).join('')}
+    </tbody></table>`;
+  }).join('');
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conferência de inventário</title>
+  <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#222}h1{font-size:16px;margin-bottom:2px}
+  h2{font-size:13px;margin:16px 0 2px}p.d{font-size:10px;color:#666;margin-bottom:6px}
+  table{width:100%;border-collapse:collapse;margin-bottom:10px}td,th{border:1px solid #ccc;padding:4px 6px;text-align:left}
+  th{background:#f0f3f7;font-size:9px;text-transform:uppercase}.n{text-align:right}
+  @media print{button{display:none}}</style></head><body>
+  <h1>HOG — Conferência de inventário</h1>
+  <p>Contagem #${ivAtual.id} · data ${ivData(ivAtual.data_contagem)} · impresso em ${new Date().toLocaleString('pt-BR')}</p>
+  ${secoes||'<p>Nenhuma divergência — contagem bateu com o sistema.</p>'}
+  <p style="margin-top:24px">Conferido por: ______________________________ &nbsp;&nbsp; Data: ____/____/______</p>
+  <button onclick="window.print()" style="margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir</button>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── fechamento: aplica os ajustes e o contado vira o saldo base ──
+async function ivConfirmar(){
+  if(!ivDiverg){ toast('Apure as divergências primeiro.','erro'); return; }
+  const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
+  if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  const ajustar=ivDiverg.filter(l=>l.contado!==null && l.dif!==null && Math.abs(l.dif)>0.0001);
+  const naoContados=ivDiverg.filter(l=>l.tipo==='NAO_CONTADO').length;
+  if(!confirm(`CONFIRMAR O INVENTÁRIO DE ${ivData(ivAtual.data_contagem)}\n\n`+
+    `• ${ivDiverg.filter(l=>l.contado!==null).length} material(is) contados\n`+
+    `• ${ajustar.length} ajuste(s) no saldo do Estoque Geral\n`+
+    `• ${naoContados} item(ns) não contados mantêm o saldo atual\n\n`+
+    `Depois disso o saldo confirmado passa a valer como base — e as saídas do período já podem ser lançadas.`)) return;
+  try{
+    const geralId=await getEstoqueGeralId();
+    const agora=new Date().toISOString();
+    // 1) foto de alocação por local
+    for(const it of ivItens){
+      const e=await sbFetch(`estoque?select=id&material_id=eq.${it.material_id}&local_id=eq.${it.local_id}&limit=1`);
+      if(e&&e.length) await sbFetch(`estoque?id=eq.${e[0].id}`,'PATCH',{ saldo: it.qtd_contada });
+      else await sbFetch('estoque','POST',{ material_id:it.material_id, local_id:it.local_id, saldo:it.qtd_contada });
+    }
+    // 2) ajustes no Estoque Geral
+    for(const l of ajustar){
+      const mv=await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:l.mid, local_id:geralId,
+        qtd:l.dif, aprovado:false, registrado_por:quem,
+        observacao:`Inventário #${ivAtual.id} de ${ivData(ivAtual.data_contagem)} — contado ${ivN(l.contado)} · sistema ${ivN(l.sistema)}` });
+      const id=mv&&mv[0]&&mv[0].id;
+      if(id) await sbFetch(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora });
+    }
+    // 3) lotes contados viram a foto de lotes
+    for(const it of ivItens){
+      const lts=(it.lotes||[]).filter(x=>x.lote&&x.validade&&x.qtd>0);
+      if(!lts.length) continue;
+      try{
+        await sbFetch(`lotes?material_id=eq.${it.material_id}&status=eq.ativo`,'PATCH',{ status:'baixado' });
+        await sbFetch('lotes','POST', lts.map(x=>({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' })));
+      }catch(e){}
+    }
+    // 4) fecha
+    await sbFetch(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'fechado', fechado_por:quem, fechado_em:agora });
+    toast(`Inventário de ${ivData(ivAtual.data_contagem)} confirmado ✓ — ${ajustar.length} ajuste(s). Já pode lançar as saídas.`,'sucesso');
+    ivCarregar();
+    if(typeof invCarregar==='function') invCarregar();
+  }catch(e){ toast('Erro ao confirmar: '+e.message,'erro'); }
+}
+
+// aviso de contagem aberta nas telas de saída
+async function ivChecarAberto(){
+  try{
+    const ab=(await sbFetch("inventarios?select=id,data_contagem&status=eq.aberto&limit=1"))||[];
+    const els=[document.getElementById('iv-aviso-saidas'), document.getElementById('iv-aviso-saidas2')].filter(Boolean);
+    for(const el of els){
+      if(ab.length){
+        el.style.display='';
+        el.innerHTML=`🔒 <b>Contagem de inventário aberta</b> (${ivData(ab[0].data_contagem)}) — segure os lançamentos de saída até a confirmação, para o saldo não ficar diferente.`;
+      } else el.style.display='none';
+    }
+  }catch(e){}
+}
+
 // ═══ RELATÓRIO DE ESTOQUE — filtra e gera p/ conferências pontuais ═══
 let relDados = [];   // [{id,nome,marca,descricao_nf,unidade,classe,controla_lote,saldo,lotes:[]}]
 let relFiltrados = [];
