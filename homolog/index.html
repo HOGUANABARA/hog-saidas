@@ -732,6 +732,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
     <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
     <button class="co-b2" onclick="coNovoFornecedor()">🏪➕ Novo fornecedor</button>
+    <button class="co-b2" id="co-btn-limpar" style="display:none;background:#FDF2E9;color:#D35400" onclick="coLimparJaComprados()">🧹 Tirar os que já viraram pedido</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
@@ -3256,6 +3257,7 @@ function acIncluir(idx){
 <script>
 // ═══ ABA COTAÇÃO v3.2 — grupos neutros arrastáveis · até 3 fornecedores/grupo ═══
 let coCotacaoId = null;
+let coJaComprado = {};   // material_id -> {pedido, status, temNf} — itens desta cotação que já viraram compra
 let coItens = [];
 let coFornecedores = [];
 let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
@@ -3320,6 +3322,7 @@ function coOpVazia(slot){
 async function coAbrir(id){
   const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo&id=eq.${id}&limit=1`);
   coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
+  await coCarregarJaComprados(id);
   const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
   coCotacaoId = id;
   coItens = (its||[]).map(it=>({
@@ -3422,6 +3425,33 @@ function coExcluirGrupo(g){
   toast('Grupo "'+g+'" excluído.','sucesso');
 }
 function coRemoveItem(i){ if(!confirm('Tirar "'+coItens[i].material_nome+'" da cotação?')) return; coItens.splice(i,1); coRender(); }
+
+// Descobre quais materiais desta cotação já viraram pedido/compra — evita comprar duas vezes
+async function coCarregarJaComprados(cotId){
+  coJaComprado={};
+  if(!cotId) return;
+  try{
+    const peds=(await sbFetch(`pedidos?select=id,status,fornecedor_id&cotacao_id=eq.${cotId}&limit=50`))||[];
+    if(!peds.length) return;
+    const ids=peds.map(p=>p.id);
+    const ords=(await sbFetch(`ordens_compra?select=material_id,pedido_id,situacao&pedido_id=in.(${ids.join(',')})&limit=1000`))||[];
+    for(const o of ords){
+      const p=peds.find(x=>x.id===o.pedido_id);
+      if(p && p.status==='CANCELADO') continue;
+      if(o.situacao==='NAO COMPRAR AGORA') continue;
+      coJaComprado[o.material_id]={ pedido:o.pedido_id, status:p?p.status:'', temNf:(o.situacao==='NF EMITIDA') };
+    }
+  }catch(e){}
+}
+function coLimparJaComprados(){
+  const alvos=coItens.filter(it=>coJaComprado[it.material_id]);
+  if(!alvos.length){ toast('Nenhum item da cotação já virou pedido.',''); return; }
+  if(!confirm(`Tirar da cotação ${alvos.length} item(ns) que já viraram pedido?\n\n${alvos.slice(0,8).map(it=>'• '+it.material_nome+' → Pedido #'+coJaComprado[it.material_id].pedido).join('\n')}${alvos.length>8?`\n• +${alvos.length-8}`:''}`)) return;
+  coItens=coItens.filter(it=>!coJaComprado[it.material_id]);
+  coRender();
+  coSalvar(true);
+  toast(`${alvos.length} item(ns) já comprados saíram da cotação ✓`,'sucesso');
+}
 
 // ── fornecedores do grupo (até 3) ──
 function coAddFornGrupo(g){
@@ -3582,7 +3612,7 @@ function coCardItem(i, it){
     : '<div style="font-size:12px;color:var(--cinza-4);padding:8px">Adicione fornecedores ao grupo (acima) para abrir os cartões de orçamento.</div>';
   return `<div class="co-item card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}" style="cursor:grab">
     <div class="co-ihead">
-      <div><div class="co-inome">⠿ ${it.material_nome}</div><div class="co-imeta">${info.join(' · ')}</div></div>
+      <div><div class="co-inome">⠿ ${it.material_nome}${coJaComprado[it.material_id]?`<span style="font-size:10px;font-weight:700;background:#FDF2E9;color:#D35400;border:1px solid #EDBB99;padding:2px 8px;border-radius:10px;margin-left:8px">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}${coJaComprado[it.material_id].temNf?' · NF dada':''}</span>`:''}</div><div class="co-imeta">${info.join(' · ')}</div></div>
       <div class="co-iqtd">Qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)">
         <select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
           ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
@@ -3630,6 +3660,9 @@ function coRender(){
   corpo.innerHTML=html;
   coItens.forEach((it,i)=>coAtualizaUnit(i));
   coDnD();
+  const nJa=coItens.filter(it=>coJaComprado[it.material_id]).length;
+  const btnL=document.getElementById('co-btn-limpar');
+  if(btnL){ btnL.style.display = nJa?'':'none'; btnL.textContent = `🧹 Tirar os ${nJa} que já viraram pedido`; }
 }
 // drag & drop entre grupos
 function coDnD(){
@@ -3752,7 +3785,8 @@ async function coFecharGrupo(g){
         nItens++;
       }
     }
-    // remove da tela os itens fechados
+    // remove da tela os itens fechados (e marca como já comprados, para não voltarem)
+    for(const {it} of prontos) coJaComprado[it.material_id]={pedido:'novo',status:'EM_MONTAGEM',temNf:false};
     const idsFechados = new Set(prontos.map(p=>p.it.material_id));
     coItens = coItens.filter(it=>!((it.grupo||'Orçamento 1')===g && idsFechados.has(it.material_id)));
     await coSalvar(true);
