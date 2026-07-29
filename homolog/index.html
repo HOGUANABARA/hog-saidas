@@ -826,6 +826,10 @@ details[open] summary { margin-bottom: 6px; }
       <input id="hi-ate" type="date" title="até" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 10px;font-size:13px;font-family:var(--fonte)" onchange="hiRenderizarLista()">
       <button class="rc-btn-editar" style="padding:9px 13px;font-size:12px" onclick="hiCarregarLista()">🔄 Atualizar</button>
     </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="hi-vis-nota" class="rc-btn-editar" style="padding:8px 14px;font-size:12px;background:var(--azul);color:#fff" onclick="hiSetVisao('nota')">📄 Por nota fiscal</button>
+      <button id="hi-vis-produto" class="rc-btn-editar" style="padding:8px 14px;font-size:12px" onclick="hiSetVisao('produto')">📦 Por produto comprado</button>
+    </div>
     <div id="hi-resumo" style="font-size:12px;color:var(--cinza-4);margin-top:8px"></div>
   </div>
   <div id="hi-lista"><div class="hi-empty">Carregando histórico...</div></div>
@@ -4134,6 +4138,17 @@ async function deCancelarPedido(pid){
 let hiNfs = [];
 let hiItensPorNf = {};
 let hiPedidos = [];
+let hiComEntrada = new Set();   // nf_id que já geraram movimentação de estoque
+let hiVisao = 'nota';          // 'nota' | 'produto'
+function hiSetVisao(v){
+  hiVisao=v;
+  const a=document.getElementById('hi-vis-nota'), b=document.getElementById('hi-vis-produto');
+  if(a&&b){
+    a.style.background = v==='nota'?'var(--azul)':'var(--azul-claro)';  a.style.color = v==='nota'?'#fff':'var(--azul)';
+    b.style.background = v==='produto'?'var(--azul)':'var(--azul-claro)'; b.style.color = v==='produto'?'#fff':'var(--azul)';
+  }
+  hiRenderizarLista();
+}
 
 function hiData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
 function hiMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -4160,6 +4175,14 @@ async function hiCarregarLista(){
       }
     }
     try{ hiPedidos = (await sbFetch('pedidos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ hiPedidos=[]; }
+    // quais notas já movimentaram o estoque (movimentação ligada ao item da NF)
+    hiComEntrada=new Set();
+    try{
+      const movs=(await sbFetch('movimentacoes?select=nf_item_id&nf_item_id=not.is.null&limit=5000'))||[];
+      const itemNf={};
+      for(const nfid of Object.keys(hiItensPorNf)) for(const it of hiItensPorNf[nfid]) itemNf[it.id]=Number(nfid);
+      for(const mv of movs){ const n=itemNf[mv.nf_item_id]; if(n) hiComEntrada.add(n); }
+    }catch(e){}
     hiRenderizarLista();
   }catch(e){
     document.getElementById('hi-lista').innerHTML = '<div class="hi-empty" style="color:var(--vermelho)">Erro ao carregar: '+e.message+'</div>';
@@ -4192,10 +4215,12 @@ const HI_STATUS = {
   'AGUARDANDO ENTREGA':{ rot:'🚚 Aguardando entrega',  cor:'#D35400',        bg:'#FDF2E9' },
   'DEVOLVIDO':         { rot:'↩️ Devolvido',           cor:'var(--vermelho)',bg:'#FDEDEC' },
   'PEDIDO':            { rot:'📦 Pedido sem NF ainda', cor:'var(--azul)',    bg:'var(--azul-claro)' },
+  'SEM ENTRADA':       { rot:'⚠️ Nota sem entrada no estoque', cor:'#D35400',  bg:'#FDF2E9' },
 };
 function hiStatusInfo(s){ return HI_STATUS[(s||'').toUpperCase()] || { rot:(s||'—'), cor:'var(--cinza-4)', bg:'var(--cinza-1)' }; }
 
 function hiRenderizarLista(){
+  if(hiVisao==='produto') return hiRenderPorProduto();
   const div = document.getElementById('hi-lista');
   if(!hiNfs.length && !hiPedidos.length){
     div.innerHTML = '<div class="hi-empty">Nenhuma compra registrada ainda.<br><span style="font-size:12px">As NFs entram pela aba 📥 Receber NF.</span></div>';
@@ -4236,7 +4261,10 @@ function hiRenderizarLista(){
     // separa por status
     const porStatus={};
     for(const nf of g.nfs){
-      const st=(nf.status||'ENTREGUE').toUpperCase();
+      let st=(nf.status||'ENTREGUE').toUpperCase();
+      const its=hiItensPorNf[nf.id]||[];
+      // nota com itens que ainda não movimentaram o estoque = aguardando entrada
+      if(st==='ENTREGUE' && its.length && !hiComEntrada.has(nf.id)) st='SEM ENTRADA';
       (porStatus[st]=porStatus[st]||[]).push({tipo:'nf', o:nf});
     }
     if(g.peds.length) porStatus['PEDIDO']=g.peds.map(p=>({tipo:'ped', o:p}));
@@ -4256,8 +4284,13 @@ function hiRenderizarLista(){
           <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="hiToggle(${nf.id})">
             <div><b style="font-size:13px">NF ${rcNumNf(nf.numero_nf)}</b> · ${rcNomeFornecedor(nf.fornecedor_id)}
               ${nf.origem==='PLANILHA'?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:1px 6px;border-radius:10px;margin-left:5px">planilha</span>':''}
-              <div style="font-size:11px;color:var(--cinza-4)">entrega ${hiData(nf.data_entrega)} · ${its2.length} item(ns)${nf.vencimentos_obs?' · '+nf.vencimentos_obs:''}</div></div>
-            <b style="font-size:14px">${hiMoney(nf.valor_total)}</b></div>
+              <div style="font-size:11px;color:var(--cinza-4)">entrega ${hiData(nf.data_entrega)} · ${its2.length} item(ns)${nf.vencimentos_obs?' · '+nf.vencimentos_obs:''}</div>
+              ${its2.length?(hiComEntrada.has(nf.id)
+                ? '<div style="font-size:10px;color:var(--verde);font-weight:700;margin-top:2px">✓ já entrou no estoque</div>'
+                : '<div style="font-size:10px;color:#D35400;font-weight:700;margin-top:2px">⚠ ainda não entrou no estoque</div>'):''}</div>
+            <div style="text-align:right"><b style="font-size:14px">${hiMoney(nf.valor_total)}</b>
+              ${(its2.length && !hiComEntrada.has(nf.id))?`<div><button class="rc-btn-editar" style="padding:5px 9px;font-size:10px;margin-top:4px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiDarEntrada(${nf.id})">📥 Dar entrada no estoque</button></div>`:''}
+            </div></div>
           <div class="hi-corpo" id="hi-corpo-${nf.id}" style="display:none;padding:0 16px 12px;background:var(--cinza-1)">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
               <thead><tr><th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
@@ -4291,10 +4324,124 @@ function hiRenderizarLista(){
     </div>`;
   }).join('');
 }
+// visão por PRODUTO — o que foi comprado, de quem, quando e por quanto
+function hiRenderPorProduto(){
+  const div=document.getElementById('hi-lista');
+  const termo=hiNorm((document.getElementById('hi-busca')||{}).value);
+  const de=(document.getElementById('hi-de')||{}).value||'';
+  const ate=(document.getElementById('hi-ate')||{}).value||'';
+  const porMat={};
+  for(const nf of hiNfs){
+    const data=((nf.data_entrega||nf.data_emissao||'')+'').slice(0,10);
+    if(de && data && data<de) continue;
+    if(ate && data && data>ate) continue;
+    if((nf.status||'').toUpperCase()==='DEVOLVIDO') continue;
+    for(const it of (hiItensPorNf[nf.id]||[])){
+      const nome=rcNomeMaterial(it.material_id);
+      if(termo && !hiNorm(nome).includes(termo) && !hiNorm(rcNomeFornecedor(nf.fornecedor_id)).includes(termo)) continue;
+      const m=porMat[it.material_id]||(porMat[it.material_id]={nome, qtd:0, valor:0, compras:[], forns:new Set()});
+      m.qtd+=Number(it.qtd)||0;
+      m.valor+=Number(it.valor_item)||((Number(it.qtd)||0)*(Number(it.valor_unitario)||0));
+      m.forns.add(rcNomeFornecedor(nf.fornecedor_id));
+      m.compras.push({data, nf, it});
+    }
+  }
+  const lista=Object.entries(porMat).map(([mid,m])=>({mid:Number(mid),...m}))
+    .sort((a,b)=>b.valor-a.valor);
+  const totalQtd=lista.reduce((s,m)=>s+m.qtd,0), totalR=lista.reduce((s,m)=>s+m.valor,0);
+  document.getElementById('hi-resumo').innerHTML=
+    `<b>${lista.length}</b> produto(s) comprado(s) · <b>${Math.round(totalQtd).toLocaleString('pt-BR')}</b> unidades · total <b>${hiMoney(totalR)}</b>`;
+  if(!lista.length){ div.innerHTML='<div class="hi-empty">Nenhuma compra com esse filtro.</div>'; return; }
+  div.innerHTML=`<div class="hi-card" style="padding:0">
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr>
+        <th style="text-align:left;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Produto</th>
+        <th style="text-align:right;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Qtd comprada</th>
+        <th style="text-align:right;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Valor total</th>
+        <th style="text-align:right;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Preço médio</th>
+        <th style="text-align:left;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Fornecedores</th>
+        <th style="text-align:center;padding:9px 12px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">Compras</th>
+      </tr></thead><tbody>
+      ${lista.map(m=>`<tr style="cursor:pointer" onclick="hiToggleProduto(${m.mid})">
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);font-weight:600">▸ ${m.nome}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:700">${Math.round(m.qtd).toLocaleString('pt-BR')}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:700">${hiMoney(m.valor)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);text-align:right;color:var(--cinza-4)">${m.qtd?hiMoney(m.valor/m.qtd):'—'}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">${[...m.forns].join(' · ')}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid var(--cinza-2);text-align:center">${m.compras.length}</td>
+      </tr>
+      <tr id="hi-prod-${m.mid}" style="display:none"><td colspan="6" style="padding:0;background:var(--cinza-1)">
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr>
+            <th style="text-align:left;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Data</th>
+            <th style="text-align:left;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">NF</th>
+            <th style="text-align:left;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Fornecedor</th>
+            <th style="text-align:right;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
+            <th style="text-align:right;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Valor un.</th>
+            <th style="text-align:right;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Total</th>
+            <th style="text-align:center;padding:5px 12px;font-size:9px;text-transform:uppercase;color:var(--cinza-4)">Estoque</th>
+          </tr></thead>
+          <tbody>${m.compras.sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(c=>`<tr>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2)">${hiData(c.data)}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2)">${rcNumNf(c.nf.numero_nf)}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2)">${rcNomeFornecedor(c.nf.fornecedor_id)}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2);text-align:right">${c.it.qtd}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(c.it.valor_unitario)}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(c.it.valor_item)}</td>
+            <td style="padding:5px 12px;border-bottom:1px solid var(--cinza-2);text-align:center">${hiComEntrada.has(c.nf.id)?'<span style="color:var(--verde)">✓</span>':'<span style="color:#D35400" title="esta nota ainda não entrou no estoque">⚠</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table></td></tr>`).join('')}
+    </tbody></table></div>
+    <div style="padding:10px 14px;font-size:11px;color:var(--cinza-4)">Clique num produto para ver cada compra. ⚠ na coluna Estoque = nota registrada que ainda não movimentou o saldo.</div>
+  </div>`;
+}
+function hiToggleProduto(mid){
+  const tr=document.getElementById('hi-prod-'+mid); if(!tr) return;
+  tr.style.display = tr.style.display==='none' ? '' : 'none';
+}
 function hiToggle(id){
   const el=document.getElementById('hi-corpo-'+id); if(!el) return;
   el.style.display = el.style.display==='none' ? '' : 'none';
 }
+// Dar entrada no estoque a partir de uma NF já registrada (ex.: comprada em junho,
+// chegou agora). Só deve ser usada quando o material AINDA NÃO está no saldo.
+async function hiDarEntrada(nfId){
+  const nf=hiNfs.find(n=>n.id===nfId); if(!nf) return;
+  const its=hiItensPorNf[nfId]||[];
+  if(!its.length){ toast('Esta nota não tem itens detalhados.','erro'); return; }
+  if(localStorage.getItem('hog_entrada_ok')!=='1'){
+    const s=prompt('🔒 Esta ação MOVE o saldo do estoque.\n\nDigite a senha de entrada:');
+    if(s===null) return;
+    if(s!==SENHA_ENTRADA){ toast('Senha incorreta.','erro'); return; }
+    localStorage.setItem('hog_entrada_ok','1');
+  }
+  const resumo=its.slice(0,6).map(it=>`• ${it.qtd} × ${rcNomeMaterial(it.material_id)}`).join('\n');
+  if(!confirm(`DAR ENTRADA NO ESTOQUE — NF ${rcNumNf(nf.numero_nf)} · ${rcNomeFornecedor(nf.fornecedor_id)}\n\n`+
+    `${resumo}${its.length>6?`\n• +${its.length-6} item(ns)`:''}\n\n`+
+    `⚠️ ATENÇÃO: use isto apenas se este material CHEGOU AGORA e ainda NÃO está no saldo.\n`+
+    `Se a compra já foi contabilizada no inventário ou no saldo inicial, dar entrada agora vai DUPLICAR a quantidade.\n\nConfirma?`)) return;
+  const quem=(document.getElementById('rc-registrado-por')||{}).value || 'Evelise (Gestora)';
+  try{
+    const localId=await getEstoqueGeralId();
+    const agora=new Date().toISOString();
+    let n=0;
+    for(const it of its){
+      const mv=await sbFetch('movimentacoes','POST',{
+        tipo:'ENTRADA_COMPRA', material_id:it.material_id, local_id:localId,
+        qtd:it.qtd, valor_unitario:it.valor_unitario, nf_item_id:it.id,
+        fornecedor_id:nf.fornecedor_id||null, aprovado:false, registrado_por:quem,
+        observacao:`Entrada retroativa — NF ${rcNumNf(nf.numero_nf)} (compra de ${hiData(nf.data_emissao||nf.data_entrega)})` });
+      const id=mv&&mv[0]&&mv[0].id;
+      if(id){ await sbFetch(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora }); n++; }
+      if(it.valor_unitario>0){ try{ await sbFetch(`materiais?id=eq.${it.material_id}`,'PATCH',{ ultimo_valor_pago:it.valor_unitario }); }catch(e){} }
+    }
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status:'ENTREGUE',
+      data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10) });
+    toast(`${n} item(ns) da NF ${rcNumNf(nf.numero_nf)} entraram no estoque ✓`,'sucesso');
+    hiCarregarLista();
+  }catch(e){ toast('Erro ao dar entrada: '+e.message,'erro'); }
+}
+
 async function hiCorrigirItem(itemId, nfId){
   const its = hiItensPorNf[nfId]||[];
   const it = its.find(x=>x.id===itemId); if(!it) return;
