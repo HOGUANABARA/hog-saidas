@@ -4326,6 +4326,7 @@ function rcRenderizar(){
   corpo.innerHTML = Object.keys(grupos).map(fid => {
     const itens = grupos[fid];
     const nomeForn = rcNomeFornecedor(Number(fid) || null);
+    const semCusto = rcSemCusto(fid);
     const linhas = itens.map(o => {
       const qtdPadrao = o.qtd_comprada ?? o.qtd_a_comprar ?? '';
       const valPadrao = o.valor_unitario ?? o.ultimo_valor_pago ?? '';
@@ -4349,7 +4350,6 @@ function rcRenderizar(){
       </td></tr>`;
     }).join('');
 
-    const semCusto = rcSemCusto(fid);
     return `<div class="rc-grupo" data-forn="${fid}">
       <div class="rc-ghead">${nomeForn} <span class="rc-count">${itens.length} pedido(s)</span></div>
       ${semCusto?`<div style="background:#EAF7EE;border-bottom:1.5px solid #A9DFBF;color:var(--verde);padding:8px 16px;font-size:12px;font-weight:700">🎁 ENTRADA SEM CUSTO (amostra grátis / bonificação) — valores ficam zerados, o nº da NF é opcional e o <b>preço de referência do item é preservado</b> para quando precisar comprar.</div>`:''}
