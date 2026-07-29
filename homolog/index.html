@@ -382,6 +382,8 @@ details[open] summary { margin-bottom: 6px; }
 <div class="hog-shell">
 <aside class="hog-side" id="hog-side">
   <nav>
+    <div class="hs-item hs-solo" id="aba-btn-alertas" onclick="trocarAba('alertas')"><span class="hs-ico">🔔</span> Alertas <span id="badge-alertas" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-painel" onclick="trocarAba('painel')"><span class="hs-ico">📊</span> Dashboard</div>
 
     <div class="hs-grupo">
@@ -959,6 +961,39 @@ details[open] summary { margin-bottom: 6px; }
   </div>
 </div>
 
+<!-- ═══ ABA ALERTAS (v4.6d) ═══════════════════════════════════════════════
+     Organizada por quem resolve, não por onde o problema apareceu.
+     Nível 1: todo mundo enxerga. As ações que mexem em cadastro pedem senha. -->
+<style>
+  #aba-alertas .al-setor{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px;overflow:hidden}
+  #aba-alertas .al-head{padding:12px 16px;color:#fff;font-weight:800;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  #aba-alertas .al-quem{font-size:11px;font-weight:600;opacity:.9}
+  #aba-alertas .al-count{font-size:11px;font-weight:700;background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px}
+  #aba-alertas .al-item{padding:13px 16px;border-bottom:1px solid var(--cinza-1);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  #aba-alertas .al-item:last-child{border-bottom:none}
+  #aba-alertas .al-txt{flex:1;min-width:230px}
+  #aba-alertas .al-tit{font-size:13.5px;font-weight:700;color:var(--cinza-5)}
+  #aba-alertas .al-sub{font-size:11.5px;color:var(--cinza-4);margin-top:3px;line-height:1.5}
+  #aba-alertas .al-acoes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  #aba-alertas .al-b{border:none;border-radius:7px;padding:7px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)}
+  #aba-alertas .al-b.verde{background:var(--verde)} #aba-alertas .al-b.claro{background:var(--azul-claro);color:var(--azul)}
+  #aba-alertas .al-b.cinza{background:var(--cinza-2);color:var(--cinza-5)}
+  #aba-alertas .al-b:hover{opacity:.9}
+  #aba-alertas .al-vazio{padding:22px;text-align:center;color:var(--cinza-4);font-size:13px}
+  #aba-alertas .al-topo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+</style>
+<div id="aba-alertas" class="container" style="display:none">
+  <div class="al-topo">
+    <label style="font-size:12px;font-weight:700;color:var(--cinza-4)">👤 Quem está resolvendo</label>
+    <select id="al-quem" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">
+      <option value="">Selecione...</option>
+    </select>
+    <span style="font-size:11.5px;color:var(--cinza-4);flex:1;min-width:200px">Cada bloco é de um setor. O alerta some daqui quando alguém resolve — e fica registrado quem foi.</span>
+    <button class="al-b claro" onclick="alCarregar()">↻ Atualizar</button>
+  </div>
+  <div id="al-corpo"><div class="al-vazio">Carregando…</div></div>
+</div>
+
 <!-- ═══ ABA CONTROLE DE REMESSAS (v4.6) ═══════════════════════════════════
      Livro paralelo: remessa NÃO mexe no saldo do estoque. Responde outra
      pergunta — o que está fora de casa e ainda não voltou.
@@ -1340,7 +1375,6 @@ function exigirSenhaCompras(){
 // Equipe do Centro Cirúrgico — edite os nomes conforme necessário
 const EQUIPE = [
   'Evelise (Gestora)',
-  'Técnica Gabrielle',
   'Técnica Talita',
   'Lucas (Adm)',
   'Bethânia (Fin)',
@@ -2142,8 +2176,20 @@ async function enviarSupabase(reg) {
       if (!qtd || qtd <= 0) continue;
       const mat = resolverMaterial(item.nome);
       if (!mat) {
+        // v4.6d — antes o item era só avisado na tela e a saída se perdia.
+        // Agora vira alerta com tudo que é preciso para refazer o lançamento.
         if (!reg.naoEncontrados) reg.naoEncontrados = [];
         if (!reg.naoEncontrados.includes(item.nome)) reg.naoEncontrados.push(item.nome);
+        try{
+          await sbFetch('alertas','POST',{
+            tipo: 'NOME_NAO_ENCONTRADO', setor: 'ESTOQUE',
+            titulo: item.nome,
+            detalhe: 'Saiu na cirurgia mas não existe no cadastro — a baixa não foi gravada.',
+            material_nome: item.nome, qtd: qtd, periodo_cirurgico_id: periodoId,
+            tipo_movimento: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
+            registrado_por: document.getElementById('sel-registrante').value || 'Equipe CC',
+          });
+        }catch(e){ /* banco sem a tabela ainda: segue com o aviso de sempre */ }
         continue;
       }
       const quem = document.getElementById('sel-registrante').value || 'Equipe CC';
@@ -2185,9 +2231,10 @@ async function enviarSupabase(reg) {
     }
   }
   if (reg.naoEncontrados && reg.naoEncontrados.length) {
-    alert('⚠️ ATENÇÃO — ' + reg.naoEncontrados.length + ' item(ns) NÃO foram enviados porque não existem no catálogo do banco:\n\n' +
+    alert('⚠️ ATENÇÃO — ' + reg.naoEncontrados.length + ' item(ns) não existem no cadastro e a baixa NÃO foi gravada:\n\n' +
       reg.naoEncontrados.join('\n') +
-      '\n\nCadastre esses materiais no banco ou informe a gestora.');
+      '\n\nEles viraram alerta na aba 🔔 Alertas. Lá dá para apontar para o material certo ou cadastrar o novo — e a saída é gravada na hora.');
+    if (typeof alAtualizarBadge === 'function') alAtualizarBadge();
   }
   if (reg.foramParaRemessa && reg.foramParaRemessa.length) {
     toast('🔁 ' + reg.foramParaRemessa.length + ' item(ns) foram para a fila de remessa (não baixaram estoque).', '');
@@ -2741,6 +2788,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-ocorrencias').classList.toggle('ativa', aba==='ocorrencias');
   document.getElementById('aba-btn-painel').classList.toggle('ativa', aba==='painel');
   document.getElementById('aba-btn-remessas').classList.toggle('ativa', aba==='remessas');
+  document.getElementById('aba-btn-alertas').classList.toggle('ativa', aba==='alertas');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
@@ -2754,7 +2802,9 @@ function trocarAba(aba) {
   document.getElementById('aba-ocorrencias').style.display = aba==='ocorrencias' ? '' : 'none';
   document.getElementById('aba-painel').style.display = aba==='painel' ? '' : 'none';
   document.getElementById('aba-remessas').style.display = aba==='remessas' ? '' : 'none';
+  document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
   if (aba==='remessas') { rmCarregar(); }
+  if (aba==='alertas')  { alCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='aprovarpedido') { apCarregar(); }
@@ -2830,6 +2880,18 @@ window.addEventListener('load', () => {
     }
     const ultimoRc = localStorage.getItem('hog_rc_registrante');
     if (ultimoRc && EQUIPE.includes(ultimoRc)) selRcReg.value = ultimoRc;
+  }
+
+  // Campo próprio da aba Alertas
+  const selAlReg = document.getElementById('al-quem');
+  if (selAlReg) {
+    for (const nome of EQUIPE) {
+      const opt = document.createElement('option');
+      opt.value = nome; opt.textContent = nome;
+      selAlReg.appendChild(opt);
+    }
+    const ultimoAl = localStorage.getItem('hog_registrante');
+    if (ultimoAl && EQUIPE.includes(ultimoAl)) selAlReg.value = ultimoAl;
   }
 
   // Campo próprio da aba Remessas
@@ -3140,7 +3202,56 @@ function ccUc(r){
 }
 function ccEtapa(r){
   const rot = ccAndamento[r.material_id] || r.etapa_status;
-  return rot ? `<span class="ac-etapa">🔄 ${rot}</span>` : '';
+  if(!rot) return '';
+  // a tag é clicável: se ela ficou presa (cotação abandonada, pedido cancelado
+  // por fora), dá para soltar o item sem precisar mexer no banco
+  return `<span class="ac-etapa" style="cursor:pointer" title="Clique para destravar este item, se a etapa já terminou"
+      onclick="ccDestravar(${r.material_id})">🔄 ${rot} <b style="opacity:.65">✕</b></span>`;
+}
+
+// tira o material das cotações ABERTAS — usado no cancelamento de pedido e no
+// destravar manual. Não apaga cotação nem pedido: só solta o item.
+async function ccSoltarDaCotacao(materialIds){
+  const ids = [...new Set((materialIds||[]).filter(Boolean))];
+  if(!ids.length) return 0;
+  try{
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=50')) || [];
+    if(!cots.length) return 0;
+    const r = await sbFetch(`cotacao_itens?cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})`,'DELETE');
+    // cotação que ficou vazia se encerra sozinha
+    for(const c of cots){
+      const restam = (await sbFetch(`cotacao_itens?select=id&cotacao_id=eq.${c.id}&limit=1`)) || [];
+      if(!restam.length) await sbFetch(`cotacoes?id=eq.${c.id}`,'PATCH',{ status:'fechada' });
+    }
+    if(typeof coItens!=='undefined' && Array.isArray(coItens)){
+      coItens = coItens.filter(it=>!ids.includes(it.material_id));
+      if(typeof coRender==='function' && document.getElementById('aba-cotacao') && document.getElementById('aba-cotacao').style.display!=='none') coRender();
+    }
+    return ids.length;
+  }catch(e){ toast('Não consegui soltar o item da cotação: '+e.message,'erro'); return 0; }
+}
+
+async function ccDestravar(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId);
+  const nome = r ? r.material : ('material #'+materialId);
+  const etapa = ccAndamento[materialId] || '(etapa antiga)';
+  if(!confirm(`Destravar "${nome}"?\n\nEle está marcado como "${etapa}" e por isso não entra na lista de compra.\n\nDestravar tira ele da cotação aberta e libera o pedido antigo que ficou pendurado. Não apaga nota, pedido aprovado nem histórico.`)) return;
+  try{
+    await ccSoltarDaCotacao([materialId]);
+    // ordens que ficaram penduradas sem pedido vivo
+    const ords = (await sbFetch(`ordens_compra?select=id,pedido_id&material_id=eq.${materialId}&situacao=eq.PENDENTE&limit=50`)) || [];
+    for(const o of ords){
+      if(!o.pedido_id){ await sbFetch(`ordens_compra?id=eq.${o.id}`,'PATCH',{ situacao:'NAO COMPRAR AGORA' }); continue; }
+      const ped = (await sbFetch(`pedidos?select=status&id=eq.${o.pedido_id}&limit=1`)) || [];
+      const st = ped.length ? ped[0].status : null;
+      if(!st || st==='CANCELADO' || st==='CONCLUIDO'){
+        await sbFetch(`ordens_compra?id=eq.${o.id}`,'PATCH',{ situacao:'NAO COMPRAR AGORA' });
+      }
+    }
+    await ccCarregarAndamento();
+    ccRender();
+    toast(nome+' destravado ✓','sucesso');
+  }catch(e){ toast('Erro ao destravar: '+e.message,'erro'); }
 }
 
 function ccRender(){
@@ -4060,7 +4171,23 @@ function coDnD(){
 
 // ── salvar ──
 async function coSalvar(silencioso){
-  if(!coItens.length){ if(!silencioso) toast('Nada para salvar.',''); return false; }
+  // v4.6d — cotação que ficou SEM itens não podia sair pela porta dos fundos:
+  // era aqui que a tag "EM COTAÇÃO" ficava presa. Se todos os itens viraram
+  // pedido (ou foram tirados), as linhas antigas continuavam no banco e a
+  // cotação seguia 'aberta' — então o item aparecia travado na lista de
+  // compras para sempre, mesmo depois de o pedido ser cancelado.
+  if(!coItens.length){
+    if(coCotacaoId!==null){
+      try{
+        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}`,'DELETE');
+        await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ status:'fechada' });
+        coCotacaoId = null;
+        if(typeof ccCarregarAndamento==='function'){ await ccCarregarAndamento(); if(typeof ccRender==='function') ccRender(); }
+      }catch(e){ toast('Erro ao encerrar a cotação vazia: '+e.message,'erro'); return false; }
+    }
+    if(!silencioso) toast('Cotação encerrada — não sobrou item nenhum.','');
+    return true;
+  }
   try{
     if(coCotacaoId===null){
       const nome=(document.getElementById('co-criado-por')||{}).value||'';
@@ -4548,7 +4675,10 @@ async function deCancelarPedido(pid){
     await sbFetch(`ordens_compra?pedido_id=eq.${pid}&situacao=eq.PENDENTE`,'PATCH',{ situacao:'NAO COMPRAR AGORA' });
     await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
       observacao:((b.pedido.observacao||'')+(motivo?' | Cancelado: '+motivo:' | Cancelado')).trim() });
-    toast('Pedido #'+pid+' cancelado.','sucesso');
+    // solta a trava do item na lista de compras: sem isto ele fica com a tag
+    // "EM COTAÇÃO" mesmo com o pedido cancelado
+    await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    toast('Pedido #'+pid+' cancelado — os itens estão livres na lista de compras.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
@@ -5812,7 +5942,8 @@ async function apRejeitarPedido(pid){
     await sbFetch(`ordens_compra?pedido_id=eq.${pid}`,'PATCH',{ situacao:'NAO COMPRAR AGORA', aprovado_pedido:false });
     await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
       observacao:(((b&&b.pedido.observacao)||'')+' | Rejeitado: '+motivo.trim()).trim() });
-    toast('Pedido rejeitado.','sucesso');
+    if(b && b.itens) await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    toast('Pedido rejeitado — os itens voltaram a ficar livres na lista de compras.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
@@ -9341,6 +9472,227 @@ async function rmLiberarNf(nfId){
     });
   };
 })();
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERTAS (v4.6d)
+// Uma tela só, organizada por QUEM RESOLVE. Junta três origens que antes
+// viviam espalhadas: nome que não casou no cadastro (a saída se perdia),
+// item que saiu na remessa e não voltou, e nota travada para pagamento.
+// ═══════════════════════════════════════════════════════════════════════════
+const AL_SETORES = {
+  ESTOQUE:          { nome:'Estoque e cadastro', quem:'quem cuida do cadastro de materiais', cor:'#1B4F72' },
+  COMPRAS:          { nome:'Compras',            quem:'quem cota e faz pedido',              cor:'#2E86AB' },
+  CENTRO_CIRURGICO: { nome:'Centro cirúrgico',   quem:'quem manda e recebe as remessas',     cor:'#6f42c1' },
+  ADMINISTRATIVO:   { nome:'Administrativo',     quem:'quem libera pagamento',               cor:'#E67E22' },
+};
+const AL_ORDEM = ['ESTOQUE','COMPRAS','CENTRO_CIRURGICO','ADMINISTRATIVO'];
+
+let alAlertas = [], alPendRem = [], alNfPend = [];
+
+function alQuem(){
+  const el = document.getElementById('al-quem');
+  return (el && el.value) || localStorage.getItem('hog_registrante') || 'Equipe CC';
+}
+function alEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function alData(d){ if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+
+async function alCarregar(){
+  const corpo = document.getElementById('al-corpo');
+  if(!corpo) return;
+  if(!sbUrl || !sbKey){ corpo.innerHTML = '<div class="al-vazio">Conecte ao banco.</div>'; return; }
+  corpo.innerHTML = '<div class="al-vazio">Carregando…</div>';
+  try{ alAlertas = (await sbFetch('alertas?select=*&status=eq.ABERTO&order=id.desc&limit=300')) || []; }
+  catch(e){ alAlertas = null; }        // null = tabela ainda não existe
+  try{ alPendRem = (await sbFetch('remessa_pendencias?select=*&status=eq.ABERTA&order=aberta_em.asc&limit=200')) || []; }catch(e){ alPendRem = []; }
+  try{ alNfPend  = (await sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,motivo_tratativa&status_pagamento=eq.PENDENTE_TRATATIVA&order=id.desc&limit=100')) || []; }catch(e){ alNfPend = []; }
+  if(!catalogoMateriais.length){
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+  }
+  if(!(typeof rmBens!=='undefined' && rmBens && rmBens.length)){
+    try{ rmBens = (await sbFetch('remessa_bens?select=id,nome,tipo,material_id,ativo&limit=500')) || []; }catch(e){}
+  }
+  alRenderizar();
+}
+
+function alLinhas(){
+  const linhas = [];
+  for(const a of (alAlertas||[])){
+    linhas.push({ setor: a.setor || 'ESTOQUE', chave:'a'+a.id,
+      titulo: a.tipo==='NOME_NAO_ENCONTRADO' ? ('“'+alEsc(a.material_nome||a.titulo)+'” não existe no cadastro') : alEsc(a.titulo),
+      sub: (a.tipo==='NOME_NAO_ENCONTRADO'
+            ? `Saiu ${a.qtd!=null?('<b>'+a.qtd+'</b> un '):''}na cirurgia e a baixa <b>não foi gravada</b>. Resolver aqui grava a saída que se perdeu.`
+            : alEsc(a.detalhe||''))
+           + `<br><span style="opacity:.8">${alData(a.created_at)}${a.registrado_por?' · lançado por '+alEsc(a.registrado_por):''}</span>`,
+      acoes: a.tipo==='NOME_NAO_ENCONTRADO'
+        ? `<button class="al-b verde" onclick="alApontar(${a.id})">🔗 Apontar para material existente</button>
+           <button class="al-b" onclick="alCadastrarNovo(${a.id})">➕ Cadastrar novo</button>
+           <button class="al-b cinza" onclick="alMover(${a.id})">↔ outro setor</button>
+           <button class="al-b cinza" onclick="alIgnorar(${a.id})">🙈 ignorar</button>`
+        : `<button class="al-b cinza" onclick="alMover(${a.id})">↔ outro setor</button>
+           <button class="al-b cinza" onclick="alIgnorar(${a.id})">🙈 ignorar</button>` });
+  }
+  for(const p of (alPendRem||[])){
+    const nome = (typeof rmBem==='function') ? rmBem(p.bem_id) : ('bem #'+p.bem_id);
+    linhas.push({ setor:'CENTRO_CIRURGICO', chave:'p'+p.id,
+      titulo: `${p.qtd} × ${alEsc(nome)} saiu na remessa e não voltou`,
+      sub: `Aberta em ${alData(p.aberta_em)}. Problema operacional — não trava pagamento.`,
+      acoes: `<button class="al-b claro" onclick="trocarAba('remessas')">abrir Remessas →</button>` });
+  }
+  for(const n of (alNfPend||[])){
+    const forn = (typeof rcNomeFornecedor==='function') ? rcNomeFornecedor(n.fornecedor_id) : '';
+    linhas.push({ setor:'ADMINISTRATIVO', chave:'n'+n.id,
+      titulo: `NF ${alEsc(n.numero_nf||'(sem número)')} travada para pagamento`,
+      sub: `${alEsc(forn)}${n.valor_total?' · R$ '+Number(n.valor_total).toFixed(2).replace('.',','):''}<br>${alEsc(n.motivo_tratativa||'')}`,
+      acoes: `<button class="al-b claro" onclick="trocarAba('remessas')">abrir Remessas →</button>` });
+  }
+  return linhas;
+}
+
+function alRenderizar(){
+  const corpo = document.getElementById('al-corpo');
+  if(alAlertas === null && !alPendRem.length && !alNfPend.length){
+    corpo.innerHTML = `<div class="al-setor"><div class="al-head" style="background:var(--vermelho)">⚠️ A tabela de alertas ainda não existe no banco</div>
+      <div style="padding:16px;font-size:13px;line-height:1.6">Rode o <b>v46d_alertas.sql</b> no Supabase e recarregue. O resto do app funciona normalmente.</div></div>`;
+    alAtualizarBadge();
+    return;
+  }
+  const linhas = alLinhas();
+  if(!linhas.length){
+    corpo.innerHTML = '<div class="al-setor"><div class="al-vazio">Nenhum alerta aberto. Tudo em dia. ✓</div></div>';
+    alAtualizarBadge();
+    return;
+  }
+  let html = '';
+  for(const s of AL_ORDEM){
+    const doSetor = linhas.filter(l=>l.setor===s);
+    if(!doSetor.length) continue;
+    const i = AL_SETORES[s];
+    html += `<div class="al-setor">
+      <div class="al-head" style="background:${i.cor}">
+        <span>${i.nome} <span class="al-quem">· ${i.quem}</span></span>
+        <span class="al-count">${doSetor.length}</span>
+      </div>
+      ${doSetor.map(l=>`<div class="al-item">
+        <div class="al-txt"><div class="al-tit">${l.titulo}</div><div class="al-sub">${l.sub}</div></div>
+        <div class="al-acoes">${l.acoes}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+  // setores sem nada, para dar a sensação de lista completa
+  const vazios = AL_ORDEM.filter(s=>!linhas.some(l=>l.setor===s));
+  if(vazios.length){
+    html += `<div style="font-size:11.5px;color:var(--cinza-4);padding:4px 2px">Sem alerta em: ${vazios.map(s=>AL_SETORES[s].nome).join(' · ')} ✓</div>`;
+  }
+  corpo.innerHTML = html;
+  alAtualizarBadge();
+}
+
+function alAtualizarBadge(){
+  const b = document.getElementById('badge-alertas');
+  if(!b) return;
+  const n = (alAlertas===null?0:(alAlertas||[]).length) + (alPendRem||[]).length + (alNfPend||[]).length;
+  b.textContent = n; b.style.display = n ? '' : 'none';
+}
+
+// ── grava a saída que tinha se perdido ────────────────────────────────────
+async function alGravarSaidaPerdida(a, materialId){
+  if(!a.qtd || !a.tipo_movimento) return false;
+  const localId = await getEstoqueGeralId();
+  await sbFetch('movimentacoes','POST',{
+    tipo: a.tipo_movimento, material_id: materialId, local_id: localId,
+    qtd: -Math.abs(Number(a.qtd)), periodo_cirurgico_id: a.periodo_cirurgico_id || null,
+    aprovado: false, registrado_por: a.registrado_por || alQuem(),
+    observacao: 'Lançamento refeito pelo alerta — o formulário trouxe "'+(a.material_nome||'')+'"',
+  });
+  return true;
+}
+
+async function alApontar(id){
+  const a = (alAlertas||[]).find(x=>x.id===id); if(!a) return;
+  const esc = await pkEscolher({
+    titulo: 'Para qual material é “'+(a.material_nome||'')+'”?',
+    subtitulo: 'A saída de '+(a.qtd??'?')+' un vai ser gravada nesse material e entra na fila de aprovação, como qualquer outra.',
+    itens: (catalogoMateriais||[]).map(m=>({ id:m.id, nome:m.nome })),
+  });
+  if(!esc) return;
+  if(!confirm(`Gravar a saída de ${a.qtd??'?'} un em "${esc.nome}"?\n\nEla vai para a aba de Aprovação como uma saída normal.`)) return;
+  try{
+    let gravou = false;
+    try{ gravou = await alGravarSaidaPerdida(a, esc.id); }
+    catch(e){ toast('Não consegui gravar a saída: '+e.message,'erro'); return; }
+    await sbFetch(`alertas?id=eq.${id}`,'PATCH',{ status:'RESOLVIDO', resolvido_por:alQuem(),
+      resolvido_em:new Date().toISOString(),
+      desfecho:'Apontado para "'+esc.nome+'"'+(gravou?' — saída gravada e enviada para aprovação':' — sem quantidade, nada a gravar') });
+    toast(gravou ? 'Saída gravada em "'+esc.nome+'" ✓ — confira na Aprovação.' : 'Alerta resolvido ✓','sucesso');
+    alCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function alCadastrarNovo(id){
+  const a = (alAlertas||[]).find(x=>x.id===id); if(!a) return;
+  if(typeof exigirSenhaCompras==='function' && !exigirSenhaCompras()) return;
+  const nome = prompt('Nome do material como deve ficar no cadastro:', a.material_nome||'');
+  if(nome===null || !nome.trim()) return;
+  const n = nome.trim().toUpperCase();
+
+  // mesma trava de duplicado do resto do app
+  const norm = (typeof pkNorm==='function') ? pkNorm : (s=>(''+s).toUpperCase().replace(/[^A-Z0-9]/g,''));
+  const parecidos = (catalogoMateriais||[]).filter(m=>{
+    const x = norm(m.nome), y = norm(n);
+    return x===y || (x.length>5 && y.length>5 && (x.includes(y)||y.includes(x)));
+  });
+  if(parecidos.length){
+    if(!confirm('⚠️ Já existe material com nome parecido:\n\n'+parecidos.slice(0,6).map(m=>'• '+m.nome).join('\n')+
+      '\n\nSe for a mesma coisa, cancele e use "Apontar para material existente".\n\nCadastrar "'+n+'" mesmo assim?')) return;
+  }
+  const minTxt = prompt('Estoque mínimo (deixe vazio se não souber):','');
+  if(minTxt===null) return;
+  const minimo = minTxt.trim()==='' ? null : (parseFloat(minTxt)||0);
+  try{
+    const r = await sbFetch('materiais','POST',{ nome:n, estoque_minimo:minimo, ativo:true,
+      exibir_dashboard:true, classe_compra:'ESPORADICO', classe_confirmada:false });
+    if(!r||!r.length) throw new Error('sem permissão (RLS)');
+    const novoId = r[0].id;
+    catalogoMateriais.push({ id:novoId, nome:n });
+    todosOsMateriais.push(n);
+    let gravou = false;
+    try{ gravou = await alGravarSaidaPerdida(a, novoId); }catch(e){ toast('Material criado, mas a saída não gravou: '+e.message,'erro'); }
+    await sbFetch(`alertas?id=eq.${id}`,'PATCH',{ status:'RESOLVIDO', resolvido_por:alQuem(),
+      resolvido_em:new Date().toISOString(),
+      desfecho:'Cadastrado como "'+n+'"'+(gravou?' — saída gravada e enviada para aprovação':'') });
+    toast('"'+n+'" cadastrado'+(gravou?' e a saída foi gravada ✓':' ✓'),'sucesso');
+    alCarregar();
+  }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
+}
+
+async function alMover(id){
+  const a = (alAlertas||[]).find(x=>x.id===id); if(!a) return;
+  const esc = await pkEscolher({
+    titulo: 'Quem resolve este alerta?',
+    subtitulo: 'Ele passa a aparecer no bloco desse setor.',
+    itens: AL_ORDEM.map(s=>({ id:s, nome:AL_SETORES[s].nome, meta:AL_SETORES[s].quem })),
+  });
+  if(!esc) return;
+  try{
+    await sbFetch(`alertas?id=eq.${id}`,'PATCH',{ setor:esc.id });
+    alCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function alIgnorar(id){
+  const a = (alAlertas||[]).find(x=>x.id===id); if(!a) return;
+  const motivo = prompt('Por que este alerta pode ser ignorado?\n\n(fica registrado — a saída NÃO será gravada)','');
+  if(motivo===null) return;
+  try{
+    await sbFetch(`alertas?id=eq.${id}`,'PATCH',{ status:'IGNORADO', resolvido_por:alQuem(),
+      resolvido_em:new Date().toISOString(), desfecho:'Ignorado: '+(motivo||'sem motivo informado') });
+    toast('Alerta ignorado.','');
+    alCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
 </script>
 
 </main>
