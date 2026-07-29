@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.4</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.5 · Acessos · Menu lateral</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -1181,15 +1181,27 @@ url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
 key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 };
 
-// Senha da aba Aprovação — troque por uma senha sua
-const SENHA_APROVACAO = 'hog2026';
+// ═══ ACESSOS (v4.5) ═══
+// NÍVEL 1 — sem senha: Saída Cirúrgica, Saídas Diversas, O que comprar.
+// NÍVEL 2 — uma senha: orçamento, pedido, receber NF, inventário, relatórios,
+//           dashboard e ocorrências. Fica lembrada no aparelho.
+// NÍVEL 3 — assinatura: os atos que aprovam ou movem saldo. Pedida SEMPRE.
+const SENHA_ACESSO2 = 'hog2026';
+const SENHA_ASSINATURA = 'cps2026';
 
-// Senha DIFERENTE para a aba Receber NF — só ela mexe no saldo de verdade (entrada de estoque)
-const SENHA_ENTRADA = 'hog2026entrada';
-// Senha da equipe de COMPRAS (orçar, cotar, decidir) — diferente da senha de gestão
-const SENHA_COMPRAS = 'hogcompras2026';
-// Senha SÓ DE VISUALIZAÇÃO dos indicadores (sócios/financeiro) — não dá acesso a nenhuma ação
-const SENHA_INDICADORES = 'hogindicadores2026';
+// aliases mantidos para não quebrar chamadas antigas espalhadas pelo app
+const SENHA_APROVACAO = SENHA_ACESSO2;
+const SENHA_ENTRADA = SENHA_ACESSO2;
+const SENHA_COMPRAS = SENHA_ACESSO2;
+const SENHA_INDICADORES = SENHA_ACESSO2;
+
+// ── ASSINATURA: pedida a cada ato, nunca memorizada ──
+function exigirAssinatura(ato){
+  const s = prompt('🖊 ASSINATURA — ' + ato + '\n\nEste ato é registrado no seu nome.\nDigite a senha de aprovação:');
+  if (s === null) return false;
+  if (s !== SENHA_ASSINATURA) { toast('Senha de aprovação incorreta.', 'erro'); return false; }
+  return true;
+}
 
 // ── ÁREA RESTRITA: revela as abas escondidas mediante qualquer senha válida ──
 function revelarAbasRestritas(){
@@ -2143,6 +2155,7 @@ function editarQtdPendente(i, k, val) {
 
 async function aprovar(i) {
   const p = pendentes[i];
+  if (!exigirAssinatura('Aprovar saída de material')) return;
   if (sbUrl && sbKey && p.itens?.length) {
     try {
       for (const it of p.itens) {
@@ -2552,11 +2565,7 @@ function trocarAba(aba) {
     else { toast('Senha incorreta.', 'erro'); return; }
     revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
   }
-  if (aba === 'aprovarpedido') {
-    const s = prompt('🔒 APROVAÇÃO DE PEDIDOS — senha de gestão (pedida a cada acesso):');
-    if (s === null) return;
-    if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
-  }
+  if (aba === 'aprovarpedido' && !exigirAssinatura('Aprovação de pedidos')) return;
   // Receber NF e Inventário usam senha PRÓPRIA e diferente — únicas etapas que efetivamente movem o saldo
   if ((aba === 'receber' || aba === 'inventario') && localStorage.getItem('hog_entrada_ok') !== '1') {
     const s = prompt('🔒 Área restrita — Entrada de Estoque.\n\nEsta etapa move o saldo real. Digite a senha de entrada:');
@@ -7170,6 +7179,7 @@ const IV_TIPOS = {
   NAO_CONTADO:{rot:'⚫ Não contado',            desc:'tem saldo no sistema e não apareceu em nenhuma contagem',       cor:'var(--cinza-5)',  bg:'#EFF1F4' },
   NEGATIVO:  { rot:'⛔ Saldo negativo',         desc:'o sistema está negativo — erro de lançamento anterior',         cor:'#7B241C',         bg:'#FADBD8' },
   SEM_LOTE:  { rot:'🟡 Sem lote/validade',      desc:'item que controla lote foi contado sem informar lote',          cor:'#B7950B',         bg:'#FEF9E7' },
+  USADO_APOS:{ rot:'🟣 Usado depois da contagem', desc:'a diferença se explica por saídas lançadas DEPOIS de você contar — não é erro, é movimento normal', cor:'#6C3483', bg:'#F4ECF7' },
   OK:        { rot:'✅ Bate certo',             desc:'contagem igual ao sistema',                                     cor:'var(--verde)',    bg:'#EAF7EE' },
 };
 
@@ -7234,8 +7244,9 @@ function ivRender(){
 
   box.innerHTML=`
     <div style="background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#7a6408">
-      🔒 <b>Contagem aberta desde ${ivData(ivAtual.data_contagem||ivAtual.created_at)}</b> — enquanto ela estiver aberta, <b>não lance saídas no sistema</b>.
-      As cirurgias do período são registradas depois da confirmação, para o saldo não ficar diferente.
+      📋 <b>Contagem aberta com data ${ivData(ivAtual.data_contagem||ivAtual.created_at)}</b> — a equipe deve <b>continuar lançando as saídas normalmente</b>.
+      A regra é outra: <b>conte apenas os itens que não terão movimento até a confirmação</b>. Se um item que você já contou for usado antes de fechar,
+      ele aparece marcado na apuração de divergências, e aí você recontagem só ele.
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
       <div style="font-size:13px"><b>Contagem #${ivAtual.id}</b> · data ${ivData(ivAtual.data_contagem)} · ${contados} de ${locais.length} locais contados${ivAtual.criado_por?' · aberta por '+ivAtual.criado_por:''}</div>
@@ -7252,9 +7263,14 @@ function ivRender(){
 async function ivIniciar(){
   const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
   if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
-  const data=prompt('Data da contagem (aaaa-mm-dd) — é a data que vai valer como saldo base:', ivHoje());
-  if(data===null) return;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.trim())){ toast('Data inválida. Use aaaa-mm-dd.','erro'); return; }
+  if(!exigirAssinatura('Iniciar contagem de inventário')) return;
+  const hojeBR = ivData(ivHoje());
+  const dbr = prompt('Data da contagem (dd/mm/aaaa) — é a data que vai valer como saldo base:', hojeBR);
+  if(dbr===null) return;
+  const mm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((dbr||'').trim());
+  if(!mm){ toast('Data inválida. Use dd/mm/aaaa.','erro'); return; }
+  const data = mm[3]+'-'+mm[2]+'-'+mm[1];
+  if(isNaN(new Date(data+'T00:00:00').getTime())){ toast('Data inválida.','erro'); return; }
   try{
     const r=await sbFetch('inventarios','POST',{ mes_referencia:data.trim(), data_contagem:data.trim(),
       status:'aberto', criado_por:quem });
@@ -7295,6 +7311,7 @@ async function ivSubirLocal(localId, file){
   const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
   if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
   const local=invLocais.find(l=>l.id===localId);
+  if(!exigirAssinatura('Subir contagem de '+((local&&local.nome)||'local'))) return;
   try{
     const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
     const limpo=s=>(s||'').replace(/[\\\/\?\*\[\]:]/g,'-').toLowerCase().trim();
@@ -7349,6 +7366,21 @@ async function ivApurar(){
     const saldo={}; for(const e of est) saldo[e.material_id]=Number(e.saldo)||0;
     let controla=new Set();
     try{ const cl=await sbFetch('materiais?select=id&controla_lote=eq.true&limit=500'); controla=new Set((cl||[]).map(x=>x.id)); }catch(e){}
+
+    // saídas lançadas DEPOIS que o item foi contado — divergência legítima, não erro de contagem
+    const movDepois={};
+    try{
+      const marcos=ivItens.map(i=>i.contado_em).filter(Boolean).sort();
+      const desde=marcos[0]||ivAtual.created_at;
+      if(desde){
+        const mv=(await sbFetch(`movimentacoes?select=material_id,qtd,created_at&aprovado=eq.true&qtd=lt.0&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&created_at=gte.${encodeURIComponent(desde)}&limit=5000`))||[];
+        const contadoEm={}; for(const it of ivItens){ if(it.contado_em && (!contadoEm[it.material_id] || it.contado_em<contadoEm[it.material_id])) contadoEm[it.material_id]=it.contado_em; }
+        for(const m of mv){
+          const ref=contadoEm[m.material_id]; if(!ref) continue;
+          if(m.created_at>=ref) movDepois[m.material_id]=(movDepois[m.material_id]||0)+Math.abs(Number(m.qtd)||0);
+        }
+      }
+    }catch(e){ console.warn('movimento pós-contagem:', e); }
     const nome=id=>{ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('#'+id); };
     const locNome=id=>{ const l=invLocais.find(x=>x.id===id); return l?l.nome:('#'+id); };
 
@@ -7367,7 +7399,9 @@ async function ivApurar(){
       let tipo = dif===0 ? 'OK' : (dif<0 ? 'FALTA' : 'SOBRA');
       if(sis<0) tipo='NEGATIVO';
       if(controla.has(mid) && !c.lotes.length && c.qtd>0 && tipo==='OK') tipo='SEM_LOTE';
-      linhas.push({ mid, nome:nome(mid), contado:c.qtd, sistema:sis, dif, tipo,
+      const usadoDepois = movDepois[mid]||0;
+      if(usadoDepois>0 && tipo==='FALTA' && Math.abs(dif)<=usadoDepois+0.0001) tipo='USADO_APOS';
+      linhas.push({ mid, nome:nome(mid), contado:c.qtd, sistema:sis, dif, tipo, usadoDepois,
                     locais:c.locais.join(' · '), lotes:c.lotes, controla:controla.has(mid) });
     }
     // itens com saldo no sistema que ninguém contou
@@ -7401,7 +7435,7 @@ function ivRenderDivergencias(){
   }).join('');
   const lista=ivFiltroTipo?ivDiverg.filter(l=>l.tipo===ivFiltroTipo):ivDiverg;
   // agrupado por tipo
-  const ordem=['FALTA','SOBRA','NEGATIVO','SEM_LOTE','NAO_CONTADO','OK'];
+  const ordem=['FALTA','SOBRA','NEGATIVO','USADO_APOS','SEM_LOTE','NAO_CONTADO','OK'];
   const grupos=ordem.filter(t=>lista.some(l=>l.tipo===t)).map(t=>{
     const i=IV_TIPOS[t], its=lista.filter(l=>l.tipo===t);
     return `<div style="margin-bottom:14px">
@@ -7506,6 +7540,7 @@ function ivImprimir(){
 // ── fechamento: aplica os ajustes e o contado vira o saldo base ──
 async function ivConfirmar(){
   if(!ivDiverg){ toast('Apure as divergências primeiro.','erro'); return; }
+  if(!exigirAssinatura('Confirmar inventário (vira o saldo base)')) return;
   const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
   if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
   const ajustar=ivDiverg.filter(l=>l.contado!==null && l.dif!==null && Math.abs(l.dif)>0.0001);
