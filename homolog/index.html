@@ -4717,6 +4717,8 @@ async function hiCarregarLista(){
   try{
     if(!catalogoMateriais.length) catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000'))||[];
     if(!coFornecedores.length) coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[];
+    // saldo de hoje: é o número que decide se a nota já entrou ou não
+    try{ if(!Object.keys(saldosCache||{}).length) await carregarSaldos(); }catch(e){}
     hiNfs = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=500')) || [];
     const ids = hiNfs.map(n=>n.id);
     hiItensPorNf = {};
@@ -4842,9 +4844,9 @@ function hiRenderizarLista(){
                 ? '<div style="font-size:10px;color:var(--verde);font-weight:700;margin-top:2px">✓ já entrou no estoque</div>'
                 : '<div style="font-size:10px;color:#D35400;font-weight:700;margin-top:2px">⚠ ainda não entrou no estoque</div>'):''}</div>
             <div style="text-align:right"><b style="font-size:14px">${hiMoney(nf.valor_total)}</b>
-              ${(its2.length && !hiComEntrada.has(nf.id))?`<div><button class="rc-btn-editar" style="padding:5px 9px;font-size:10px;margin-top:4px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiDarEntrada(${nf.id})">📥 Dar entrada no estoque</button></div>`:''}
+              ${(its2.length && !hiComEntrada.has(nf.id))?`<div><button class="rc-btn-editar" style="padding:5px 9px;font-size:10px;margin-top:4px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button></div>`:''}
             </div></div>
-          <div class="hi-corpo" id="hi-corpo-${nf.id}" style="display:none;padding:0 16px 12px;background:var(--cinza-1)">
+          <div class="hi-corpo${(its2.length && !hiComEntrada.has(nf.id))?' aberto':''}" id="hi-corpo-${nf.id}" style="padding:0 16px 12px;background:var(--cinza-1)">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
               <thead><tr><th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
               <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
@@ -4858,6 +4860,7 @@ function hiRenderizarLista(){
                 <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
               </tr>`).join('')||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>'}</tbody>
             </table>
+            ${(its2.length && !hiComEntrada.has(nf.id)) ? hiPainelEntrada(nf, its2) : ''}
             <div style="text-align:right;margin-top:8px"><button class="rc-btn-editar" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button></div>
           </div></div>`;
       }).join('');
@@ -4954,10 +4957,68 @@ function hiToggleProduto(mid){
 }
 function hiToggle(id){
   const el=document.getElementById('hi-corpo-'+id); if(!el) return;
-  el.style.display = el.style.display==='none' ? '' : 'none';
+  // v4.6e — antes isto fazia display:'' , e a classe .hi-corpo tem display:none.
+  // O inline vazio devolvia o controle para a classe: o dropdown NUNCA abria.
+  el.classList.toggle('aberto');
 }
-// Dar entrada no estoque a partir de uma NF já registrada (ex.: comprada em junho,
-// chegou agora). Só deve ser usada quando o material AINDA NÃO está no saldo.
+// ── v4.6e · DAR ENTRADA COM A CONTA NA FRENTE ────────────────────────────
+// Antes isto era um confirm() do navegador com um parágrafo de aviso, pedindo
+// uma decisão que ela não tinha como tomar: "já está no saldo?" é justamente
+// o que ela precisava ver. Agora a nota abre sozinha, lista os itens com o
+// saldo de hoje ao lado, e ela marca o que realmente chegou.
+function hiSaldoDe(materialId){
+  const nome = (rcNomeMaterial(materialId)||'').toUpperCase();
+  const v = (typeof saldosCache!=='undefined' && saldosCache) ? saldosCache[nome] : undefined;
+  return (v===undefined || v===null) ? null : Number(v);
+}
+
+function hiPainelEntrada(nf, its){
+  const linhas = its.map(it=>{
+    const saldo = hiSaldoDe(it.material_id);
+    const depois = saldo===null ? null : saldo + (Number(it.qtd)||0);
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">
+        <label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+          <input type="checkbox" class="hi-ent-chk" id="hi-ent-${nf.id}-${it.id}" data-item="${it.id}" checked>
+          <span>${rcNomeMaterial(it.material_id)}</span></label></td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
+        <input type="number" step="any" id="hi-entq-${nf.id}-${it.id}" value="${it.qtd??''}"
+               style="width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center;font-family:var(--fonte)"></td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;color:var(--cinza-5)">${saldo===null?'—':saldo}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;font-weight:800;color:var(--verde)">${depois===null?'—':depois}</td>
+    </tr>`;
+  }).join('');
+  return `<div id="hi-painel-${nf.id}" style="margin-top:12px;background:#fff;border:2px solid var(--verde);border-radius:10px;overflow:hidden">
+    <div style="background:var(--verde);color:#fff;padding:9px 14px;font-size:12.5px;font-weight:800">📥 Finalizar a entrada desta nota</div>
+    <div style="padding:10px 14px;background:#FEF9E7;font-size:12px;color:#7D6608;line-height:1.55">
+      Compare a coluna <b>saldo hoje</b> com a prateleira. Se a quantidade da nota <b>já estiver</b> nesse saldo
+      (porque entrou no inventário ou na carga inicial), <b>não marque o item</b> — dar entrada de novo dobra a quantidade.
+      Desmarque o que não chegou e ajuste a quantidade se veio parcial.
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Item que chegou</th>
+        <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd a entrar</th>
+        <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Saldo hoje</th>
+        <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Fica com</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div style="padding:11px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--cinza-1)">
+      <span style="font-size:11px;color:var(--cinza-5)">Isto move o saldo real e pede senha de entrada.</span>
+      <button class="rc-confirmar" style="margin-left:auto;padding:9px 14px;font-size:12.5px"
+              onclick="event.stopPropagation();hiDarEntrada(${nf.id})">📥 Dar entrada nos itens marcados</button>
+    </div>
+  </div>`;
+}
+
+function hiAbrirEntrada(nfId){
+  const el = document.getElementById('hi-corpo-'+nfId);
+  if(el) el.classList.add('aberto');
+  const p = document.getElementById('hi-painel-'+nfId);
+  if(p) p.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
 async function hiDarEntrada(nfId){
   const nf=hiNfs.find(n=>n.id===nfId); if(!nf) return;
   const its=hiItensPorNf[nfId]||[];
@@ -4968,20 +5029,31 @@ async function hiDarEntrada(nfId){
     if(s!==SENHA_ENTRADA){ toast('Senha incorreta.','erro'); return; }
     localStorage.setItem('hog_entrada_ok','1');
   }
-  const resumo=its.slice(0,6).map(it=>`• ${it.qtd} × ${rcNomeMaterial(it.material_id)}`).join('\n');
-  if(!confirm(`DAR ENTRADA NO ESTOQUE — NF ${rcNumNf(nf.numero_nf)} · ${rcNomeFornecedor(nf.fornecedor_id)}\n\n`+
-    `${resumo}${its.length>6?`\n• +${its.length-6} item(ns)`:''}\n\n`+
-    `⚠️ ATENÇÃO: use isto apenas se este material CHEGOU AGORA e ainda NÃO está no saldo.\n`+
-    `Se a compra já foi contabilizada no inventário ou no saldo inicial, dar entrada agora vai DUPLICAR a quantidade.\n\nConfirma?`)) return;
+  // só entra o que ela marcou, na quantidade que ela conferiu
+  const escolhidos=[];
+  for(const it of its){
+    const chk=document.getElementById(`hi-ent-${nfId}-${it.id}`);
+    if(chk && !chk.checked) continue;
+    const qEl=document.getElementById(`hi-entq-${nfId}-${it.id}`);
+    const qtd=qEl ? parseFloat(String(qEl.value).replace(',','.')) : Number(it.qtd);
+    if(!qtd || qtd<=0){ toast(`Quantidade inválida em "${rcNomeMaterial(it.material_id)}".`,'erro'); return; }
+    escolhidos.push({ it, qtd });
+  }
+  if(!escolhidos.length){ toast('Marque ao menos um item que chegou.','erro'); return; }
+  const resumo=escolhidos.slice(0,8).map(({it,qtd})=>{
+    const s=hiSaldoDe(it.material_id);
+    return `• ${qtd} × ${rcNomeMaterial(it.material_id)}${s===null?'':`  (${s} → ${s+qtd})`}`;
+  }).join('\n');
+  if(!confirm(`Dar entrada de ${escolhidos.length} item(ns) da NF ${rcNumNf(nf.numero_nf)}?\n\n${resumo}${escolhidos.length>8?`\n• +${escolhidos.length-8} item(ns)`:''}\n\nO saldo passa a ser o número da direita.`)) return;
   const quem=(document.getElementById('rc-registrado-por')||{}).value || 'Evelise (Gestora)';
   try{
     const localId=await getEstoqueGeralId();
     const agora=new Date().toISOString();
     let n=0;
-    for(const it of its){
+    for(const {it, qtd} of escolhidos){
       const mv=await sbFetch('movimentacoes','POST',{
         tipo:'ENTRADA_COMPRA', material_id:it.material_id, local_id:localId,
-        qtd:it.qtd, valor_unitario:it.valor_unitario, nf_item_id:it.id,
+        qtd:qtd, valor_unitario:it.valor_unitario, nf_item_id:it.id,
         fornecedor_id:nf.fornecedor_id||null, aprovado:false, registrado_por:quem,
         observacao:`Entrada retroativa — NF ${rcNumNf(nf.numero_nf)} (compra de ${hiData(nf.data_emissao||nf.data_entrega)})` });
       const id=mv&&mv[0]&&mv[0].id;
@@ -4991,6 +5063,7 @@ async function hiDarEntrada(nfId){
     await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status:'ENTREGUE',
       data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10) });
     toast(`${n} item(ns) da NF ${rcNumNf(nf.numero_nf)} entraram no estoque ✓`,'sucesso');
+    try{ await carregarSaldos(); }catch(e){}
     hiCarregarLista();
   }catch(e){ toast('Erro ao dar entrada: '+e.message,'erro'); }
 }
