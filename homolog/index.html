@@ -370,11 +370,10 @@ details[open] summary { margin-bottom: 6px; }
   🧪 AMBIENTE DE HOMOLOGAÇÃO — versão de teste. O app oficial da equipe é <a href="https://hoguanabara.github.io/hog-saidas/" style="color:#fff;text-decoration:underline">este link</a>.
 </div>
 
-
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.5 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.6 · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -391,6 +390,13 @@ details[open] summary { margin-bottom: 6px; }
         <div class="hs-item ativa" id="aba-btn-registro" onclick="trocarAba('registro')">Saída Cirúrgica</div>
         <div class="hs-item" id="aba-btn-diversas" onclick="trocarAba('diversas')">Saídas Diversas</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+      </div>
+    </div>
+
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Remessas</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
+      <div class="hs-lista" id="hs-l-rem">
+        <div class="hs-item" id="aba-btn-remessas" onclick="trocarAba('remessas')">Fora de casa <span id="badge-rem" style="background:#E67E22;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
       </div>
     </div>
 
@@ -953,6 +959,73 @@ details[open] summary { margin-bottom: 6px; }
   </div>
 </div>
 
+<!-- ═══ ABA CONTROLE DE REMESSAS (v4.6) ═══════════════════════════════════
+     Livro paralelo: remessa NÃO mexe no saldo do estoque. Responde outra
+     pergunta — o que está fora de casa e ainda não voltou.
+     Nível 1: registra sem senha. Só a perda definitiva pede assinatura. -->
+<style>
+  #aba-remessas .rm-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-remessas .rm-head{padding:11px 16px;font-weight:700;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:#fff}
+  #aba-remessas .rm-head.laranja{background:#E67E22}
+  #aba-remessas .rm-head.azul{background:var(--azul-medio)}
+  #aba-remessas .rm-head.roxo{background:#6f42c1}
+  #aba-remessas .rm-head.verm{background:var(--vermelho)}
+  #aba-remessas .rm-head.cinza{background:var(--cinza-5)}
+  #aba-remessas .rm-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px}
+  #aba-remessas table{width:100%;border-collapse:collapse;font-size:12px}
+  #aba-remessas thead th{text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
+  #aba-remessas tbody td{padding:7px 10px;border-bottom:1px solid var(--cinza-1);vertical-align:middle}
+  #aba-remessas .rm-empty{text-align:center;padding:22px;color:var(--cinza-4);font-size:13px}
+  #aba-remessas .rm-b{border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)}
+  #aba-remessas .rm-b.verde{background:var(--verde)}
+  #aba-remessas .rm-b.laranja{background:#E67E22}
+  #aba-remessas .rm-b.roxo{background:#6f42c1}
+  #aba-remessas .rm-b.claro{background:var(--azul-claro);color:var(--azul)}
+  #aba-remessas .rm-b.perigo{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho)}
+  #aba-remessas .rm-b:hover{opacity:.9}
+  #aba-remessas .rm-n{width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)}
+  #aba-remessas .rm-topo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  #aba-remessas .rm-topo select,#aba-remessas .rm-topo input{border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)}
+  #aba-remessas .rm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  #aba-remessas .rm-tile{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px}
+  #aba-remessas .rm-tile b{display:block;font-size:22px;line-height:1.1}
+  #aba-remessas .rm-tile span{font-size:11px;color:var(--cinza-4);text-transform:uppercase;font-weight:700}
+  #aba-remessas .rm-aviso{background:#FEF9E7;border-left:4px solid #E67E22;padding:10px 14px;font-size:12px;color:#7D6608;border-radius:0 8px 8px 0;margin-bottom:16px;line-height:1.5}
+  #aba-remessas .rm-tag{font-size:10px;font-weight:700;border-radius:10px;padding:2px 8px;white-space:nowrap}
+  #aba-remessas .rm-tag.ok{background:#EAF7EE;color:var(--verde)}
+  #aba-remessas .rm-tag.falta{background:#FDEDEC;color:var(--vermelho)}
+  #aba-remessas .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
+</style>
+<div id="aba-remessas" class="container" style="display:none">
+
+  <div class="rm-aviso">
+    🔁 <b>O livro de remessas não é estoque.</b> O que está aqui não foi consumido — saiu para reprocessamento ou lavagem e tem que voltar.
+    Uma nota da Esterileno pode ser <b>serviço</b> (reprocessamento, entra neste livro) ou <b>compra</b> (descartável, entra no estoque comum).
+    Quem define é o item, nunca o fornecedor.
+  </div>
+
+  <div class="rm-topo">
+    <label style="font-size:12px;font-weight:700;color:var(--cinza-4)">👤 Registrado por</label>
+    <select id="rm-registrado-por" onchange="localStorage.setItem('hog_rm_registrante', this.value)">
+      <option value="">Selecione...</option>
+    </select>
+    <button class="rm-b laranja" onclick="rmMontarRemessa()">🧺 Montar remessa do dia</button>
+    <button class="rm-b claro" onclick="rmNovoSujo()">➕ Acrescentar item sujo</button>
+    <button class="rm-b claro" onclick="rmEntradaBem()">📦 Entrada de peça nova</button>
+    <button class="rm-b claro" onclick="rmCarregar()" style="margin-left:auto">↻ Atualizar</button>
+  </div>
+
+  <div class="rm-tiles" id="rm-tiles"></div>
+
+  <div id="rm-sujos"></div>
+  <div id="rm-fora"></div>
+  <div id="rm-aguardando-nf"></div>
+  <div id="rm-pend-fisica"></div>
+  <div id="rm-pend-nf"></div>
+  <div id="rm-saldo"></div>
+
+</div>
+
 <!-- ═══ ABA APROVAR PEDIDO (SEGUNDA CAMADA, ANTES DE ENTRAR NO ESTOQUE) ═══ -->
 <style>
   #aba-aprovarpedido .ap-grupo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
@@ -1314,10 +1387,27 @@ async function testarConexao() {
     document.getElementById('status-cx').textContent = `✅ Conectado — ${todosOsMateriais.length} materiais`;
     document.getElementById('config-box').style.borderColor = '#A9DFBF';
     await carregarTiposCirurgia();
+    await carregarBensRemessa();
     renderizarTipos(); // atualiza o formulário caso já estivesse aberto sem os tipos carregados
     carregarPendentes();
   } catch(e) {
     document.getElementById('status-cx').textContent = `❌ Erro: ${e.message}`;
+  }
+}
+
+// ── QUEM VIVE NO LIVRO DE REMESSAS (v4.6) ────────────────────
+// material_id -> bem_id. Quem está aqui NÃO baixa estoque na saída cirúrgica:
+// não foi consumido, ficou sujo e vai para a Esterileno.
+// Quem define é o ITEM, nunca o fornecedor — a Esterileno também vende
+// descartável (capa protetora), e isso é compra comum, estoque comum.
+let matRemessa = {};
+async function carregarBensRemessa(){
+  try{
+    const bens = (await sbFetch('remessa_bens?select=id,material_id&material_id=not.is.null&limit=500')) || [];
+    matRemessa = {};
+    for(const b of bens) matRemessa[b.material_id] = b.id;
+  }catch(e){
+    matRemessa = {};   // banco ainda sem as tabelas da v4.6 — app segue normal
   }
 }
 
@@ -2030,11 +2120,41 @@ async function enviarSupabase(reg) {
         if (!reg.naoEncontrados.includes(item.nome)) reg.naoEncontrados.push(item.nome);
         continue;
       }
+      const quem = document.getElementById('sel-registrante').value || 'Equipe CC';
+
+      // ── v4.6: item que circula (Esterileno / lavanderia) não baixa estoque ──
+      // Ele não foi consumido: ficou sujo. A baixa sai do livro de remessas.
+      const bemId = matRemessa[mat.id];
+      if (bemId) {
+        try{
+          await sbFetch('remessa_sujos', 'POST', {
+            bem_id: bemId, qtd: qtd, origem: 'SAIDA_CIRURGIA',
+            periodo_cirurgico_id: periodoId, registrado_por: quem,
+          });
+          await sbFetch('remessa_mov', 'POST', {
+            bem_id: bemId, tipo: 'USO', d_casa: -qtd, d_sujo: qtd,
+            registrado_por: quem, observacao: 'Usado na cirurgia — foi para a fila de remessa',
+          });
+          if (!reg.foramParaRemessa) reg.foramParaRemessa = [];
+          reg.foramParaRemessa.push(`${qtd}x ${mat.nome}`);
+        }catch(e){
+          // livro indisponível: não perde o registro, cai no caminho antigo
+          await sbFetch('movimentacoes', 'POST', {
+            tipo: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
+            material_id: mat.id, local_id: localId,
+            qtd: -qtd, periodo_cirurgico_id: periodoId,
+            aprovado: false, registrado_por: quem,
+            observacao: 'Item de remessa — livro indisponível, lançado como saída comum',
+          });
+        }
+        continue;
+      }
+
       await sbFetch('movimentacoes', 'POST', {
         tipo: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
         material_id: mat.id, local_id: localId,
         qtd: -qtd, periodo_cirurgico_id: periodoId,
-        aprovado: false, registrado_por: document.getElementById('sel-registrante').value || 'Equipe CC',
+        aprovado: false, registrado_por: quem,
       });
     }
   }
@@ -2042,6 +2162,9 @@ async function enviarSupabase(reg) {
     alert('⚠️ ATENÇÃO — ' + reg.naoEncontrados.length + ' item(ns) NÃO foram enviados porque não existem no catálogo do banco:\n\n' +
       reg.naoEncontrados.join('\n') +
       '\n\nCadastre esses materiais no banco ou informe a gestora.');
+  }
+  if (reg.foramParaRemessa && reg.foramParaRemessa.length) {
+    toast('🔁 ' + reg.foramParaRemessa.length + ' item(ns) foram para a fila de remessa (não baixaram estoque).', '');
   }
 }
 
@@ -2529,7 +2652,7 @@ function hsSincronizar(){
   hsFecharMobile();
 }
 document.addEventListener('DOMContentLoaded', function(){
-  for(const g of ['saidas','compras','inv','rel']){
+  for(const g of ['saidas','rem','compras','inv','rel']){
     try{ if(localStorage.getItem('hog_menu_'+g)==='0') hsToggle(g); }catch(e){}
   }
   hsAjustarGrupos();
@@ -2591,6 +2714,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-inventario').classList.toggle('ativa', aba==='inventario');
   document.getElementById('aba-btn-ocorrencias').classList.toggle('ativa', aba==='ocorrencias');
   document.getElementById('aba-btn-painel').classList.toggle('ativa', aba==='painel');
+  document.getElementById('aba-btn-remessas').classList.toggle('ativa', aba==='remessas');
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
@@ -2603,6 +2727,8 @@ function trocarAba(aba) {
   document.getElementById('aba-inventario').style.display = aba==='inventario' ? '' : 'none';
   document.getElementById('aba-ocorrencias').style.display = aba==='ocorrencias' ? '' : 'none';
   document.getElementById('aba-painel').style.display = aba==='painel' ? '' : 'none';
+  document.getElementById('aba-remessas').style.display = aba==='remessas' ? '' : 'none';
+  if (aba==='remessas') { rmCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
   if (aba==='aprovarpedido') { apCarregar(); }
@@ -2680,6 +2806,18 @@ window.addEventListener('load', () => {
     if (ultimoRc && EQUIPE.includes(ultimoRc)) selRcReg.value = ultimoRc;
   }
 
+  // Campo próprio da aba Remessas
+  const selRmReg = document.getElementById('rm-registrado-por');
+  if (selRmReg) {
+    for (const nome of EQUIPE) {
+      const opt = document.createElement('option');
+      opt.value = nome; opt.textContent = nome;
+      selRmReg.appendChild(opt);
+    }
+    const ultimoRm = localStorage.getItem('hog_rm_registrante');
+    if (ultimoRm && EQUIPE.includes(ultimoRm)) selRmReg.value = ultimoRm;
+  }
+
   // Prioridade 1: configuração fixa embutida no código
   if (CONFIG_FIXA.url && CONFIG_FIXA.key) {
     sbUrl = CONFIG_FIXA.url.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
@@ -2722,6 +2860,10 @@ let ccOrdem = {};       // material_id -> posição manual (arrastar na lista de
 let ccDragMid = null;
 let ccFiltroPrio = '';  // '' | URGENTE | COMPRAR | ATENCAO
 let ccVerOcultos = false;
+// v4.6 — itens que ela trouxe pela busca "fora da regra". Ficam numa faixa
+// própria no topo, com o saldo à vista, e só vão para o orçamento quando ela
+// mandar. Antes a busca pulava direto para a cotação e escondia a quantidade.
+let ccIncluidoManual = {};   // material_id -> true
 
 const CC_INFO = {
   RECORRENTE:       { emoji:'🔁', nome:'Recorrentes',            grad:'linear-gradient(135deg,var(--azul),var(--azul-medio))', cor:'var(--azul-medio)', chip:'cc-azul',
@@ -3001,7 +3143,31 @@ function ccRender(){
   if(ccFiltroClasse) dados = dados.filter(r=>(r.classe_compra||'ESPORADICO')===ccFiltroClasse);
   if(ccFiltroPrio) dados = dados.filter(r=>ccPrioridade(r)===ccFiltroPrio && !ccAndamento[r.material_id]);
 
+  // faixa dos itens trazidos pela busca — o saldo aparece ANTES de orçar
+  const manuais = ccDados.filter(r=>ccIncluidoManual[r.material_id]);
+  dados = dados.filter(r=>!ccIncluidoManual[r.material_id]);
   let html = '';
+  if(manuais.length){
+    html += `<div class="cc-bloco" id="cc-incluidos">
+      <div class="cc-bhead" style="background:linear-gradient(135deg,#1B4F72,#2E86AB)">
+        <span>➕ INCLUÍDOS À MÃO (${manuais.length}) — confira o saldo e mande orçar quando quiser</span>
+      </div>
+      <div class="cc-bbody"><table>
+        <thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Mínimo</th><th class="num">Consumo/mês</th><th>Situação</th><th></th></tr></thead>
+        <tbody>${manuais.map(r=>{
+          const emAndamento = ccAndamento[r.material_id];
+          return `<tr>
+            <td><div class="ac-item">${r.material}</div></td>
+            <td class="num" style="font-weight:800;font-size:15px;color:${(r.saldo!=null&&r.estoque_minimo!=null&&Number(r.saldo)<Number(r.estoque_minimo))?'var(--vermelho)':'var(--cinza-5)'}">${r.saldo!=null?acN0(r.saldo):'—'}</td>
+            <td class="num">${r.estoque_minimo??'—'}</td>
+            <td class="num">${r.consumo_medio_mensal?acN0(r.consumo_medio_mensal):'—'}</td>
+            <td style="font-size:11px;color:var(--cinza-4)">${emAndamento?('🔄 '+emAndamento):'livre para orçar'}</td>
+            <td style="white-space:nowrap">
+              ${emAndamento?'' : `<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">📤 Orçar</button>`}
+              <button class="ac-orcar" style="background:var(--cinza-2);color:var(--cinza-5)" onclick="ccTirarIncluido(${r.material_id})">✕ tirar</button>
+            </td></tr>`;
+        }).join('')}</tbody></table></div></div>`;
+  }
   for(const classe of CC_ORDEM){
     if(ccFiltroClasse && classe!==ccFiltroClasse) continue;
     const i = CC_INFO[classe];
@@ -3364,15 +3530,36 @@ async function acCadastrarNovoMaterial(){
   });
   document.addEventListener('click',e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.style.display='none'; });
 })();
-function acIncluir(idx){
+async function acIncluir(idx){
   const m=acResultados[idx]; if(!m) return;
   document.getElementById('ac-busca').value=''; document.getElementById('ac-res').style.display='none';
-  if(!ccDados.find(x=>x.material_id===m.id)){
-    ccDados.push({ material_id:m.id, material:m.nome, classe_compra:'ESPORADICO', classe_confirmada:true,
-      saldo:null, estoque_minimo:m.estoque_minimo, consumo_medio_mensal:0, cobertura_meses:null,
-      consumo_por_paciente:null, qtd_vencendo_60d:0, proxima_validade:null, meses_com_consumo:0 });
+
+  let linha = ccDados.find(x=>x.material_id===m.id);
+  if(!linha){
+    // busca o saldo de verdade antes de pôr na lista — é o número que ela
+    // precisa ver ANTES de decidir quanto comprar
+    let saldo = null;
+    try{
+      const s = await sbFetch(`vw_saldo_consolidado?select=saldo_total&material=eq.${encodeURIComponent(m.nome)}&limit=1`);
+      if(s && s.length) saldo = s[0].saldo_total;
+    }catch(e){}
+    linha = { material_id:m.id, material:m.nome, classe_compra:'ESPORADICO', classe_confirmada:true,
+      saldo:saldo, estoque_minimo:m.estoque_minimo, consumo_medio_mensal:0, cobertura_meses:null,
+      consumo_por_paciente:null, qtd_vencendo_60d:0, proxima_validade:null, meses_com_consumo:0 };
+    ccDados.push(linha);
   }
-  ccOrcar(m.id);
+  ccIncluidoManual[m.id] = true;
+  if(ccOculto[m.id]) delete ccOculto[m.id];   // estava fora da lista: reaparece enquanto ela decide
+  ccVerOcultos = false;
+  ccRender();
+  toast(m.nome+' está na lista de compras — confira o saldo antes de orçar.','sucesso');
+  setTimeout(()=>{ const e=document.getElementById('cc-incluidos'); if(e) e.scrollIntoView({behavior:'smooth',block:'center'}); }, 60);
+}
+
+// tira o item da faixa de incluídos (não mexe no cadastro)
+function ccTirarIncluido(materialId){
+  delete ccIncluidoManual[materialId];
+  ccRender();
 }
 </script>
 
@@ -3576,24 +3763,48 @@ function coLimparJaComprados(){
 }
 
 // ── fornecedores do grupo (até 3) ──
-function coAddFornGrupo(g){
+// v4.6 — era um prompt() do navegador, que corta a lista por volta do 21º nome.
+// Agora é uma janela com busca: rola até o fim e filtra ignorando acento.
+async function coAddFornGrupo(g){
   const lista = coFornGrupo[g] || [];
   if(lista.length>=3){ toast('Máximo de 3 fornecedores por grupo.','erro'); return; }
+  if(!coFornecedores.length){
+    try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000')) || []; }catch(e){}
+  }
   const candidatos = coFornecedores.filter(f=>!lista.includes(f.id));
-  const opcoes = candidatos.map((f,i)=>`${i+1} — ${f.nome}`).join('\n');
-  const esc = prompt('Adicionar fornecedor ao grupo "'+g+'":\n\n0 — ➕ CADASTRAR NOVO FORNECEDOR\n'+opcoes+'\n\nDigite o número:');
-  if(esc===null) return;
-  if(esc.trim()==='0'){ coNovoFornecedor(g); return; }
-  const idx = parseInt(esc)-1;
-  if(isNaN(idx)||!candidatos[idx]){ toast('Escolha inválida.','erro'); return; }
-  coFornGrupo[g] = [...lista, candidatos[idx].id];
+  const esc = await pkEscolher({
+    titulo: 'Fornecedor para "'+g+'"',
+    subtitulo: 'Digite qualquer pedaço do nome para filtrar. São '+candidatos.length+' fornecedores cadastrados.',
+    itens: candidatos.map(f=>({ id:f.id, nome:f.nome })),
+    novoLabel: '➕ Cadastrar novo',
+  });
+  if(!esc) return;
+  if(esc.__novo){ coNovoFornecedor(g, esc.termo); return; }
+  coFornGrupo[g] = [...lista, esc.id];
   coRender();
 }
 // cadastrar fornecedor novo direto da tela de orçamento
-async function coNovoFornecedor(g){
-  const nome = prompt('Nome do novo fornecedor:');
+async function coNovoFornecedor(g, sugestao){
+  const nome = prompt('Nome do novo fornecedor:', sugestao||'');
   if(nome===null || !nome.trim()) return;
   const n = nome.trim().toUpperCase();
+  // v4.6 — trava de duplicado: compara ignorando acento, espaço e pontuação,
+  // que é por onde os nomes repetidos entraram (ESTERILENO x ESTERILENO LTDA).
+  const norm = (typeof pkNorm==='function') ? pkNorm : (s=>(''+s).toUpperCase().replace(/[^A-Z0-9]/g,''));
+  const parecidos = coFornecedores.filter(f=>{
+    const a = norm(f.nome), b = norm(n);
+    return a===b || (a.length>3 && b.length>3 && (a.includes(b) || b.includes(a)));
+  });
+  if(parecidos.length){
+    const igual = parecidos.find(f=>norm(f.nome)===norm(n));
+    if(igual){
+      toast('"'+igual.nome+'" já está cadastrado — adicionado ao grupo.','');
+      if(g){ const lista=coFornGrupo[g]||[]; if(lista.length<3 && !lista.includes(igual.id)){ coFornGrupo[g]=[...lista,igual.id]; coRender(); } }
+      return;
+    }
+    if(!confirm('⚠️ Já existe fornecedor com nome parecido:\n\n'+parecidos.map(f=>'• '+f.nome).join('\n')+
+                '\n\nCadastrar "'+n+'" mesmo assim cria um segundo cadastro, e as compras ficam divididas entre os dois.\n\nCadastrar assim mesmo?')) return;
+  }
   const jaExiste = coFornecedores.find(f=>f.nome.trim().toUpperCase()===n);
   if(jaExiste){
     toast('"'+jaExiste.nome+'" já está cadastrado — adicionado ao grupo.','');
@@ -3614,17 +3825,26 @@ function coRemFornGrupo(g, fid){
   coFornGrupo[g] = (coFornGrupo[g]||[]).filter(x=>x!==fid);
   coRender();
 }
+// v4.6 — o texto diz de qual rodada se trata e leva SÓ os itens daquele
+// fornecedor: fica de fora o que ele já disse que não tem e o que foi marcado
+// como "🔕 não pedir" no cartão dele.
 function coTextoGrupo(g, fid){
   const forn = coFornNomeById(fid);
-  const itens = coItens.filter(it=>(it.grupo||'Orçamento 1')===g);
+  const itens = coItens.filter(it=>{
+    if((it.grupo||'Orçamento 1')!==g) return false;
+    const o = (it.opcoes||[]).find(x=>x.fornecedor_id===fid);
+    if(o && (o.nao_pedir || o.nao_tem)) return false;
+    return true;
+  });
   if(!itens.length) return null;
   const linhas = itens.map(it=>`• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${(it.descricao_nf&&it.descricao_nf.trim())||it.material_nome}`).join('\n');
-  return { forn, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo. Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
+  const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
+  return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
 }
 // mostra o texto na tela (conferir/editar antes de enviar) + copiar + abrir WhatsApp
 function coWhatsGrupo(g, fid){
   const r = coTextoGrupo(g, fid);
-  if(!r){ toast('Grupo sem itens.',''); return; }
+  if(!r){ toast('Nenhum item para este fornecedor neste grupo (todos estão como "não pedir" ou "não tem").',''); return; }
   const box = document.getElementById('co-textos');
   if(!box){ if(navigator.clipboard) navigator.clipboard.writeText(r.texto); toast('Texto copiado ✓','sucesso'); return; }
   const id = 'co-tx-'+g.replace(/[^a-zA-Z0-9]/g,'')+'-'+fid;
@@ -3668,6 +3888,7 @@ function coSetOp(i, fid, campo, val){
   const o = coOpDoFornecedor(coItens[i], fid);
   if(campo==='qtd_embalagem'||campo==='preco_total'||campo==='qtd_escolhida') o[campo]=coNum(val);
   else if(campo==='nao_tem') o.nao_tem = !!val;
+  else if(campo==='nao_pedir') o.nao_pedir = !!val;
   else o[campo]=val;
   if(campo==='qtd_embalagem'||campo==='preco_total') coAtualizaUnit(i);
 }
@@ -3704,7 +3925,10 @@ function coCardOpcao(i, it, fid){
   const esc = o.escolhida;
   return `<div class="co-op ${esc?'co-melhor':''}" id="co-op-${i}-${fid}" style="${o.nao_tem?'opacity:.55':''}">
     <div class="co-op-top"><span>🏪 ${forn}</span>
-      <label style="font-size:9px;cursor:pointer"><input type="checkbox" ${o.nao_tem?'checked':''} onchange="coSetOp(${i},${fid},'nao_tem',this.checked);coRender()"> 🚫 não tem</label></div>
+      <span style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:9px;cursor:pointer" title="não incluir este item no WhatsApp deste fornecedor"><input type="checkbox" ${o.nao_pedir?'checked':''} onchange="coSetOp(${i},${fid},'nao_pedir',this.checked);coRender()"> 🔕 não pedir</label>
+        <label style="font-size:9px;cursor:pointer"><input type="checkbox" ${o.nao_tem?'checked':''} onchange="coSetOp(${i},${fid},'nao_tem',this.checked);coRender()"> 🚫 não tem</label>
+      </span></div>
     ${o.nao_tem
       ? `<input placeholder="obs (ex: só volta em setembro)" value="${o.observacao||''}" oninput="coSetOp(${i},${fid},'observacao',this.value)">`
       : `<input placeholder="🏷️ marca oferecida" value="${o.marca||''}" oninput="coSetOp(${i},${fid},'marca',this.value)">
@@ -3917,12 +4141,25 @@ async function coFecharGrupo(g){
   }catch(e){ toast('Erro ao fechar grupo: '+e.message,'erro'); }
 }
 
-// textos whatsapp gerais (mantido por compatibilidade do botão)
+// v4.6 — seletor de destinatário. Quando há mais de um fornecedor no grupo,
+// ela escolhe para quem está mandando e o texto sai só com os itens dele.
 function coWhatsapp(){
-  const grupos = coGruposDistintos();
-  let feitos=0;
-  for(const g of grupos){ for(const fid of (coFornGrupo[g]||[])){ coWhatsGrupo(g, fid); feitos++; break; } }
-  if(!feitos) toast('Adicione fornecedores aos grupos para gerar os textos.','');
+  const pares = [];
+  for(const g of coGruposDistintos()){
+    for(const fid of (coFornGrupo[g]||[])){
+      const r = coTextoGrupo(g, fid);
+      pares.push({ g, fid, nome: coFornNomeById(fid), n: r ? r.n : 0 });
+    }
+  }
+  if(!pares.length){ toast('Adicione fornecedores aos grupos para gerar os textos.',''); return; }
+  if(pares.length===1){ coWhatsGrupo(pares[0].g, pares[0].fid); return; }
+  const lista = pares.map((p,i)=>`${i+1} — ${p.g} → ${p.nome} (${p.n} item${p.n===1?'':'ns'})`).join('\n');
+  const esc = prompt('Para quem é este orçamento?\n\n0 — 📨 gerar o texto de TODOS\n'+lista+'\n\nDigite o número:');
+  if(esc===null) return;
+  if(esc.trim()==='0'){ for(const p of pares) coWhatsGrupo(p.g, p.fid); return; }
+  const p = pares[parseInt(esc)-1];
+  if(!p){ toast('Escolha inválida.','erro'); return; }
+  coWhatsGrupo(p.g, p.fid);
 }
 
 // ═══ COMPRAR POR FORNECEDOR — fechar pedido mínimo (v4.0) ═══
@@ -3950,9 +4187,13 @@ async function fvBuscar(){
     if(!cands.length){ corpo.innerHTML='<div style="text-align:center;padding:22px;color:var(--cinza-4)">Nenhum fornecedor com esse nome.</div>'; return; }
     let forn = cands[0];
     if(cands.length>1){
-      const esc = prompt('Vários fornecedores encontrados:\n\n'+cands.map((f,i)=>`${i+1} — ${f.nome}`).join('\n')+'\n\nDigite o número:','1');
-      if(esc===null) { corpo.innerHTML=''; return; }
-      forn = cands[parseInt(esc)-1] || cands[0];
+      const esc = await pkEscolher({
+        titulo: 'Qual fornecedor?',
+        subtitulo: cands.length+' fornecedores batem com "'+termo+'".',
+        itens: cands.map(f=>({ id:f.id, nome:f.nome })),
+      });
+      if(!esc){ corpo.innerHTML=''; return; }
+      forn = cands.find(f=>f.id===esc.id) || cands[0];
     }
     fvFornecedor = forn;
 
@@ -4678,6 +4919,9 @@ async function rcCarregar(){
       rcOrfas = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc&limit=200")) || [];
     }catch(e){ rcOrfas = []; }
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
+    // v4.6 — notas salvas que ainda NÃO deram entrada no estoque
+    try{ rcNfsSalvas = (await sbFetch('notas_fiscais?select=*,nf_itens(*)&confirmada=eq.false&order=id.desc&limit=50')) || []; }
+    catch(e){ rcNfsSalvas = []; }   // banco ainda sem a coluna confirmada — segue no fluxo antigo
     rcRenderizar();
     rcCarregarNfsRecentes();
   }catch(e){
@@ -4686,11 +4930,51 @@ async function rcCarregar(){
 }
 
 let rcPausados = [];
+let rcNfsSalvas = [];
+
+// ── v4.6 · notas salvas que ainda não entraram no estoque ──────────────────
+// Salvar grava a nota inteira e deixa as movimentações com aprovado=false.
+// Confirmar (assinatura) faz o UPDATE para true — é aí que o saldo se mexe.
+function rcHtmlSalvas(){
+  if(!rcNfsSalvas || !rcNfsSalvas.length) return '';
+  const cards = rcNfsSalvas.map(nf=>{
+    const itens = nf.nf_itens||[];
+    const linhas = itens.map(i=>`<tr>
+        <td>${rcNomeMaterial(i.material_id)}</td>
+        <td style="text-align:center;font-weight:700">${i.qtd}</td>
+        <td style="text-align:right">${rcMoney(i.valor_unitario)}</td>
+        <td style="text-align:right;font-weight:700">${rcMoney(i.valor_item)}</td>
+      </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--cinza-4);padding:12px">Nota sem itens.</td></tr>';
+    return `<div class="rc-grupo" style="border:2px solid #E67E22">
+      <div class="rc-ghead" style="background:#E67E22">
+        <span>📝 NF ${nf.numero_nf||'(sem número)'} — ${rcNomeFornecedor(nf.fornecedor_id)}</span>
+        <span class="rc-count">salva · não entrou no estoque</span>
+      </div>
+      <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7D6608;line-height:1.5">
+        A nota está gravada e conferível, mas <b>o saldo ainda não se mexeu</b>.
+        Só a confirmação assinada dá entrada no estoque.
+        ${nf.status_pagamento==='PENDENTE_TRATATIVA'?'<br>⚠️ <b>Travada para pagamento:</b> '+(nf.motivo_tratativa||''):''}
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Material</th><th style="text-align:center">Qtd</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>${linhas}</tbody></table></div>
+      <div class="rc-rodape" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--cinza-5)">Total ${rcMoney(nf.valor_total)}${nf.data_entrega?' · entrega '+(''+nf.data_entrega).slice(0,10).split('-').reverse().join('/'):''}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="rc-btn-problema" style="padding:8px 12px" onclick="rcTravarNf(${nf.id})" title="segurar o pagamento até o administrativo resolver">💰 travar pagamento</button>
+          <button class="rc-btn-editar" style="padding:8px 12px" onclick="rcApagarNfSalva(${nf.id})" title="apagar esta nota salva">🗑 apagar</button>
+          <button class="rc-confirmar" onclick="rcConfirmarEntrada(${nf.id})">🖊 Confirmar entrada no estoque</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div style="margin-bottom:6px;font-size:11px;font-weight:800;text-transform:uppercase;color:#E67E22">Notas salvas, aguardando confirmação</div>${cards}`;
+}
 
 function rcRenderizar(){
   const corpo = document.getElementById('rc-corpo');
   if(!rcOrdens.length){
-    corpo.innerHTML = rcHtmlOrfas() + '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de aprovados na aba 🔏 Aprovar Pedido.</span></div>';
+    corpo.innerHTML = rcHtmlOrfas() + rcHtmlSalvas() + '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de aprovados na aba 🔏 Aprovar Pedido.</span></div>';
     corpo.innerHTML += rcHtmlPausados();
     return;
   }
@@ -4763,11 +5047,15 @@ function rcRenderizar(){
       </div>
       <div class="rc-rodape" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div id="rc-resumo-${chave}" style="font-size:13px;color:var(--cinza-5)">—</div>
-        <button class="rc-confirmar" onclick="rcConfirmarNF('${chave}')">✔ Confirmar recebimento desta NF</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--cinza-4);max-width:230px;line-height:1.4">Salvar grava a nota sem mexer no saldo. Confirmar é o que dá entrada.</span>
+          <button class="rc-btn-editar" style="padding:9px 14px;font-size:12px;font-weight:700" onclick="rcSalvarNF('${chave}')">💾 Salvar NF</button>
+          <button class="rc-confirmar" onclick="rcConfirmarNF('${chave}')">🖊 Confirmar entrada no estoque</button>
+        </div>
       </div>
     </div>`;
   }).join('') + rcHtmlPausados();
-  corpo.innerHTML = rcHtmlOrfas() + corpo.innerHTML;
+  corpo.innerHTML = rcHtmlOrfas() + rcHtmlSalvas() + corpo.innerHTML;
   Object.keys(grupos).forEach(k=>rcAtualizaTotais(k));
 }
 
@@ -4918,7 +5206,17 @@ function rcFidDaChave(chave){
   if(s[0]==='F') return Number(s.slice(1))||0;
   return Number(s)||0;
 }
+// ── v4.6 · duas portas para a mesma nota ──────────────────────────────────
+// Salvar   → grava tudo com aprovado=false. O estoque não sente nada.
+// Confirmar→ pede assinatura e faz o UPDATE para true. O gatilho
+//            fn_atualiza_saldo trata a transição false→true e sobe o saldo.
+async function rcSalvarNF(chave){ return rcGravarNF(chave, false); }
 async function rcConfirmarNF(chave){
+  if(!exigirAssinatura('Entrada de nota fiscal no estoque')) return;
+  return rcGravarNF(chave, true);
+}
+
+async function rcGravarNF(chave, confirmar){
   const fid = rcFidDaChave(chave);
   const pedidoDoGrupo = String(chave)[0]==='P' ? Number(String(chave).slice(1)) : null;
   const registrante = document.getElementById('rc-registrado-por').value;
@@ -4948,7 +5246,7 @@ async function rcConfirmarNF(chave){
     const ordemId = Number(tr.dataset.ordem);
     const ordem = rcOrdens.find(o=>o.id===ordemId);
     const qtd = parseFloat(document.getElementById(`rc-qtd-${ordemId}`).value);
-    const val = parseFloat(document.getElementById(`rc-val-${ordemId}`).value);
+    let val = parseFloat(document.getElementById(`rc-val-${ordemId}`).value);
     if(!qtd || qtd<=0){ toast('Informe a quantidade recebida de todos os itens marcados.','erro'); return; }
     if(semCusto){ val = 0; }
     else if(isNaN(val) || val<0){ toast('Informe o valor unitário de todos os itens marcados.','erro'); return; }
@@ -4969,12 +5267,15 @@ async function rcConfirmarNF(chave){
   valorTotal += frete;
 
   if(cred>0 && cred>valorTotal+0.001){ toast('Crédito maior que o total da NF.','erro'); return; }
-  if(!confirm(`Confirmar recebimento de ${itensParaGravar.length} item(ns) — NF ${numeroNf||'(sem número)'} — total ${rcMoney(valorTotal)}${cred?` (💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorTotal-cred)})`:''}?`)) return;
+  const resumoNf = `NF ${numeroNf||'(sem número)'} — ${itensParaGravar.length} item(ns) — total ${rcMoney(valorTotal)}${cred?` (💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorTotal-cred)})`:''}`;
+  if(!confirm(confirmar
+      ? `🖊 CONFIRMAR ENTRADA NO ESTOQUE\n\n${resumoNf}\n\nIsto move o saldo real e fica registrado no seu nome.`
+      : `💾 SALVAR a nota sem dar entrada?\n\n${resumoNf}\n\nO saldo do estoque NÃO se mexe. A nota fica esperando a confirmação assinada.`)) return;
   if(cred>0){ obs = (obs?obs+' | ':'')+'CRÉDITO UTILIZADO: '+rcMoney(cred)+' — a pagar '+rcMoney(valorTotal-cred); }
 
   try{
     // 1. Cabeçalho da NF
-    const nfArr = await sbFetch('notas_fiscais','POST',{
+    const cabecalho = {
       fornecedor_id: Number(fid) || null,
       numero_nf: numeroNf || null,
       mes_referencia: rcMesRef(dataEntrega || dataEmissao),
@@ -4984,7 +5285,19 @@ async function rcConfirmarNF(chave){
       frete: frete,
       vencimentos_obs: obs || null,
       status: dataEntrega ? 'ENTREGUE' : 'AGUARDANDO ENTREGA',
-    });
+    };
+    let nfArr;
+    try{
+      nfArr = await sbFetch('notas_fiscais','POST', Object.assign({
+        confirmada: !!confirmar,
+        confirmada_por: confirmar ? registrante : null,
+        confirmada_em: confirmar ? new Date().toISOString() : null,
+      }, cabecalho));
+    }catch(e){
+      // banco ainda sem as colunas da v4.6 — grava do jeito antigo
+      if(!confirmar){ toast('O banco ainda não tem a coluna "confirmada" — rode o SQL da v4.6 para poder salvar sem dar entrada.','erro'); return; }
+      nfArr = await sbFetch('notas_fiscais','POST', cabecalho);
+    }
     const nfId = nfArr && nfArr[0] && nfArr[0].id;
     const localId = await getEstoqueGeralId();
 
@@ -5023,8 +5336,11 @@ async function rcConfirmarNF(chave){
         try{ await sbFetch(`materiais?id=eq.${ordem.material_id}`,'PATCH',{ ultimo_valor_pago: val }); }catch(e){}
       }
       const movId = movArr && movArr[0] && movArr[0].id;
-      // Aprova em seguida — só a mudança de aprovado (via UPDATE) dispara o trigger que soma o estoque
-      await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+      // Só a mudança de aprovado (via UPDATE) dispara o gatilho que soma o estoque.
+      // No Salvar a movimentação fica esperando, com aprovado=false: o saldo não sente nada.
+      if(confirmar){
+        await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+      }
 
       // Recebimento parcial: se veio menos do que foi pedido, separa o restante como novo pedido pendente
       const qtdPedidaOriginal = ordem.qtd_a_comprar ?? ordem.qtd_comprada ?? qtd;
@@ -5043,6 +5359,11 @@ async function rcConfirmarNF(chave){
         situacao: 'NF EMITIDA', qtd_comprada: qtd, valor_unitario: val, data_pedido: dataEntrega || dataEmissao,
       });
     }
+    if(!confirmar){
+      toast(`💾 NF ${numeroNf||''} salva — ${itensParaGravar.length} item(ns). O estoque ainda NÃO se mexeu.`,'sucesso');
+      rcCarregar();
+      return;
+    }
 
     if(cred>0 && typeof ocAbaterCreditos==='function'){
       try{ await ocAbaterCreditos(fid, cred); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
@@ -5058,6 +5379,54 @@ async function rcConfirmarNF(chave){
     toast(`NF registrada — ${itensParaGravar.length} item(ns) receb​ido(s), estoque atualizado ✓`,'sucesso');
     rcCarregar();
   }catch(e){ toast('Erro ao registrar NF: '+e.message,'erro'); }
+}
+
+// ── v4.6 · confirmar depois uma nota que foi só salva ─────────────────────
+async function rcConfirmarEntrada(nfId){
+  const nf = rcNfsSalvas.find(x=>x.id===nfId); if(!nf) return;
+  const registrante = document.getElementById('rc-registrado-por').value;
+  if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
+  const itens = nf.nf_itens||[];
+  if(!itens.length){ toast('Esta nota não tem itens — nada a dar entrada.','erro'); return; }
+  if(!confirm(`🖊 CONFIRMAR ENTRADA NO ESTOQUE\n\nNF ${nf.numero_nf||'(sem número)'} — ${itens.length} item(ns) — ${rcMoney(nf.valor_total)}\n\nIsto move o saldo real e fica registrado no seu nome.`)) return;
+  if(!exigirAssinatura('Entrada de nota fiscal no estoque')) return;
+  try{
+    const ids = itens.map(i=>i.id).join(',');
+    const movs = (await sbFetch(`movimentacoes?select=id&aprovado=eq.false&nf_item_id=in.(${ids})&limit=500`)) || [];
+    if(!movs.length){ toast('Não achei movimentações pendentes desta nota. Confira antes de repetir.','erro'); return; }
+    for(const m of movs){
+      await sbFetch(`movimentacoes?id=eq.${m.id}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
+    }
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ confirmada:true, confirmada_por:registrante, confirmada_em:new Date().toISOString() });
+    toast(`✔ NF ${nf.numero_nf||''} confirmada — ${movs.length} entrada(s) no estoque.`,'sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro ao confirmar: '+e.message,'erro'); }
+}
+
+async function rcTravarNf(nfId){
+  const nf = rcNfsSalvas.find(x=>x.id===nfId); if(!nf) return;
+  const motivo = prompt('Por que esta nota não pode ser paga ainda?\n\n(fica visível para o administrativo)', nf.motivo_tratativa||'Cobra item que não foi entregue');
+  if(motivo===null || !motivo.trim()) return;
+  try{
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status_pagamento:'PENDENTE_TRATATIVA', motivo_tratativa:motivo.trim() });
+    toast('Nota travada para pagamento ⚠️ — o administrativo resolve.','');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rcApagarNfSalva(nfId){
+  const nf = rcNfsSalvas.find(x=>x.id===nfId); if(!nf) return;
+  if(!confirm(`Apagar a nota salva ${nf.numero_nf||'(sem número)'}?\n\nAs movimentações que estavam esperando são apagadas junto — o estoque não é afetado porque elas nunca foram aprovadas.\n\n⚠️ Os pedidos já foram marcados como "NF EMITIDA" e NÃO voltam sozinhos para a fila.`)) return;
+  try{
+    const ids = (nf.nf_itens||[]).map(i=>i.id).join(',');
+    if(ids){
+      await sbFetch(`movimentacoes?aprovado=eq.false&nf_item_id=in.(${ids})`,'DELETE');
+      await sbFetch(`nf_itens?nota_fiscal_id=eq.${nfId}`,'DELETE');
+    }
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'DELETE');
+    toast('Nota salva apagada.','');
+    rcCarregar();
+  }catch(e){ toast('Erro ao apagar: '+e.message,'erro'); }
 }
 
 let rcNfItensCache = {}; // nf_id -> itens carregados
@@ -7789,6 +8158,834 @@ function relImprimir(){
   </body></html>`);
   w.document.close();
 }
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLE DE REMESSAS (v4.6)
+// Livro paralelo ao estoque. O item não foi consumido — ficou sujo, saiu para
+// reprocessamento/lavagem e tem que voltar. Três lugares: CASA · SUJO · FORA.
+// Nada aqui mexe no saldo do estoque. Só a perda definitiva pede assinatura.
+// ═══════════════════════════════════════════════════════════════════════════
+let rmBens = [], rmSaldo = [], rmSujos = [], rmRemessas = [], rmPend = [], rmNfPend = [];
+let rmSemBanco = false;   // true quando o SQL da v4.6 ainda não foi rodado
+
+function rmQuem(){
+  const el = document.getElementById('rm-registrado-por');
+  return (el && el.value) || localStorage.getItem('hog_rm_registrante') || 'Equipe CC';
+}
+function rmNum(v){ const n = Number(v); return isNaN(n) ? 0 : n; }
+function rmData(d){ if(!d) return '—'; const p = (''+d).slice(0,10).split('-'); return p.length===3 ? `${p[2]}/${p[1]}/${p[0]}` : d; }
+function rmMoney(v){ return (v===null||v===undefined||v==='') ? '—' : 'R$ '+Number(v).toFixed(2).replace('.',','); }
+function rmEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function rmBem(id){ const b = rmBens.find(x=>x.id===Number(id)); return b ? b.nome : ('bem #'+id); }
+function rmBemPorMaterial(mid){ return rmBens.find(b=>b.material_id===Number(mid)) || null; }
+function rmRemessaTitulo(r){ return `🔁 Remessa ${rmEsc(r.numero_bloco||'(sem número)')} · ${r.tipo==='LAVANDERIA'?'🧺 Lavanderia':'♻️ Esterilização'}`; }
+
+// ── CARGA ──────────────────────────────────────────────────────────────────
+async function rmCarregar(){
+  if(!sbUrl || !sbKey){
+    document.getElementById('rm-sujos').innerHTML = '<div class="rm-card"><div class="rm-empty">Conecte ao banco para usar o controle de remessas.</div></div>';
+    return;
+  }
+  const alvo = document.getElementById('rm-sujos');
+  alvo.innerHTML = '<div class="rm-card"><div class="rm-empty">Carregando o livro de remessas…</div></div>';
+  try{
+    rmBens = (await sbFetch('remessa_bens?select=id,nome,tipo,material_id,ativo&order=nome.asc&limit=500')) || [];
+    rmSemBanco = false;
+  }catch(e){
+    rmSemBanco = true;
+    ['rm-tiles','rm-fora','rm-aguardando-nf','rm-pend-fisica','rm-pend-nf','rm-saldo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+    alvo.innerHTML = `<div class="rm-card"><div class="rm-head verm">⚠️ O banco ainda não tem as tabelas de remessa</div>
+      <div style="padding:16px;font-size:13px;line-height:1.6">
+        Rode o script <b>v46_remessas.sql</b> no SQL Editor do Supabase e recarregue esta página.
+        Enquanto isso o resto do app funciona normalmente — só esta aba fica parada.
+        <div style="margin-top:8px;font-size:11px;color:var(--cinza-4)">Detalhe técnico: ${rmEsc(e.message)}</div>
+      </div></div>`;
+    return;
+  }
+  try{
+    const [saldo, sujos, remessas, pend, nfPend] = await Promise.all([
+      sbFetch('vw_remessa_saldo?select=*&order=nome.asc&limit=500'),
+      sbFetch('remessa_sujos?select=*&remessa_id=is.null&order=data.asc&limit=500'),
+      sbFetch('remessas?select=*,remessa_itens(*)&status=in.(MONTAGEM,ENVIADA,RETORNADA)&order=id.desc&limit=200'),
+      sbFetch('remessa_pendencias?select=*&status=eq.ABERTA&order=aberta_em.asc&limit=300'),
+      sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,data_emissao,status_pagamento,motivo_tratativa,natureza,remessa_id&status_pagamento=eq.PENDENTE_TRATATIVA&order=id.desc&limit=100'),
+    ]);
+    rmSaldo = saldo || []; rmSujos = sujos || []; rmRemessas = remessas || []; rmPend = pend || []; rmNfPend = nfPend || [];
+    if(!(typeof coFornecedores !== 'undefined' && coFornecedores && coFornecedores.length)){
+      try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || []; }catch(e){}
+    }
+    rmRenderizar();
+  }catch(e){
+    alvo.innerHTML = `<div class="rm-card"><div class="rm-empty">Erro ao carregar: ${rmEsc(e.message)}</div></div>`;
+  }
+}
+
+// ── TELA ───────────────────────────────────────────────────────────────────
+function rmRenderizar(){
+  const foraTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.fora),0);
+  const sujoTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.sujo),0);
+  const casaTotal = rmSaldo.reduce((s,b)=>s+rmNum(b.em_casa),0);
+
+  document.getElementById('rm-tiles').innerHTML = `
+    <div class="rm-tile"><span>Em casa</span><b style="color:var(--verde)">${casaTotal}</b></div>
+    <div class="rm-tile"><span>Sujo, esperando envio</span><b style="color:#E67E22">${sujoTotal}</b></div>
+    <div class="rm-tile"><span>Fora de casa</span><b style="color:#6f42c1">${foraTotal}</b></div>
+    <div class="rm-tile"><span>Pendências físicas</span><b style="color:${rmPend.length?'var(--vermelho)':'var(--cinza-4)'}">${rmPend.length}</b></div>
+    <div class="rm-tile"><span>Notas travadas</span><b style="color:${rmNfPend.length?'var(--vermelho)':'var(--cinza-4)'}">${rmNfPend.length}</b></div>`;
+
+  const badge = document.getElementById('badge-rem');
+  if(badge){ const n = foraTotal + rmPend.length; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+
+  rmRenderSujos();
+  rmRenderMontagem();
+  rmRenderFora();
+  rmRenderAguardandoNf();
+  rmRenderPendFisica();
+  rmRenderPendNf();
+  rmRenderSaldo();
+}
+
+function rmRenderSujos(){
+  const box = document.getElementById('rm-sujos');
+  if(!rmSujos.length){
+    box.innerHTML = `<div class="rm-card"><div class="rm-head laranja"><span>🧺 Sujo, esperando envio</span><span class="rm-count">0</span></div>
+      <div class="rm-empty">Nada sujo esperando. A saída cirúrgica joga aqui sozinha o que foi usado.</div></div>`;
+    return;
+  }
+  const linhas = rmSujos.map(s=>`<tr>
+      <td>${rmEsc(rmBem(s.bem_id))}</td>
+      <td style="text-align:center;font-weight:700">${rmNum(s.qtd)}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${rmData(s.data)}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${s.origem==='SAIDA_CIRURGIA'?'🔪 saída cirúrgica':'✋ acrescentado à mão'}${s.registrado_por?' · '+rmEsc(s.registrado_por):''}</td>
+      <td style="text-align:right"><button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmApagarSujo(${s.id})" title="tirar da fila">✕</button></td>
+    </tr>`).join('');
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head laranja"><span>🧺 Sujo, esperando envio</span><span class="rm-count">${rmSujos.length} linha(s)</span></div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Item</th><th style="text-align:center">Qtd</th><th>Data</th><th>Origem</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+    <div style="padding:10px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">
+      Use <b>🧺 Montar remessa do dia</b> lá em cima para juntar tudo isso numa remessa só.</div>
+  </div>`;
+}
+
+function rmRenderMontagem(){
+  const emMontagem = rmRemessas.filter(r=>r.status==='MONTAGEM');
+  if(!emMontagem.length) return;
+  const html = emMontagem.map(r=>{
+    const itens = (r.remessa_itens||[]);
+    const linhas = itens.map(i=>`<tr>
+        <td>${rmEsc(rmBem(i.bem_id))}</td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-mi-${i.id}" value="${rmNum(i.qtd_enviada)}"></td>
+        <td style="text-align:right"><button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmTirarItem(${i.id})">✕</button></td>
+      </tr>`).join('') || '<tr><td colspan="3" class="rm-empty">Remessa vazia — acrescente itens.</td></tr>';
+    return `<div class="rm-card">
+      <div class="rm-head azul"><span>📝 Em montagem — ${rmRemessaTitulo(r)}</span><span class="rm-count">${itens.length} item(ns)</span></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Item</th><th style="text-align:center">Qtd a enviar</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody></table></div>
+      <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="rm-b claro" onclick="rmAcrescentarItem(${r.id})">➕ Acrescentar item</button>
+        <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
+        <button class="rm-b verde" style="margin-left:auto" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
+        <button class="rm-b perigo" onclick="rmDesfazerMontagem(${r.id})">🗑 Desfazer</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('rm-sujos').insertAdjacentHTML('beforeend', html);
+}
+
+function rmRenderFora(){
+  const box = document.getElementById('rm-fora');
+  const enviadas = rmRemessas.filter(r=>r.status==='ENVIADA');
+  if(!enviadas.length){
+    box.innerHTML = `<div class="rm-card"><div class="rm-head roxo"><span>🚚 Fora de casa</span><span class="rm-count">0</span></div>
+      <div class="rm-empty">Nada fora de casa. Tudo que saiu já voltou. ✓</div></div>`;
+    return;
+  }
+  box.innerHTML = enviadas.map(r=>{
+    const itens = r.remessa_itens||[];
+    const dias = r.data_envio ? Math.round((Date.now()-new Date(r.data_envio+'T12:00:00').getTime())/86400000) : null;
+    const linhas = itens.map(i=>`<tr>
+        <td>${rmEsc(rmBem(i.bem_id))}</td>
+        <td style="text-align:center;font-weight:700;color:#6f42c1">${rmNum(i.qtd_enviada)}</td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-dev-${i.id}" value="${rmNum(i.qtd_enviada)}"></td>
+      </tr>`).join('');
+    return `<div class="rm-card">
+      <div class="rm-head roxo"><span>${rmRemessaTitulo(r)}</span>
+        <span class="rm-count">enviada ${rmData(r.data_envio)}${dias!==null?` · ${dias} dia(s) fora`:''}</span></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou quanto?</th></tr></thead>
+        <tbody>${linhas}</tbody></table></div>
+      <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
+        <button class="rm-b verde" style="margin-left:auto" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function rmRenderAguardandoNf(){
+  const box = document.getElementById('rm-aguardando-nf');
+  const retornadas = rmRemessas.filter(r=>r.status==='RETORNADA');
+  if(!retornadas.length){ box.innerHTML=''; return; }
+  box.innerHTML = retornadas.map(r=>{
+    const itens = r.remessa_itens||[];
+    const linhas = itens.map(i=>{
+      const env = rmNum(i.qtd_enviada), dev = rmNum(i.qtd_devolvida), falta = env-dev;
+      return `<tr>
+        <td>${rmEsc(rmBem(i.bem_id))}${falta>0?` <span class="rm-tag falta">faltaram ${falta}</span>`:''}</td>
+        <td style="text-align:center">${env}</td>
+        <td style="text-align:center;font-weight:700">${dev}</td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-fat-${i.id}" value="${dev}" title="quantidade que a nota está cobrando"></td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="0.01" id="rm-val-${i.id}" placeholder="R$/un"></td>
+      </tr>`;
+    }).join('');
+    return `<div class="rm-card">
+      <div class="rm-head cinza"><span>🧾 Voltou — falta dar entrada na nota · ${rmRemessaTitulo(r)}</span>
+        <span class="rm-count">voltou ${rmData(r.data_retorno)}</span></div>
+      <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7D6608;line-height:1.5">
+        A nota é conferida item a item contra o que voltou. Se a nota cobrar algo que não voltou,
+        os itens que chegaram entram normalmente e <b>a nota fica travada para pagamento</b> até o administrativo resolver.</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobra</th><th style="text-align:center">R$/un</th></tr></thead>
+        <tbody>${linhas}</tbody></table></div>
+      <div style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;color:var(--cinza-4);text-transform:uppercase">Nº da NF</label>
+          <input id="rm-nf-num-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
+        <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;color:var(--cinza-4);text-transform:uppercase">Emissão</label>
+          <input type="date" id="rm-nf-emissao-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
+        <button class="rm-b verde" style="margin-left:auto" onclick="rmConferirNf(${r.id})">✔ Conferir e dar entrada na nota</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function rmRenderPendFisica(){
+  const box = document.getElementById('rm-pend-fisica');
+  if(!rmPend.length){ box.innerHTML=''; return; }
+  const linhas = rmPend.map(p=>{
+    const r = rmRemessas.find(x=>x.id===p.remessa_id);
+    const dias = p.aberta_em ? Math.round((Date.now()-new Date(p.aberta_em+'T12:00:00').getTime())/86400000) : null;
+    return `<tr>
+      <td>${rmEsc(rmBem(p.bem_id))}</td>
+      <td style="text-align:center;font-weight:700;color:var(--vermelho)">${rmNum(p.qtd)}</td>
+      <td style="font-size:11px">${r?rmEsc(r.numero_bloco||('#'+r.id)):('remessa #'+p.remessa_id)}</td>
+      <td style="font-size:11px;color:${dias&&dias>15?'var(--vermelho)':'var(--cinza-4)'}">${rmData(p.aberta_em)}${dias!==null?` · ${dias} dia(s)`:''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmPendVoltou(${p.id})">↩ voltou depois</button>
+        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendPerda(${p.id})">✕ dar como perda</button>
+      </td></tr>`;
+  }).join('');
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${rmPend.length}</span></div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Item</th><th style="text-align:center">Falta</th><th>Remessa</th><th>Aberta em</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div></div>`;
+}
+
+function rmRenderPendNf(){
+  const box = document.getElementById('rm-pend-nf');
+  if(!rmNfPend.length){ box.innerHTML=''; return; }
+  const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:'—'; };
+  const linhas = rmNfPend.map(n=>`<tr>
+      <td>NF ${rmEsc(n.numero_nf||'(sem número)')}</td>
+      <td>${rmEsc(nomeForn(n.fornecedor_id))}</td>
+      <td style="text-align:right;font-weight:700">${rmMoney(n.valor_total)}</td>
+      <td style="font-size:11px;color:var(--cinza-5)">${rmEsc(n.motivo_tratativa||'—')}</td>
+      <td style="text-align:right"><button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmLiberarNf(${n.id})">🔓 liberar para pagamento</button></td>
+    </tr>`).join('');
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head verm"><span>💰 Notas travadas para pagamento</span><span class="rm-count">${rmNfPend.length}</span></div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>financeiro</b>, do administrativo. Os itens que chegaram já entraram — o que está travado é o pagamento.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Nota</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Motivo</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div></div>`;
+}
+
+function rmRenderSaldo(){
+  const box = document.getElementById('rm-saldo');
+  if(!rmSaldo.length){ box.innerHTML=''; return; }
+  const linhas = rmSaldo.map(b=>`<tr>
+      <td>${rmEsc(b.nome)}${b.material_id?'':' <span class="rm-tag dinheiro">só no livro</span>'}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${b.tipo==='LAVANDERIA'?'🧺 lavanderia':'♻️ esterilização'}</td>
+      <td style="text-align:center;color:var(--verde);font-weight:700">${rmNum(b.em_casa)}</td>
+      <td style="text-align:center;color:#E67E22">${rmNum(b.sujo)}</td>
+      <td style="text-align:center;color:#6f42c1;font-weight:700">${rmNum(b.fora)}</td>
+      <td style="text-align:center;font-weight:700">${rmNum(b.total)}</td>
+    </tr>`).join('');
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">${rmSaldo.length} bem(ns)</span></div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">
+      A diferença entre o que saiu e o que voltou aparece aqui como perda — visível, em vez de virar ajuste sem explicação.
+      Para o pijama cirúrgico, é este saldo que diz quando comprar mais.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Bem</th><th>Tipo</th><th style="text-align:center">Em casa</th><th style="text-align:center">Sujo</th><th style="text-align:center">Fora</th><th style="text-align:center">Total</th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+    <div style="padding:10px 16px"><button class="rm-b claro" onclick="rmNovoBem()">➕ Cadastrar um bem novo no livro</button></div></div>`;
+}
+
+// ── AÇÕES ──────────────────────────────────────────────────────────────────
+async function rmEscolherBem(titulo, filtro){
+  const lista = rmBens.filter(b=>b.ativo!==false).filter(filtro||(()=>true));
+  if(!lista.length){ toast('Nenhum bem cadastrado no livro.','erro'); return null; }
+  const esc = await pkEscolher({
+    titulo: titulo,
+    subtitulo: 'Só aparecem bens já cadastrados no livro. Para criar um novo, use "Cadastrar um bem novo" na tabela de saldo.',
+    itens: lista.map(b=>({ id:b.id, nome:b.nome, meta: b.tipo==='LAVANDERIA'?'🧺 lavanderia':'♻️ esterilização' })),
+  });
+  if(!esc) return null;
+  return rmBens.find(b=>b.id===esc.id) || null;
+}
+
+// ── CADASTRO DE BENS — o lugar único, com trava de nome repetido ───────────
+// Duas portas: puxar do catálogo de materiais (aí o bem fica amarrado ao
+// material e o nome é o mesmo, sem chance de divergir) ou criar um item que só
+// existe no livro. A segunda porta compara o nome ignorando acento, espaço e
+// pontuação — é exatamente por aí que os duplicados entram.
+async function rmNovoBem(){
+  const jaNoLivro = new Set(rmBens.map(b=>b.material_id).filter(Boolean));
+  const candidatos = (catalogoMateriais||[]).filter(m=>!jaNoLivro.has(m.id));
+  const esc = await pkEscolher({
+    titulo: 'Cadastrar bem no livro de remessas',
+    subtitulo: 'Se o item já existe no catálogo de materiais, escolha ele aqui — o bem fica amarrado ao cadastro e o nome nunca diverge. Só crie item novo para o que não é material de consumo (guias, borrachas, lentes, pijama).',
+    itens: candidatos.map(m=>({ id:m.id, nome:m.nome, meta:'do catálogo' })),
+    novoLabel: '➕ Criar item que só existe no livro',
+  });
+  if(!esc) return;
+
+  const norm = (typeof pkNorm==='function') ? pkNorm : (s=>(''+s).toUpperCase().replace(/[^A-Z0-9]/g,''));
+
+  // porta 1 — veio do catálogo de materiais
+  if(!esc.__novo){
+    const m = candidatos.find(x=>x.id===esc.id); if(!m) return;
+    const t = await rmPerguntarTipo();
+    if(!t) return;
+    try{
+      await sbFetch('remessa_bens','POST',{ nome:m.nome, material_id:m.id, tipo:t });
+      try{ await sbFetch(`materiais?id=eq.${m.id}`,'PATCH',{ controla_remessa:true }); }catch(e){}
+      toast('"'+m.nome+'" agora circula no livro ✓','sucesso');
+      await carregarBensRemessa();
+      rmCarregar();
+    }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
+    return;
+  }
+
+  // porta 2 — item que só existe no livro
+  const nome = prompt('Nome do bem que só existe no livro de remessas:', esc.termo||'');
+  if(nome===null || !nome.trim()) return;
+  const n = nome.trim().toUpperCase();
+  const nn = norm(n);
+
+  const iguaisNoLivro = rmBens.filter(b=>norm(b.nome)===nn);
+  if(iguaisNoLivro.length){ toast('"'+iguaisNoLivro[0].nome+'" já está no livro.','erro'); return; }
+
+  const parecidos = [
+    ...rmBens.filter(b=>{ const a=norm(b.nome); return a!==nn && a.length>3 && nn.length>3 && (a.includes(nn)||nn.includes(a)); })
+            .map(b=>'• '+b.nome+'  (já está no livro)'),
+    ...(catalogoMateriais||[]).filter(m=>{ const a=norm(m.nome); return a===nn || (a.length>3 && nn.length>3 && (a.includes(nn)||nn.includes(a))); })
+            .map(m=>'• '+m.nome+'  (existe no catálogo de materiais)'),
+  ];
+  if(parecidos.length){
+    if(!confirm('⚠️ Já existe nome parecido:\n\n'+parecidos.slice(0,8).join('\n')+
+      '\n\nSe for a mesma coisa, cancele e escolha o item existente — dois cadastros dividem o saldo e a conta do que está fora de casa nunca fecha.\n\nCriar "'+n+'" mesmo assim?')) return;
+  }
+  const t = await rmPerguntarTipo();
+  if(!t) return;
+  try{
+    await sbFetch('remessa_bens','POST',{ nome:n, tipo:t });
+    toast('Bem "'+n+'" cadastrado no livro ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao cadastrar: '+e.message,'erro'); }
+}
+
+async function rmPerguntarTipo(){
+  const t = await pkEscolher({
+    titulo: 'Esse bem circula por onde?',
+    itens: [{ id:'ESTERILIZACAO', nome:'♻️ Esterilização (Esterileno)' },
+            { id:'LAVANDERIA',    nome:'🧺 Lavanderia' }],
+  });
+  return t ? t.id : null;
+}
+
+async function rmNovoSujo(){
+  const b = await rmEscolherBem('Que item está sujo, esperando ir para fora?');
+  if(!b) return;
+  const q = parseFloat(prompt('Quantidade de "'+b.nome+'":','1'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  try{
+    await sbFetch('remessa_sujos','POST',{ bem_id:b.id, qtd:q, origem:'MANUAL', registrado_por:rmQuem() });
+    await sbFetch('remessa_mov','POST',{ bem_id:b.id, tipo:'USO', d_casa:-q, d_sujo:q, registrado_por:rmQuem(),
+      observacao:'Acrescentado à mão na fila de sujos' });
+    toast('Item na fila de sujos ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmApagarSujo(id){
+  const s = rmSujos.find(x=>x.id===id); if(!s) return;
+  if(!confirm('Tirar "'+rmBem(s.bem_id)+'" da fila de sujos?\n\nO item volta para "em casa" no livro.')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:s.bem_id, tipo:'AJUSTE', d_casa:rmNum(s.qtd), d_sujo:-rmNum(s.qtd),
+      registrado_por:rmQuem(), observacao:'Retirado da fila de sujos' });
+    await sbFetch(`remessa_sujos?id=eq.${id}`,'DELETE');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmEntradaBem(){
+  const b = await rmEscolherBem('Entrada de peça nova no livro (compra, reposição):');
+  if(!b) return;
+  const q = parseFloat(prompt('Quantas peças novas de "'+b.nome+'" entraram?','1'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  const v = parseFloat(prompt('Valor unitário (R$) — deixe vazio se não souber:','')||'');
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:b.id, tipo:'COMPRA', d_casa:q, valor_unitario:isNaN(v)?null:v,
+      registrado_por:rmQuem(), observacao:'Entrada de peça nova no livro de remessas' });
+    toast(q+' peça(s) de "'+b.nome+'" no livro ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmMontarRemessa(){
+  if(rmSemBanco){ toast('Rode o SQL da v4.6 antes.','erro'); return; }
+  const t = prompt('Montar remessa de:\n\n1 — ♻️ Esterilização (Esterileno)\n2 — 🧺 Lavanderia\n\nDigite o número:','1');
+  if(t===null) return;
+  const tipo = t.trim()==='2' ? 'LAVANDERIA' : 'ESTERILIZACAO';
+  const idsTipo = new Set(rmBens.filter(b=>b.tipo===tipo).map(b=>b.id));
+  const sujosDoTipo = rmSujos.filter(s=>idsTipo.has(s.bem_id));
+  const bloco = prompt('Número do bloco de remessa (o bloco físico que fica com o hospital):');
+  if(bloco===null || !bloco.trim()){ toast('A remessa precisa do número do bloco.','erro'); return; }
+  try{
+    const arr = await sbFetch('remessas','POST',{ numero_bloco:bloco.trim(), tipo, status:'MONTAGEM', criado_por:rmQuem() });
+    const rid = arr && arr[0] && arr[0].id;
+    // junta os sujos do dia por bem
+    const porBem = {};
+    for(const s of sujosDoTipo) porBem[s.bem_id] = (porBem[s.bem_id]||0) + rmNum(s.qtd);
+    for(const bemId of Object.keys(porBem)){
+      await sbFetch('remessa_itens','POST',{ remessa_id:rid, bem_id:Number(bemId), qtd_enviada:porBem[bemId] });
+    }
+    for(const s of sujosDoTipo) await sbFetch(`remessa_sujos?id=eq.${s.id}`,'PATCH',{ remessa_id:rid });
+    toast(sujosDoTipo.length ? `Remessa ${bloco.trim()} montada com ${Object.keys(porBem).length} item(ns) ✓` : `Remessa ${bloco.trim()} criada vazia — acrescente os itens.`,'sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao montar remessa: '+e.message,'erro'); }
+}
+
+async function rmAcrescentarItem(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const b = await rmEscolherBem('Acrescentar à remessa '+(r.numero_bloco||'#'+r.id)+':');
+  if(!b) return;
+  const q = parseFloat(prompt('Quantidade de "'+b.nome+'" nesta remessa:','1'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  try{
+    const jaTem = (r.remessa_itens||[]).find(i=>i.bem_id===b.id);
+    if(jaTem) await sbFetch(`remessa_itens?id=eq.${jaTem.id}`,'PATCH',{ qtd_enviada: rmNum(jaTem.qtd_enviada)+q });
+    else await sbFetch('remessa_itens','POST',{ remessa_id:remessaId, bem_id:b.id, qtd_enviada:q });
+    // não passou pela saída cirúrgica: entra na conta como usado agora
+    await sbFetch('remessa_mov','POST',{ bem_id:b.id, tipo:'USO', d_casa:-q, d_sujo:q, remessa_id:remessaId,
+      registrado_por:rmQuem(), observacao:'Acrescentado direto na remessa' });
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmTirarItem(itemId){
+  let alvo=null, dono=null;
+  for(const r of rmRemessas){ const i=(r.remessa_itens||[]).find(x=>x.id===itemId); if(i){ alvo=i; dono=r; break; } }
+  if(!alvo) return;
+  if(!confirm('Tirar "'+rmBem(alvo.bem_id)+'" desta remessa?')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:alvo.bem_id, tipo:'AJUSTE', d_casa:rmNum(alvo.qtd_enviada), d_sujo:-rmNum(alvo.qtd_enviada),
+      remessa_id:dono.id, registrado_por:rmQuem(), observacao:'Tirado da remessa em montagem' });
+    await sbFetch(`remessa_sujos?remessa_id=eq.${dono.id}&bem_id=eq.${alvo.bem_id}`,'PATCH',{ remessa_id:null });
+    await sbFetch(`remessa_itens?id=eq.${itemId}`,'DELETE');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmDesfazerMontagem(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  if(!confirm('Desfazer a remessa '+(r.numero_bloco||'#'+r.id)+'?\n\nOs itens voltam para a fila de sujos.')) return;
+  try{
+    await sbFetch(`remessa_sujos?remessa_id=eq.${remessaId}`,'PATCH',{ remessa_id:null });
+    await sbFetch(`remessa_itens?remessa_id=eq.${remessaId}`,'DELETE');
+    await sbFetch(`remessas?id=eq.${remessaId}`,'DELETE');
+    toast('Remessa desfeita.','');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmEnviar(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const itens = (r.remessa_itens||[]);
+  if(!itens.length){ toast('Remessa vazia.','erro'); return; }
+  // relê as quantidades da tela
+  const finais = [];
+  for(const i of itens){
+    const el = document.getElementById('rm-mi-'+i.id);
+    const q = el ? parseFloat(el.value) : rmNum(i.qtd_enviada);
+    if(!q || q<=0){ toast('Quantidade inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
+    finais.push({ item:i, qtd:q });
+  }
+  const total = finais.reduce((s,f)=>s+f.qtd,0);
+  if(!confirm(`Enviar a remessa ${r.numero_bloco||'#'+r.id} com ${total} peça(s)?\n\nA partir daqui elas contam como FORA DE CASA até você dar baixa na entrega.`)) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  try{
+    for(const {item,qtd} of finais){
+      const dif = qtd - rmNum(item.qtd_enviada);
+      if(dif !== 0){
+        await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_enviada:qtd });
+        await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'AJUSTE', d_casa:-dif, d_sujo:dif, remessa_id:remessaId,
+          registrado_por:rmQuem(), observacao:'Ajuste de quantidade no envio' });
+      }
+      await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'ENVIO', d_sujo:-qtd, d_fora:qtd, remessa_id:remessaId,
+        data:hoje, registrado_por:rmQuem(), observacao:'Envio da remessa '+(r.numero_bloco||'#'+remessaId) });
+    }
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'ENVIADA', data_envio:hoje, enviado_por:rmQuem() });
+    toast('Remessa enviada ✓ — agora ela aparece em "fora de casa".','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao enviar: '+e.message,'erro'); }
+}
+
+async function rmRegistrarRetorno(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const itens = (r.remessa_itens||[]);
+  const dados = [];
+  for(const i of itens){
+    const el = document.getElementById('rm-dev-'+i.id);
+    const dev = el ? parseFloat(el.value) : 0;
+    if(isNaN(dev) || dev<0){ toast('Quantidade inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
+    if(dev > rmNum(i.qtd_enviada)){ toast('"'+rmBem(i.bem_id)+'": voltou mais do que saiu. Confira.','erro'); return; }
+    dados.push({ item:i, dev, falta: rmNum(i.qtd_enviada)-dev });
+  }
+  const faltantes = dados.filter(d=>d.falta>0);
+  const aviso = faltantes.length
+    ? `\n\n⚠️ ${faltantes.length} item(ns) não voltaram inteiros:\n` + faltantes.map(d=>`• ${rmBem(d.item.bem_id)}: faltam ${d.falta}`).join('\n') + '\n\nIsso abre pendência de remessa.'
+    : '\n\nTudo que saiu voltou. ✓';
+  if(!confirm('Dar baixa na entrega da remessa '+(r.numero_bloco||'#'+r.id)+'?'+aviso)) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  try{
+    for(const {item,dev,falta} of dados){
+      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_devolvida:dev });
+      if(dev>0){
+        await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'RETORNO', d_fora:-dev, d_casa:dev, remessa_id:remessaId,
+          data:hoje, registrado_por:rmQuem(), observacao:'Retorno da remessa '+(r.numero_bloco||'#'+remessaId) });
+      }
+      if(falta>0){
+        await sbFetch('remessa_pendencias','POST',{ remessa_id:remessaId, remessa_item_id:item.id, bem_id:item.bem_id,
+          qtd:falta, status:'ABERTA', observacao:'Saiu na remessa '+(r.numero_bloco||'#'+remessaId)+' e não voltou' });
+      }
+    }
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'RETORNADA', data_retorno:hoje, recebido_por:rmQuem() });
+    toast(faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). Agora dê entrada na nota.` : 'Baixa registrada ✓ — agora dê entrada na nota.','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao dar baixa: '+e.message,'erro'); }
+}
+
+async function rmConferirNf(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const itens = (r.remessa_itens||[]);
+  const numero = (document.getElementById('rm-nf-num-'+remessaId)||{}).value;
+  const emissao = (document.getElementById('rm-nf-emissao-'+remessaId)||{}).value || null;
+  if(!numero || !numero.trim()){ toast('Informe o número da nota.','erro'); return; }
+
+  const linhas = []; let total = 0; const travas = [];
+  for(const i of itens){
+    const fatEl = document.getElementById('rm-fat-'+i.id);
+    const valEl = document.getElementById('rm-val-'+i.id);
+    const fat = fatEl ? parseFloat(fatEl.value) : 0;
+    const val = valEl ? parseFloat(valEl.value) : NaN;
+    if(isNaN(fat) || fat<0){ toast('Quantidade cobrada inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
+    const dev = rmNum(i.qtd_devolvida), env = rmNum(i.qtd_enviada);
+    let situacao = 'OK';
+    if(env>dev && fat>dev) situacao = 'FALTA_COBRADA';        // caso B — trava o pagamento
+    else if(env>dev)       situacao = 'FALTA_NAO_COBRADA';    // caso A — só pendência física
+    else if(fat>dev)       situacao = 'COBRADO_A_MAIS';
+    if(situacao==='FALTA_COBRADA' || situacao==='COBRADO_A_MAIS'){
+      travas.push(`${rmBem(i.bem_id)}: voltaram ${dev}, a nota cobra ${fat}`);
+    }
+    total += fat * (isNaN(val)?0:val);
+    linhas.push({ item:i, fat, val:isNaN(val)?null:val, situacao });
+  }
+
+  const travado = travas.length > 0;
+  const msg = travado
+    ? `A nota ${numero} cobra item que não voltou:\n\n${travas.join('\n')}\n\nOs itens que chegaram entram normalmente, mas a NOTA FICA TRAVADA para pagamento até o administrativo resolver.\n\nConfirmar?`
+    : `Dar entrada na nota ${numero} — total ${rmMoney(total)}?\n\nConferência bateu: o que a nota cobra é o que voltou. ✓`;
+  if(!confirm(msg)) return;
+
+  try{
+    const nfArr = await sbFetch('notas_fiscais','POST',{
+      fornecedor_id: r.fornecedor_id || null,
+      numero_nf: numero.trim(),
+      data_emissao: emissao,
+      data_entrega: r.data_retorno,
+      valor_total: total || null,
+      natureza: 'SERVICO_REPROCESSAMENTO',
+      confirmada: true,
+      status_pagamento: travado ? 'PENDENTE_TRATATIVA' : 'LIBERADA',
+      motivo_tratativa: travado ? ('Cobra item que não voltou — '+travas.join(' · ')) : null,
+      remessa_id: remessaId,
+      status: 'ENTREGUE',
+      vencimentos_obs: 'Serviço de reprocessamento — remessa '+(r.numero_bloco||'#'+remessaId)+'. Não gera entrada de estoque.',
+    });
+    const nfId = nfArr && nfArr[0] && nfArr[0].id;
+    for(const {item,fat,val,situacao} of linhas){
+      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_faturada:fat, valor_unitario:val, situacao });
+      if(val!=null && fat>0){
+        await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'CUSTO_SERVICO', remessa_id:remessaId, nota_fiscal_id:nfId,
+          valor_unitario:val, registrado_por:rmQuem(),
+          observacao:'Reprocessamento cobrado na NF '+numero.trim()+' — '+fat+' un a '+rmMoney(val) });
+      }
+    }
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'CONFERIDA', nota_fiscal_id:nfId });
+    toast(travado ? 'Nota registrada e TRAVADA para pagamento ⚠️' : 'Nota conferida e registrada ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao registrar a nota: '+e.message,'erro'); }
+}
+
+async function rmPendVoltou(pendId){
+  const p = rmPend.find(x=>x.id===pendId); if(!p) return;
+  const q = parseFloat(prompt('Quantas unidades de "'+rmBem(p.bem_id)+'" voltaram depois?', String(rmNum(p.qtd))));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  if(q > rmNum(p.qtd)){ toast('Voltou mais do que estava pendente. Confira.','erro'); return; }
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:p.bem_id, tipo:'RETORNO', d_fora:-q, d_casa:q, remessa_id:p.remessa_id,
+      registrado_por:rmQuem(), observacao:'Retorno tardio — pendência #'+pendId });
+    if(p.remessa_item_id){
+      const it = (await sbFetch(`remessa_itens?select=qtd_devolvida&id=eq.${p.remessa_item_id}&limit=1`))||[];
+      const atual = it.length ? rmNum(it[0].qtd_devolvida) : 0;
+      await sbFetch(`remessa_itens?id=eq.${p.remessa_item_id}`,'PATCH',{ qtd_devolvida: atual+q });
+    }
+    if(q >= rmNum(p.qtd)){
+      await sbFetch(`remessa_pendencias?id=eq.${pendId}`,'PATCH',{ status:'RESOLVIDA_VOLTOU', tratada_em:new Date().toISOString().slice(0,10),
+        tratada_por:rmQuem(), desfecho:'Voltou depois' });
+    } else {
+      await sbFetch(`remessa_pendencias?id=eq.${pendId}`,'PATCH',{ qtd: rmNum(p.qtd)-q,
+        observacao: (p.observacao||'')+' | voltaram '+q+' depois' });
+    }
+    toast('Retorno tardio registrado ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmPendPerda(pendId){
+  const p = rmPend.find(x=>x.id===pendId); if(!p) return;
+  if(!confirm('Dar "'+rmBem(p.bem_id)+'" ('+rmNum(p.qtd)+') como PERDA?\n\nO item sai do livro de uma vez. A perda fica visível no saldo, em vez de virar ajuste sem explicação.')) return;
+  if(!exigirAssinatura('Baixa de perda no livro de remessas')) return;
+  const motivo = prompt('O que aconteceu? (fica registrado)','Não retornou da remessa');
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:p.bem_id, tipo:'PERDA', d_fora:-rmNum(p.qtd), remessa_id:p.remessa_id,
+      registrado_por:rmQuem(), observacao:'PERDA — '+(motivo||'sem motivo informado') });
+    await sbFetch(`remessa_pendencias?id=eq.${pendId}`,'PATCH',{ status:'RESOLVIDA_PERDA', tratada_em:new Date().toISOString().slice(0,10),
+      tratada_por:rmQuem(), desfecho: motivo||'Perda' });
+    toast('Perda registrada no livro.','');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function rmLiberarNf(nfId){
+  const n = rmNfPend.find(x=>x.id===nfId); if(!n) return;
+  if(!exigirAssinatura('Liberar nota para pagamento')) return;
+  const desfecho = prompt('Como a tratativa foi resolvida? (fica registrado na nota)','Fornecedor emitiu carta de correção');
+  if(desfecho===null) return;
+  try{
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status_pagamento:'LIBERADA',
+      motivo_tratativa: (n.motivo_tratativa||'')+' | RESOLVIDO: '+desfecho+' ('+rmQuem()+')' });
+    toast('Nota liberada para pagamento ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA EM dd/mm/aaaa (v4.6)
+// O <input type="date"> se desenha no formato do navegador — no Chrome em
+// inglês vira mm/dd/aaaa e a equipe digita o mês no lugar do dia. Aqui todo
+// campo de data vira texto com máscara dd/mm/aaaa, mas o resto do app continua
+// lendo e escrevendo em ISO (aaaa-mm-dd): o valor exibido e o valor lido são
+// coisas diferentes, e ninguém precisou mudar de lugar nenhum.
+// ═══════════════════════════════════════════════════════════════════════════
+(function(){
+  const nativo = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+
+  function isoParaBr(v){
+    if(!v) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(''+v);
+    return m ? (m[3]+'/'+m[2]+'/'+m[1]) : ''+v;
+  }
+  function brParaIso(t){
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((t||'').trim());
+    if(!m) return '';
+    const d = +m[1], mo = +m[2], a = +m[3];
+    if(d<1 || d>31 || mo<1 || mo>12 || a<1900 || a>2999) return '';
+    return m[3]+'-'+m[2]+'-'+m[1];
+  }
+  function mascarar(t){
+    const n = (t||'').replace(/\D/g,'').slice(0,8);
+    if(n.length<=2) return n;
+    if(n.length<=4) return n.slice(0,2)+'/'+n.slice(2);
+    return n.slice(0,2)+'/'+n.slice(2,4)+'/'+n.slice(4);
+  }
+
+  function dmUpgrade(el){
+    if(!el || el.dataset.dmOk === '1') return;
+    let bruto = '';
+    try{ bruto = nativo.get.call(el) || el.getAttribute('value') || ''; }catch(e){}
+    el.dataset.dmOk = '1';
+    el.type = 'text';
+    el.setAttribute('inputmode','numeric');
+    el.setAttribute('maxlength','10');
+    if(!el.placeholder) el.placeholder = 'dd/mm/aaaa';
+    if(!el.style.minWidth) el.style.minWidth = '120px';
+    nativo.set.call(el, isoParaBr(bruto));
+    Object.defineProperty(el, 'value', {
+      configurable: true,
+      get(){ return brParaIso(nativo.get.call(el)); },
+      set(v){
+        const s = (v==null) ? '' : (''+v);
+        nativo.set.call(el, /^\d{2}\/\d{2}\/\d{4}$/.test(s) ? s : isoParaBr(s));
+      }
+    });
+    el.addEventListener('input', function(){
+      const atual = nativo.get.call(el);
+      const m = mascarar(atual);
+      if(m !== atual) nativo.set.call(el, m);
+      el.style.borderColor = '';
+    });
+    el.addEventListener('blur', function(){
+      const t = nativo.get.call(el);
+      if(t && !brParaIso(t)){ el.style.borderColor = '#E74C3C'; el.title = 'Data incompleta — use dd/mm/aaaa'; }
+      else { el.style.borderColor = ''; el.title = ''; }
+    });
+  }
+
+  function varrer(raiz){
+    if(!raiz || !raiz.querySelectorAll) return;
+    raiz.querySelectorAll('input[type="date"]').forEach(dmUpgrade);
+    if(raiz.matches && raiz.matches('input[type="date"]')) dmUpgrade(raiz);
+  }
+  window.dmVarrer = varrer;
+
+  let agendado = false;
+  function agendar(){
+    if(agendado) return;
+    agendado = true;
+    requestAnimationFrame(function(){ agendado = false; varrer(document.body); });
+  }
+
+  function iniciar(){
+    varrer(document.body);
+    new MutationObserver(function(muts){
+      for(const m of muts){ if(m.addedNodes && m.addedNodes.length){ agendar(); return; } }
+    }).observe(document.body, { childList:true, subtree:true });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+  else iniciar();
+})();
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// SELETOR COM BUSCA (v4.6)
+// O prompt() do navegador corta a lista quando ela é longa — é por isso que a
+// escolha de fornecedor parava no 21º nome. Aqui a lista é uma janela de
+// verdade: rola até o fim, filtra por qualquer pedaço do nome e ignora acento.
+// ═══════════════════════════════════════════════════════════════════════════
+(function(){
+  const css = document.createElement('style');
+  css.textContent = `
+    .pk-fundo{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px}
+    .pk-cx{background:#fff;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.3);width:min(520px,100%);max-height:min(78vh,640px);display:flex;flex-direction:column;overflow:hidden}
+    .pk-cab{padding:14px 16px;border-bottom:1px solid #E5E7E9}
+    .pk-tit{font-size:14px;font-weight:800;color:#1B4F72}
+    .pk-sub{font-size:11.5px;color:#7F8C8D;margin-top:3px;line-height:1.45}
+    .pk-busca{width:100%;border:1.5px solid #D5DBDB;border-radius:8px;padding:10px 12px;font-size:14px;margin-top:10px;font-family:inherit;outline:none}
+    .pk-busca:focus{border-color:#2E86AB}
+    .pk-lista{overflow:auto;flex:1}
+    .pk-li{padding:11px 16px;font-size:13.5px;border-bottom:1px solid #F4F6F6;cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center}
+    .pk-li:hover,.pk-li.sel{background:#EBF5FB}
+    .pk-meta{font-size:11px;color:#7F8C8D;white-space:nowrap}
+    .pk-vazio{padding:26px;text-align:center;color:#7F8C8D;font-size:13px}
+    .pk-pe{padding:10px 16px;border-top:1px solid #E5E7E9;display:flex;gap:8px;justify-content:space-between;align-items:center;background:#FBFCFC}
+    .pk-b{border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+    .pk-b.novo{background:#EBF5FB;color:#1B4F72} .pk-b.sair{background:#F4F6F6;color:#7F8C8D}
+    .pk-conta{font-size:11px;color:#7F8C8D}`;
+  document.head.appendChild(css);
+
+  function norm(s){
+    return (''+(s||'')).toUpperCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Z0-9]/g,'');
+  }
+  window.pkNorm = norm;
+
+  // pkEscolher({titulo, subtitulo, itens:[{id,nome,meta}], novoLabel})
+  //   → Promise que devolve o item escolhido, {__novo:true, termo} ou null
+  window.pkEscolher = function(opts){
+    return new Promise(resolve => {
+      const itens = opts.itens || [];
+      const fundo = document.createElement('div');
+      fundo.className = 'pk-fundo';
+      fundo.innerHTML = `<div class="pk-cx">
+        <div class="pk-cab">
+          <div class="pk-tit">${opts.titulo||'Escolha'}</div>
+          ${opts.subtitulo?`<div class="pk-sub">${opts.subtitulo}</div>`:''}
+          <input class="pk-busca" placeholder="digite para filtrar…">
+        </div>
+        <div class="pk-lista"></div>
+        <div class="pk-pe">
+          <span class="pk-conta"></span>
+          <span style="display:flex;gap:8px">
+            ${opts.novoLabel?`<button class="pk-b novo">${opts.novoLabel}</button>`:''}
+            <button class="pk-b sair">Cancelar</button>
+          </span>
+        </div></div>`;
+      document.body.appendChild(fundo);
+
+      const busca = fundo.querySelector('.pk-busca');
+      const lista = fundo.querySelector('.pk-lista');
+      const conta = fundo.querySelector('.pk-conta');
+
+      function fechar(v){ document.removeEventListener('keydown', tecla); fundo.remove(); resolve(v); }
+      function tecla(e){ if(e.key === 'Escape') fechar(null); }
+      document.addEventListener('keydown', tecla);
+
+      function pintar(){
+        const q = norm(busca.value);
+        const vis = q ? itens.filter(it => norm(it.nome).includes(q)) : itens;
+        conta.textContent = vis.length + ' de ' + itens.length;
+        lista.innerHTML = vis.length
+          ? vis.map(it => `<div class="pk-li" data-id="${it.id}"><span>${it.nome}</span>${it.meta?`<span class="pk-meta">${it.meta}</span>`:''}</div>`).join('')
+          : '<div class="pk-vazio">Nada com esse nome.' + (opts.novoLabel ? '<br>Use o botão de cadastrar aqui embaixo.' : '') + '</div>';
+        lista.querySelectorAll('.pk-li').forEach(li => {
+          li.addEventListener('click', () => fechar(itens.find(x => String(x.id) === li.dataset.id)));
+        });
+      }
+      busca.addEventListener('input', pintar);
+      busca.addEventListener('keydown', e => {
+        if(e.key === 'Enter'){
+          const primeiro = lista.querySelector('.pk-li');
+          if(primeiro) fechar(itens.find(x => String(x.id) === primeiro.dataset.id));
+        }
+      });
+      const bNovo = fundo.querySelector('.pk-b.novo');
+      if(bNovo) bNovo.addEventListener('click', () => fechar({ __novo:true, termo: busca.value.trim() }));
+      fundo.querySelector('.pk-b.sair').addEventListener('click', () => fechar(null));
+      fundo.addEventListener('click', e => { if(e.target === fundo) fechar(null); });
+
+      pintar();
+      setTimeout(() => busca.focus(), 40);
+    });
+  };
+})();
 </script>
 
 </main>
