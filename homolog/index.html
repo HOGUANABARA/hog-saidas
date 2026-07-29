@@ -344,7 +344,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.1 · HOMOLOGAÇÃO</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.2 · HOMOLOGAÇÃO</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -4177,56 +4177,112 @@ function hiFiltrar(){
   });
 }
 
+function hiMesLabel(m){
+  const n=['','janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const mm=parseInt((m||'').slice(5,7));
+  return (n[mm]||m)+'/'+(m||'').slice(2,4);
+}
+const HI_STATUS = {
+  'ENTREGUE':          { rot:'✅ Entregue',            cor:'var(--verde)',   bg:'var(--verde-claro)' },
+  'AGUARDANDO ENTREGA':{ rot:'🚚 Aguardando entrega',  cor:'#D35400',        bg:'#FDF2E9' },
+  'DEVOLVIDO':         { rot:'↩️ Devolvido',           cor:'var(--vermelho)',bg:'#FDEDEC' },
+  'PEDIDO':            { rot:'📦 Pedido sem NF ainda', cor:'var(--azul)',    bg:'var(--azul-claro)' },
+};
+function hiStatusInfo(s){ return HI_STATUS[(s||'').toUpperCase()] || { rot:(s||'—'), cor:'var(--cinza-4)', bg:'var(--cinza-1)' }; }
+
 function hiRenderizarLista(){
   const div = document.getElementById('hi-lista');
-  if(!hiNfs.length){
-    div.innerHTML = '<div class="hi-empty">Nenhuma nota fiscal registrada ainda.<br><span style="font-size:12px">As NFs entram pela aba 📥 Receber NF. O histórico de junho/julho pode ser importado da planilha.</span></div>';
+  if(!hiNfs.length && !hiPedidos.length){
+    div.innerHTML = '<div class="hi-empty">Nenhuma compra registrada ainda.<br><span style="font-size:12px">As NFs entram pela aba 📥 Receber NF.</span></div>';
     document.getElementById('hi-resumo').textContent='';
     return;
   }
   const lista = hiFiltrar();
-  const total = lista.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
+  // pedidos aprovados que ainda não viraram NF entram como "aguardando"
+  const termo = hiNorm((document.getElementById('hi-busca')||{}).value);
+  const pedAguard = (hiPedidos||[]).filter(p=>{
+    if(!['APROVADO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'].includes(p.status)) return false;
+    if(!termo) return true;
+    return hiNorm(rcNomeFornecedor(p.fornecedor_id)).includes(termo) || hiNorm('pedido '+p.id).includes(termo);
+  });
+
+  // agrupa por mês
+  const meses = {};
+  for(const nf of lista){
+    const d=((nf.data_entrega||nf.data_emissao||'')+'').slice(0,10);
+    const m=d?d.slice(0,7):'sem data';
+    (meses[m]=meses[m]||{nfs:[],peds:[],total:0})['nfs'].push(nf);
+    if((nf.status||'').toUpperCase()!=='DEVOLVIDO') meses[m].total+=Number(nf.valor_total)||0;
+  }
+  for(const p of pedAguard){
+    const d=((p.aprovado_em||p.created_at||'')+'').slice(0,10);
+    const m=d?d.slice(0,7):'sem data';
+    (meses[m]=meses[m]||{nfs:[],peds:[],total:0})['peds'].push(p);
+  }
+  const ordem=Object.keys(meses).sort().reverse();
+  const totalGeral=ordem.reduce((s,m)=>s+meses[m].total,0);
+  const nNfs=lista.length;
   document.getElementById('hi-resumo').innerHTML =
-    `<b>${lista.length}</b> nota(s) · total <b>${hiMoney(total)}</b>${lista.length!==hiNfs.length?` <span style="color:var(--azul)">(de ${hiNfs.length})</span>`:''}`;
-  if(!lista.length){ div.innerHTML='<div class="hi-empty">Nada encontrado com esse filtro.</div>'; return; }
-  div.innerHTML = lista.map(nf=>{
-    const its = hiItensPorNf[nf.id]||[];
-    const daPlanilha = (nf.origem==='PLANILHA');
-    return `<div class="hi-card">
-      <div class="hi-head" onclick="hiToggle(${nf.id})">
-        <div>
-          <div class="hi-titulo">NF ${nf.numero_nf||'—'} · ${rcNomeFornecedor(nf.fornecedor_id)}
-            ${daPlanilha?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:2px 7px;border-radius:10px;margin-left:6px">planilha</span>':''}</div>
-          <div class="hi-meta">Entrega ${hiData(nf.data_entrega)} · emissão ${hiData(nf.data_emissao)} · ${its.length} item(ns)
-            ${nf.vencimentos_obs?` · <span style="color:var(--azul)">${nf.vencimentos_obs}</span>`:''}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-weight:800;font-size:15px">${hiMoney(nf.valor_total)}</div>
-          <div class="hi-meta">${nf.frete?('frete '+hiMoney(nf.frete)+' · '):''}${nf.status||''}</div>
-        </div>
+    `<b>${nNfs}</b> nota(s) em <b>${ordem.length}</b> mês(es) · total comprado <b>${hiMoney(totalGeral)}</b>${pedAguard.length?` · <span style="color:var(--azul)">${pedAguard.length} pedido(s) sem NF</span>`:''}${nNfs!==hiNfs.length?` <span style="color:var(--azul)">(filtrado de ${hiNfs.length})</span>`:''}`;
+  if(!ordem.length){ div.innerHTML='<div class="hi-empty">Nada encontrado com esse filtro.</div>'; return; }
+
+  div.innerHTML = ordem.map(mes=>{
+    const g=meses[mes];
+    // separa por status
+    const porStatus={};
+    for(const nf of g.nfs){
+      const st=(nf.status||'ENTREGUE').toUpperCase();
+      (porStatus[st]=porStatus[st]||[]).push({tipo:'nf', o:nf});
+    }
+    if(g.peds.length) porStatus['PEDIDO']=g.peds.map(p=>({tipo:'ped', o:p}));
+    const blocos=Object.keys(porStatus).sort().map(st=>{
+      const i=hiStatusInfo(st), its=porStatus[st];
+      const soma=its.reduce((s,x)=>s+(x.tipo==='nf'?(Number(x.o.valor_total)||0):0),0);
+      const linhas=its.map(x=>{
+        if(x.tipo==='ped'){
+          const p=x.o;
+          return `<div style="padding:9px 14px;border-bottom:1px solid var(--cinza-1);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div><b style="font-size:13px">Pedido #${p.id}</b> · ${rcNomeFornecedor(p.fornecedor_id)}
+              <div style="font-size:11px;color:var(--cinza-4)">aprovado ${hiData(p.aprovado_em)}${p.prazo_previsto?' · prazo '+p.prazo_previsto:''}${p.pedido_por?' · '+p.pedido_por:''}</div></div>
+            <span style="font-size:11px;color:var(--azul);font-weight:700">aguardando NF</span></div>`;
+        }
+        const nf=x.o, its2=hiItensPorNf[nf.id]||[];
+        return `<div style="border-bottom:1px solid var(--cinza-1)">
+          <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="hiToggle(${nf.id})">
+            <div><b style="font-size:13px">NF ${nf.numero_nf||'—'}</b> · ${rcNomeFornecedor(nf.fornecedor_id)}
+              ${nf.origem==='PLANILHA'?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:1px 6px;border-radius:10px;margin-left:5px">planilha</span>':''}
+              <div style="font-size:11px;color:var(--cinza-4)">entrega ${hiData(nf.data_entrega)} · ${its2.length} item(ns)${nf.vencimentos_obs?' · '+nf.vencimentos_obs:''}</div></div>
+            <b style="font-size:14px">${hiMoney(nf.valor_total)}</b></div>
+          <div class="hi-corpo" id="hi-corpo-${nf.id}" style="display:none;padding:0 16px 12px;background:var(--cinza-1)">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead><tr><th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
+              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
+              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Unit.</th>
+              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Total</th><th></th></tr></thead>
+              <tbody>${its2.map(it=>`<tr>
+                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}</td>
+                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.qtd??'—'}</td>
+                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(it.valor_unitario)}</td>
+                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
+                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
+              </tr>`).join('')||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>'}</tbody>
+            </table>
+            <div style="text-align:right;margin-top:8px"><button class="rc-btn-editar" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button></div>
+          </div></div>`;
+      }).join('');
+      return `<details ${st==='ENTREGUE'?'':'open'} style="margin-bottom:6px">
+        <summary style="cursor:pointer;list-style:none;padding:9px 14px;background:${i.bg};color:${i.cor};font-size:12px;font-weight:800;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+          <span>${i.rot} — ${its.length}</span><span>${soma?hiMoney(soma):''} ▾</span></summary>
+        <div style="background:#fff;border:1px solid var(--cinza-2);border-top:none;border-radius:0 0 6px 6px">${linhas}</div>
+      </details>`;
+    }).join('');
+
+    return `<div class="hi-card" style="padding:0;overflow:visible">
+      <div style="background:var(--azul);color:#fff;padding:12px 16px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span style="font-size:14px;font-weight:800;text-transform:capitalize">📅 ${mes==='sem data'?'Sem data':hiMesLabel(mes)}</span>
+        <span style="font-size:15px;font-weight:800">${hiMoney(g.total)}<span style="font-size:11px;font-weight:600;opacity:.8"> · ${g.nfs.length} nota(s)</span></span>
       </div>
-      <div class="hi-corpo" id="hi-corpo-${nf.id}" style="display:none;padding:0 16px 14px">
-        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
-          <thead><tr>
-            <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Material</th>
-            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Qtd</th>
-            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Valor un.</th>
-            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">Total</th>
-            <th style="border-bottom:1px solid var(--cinza-2)"></th>
-          </tr></thead>
-          <tbody>${its.map(it=>`<tr>
-            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1)">${rcNomeMaterial(it.material_id)}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">${it.qtd??'—'}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">${hiMoney(it.valor_unitario)}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-1);text-align:right">
-              <button class="rc-btn-editar" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})" title="corrigir quantidade ou valor">✎</button></td>
-          </tr>`).join('')||'<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>'}</tbody>
-        </table>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-          <button class="rc-btn-editar" style="padding:7px 11px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button>
-        </div>
-      </div>
+      <div style="padding:12px 14px">${blocos}</div>
     </div>`;
   }).join('');
 }
@@ -5559,6 +5615,7 @@ let pnPedidos = [];
 let pnNfItens = [];
 let pnSnaps = [];      // painel_snapshots (comparativos mensais)
 let pnOcorrencias = [];
+let pnInvAberto = null;
 let pnSimLinhas = [{tipo:'',medico:'',qtd:1,protocolo:''}];
 let pnSimResultado = null;
 let pnPerDrillAberto = null;
@@ -5637,6 +5694,7 @@ async function pnCarregar(){
     try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }catch(e){ pnHistRows=[]; }
     try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
     try{ pnOcorrencias=(await sbFetch('ocorrencias?select=*&status=eq.aberta&order=id.desc&limit=100'))||[]; }catch(e){ pnOcorrencias=[]; }
+    try{ pnInvAberto=((await sbFetch("inventarios?select=id,data_contagem,criado_por,created_at&status=eq.aberto&limit=1"))||[])[0]||null; }catch(e){ pnInvAberto=null; }
     pnMontaHist();
     document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
     pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
@@ -5739,6 +5797,58 @@ function pnAlertas(){
   if(ocAtras.length) cards.push({cor:'ama',n:ocAtras.length,t:'⚠️ OCORRÊNCIA COM PRAZO VENCIDO',
     d:ocAtras.slice(0,3).map(o=>'#'+o.id+' ('+o.situacao.replace(/_/g,' ').toLowerCase()+', combinado p/ '+pnData(o.data_prometida)+')').join(' · '),
     a:'⚠️ Ver ocorrências',fn:`trocarAba('ocorrencias')`});
+  // ── inventário aberto: trava as saídas, precisa fechar ──
+  if(pnInvAberto){
+    const d=pnDiasDesde(pnInvAberto.data_contagem||pnInvAberto.created_at);
+    cards.push({cor:d>2?'lar':'azul',n:d===null?'—':d+'d',t:'📐 CONTAGEM DE INVENTÁRIO ABERTA — saídas represadas',
+      d:`Contagem de ${pnData(pnInvAberto.data_contagem)}${pnInvAberto.criado_por?' aberta por '+pnInvAberto.criado_por:''}. Enquanto não confirmar, a equipe não lança saída — e o consumo do período fica sem registro.`,
+      a:'📐 Abrir Inventário',fn:`trocarAba('inventario')`});
+  }
+  // ── consumo fora do padrão (3x a média do próprio item) ──
+  {
+    const mes=pnHojeMes();
+    const porMat={};
+    for(const m of pnMovs){ if(m.mes!==mes) continue; porMat[m.material_id]=(porMat[m.material_id]||0)+m.qtd; }
+    const fora=[];
+    for(const r of ccDados){
+      const media=Number(r.consumo_medio_mensal)||0;
+      const atual=porMat[r.material_id]||0;
+      if(media>=3 && atual > media*3) fora.push({nome:r.material, atual:Math.round(atual), media:Math.round(media)});
+    }
+    fora.sort((a,b)=>(b.atual/b.media)-(a.atual/a.media));
+    if(fora.length) cards.push({cor:'ama',n:fora.length,t:'📈 CONSUMO MUITO ACIMA DO NORMAL neste mês',
+      d:fora.slice(0,4).map(x=>`${x.nome}: ${x.atual} (média ${x.media})`).join(' · ')+' — pode ser desperdício, lançamento errado ou mudança real de protocolo',
+      a:'💰 Ver custos',fn:`pnIr('custos',document.querySelector('#aba-painel .pn-pill[data-sec=custos]'))`});
+  }
+  // ── itens sem preço de referência (subestimam o custo) ──
+  {
+    const comSaida=new Set(pnMovs.map(m=>m.material_id));
+    const semPreco=[...comSaida].filter(mid=>!(pnUvp[mid]&&pnUvp[mid].uvp>0));
+    if(semPreco.length) cards.push({cor:'azul',n:semPreco.length,t:'💰 ITENS COM SAÍDA E SEM PREÇO — custo subestimado',
+      d:semPreco.slice(0,4).map(mid=>pnUvp[mid]?pnUvp[mid].nome:('#'+mid)).join(' · ')+(semPreco.length>4?` · +${semPreco.length-4}`:'')+' — enquanto não tiverem valor, entram como R$ 0 nos indicadores',
+      a:'🔧 Corrigir na Base',fn:`pnIr('base',document.querySelector('#aba-painel .pn-pill[data-sec=base]'))`});
+  }
+  // ── itens que controlam lote e estão sem lote registrado ──
+  {
+    const semLote=ccDados.filter(r=>{
+      const cad=(typeof ccCadastro!=='undefined'&&ccCadastro[r.material_id])||{};
+      return r.classe_compra==='CRITICO' && (Number(r.saldo)||0)>0 && !r.proxima_validade;
+    });
+    if(semLote.length) cards.push({cor:'ama',n:semLote.length,t:'🔒 ITEM DE SEGURANÇA SEM LOTE/VALIDADE REGISTRADO',
+      d:semLote.slice(0,4).map(r=>r.material).join(' · ')+(semLote.length>4?` · +${semLote.length-4}`:'')+' — sem validade no sistema, o alerta de vencimento não funciona para eles',
+      a:'📐 Registrar no inventário',fn:`trocarAba('inventario')`});
+  }
+  // ── amostra grátis que zerou (agora precisa comprar de verdade) ──
+  {
+    const amostraZero=ccDados.filter(r=>{
+      const f=ccFontes[pnN(r.material)];
+      const ehAmostra=f&&/AMOSTRA|BONIFICA|GRATIS|GRÁTIS/i.test((f.fornecedores||'')+' '+(f.marcas||''));
+      return ehAmostra && (Number(r.saldo)||0)<=0;
+    });
+    if(amostraZero.length) cards.push({cor:'azul',n:amostraZero.length,t:'🎁 ITEM DE AMOSTRA GRÁTIS ZEROU',
+      d:amostraZero.slice(0,4).map(r=>r.material).join(' · ')+' — se ainda for necessário, agora vira compra paga',
+      a:'🛒 Ver em Compras',fn:`trocarAba('comprar')`});
+  }
   // triagem
   const triagem=ccDados.filter(r=>!r.classe_confirmada).length;
   if(triagem) cards.push({cor:'azul',n:triagem,t:'🏷️ ITENS AGUARDANDO CLASSIFICAÇÃO',
@@ -5752,7 +5862,7 @@ function pnAlertas(){
 
   // KPIs-pergunta
   const seg=vencidos.length+vencendo.length;
-  const travada=cotParadas.length+entAtras.length+aguardAprov.length+montVelha.length;
+  const travada=cotParadas.length+entAtras.length+aguardAprov.length+montVelha.length+(pnInvAberto?1:0);
   const confianca=ccDados.length?Math.max(0,Math.round(100-(negativos.length/ccDados.length*100))):100;
   // pulso
   const perMes=pnPeriodos.filter(p=>(p.data||'').slice(0,7)===mes);
