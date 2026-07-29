@@ -947,7 +947,7 @@ details[open] summary { margin-bottom: 6px; }
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
   <div class="inv-card" id="rel-card">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span>📄 Saldo atual — planilha de consulta e conferência</span>
+      <span>📄 Saldo atual — consulta e planilha de conferência do inventário</span>
       <button onclick="relCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar saldos</button>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
@@ -7129,19 +7129,36 @@ let relDados = [];   // [{id,nome,marca,descricao_nf,unidade,classe,controla_lot
 let relFiltrados = [];
 let relUltContagem = {};   // material_id -> {total, onde:[]} da última contagem fechada
 let relUltData = null;
+let relMov = {};           // material_id -> {compra, consumo, outros} no mês
+let relMesIni = null;
 
 async function relCarregar(){
   const corpo=document.getElementById('rel-corpo');
   corpo.innerHTML='<div style="text-align:center;padding:24px;color:var(--cinza-4)">Carregando…</div>';
   try{
     const geralId = await getEstoqueGeralId();
-    const mats=(await sbFetch('materiais?select=id,nome,marca,descricao_nf,unidade_medida,classe_compra,controla_lote&ativo=eq.true&order=nome.asc&limit=1000'))||[];
+    const mats=(await sbFetch('materiais?select=id,nome,marca,descricao_nf,unidade_medida,qtd_kit,classe_compra,controla_lote&ativo=eq.true&order=nome.asc&limit=1000'))||[];
     const est=(await sbFetch(`estoque?select=material_id,saldo&local_id=eq.${geralId}&limit=2000`))||[];
     const saldoMap={}; for(const e of est) saldoMap[e.material_id]=Number(e.saldo)||0;
     let lotesMap={};
     try{
       const lts=(await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000'))||[];
       for(const l of lts){ (lotesMap[l.material_id]=lotesMap[l.material_id]||[]).push(l); }
+    }catch(e){}
+    // movimento do mês: compras, consumo e ajustes (fecha a conta com o saldo)
+    relMov={};
+    try{
+      const ini=new Date(); ini.setDate(1);
+      const iniStr=ini.toISOString().slice(0,10);
+      relMesIni=iniStr;
+      const movs=(await sbFetch(`movimentacoes?select=material_id,qtd,tipo&aprovado=eq.true&created_at=gte.${iniStr}&limit=8000`))||[];
+      for(const mv of movs){
+        const m=relMov[mv.material_id]||(relMov[mv.material_id]={compra:0,consumo:0,outros:0});
+        const q=Number(mv.qtd)||0, t=(mv.tipo||'').toUpperCase();
+        if(t.startsWith('ENTRADA') && q>0) m.compra+=q;
+        else if(t.startsWith('SAIDA') && q<0) m.consumo+=Math.abs(q);
+        else m.outros+=q;
+      }
     }catch(e){}
     // última contagem fechada: total, data e onde estava alocado (ajuda a achar problema)
     relUltContagem={}; relUltData=null;
@@ -7162,9 +7179,14 @@ async function relCarregar(){
     relDados=mats.map(m=>{
       const c=relUltContagem[m.id];
       const saldo=saldoMap[m.id]??0;
+      const mv=relMov[m.id]||{compra:0,consumo:0,outros:0};
+      const anterior = saldo - mv.compra + mv.consumo - mv.outros;
+      const emb = (m.unidade_medida||'') + ((Number(m.qtd_kit)||0)>1 ? ` c/ ${Number(m.qtd_kit)}` : '');
       return { id:m.id, nome:m.nome, marca:m.marca||'', descricao_nf:m.descricao_nf||'',
-        unidade:m.unidade_medida||'', classe:m.classe_compra||'ESPORADICO', controla_lote:!!m.controla_lote,
-        saldo, lotes:lotesMap[m.id]||[],
+        unidade:m.unidade_medida||'', qtd_kit:Number(m.qtd_kit)||null, embalagem: emb.trim(),
+        classe:m.classe_compra||'ESPORADICO', controla_lote:!!m.controla_lote,
+        saldo, anterior, compraMes:mv.compra, consumoMes:mv.consumo, ajusteMes:mv.outros,
+        lotes:lotesMap[m.id]||[],
         ultContagem: c?c.total:null, ondeEstava: c?c.onde.join(' · '):'',
         movimento: c?(saldo-c.total):null };
     });
@@ -7186,43 +7208,49 @@ function relRender(){
     return true;
   });
   const totalUn=relFiltrados.reduce((s,m)=>s+m.saldo,0);
-  document.getElementById('rel-resumo').innerHTML=`<b>${relFiltrados.length}</b> item(ns) · <b>${Math.round(totalUn).toLocaleString('pt-BR')}</b> unidades no Estoque Geral · gerado em ${new Date().toLocaleString('pt-BR').slice(0,16)}`;
+  document.getElementById('rel-resumo').innerHTML=`<b>${relFiltrados.length}</b> item(ns) · <b>${Math.round(totalUn).toLocaleString('pt-BR')}</b> unidades no Estoque Geral · gerado em ${new Date().toLocaleString('pt-BR').slice(0,16)}
+    <br><span style="font-size:11px">A conta fecha assim: <b>estoque do mês anterior + compra − consumo ± ajustes = saldo real</b>. Onde não fechar com a contagem física, há problema para investigar.</span>`;
   document.getElementById('rel-corpo').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12.5px">
     <thead><tr>
       <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Material</th>
       <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Marca</th>
-      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Unid.</th>
-      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Saldo</th>
-      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Últ. contagem${'${relUltData?" ("+relData(relUltData)+")":""}'}</th>
-      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Movimento</th>
-      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Onde estava</th>
+      <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Embalagem</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Estoque mês ant.</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Compra mês</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Consumo mês</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Ajustes</th>
+      <th style="text-align:right;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Saldo real</th>
       <th style="text-align:left;padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:2px solid var(--cinza-2);background:var(--cinza-1);position:sticky;top:0">Lotes / validades</th>
     </tr></thead><tbody>
     ${relFiltrados.map(m=>`<tr>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-weight:600">${m.nome}${m.descricao_nf?`<div style="font-size:10px;color:var(--cinza-4);font-weight:400">${m.descricao_nf}</div>`:''}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-weight:600">${m.nome}${m.descricao_nf?`<div style="font-size:10px;color:var(--cinza-4);font-weight:400">${m.descricao_nf}</div>`:''}${m.ondeEstava?`<div style="font-size:9px;color:var(--cinza-3)">últ. contagem${relUltData?' '+relData(relUltData):''}: ${m.ultContagem} (${m.ondeEstava})</div>`:''}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.marca||'—'}</td>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.unidade||'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px">${m.embalagem||'<span style="color:var(--cinza-3)">—</span>'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;color:var(--cinza-4)">${m.anterior.toLocaleString('pt-BR')}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.compraMes?'color:var(--azul);font-weight:600':'color:var(--cinza-3)'}">${m.compraMes?('+'+m.compraMes.toLocaleString('pt-BR')):'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.consumoMes?'color:#D35400;font-weight:600':'color:var(--cinza-3)'}">${m.consumoMes?('−'+m.consumoMes.toLocaleString('pt-BR')):'—'}</td>
+      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;${m.ajusteMes?'color:var(--amarelo);font-weight:600':'color:var(--cinza-3)'}">${m.ajusteMes?((m.ajusteMes>0?'+':'')+m.ajusteMes.toLocaleString('pt-BR')):'—'}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:800;${m.saldo<0?'color:var(--vermelho)':''}">${m.saldo.toLocaleString('pt-BR')}</td>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;color:var(--cinza-4)">${m.ultContagem===null?'—':m.ultContagem.toLocaleString('pt-BR')}</td>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:700;color:${m.movimento===null?'var(--cinza-4)':(m.movimento<0?'#D35400':(m.movimento>0?'var(--azul)':'var(--verde)'))}">${m.movimento===null?'—':(m.movimento>0?'+':'')+m.movimento.toLocaleString('pt-BR')}</td>
-      <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:10px;color:var(--cinza-4)">${m.ondeEstava||'—'}</td>
       <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">${m.lotes.length?m.lotes.map(l=>`${l.lote} · val ${relData(l.validade)} (${l.qtd})`).join('<br>'):(m.controla_lote?'<span style="color:var(--amarelo)">sem lote registrado</span>':'—')}</td>
-    </tr>`).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--cinza-4)">nenhum item com esses filtros</td></tr>'}
+    </tr>`).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--cinza-4)">nenhum item com esses filtros</td></tr>'}
   </tbody></table>`;
 }
 function relExportar(){
   if(!relFiltrados.length){ toast('Nada para exportar — ajuste os filtros.','erro'); return; }
   const rotUlt='Últ. contagem'+(relUltData?' '+relData(relUltData):'');
-  const linhas=[['ID','Material','Descrição NF','Marca','Unidade','Classe','Saldo Estoque Geral',
-                 rotUlt,'Movimento desde a contagem','Onde estava (por local)','Lotes / Validades','Conferido (✓)','Observação']];
+  const linhas=[['ID','Material','Descrição NF','Marca','Embalagem (un/pacote)','Classe',
+                 'Estoque mês anterior','Compra no mês','Consumo no mês','Ajustes no mês','SALDO REAL',
+                 rotUlt,'Onde estava (por local)','Lote / Validade','Contagem física','Diferença','Observação']];
   for(const m of relFiltrados){
-    linhas.push([m.id, m.nome, m.descricao_nf, m.marca, m.unidade, m.classe, m.saldo,
-      m.ultContagem===null?'':m.ultContagem, m.movimento===null?'':m.movimento, m.ondeEstava,
-      m.lotes.map(l=>`${l.lote} val ${relData(l.validade)} (${l.qtd})`).join(' | '), '', '']);
+    linhas.push([m.id, m.nome, m.descricao_nf, m.marca, m.embalagem, m.classe,
+      m.anterior, m.compraMes||'', m.consumoMes||'', m.ajusteMes||'', m.saldo,
+      m.ultContagem===null?'':m.ultContagem, m.ondeEstava,
+      m.lotes.map(l=>`${l.lote} val ${relData(l.validade)} (${l.qtd})`).join(' | '), '', '', '']);
   }
   const ws=XLSX.utils.aoa_to_sheet(linhas);
-  ws['!cols']=[{wch:6},{wch:38},{wch:34},{wch:16},{wch:10},{wch:16},{wch:14},
-               {wch:15},{wch:16},{wch:30},{wch:34},{wch:11},{wch:20}];
+  ws['!cols']=[{wch:6},{wch:38},{wch:32},{wch:15},{wch:18},{wch:15},
+               {wch:16},{wch:13},{wch:13},{wch:12},{wch:12},
+               {wch:15},{wch:28},{wch:30},{wch:14},{wch:11},{wch:18}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Relatório Estoque');
   XLSX.writeFile(wb, 'Relatorio_Estoque_HOG_'+new Date().toISOString().split('T')[0]+'.xlsx');
@@ -7239,12 +7267,14 @@ function relImprimir(){
   @media print{button{display:none}}</style></head><body>
   <h1>HOG — Relatório de Estoque (conferência)</h1>
   <p>${relFiltrados.length} item(ns) · gerado em ${new Date().toLocaleString('pt-BR')}</p>
-  <table><thead><tr><th>Material</th><th>Marca</th><th class="num">Saldo</th><th class="num">Últ. cont.</th><th class="num">Movim.</th><th>Onde estava</th><th style="width:60px">Contado</th><th style="width:90px">Obs.</th></tr></thead><tbody>
-  ${relFiltrados.map(m=>`<tr><td><b>${m.nome}</b>${m.descricao_nf?('<br><span style="font-size:9px;color:#666">'+m.descricao_nf+'</span>'):''}</td>
-    <td>${m.marca||'—'}</td><td class="num"><b>${m.saldo.toLocaleString('pt-BR')}</b></td>
-    <td class="num">${m.ultContagem===null?'—':m.ultContagem.toLocaleString('pt-BR')}</td>
-    <td class="num">${m.movimento===null?'—':(m.movimento>0?'+':'')+m.movimento.toLocaleString('pt-BR')}</td>
-    <td style="font-size:9px">${m.ondeEstava||'—'}</td><td></td><td></td></tr>`).join('')}
+  <table><thead><tr><th>Material</th><th>Embalagem</th><th class="num">Est. ant.</th><th class="num">Compra</th><th class="num">Consumo</th><th class="num">Saldo real</th><th>Lote / validade</th><th style="width:58px">Contado</th><th style="width:80px">Obs.</th></tr></thead><tbody>
+  ${relFiltrados.map(m=>`<tr><td><b>${m.nome}</b>${m.descricao_nf?('<br><span style="font-size:9px;color:#666">'+m.descricao_nf+'</span>'):''}${m.marca?('<br><span style="font-size:9px;color:#888">'+m.marca+'</span>'):''}</td>
+    <td style="font-size:9px">${m.embalagem||'—'}</td>
+    <td class="num">${m.anterior.toLocaleString('pt-BR')}</td>
+    <td class="num">${m.compraMes?('+'+m.compraMes.toLocaleString('pt-BR')):'—'}</td>
+    <td class="num">${m.consumoMes?('−'+m.consumoMes.toLocaleString('pt-BR')):'—'}</td>
+    <td class="num"><b>${m.saldo.toLocaleString('pt-BR')}</b></td>
+    <td style="font-size:9px">${m.lotes.map(l=>`${l.lote} val ${relData(l.validade)}`).join('<br>')||'—'}</td><td></td><td></td></tr>`).join('')}
   </tbody></table>
   <button onclick="window.print()" style="margin-top:14px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>
   </body></html>`);
