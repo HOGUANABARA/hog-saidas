@@ -2340,11 +2340,65 @@ function renderizarPendentes() {
           ${linhas}</table>
       </div>
       <div class="acoes">
+        <button class="btn btn-secundario btn-sm" onclick="aprIncluirItem(${i})" title="A equipe esqueceu de lançar algo? Inclua aqui antes de aprovar">➕ Incluir item</button>
         <button class="btn btn-aprovar btn-sm" onclick="aprovar(${i})">✓ Aprovar</button>
         <button class="btn btn-rejeitar btn-sm" onclick="rejeitar(${i})">✕</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// ── v4.6e · incluir item na APROVAÇÃO ────────────────────────────────────
+// Antes só dava para corrigir quantidade. Se a equipe esquecia de lançar um
+// material, não havia caminho: ou aprovava incompleto e ajustava por fora, ou
+// devolvia tudo. Agora o item entra no mesmo período, ainda não aprovado, e
+// segue junto na mesma assinatura.
+async function aprIncluirItem(i){
+  const p = pendentes[i]; if(!p) return;
+  if(!catalogoMateriais.length){
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+  }
+  const jaTem = new Set((p.itens||[]).map(x=>x.material_id));
+  const esc = await pkEscolher({
+    titulo: 'Incluir item neste lançamento',
+    subtitulo: 'Ele entra no mesmo período e é aprovado junto, na mesma assinatura. O saldo atual aparece ao lado do nome.',
+    itens: catalogoMateriais.map(m=>{
+      const sal = saldosCache[(m.nome||'').toUpperCase()];
+      return { id:m.id, nome:m.nome + (jaTem.has(m.id)?'  (já está na lista)':''),
+               meta: (sal===undefined||sal===null) ? '' : ('saldo '+sal) };
+    }),
+  });
+  if(!esc) return;
+  const mat = catalogoMateriais.find(m=>m.id===esc.id); if(!mat) return;
+  const q = parseFloat(String(prompt('Quantidade de "'+mat.nome+'" que saiu:','1')||'').replace(',','.'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+
+  const ehDiversa = !p.periodo && p.destino;
+  const tipo = ehDiversa ? 'SAIDA_GERAL' : 'SAIDA_CIRURGIA';
+  const quem = p.registrado_por || document.getElementById('sel-registrante').value || 'Equipe CC';
+  try{
+    const localId = (p.itens && p.itens[0] && p.itens[0].local_id) || await getEstoqueGeralId();
+    // item que vive no livro de remessas não baixa estoque, nem aqui
+    const bemId = (typeof matRemessa!=='undefined' && matRemessa) ? matRemessa[mat.id] : null;
+    if(bemId){
+      await sbFetch('remessa_sujos','POST',{ bem_id:bemId, qtd:q, origem:'SAIDA_CIRURGIA',
+        periodo_cirurgico_id: p.periodo ? p.periodo.id : null, registrado_por:quem });
+      await sbFetch('remessa_mov','POST',{ bem_id:bemId, tipo:'USO', d_casa:-q, d_sujo:q,
+        registrado_por:quem, observacao:'Incluído na aprovação — foi para a fila de remessa' });
+      toast('🔁 "'+mat.nome+'" foi para a fila de remessa (não baixa estoque).','sucesso');
+      return;
+    }
+    await sbFetch('movimentacoes','POST',{
+      tipo: tipo, material_id: mat.id, local_id: localId,
+      qtd: -Math.abs(q),
+      periodo_cirurgico_id: p.periodo ? p.periodo.id : null,
+      destino_saida_geral: ehDiversa ? p.destino : null,
+      aprovado: false, registrado_por: quem,
+      observacao: 'Incluído na aprovação' + (ehDiversa && p.obs ? ' — '+p.obs : ''),
+    });
+    toast('"'+mat.nome+'" incluído — confira e aprove.','sucesso');
+    carregarPendentes();
+  }catch(e){ toast('Erro ao incluir: '+e.message,'erro'); }
 }
 
 function editarQtdPendente(i, k, val) {
@@ -3285,25 +3339,23 @@ function ccRender(){
   dados = dados.filter(r=>!ccIncluidoManual[r.material_id]);
   let html = '';
   if(manuais.length){
+    // v4.6e — usa a mesma tabela das outras classes, para trazer cobertura,
+    // sugerido, marcas/fornecedores e última compra. Antes esta faixa tinha
+    // uma tabela própria, mais pobre que o padrão.
+    const porClasse = {};
+    for(const r of manuais){ const c = r.classe_compra||'ESPORADICO'; (porClasse[c]=porClasse[c]||[]).push(r); }
     html += `<div class="cc-bloco" id="cc-incluidos">
       <div class="cc-bhead" style="background:linear-gradient(135deg,#1B4F72,#2E86AB)">
-        <span>➕ INCLUÍDOS À MÃO (${manuais.length}) — confira o saldo e mande orçar quando quiser</span>
+        <span>➕ INCLUÍDOS À MÃO (${manuais.length}) — confira o saldo e marque para orçar</span>
       </div>
-      <div class="cc-bbody"><table>
-        <thead><tr><th>Item</th><th class="num">Saldo</th><th class="num">Mínimo</th><th class="num">Consumo/mês</th><th>Situação</th><th></th></tr></thead>
-        <tbody>${manuais.map(r=>{
-          const emAndamento = ccAndamento[r.material_id];
-          return `<tr>
-            <td><div class="ac-item">${r.material}</div></td>
-            <td class="num" style="font-weight:800;font-size:15px;color:${(r.saldo!=null&&r.estoque_minimo!=null&&Number(r.saldo)<Number(r.estoque_minimo))?'var(--vermelho)':'var(--cinza-5)'}">${r.saldo!=null?acN0(r.saldo):'—'}</td>
-            <td class="num">${r.estoque_minimo??'—'}</td>
-            <td class="num">${r.consumo_medio_mensal?acN0(r.consumo_medio_mensal):'—'}</td>
-            <td style="font-size:11px;color:var(--cinza-4)">${emAndamento?('🔄 '+emAndamento):'livre para orçar'}</td>
-            <td style="white-space:nowrap">
-              ${emAndamento?'' : `<button class="ac-orcar" onclick="ccOrcar(${r.material_id})">📤 Orçar</button>`}
-              <button class="ac-orcar" style="background:var(--cinza-2);color:var(--cinza-5)" onclick="ccTirarIncluido(${r.material_id})">✕ tirar</button>
-            </td></tr>`;
-        }).join('')}</tbody></table></div></div>`;
+      <div class="cc-bbody">${Object.keys(porClasse).map(c=>{
+        const i = CC_INFO[c] || CC_INFO.ESPORADICO;
+        return `${Object.keys(porClasse).length>1?`<div style="padding:6px 10px;font-size:10px;font-weight:800;text-transform:uppercase;color:${i.cor}">${i.emoji} ${i.nome}</div>`:''}${ccTabela(c, porClasse[c], true)}`;
+      }).join('')}
+      <div style="padding:8px 10px;font-size:11px;color:var(--cinza-4);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span>Tirar desta faixa (não mexe no cadastro):</span>
+        ${manuais.map(r=>`<span style="cursor:pointer;color:var(--azul);font-weight:700" onclick="ccTirarIncluido(${r.material_id})">✕ ${r.material}</span>`).join(' · ')}
+      </div></div></div>`;
   }
   for(const classe of CC_ORDEM){
     if(ccFiltroClasse && classe!==ccFiltroClasse) continue;
@@ -3351,7 +3403,7 @@ function ccChk(r){
     <button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button></td>`;
 }
 
-function ccTabela(classe, rows){
+function ccTabela(classe, rows, mostrarTodos){
   const g = r => ccGatilho(r);
   // ordem canônica: a mesma do formulário de saídas (em todos os detalhamentos)
   const pos = r => (ccOrdem[r.material_id]!=null ? ccOrdem[r.material_id] : ccOrdemForm(r.material));
@@ -3362,7 +3414,7 @@ function ccTabela(classe, rows){
   });
   // recorrentes/proc: mostra quem pede compra OU já está em andamento (+ triagem/filtro de prioridade mostram tudo que casa); críticos/esporádicos: todos
   let visiveis = ord;
-  if(!ccModoTriagem && !ccFiltroPrio && (classe==='RECORRENTE' || classe==='POR_PROCEDIMENTO')){
+  if(!mostrarTodos && !ccModoTriagem && !ccFiltroPrio && (classe==='RECORRENTE' || classe==='POR_PROCEDIMENTO')){
     visiveis = ord.filter(r=>g(r).compra || ccAndamento[r.material_id]);
     if(!visiveis.length) return '<div class="ac-empty" style="padding:14px">Nenhum item desta classe pedindo compra. ✓</div>';
   }
@@ -4288,6 +4340,17 @@ async function coFecharGrupo(g){
     for(const {it} of prontos) coJaComprado[it.material_id]={pedido:'novo',status:'EM_MONTAGEM',temNf:false};
     const idsFechados = new Set(prontos.map(p=>p.it.material_id));
     coItens = coItens.filter(it=>!((it.grupo||'Orçamento 1')===g && idsFechados.has(it.material_id)));
+    // v4.6e — a virada de "em cotação" para "pedido" acontece AGORA, por comando
+    // direto no banco. Antes dependia da regravação da cotação inteira: se ela
+    // não acontecesse, o pedido existia e o item continuava preso na cotação,
+    // bloqueando a próxima compra do mesmo produto.
+    if(coCotacaoId && idsFechados.size){
+      try{
+        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`,'DELETE');
+      }catch(e){
+        toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e.message+' — use o ✕ da tag na lista de compras.','erro');
+      }
+    }
     await coSalvar(true);
     coRender();
     toast(`Grupo fechado ✓ — ${nItens} item(ns) em pedido(s) por fornecedor. Abra 📦 Pedidos.`,'sucesso');
@@ -4719,6 +4782,10 @@ async function hiCarregarLista(){
     if(!coFornecedores.length) coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[];
     // saldo de hoje: é o número que decide se a nota já entrou ou não
     try{ if(!Object.keys(saldosCache||{}).length) await carregarSaldos(); }catch(e){}
+    // quem controla lote: sem lote e validade a entrada é recusada
+    if(!rcControlaLote.size){
+      try{ rcControlaLote = new Set(((await sbFetch('materiais?select=id&controla_lote=eq.true&limit=500'))||[]).map(x=>x.id)); }catch(e){}
+    }
     hiNfs = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=500')) || [];
     const ids = hiNfs.map(n=>n.id);
     hiItensPorNf = {};
@@ -4843,7 +4910,9 @@ function hiRenderizarLista(){
               ${its2.length?(hiComEntrada.has(nf.id)
                 ? '<div style="font-size:10px;color:var(--verde);font-weight:700;margin-top:2px">✓ já entrou no estoque</div>'
                 : '<div style="font-size:10px;color:#D35400;font-weight:700;margin-top:2px">⚠ ainda não entrou no estoque</div>'):''}</div>
-            <div style="text-align:right"><b style="font-size:14px">${hiMoney(nf.valor_total)}</b>
+            <div style="text-align:right"><b style="font-size:14px">${(nf.valor_total===null||nf.valor_total===undefined||Number(nf.valor_total)===0) && its2.length
+                ? hiMoney(its2.reduce((a,x)=>a+(Number(x.valor_item)||0),0))+'<span style="font-size:9px;font-weight:600;color:var(--cinza-4);display:block">soma dos itens</span>'
+                : hiMoney(nf.valor_total)}</b>
               ${(its2.length && !hiComEntrada.has(nf.id))?`<div><button class="rc-btn-editar" style="padding:5px 9px;font-size:10px;margin-top:4px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button></div>`:''}
             </div></div>
           <div class="hi-corpo${(its2.length && !hiComEntrada.has(nf.id))?' aberto':''}" id="hi-corpo-${nf.id}" style="padding:0 16px 12px;background:var(--cinza-1)">
@@ -4973,19 +5042,28 @@ function hiSaldoDe(materialId){
 }
 
 function hiPainelEntrada(nf, its){
+  const hoje = new Date().toISOString().slice(0,10);
   const linhas = its.map(it=>{
     const saldo = hiSaldoDe(it.material_id);
     const depois = saldo===null ? null : saldo + (Number(it.qtd)||0);
+    const exigeLote = rcControlaLote.has(it.material_id);
     return `<tr>
       <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">
         <label style="display:flex;gap:7px;align-items:center;cursor:pointer">
           <input type="checkbox" class="hi-ent-chk" id="hi-ent-${nf.id}-${it.id}" data-item="${it.id}" checked>
-          <span>${rcNomeMaterial(it.material_id)}</span></label></td>
-      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
+          <span>${rcNomeMaterial(it.material_id)}</span></label>
+        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:${exigeLote?'var(--vermelho)':'var(--cinza-4)'}">${exigeLote?'🔒 lote e validade obrigatórios':'lote / validade (se houver)'}</span>
+          <input id="hi-lote-${nf.id}-${it.id}" placeholder="lote"
+                 style="width:110px;border:1px solid var(--cinza-2);border-radius:5px;padding:3px 6px;font-size:11px;font-family:var(--fonte)">
+          <input type="date" id="hi-val-${nf.id}-${it.id}" title="validade"
+                 style="border:1px solid var(--cinza-2);border-radius:5px;padding:3px 6px;font-size:11px;font-family:var(--fonte)">
+        </div></td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;vertical-align:top">
         <input type="number" step="any" id="hi-entq-${nf.id}-${it.id}" value="${it.qtd??''}"
                style="width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center;font-family:var(--fonte)"></td>
-      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;color:var(--cinza-5)">${saldo===null?'—':saldo}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;font-weight:800;color:var(--verde)">${depois===null?'—':depois}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;color:var(--cinza-5);vertical-align:top">${saldo===null?'—':saldo}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center;font-weight:800;color:var(--verde);vertical-align:top">${depois===null?'—':depois}</td>
     </tr>`;
   }).join('');
   return `<div id="hi-painel-${nf.id}" style="margin-top:12px;background:#fff;border:2px solid var(--verde);border-radius:10px;overflow:hidden">
@@ -4995,9 +5073,19 @@ function hiPainelEntrada(nf, its){
       (porque entrou no inventário ou na carga inicial), <b>não marque o item</b> — dar entrada de novo dobra a quantidade.
       Desmarque o que não chegou e ajuste a quantidade se veio parcial.
     </div>
+    <div style="padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--cinza-2)">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Data de entrega</label>
+        <input type="date" id="hi-nf-entrega-${nf.id}" value="${(nf.data_entrega||'').slice(0,10)||hoje}"
+               style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:210px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Forma de pagamento / vencimentos</label>
+        <input id="hi-nf-pgto-${nf.id}" placeholder="ex: boleto 28 dias · cartão · à vista" value="${(nf.vencimentos_obs||'').replace(/"/g,'&quot;')}"
+               style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>
+    </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
-        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Item que chegou</th>
+        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Item que chegou · lote e validade</th>
         <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd a entrar</th>
         <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Saldo hoje</th>
         <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Fica com</th>
@@ -5037,7 +5125,15 @@ async function hiDarEntrada(nfId){
     const qEl=document.getElementById(`hi-entq-${nfId}-${it.id}`);
     const qtd=qEl ? parseFloat(String(qEl.value).replace(',','.')) : Number(it.qtd);
     if(!qtd || qtd<=0){ toast(`Quantidade inválida em "${rcNomeMaterial(it.material_id)}".`,'erro'); return; }
-    escolhidos.push({ it, qtd });
+    const lote=((document.getElementById(`hi-lote-${nfId}-${it.id}`)||{}).value||'').trim();
+    const val =((document.getElementById(`hi-val-${nfId}-${it.id}`)||{}).value||'')||null;
+    // mesma regra do Receber NF: item que controla lote não entra sem lote e validade
+    if(rcControlaLote.has(it.material_id) && (!lote || !val)){
+      toast(`"${rcNomeMaterial(it.material_id)}" controla lote — preencha lote e validade antes de dar entrada.`,'erro');
+      const el=document.getElementById(`hi-lote-${nfId}-${it.id}`); if(el){ el.style.borderColor='var(--vermelho)'; el.focus(); }
+      return;
+    }
+    escolhidos.push({ it, qtd, lote, val });
   }
   if(!escolhidos.length){ toast('Marque ao menos um item que chegou.','erro'); return; }
   const resumo=escolhidos.slice(0,8).map(({it,qtd})=>{
@@ -5050,7 +5146,15 @@ async function hiDarEntrada(nfId){
     const localId=await getEstoqueGeralId();
     const agora=new Date().toISOString();
     let n=0;
-    for(const {it, qtd} of escolhidos){
+    for(const {it, qtd, lote, val} of escolhidos){
+      // o lote vem primeiro: quando o material controla lote, o gatilho de saldo
+      // consome por FEFO e precisa encontrar o lote já gravado
+      if(lote || val){
+        try{
+          await sbFetch('lotes','POST',{ material_id:it.material_id, lote:lote||'—', validade:val,
+            qtd:qtd, nf_item_id:it.id, status:'ativo' });
+        }catch(e){ toast('⚠ Lote não gravado ('+(lote||'—')+'): '+e.message,'erro'); }
+      }
       const mv=await sbFetch('movimentacoes','POST',{
         tipo:'ENTRADA_COMPRA', material_id:it.material_id, local_id:localId,
         qtd:qtd, valor_unitario:it.valor_unitario, nf_item_id:it.id,
@@ -5060,8 +5164,13 @@ async function hiDarEntrada(nfId){
       if(id){ await sbFetch(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora }); n++; }
       if(it.valor_unitario>0){ try{ await sbFetch(`materiais?id=eq.${it.material_id}`,'PATCH',{ ultimo_valor_pago:it.valor_unitario }); }catch(e){} }
     }
-    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ status:'ENTREGUE',
-      data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10) });
+    const entregaEl=(document.getElementById(`hi-nf-entrega-${nfId}`)||{}).value;
+    const pgtoEl=((document.getElementById(`hi-nf-pgto-${nfId}`)||{}).value||'').trim();
+    const patchNf={ status:'ENTREGUE',
+      data_entrega: entregaEl || nf.data_entrega || new Date().toISOString().slice(0,10) };
+    if(pgtoEl) patchNf.vencimentos_obs = pgtoEl;
+    try{ patchNf.confirmada = true; patchNf.confirmada_por = quem; patchNf.confirmada_em = new Date().toISOString(); }catch(e){}
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',patchNf);
     toast(`${n} item(ns) da NF ${rcNumNf(nf.numero_nf)} entraram no estoque ✓`,'sucesso');
     try{ await carregarSaldos(); }catch(e){}
     hiCarregarLista();
@@ -5626,7 +5735,13 @@ async function rcConfirmarEntrada(nfId){
     for(const m of movs){
       await sbFetch(`movimentacoes?id=eq.${m.id}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em:new Date().toISOString() });
     }
-    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ confirmada:true, confirmada_por:registrante, confirmada_em:new Date().toISOString() });
+    // sem isto a nota ficava presa em "AGUARDANDO ENTREGA" para sempre,
+    // mesmo com o estoque já somado — era o "não tirou do status anterior"
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{
+      confirmada:true, confirmada_por:registrante, confirmada_em:new Date().toISOString(),
+      status:'ENTREGUE',
+      data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10),
+    });
     toast(`✔ NF ${nf.numero_nf||''} confirmada — ${movs.length} entrada(s) no estoque.`,'sucesso');
     rcCarregar();
   }catch(e){ toast('Erro ao confirmar: '+e.message,'erro'); }
