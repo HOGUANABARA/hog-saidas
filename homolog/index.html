@@ -373,7 +373,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.6 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.7 · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil">👤 Equipe CC</div>
 </header>
@@ -3667,13 +3667,14 @@ function acEnviarParaCotacao(materialId, silencioso){
   if (r.fornecedor_padrao_id) op1.fornecedor_id = r.fornecedor_padrao_id;
   if (r.marca) op1.marca = r.marca;
   const cad = ccCadastro[r.material_id] || {};
-  coItens.push({
+  coItens.push(coContexto({
     id: null, material_id: r.material_id, material_nome: r.material,
     qtd_desejada: sug > 0 ? sug : null, saldo: Number(r.saldo)||0, minimo: Number(r.estoque_minimo)||0,
     descricao_nf: cad.descricao_nf || '',   // já vem do cadastro (vai no texto do WhatsApp)
     grupo: (typeof coGrupoAtual !== 'undefined' ? coGrupoAtual : 'Orçamento 1'),
     opcoes: [op1, coOpVazia(2), coOpVazia(3)]
-  });
+  }, { qtd_kit: cad.qtd_kit, unidade: cad.unidade_medida,
+       uc_valor: r.uc_valor_unitario, uc_data: r.uc_data, consumo: r.consumo_medio_mensal }));
   if (!silencioso && typeof coRender === 'function') coRender();
   if (!silencioso) toast(r.material + ' enviado para Cotação ✓','sucesso');
   return true;
@@ -3870,7 +3871,7 @@ function coDesfazerPuxada(){
     const q=this.value.trim(); if(q.length<2){ res.style.display='none'; return; }
     clearTimeout(coBuscaTimer); coBuscaTimer=setTimeout(async()=>{
       try{
-        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,marca,descricao_nf,fornecedor_padrao_id&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
+        const rows=await sbFetch(`materiais?select=id,nome,estoque_minimo,marca,descricao_nf,fornecedor_padrao_id,qtd_kit,unidade_medida,ultimo_valor_pago&nome=ilike.*${encodeURIComponent(q)}*&limit=12`);
         coBuscaRes=rows||[];
         res.innerHTML=(!rows||!rows.length)?'<div class="co-meta" style="justify-content:center">nada encontrado</div>'
           : rows.map((r,i)=>`<div onclick="coAddBusca(${i})"><span>${r.nome}</span><span class="co-meta">mín ${r.estoque_minimo??'—'}</span></div>`).join('');
@@ -3880,14 +3881,42 @@ function coDesfazerPuxada(){
   });
   document.addEventListener('click',e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.style.display='none'; });
 })();
-function coAddBusca(idx){
+async function coAddBusca(idx){
   const m=coBuscaRes[idx]; if(!m) return;
   if(coItens.find(x=>x.material_id===m.id)){ toast('Item já está na cotação.',''); return; }
-  coItens.push({ id:null, material_id:m.id, material_nome:m.nome, qtd_desejada:null,
-    saldo:null, minimo:m.estoque_minimo, grupo:coGrupoAtual, descricao_nf:m.descricao_nf||'',
-    opcoes:[coOpVazia(1),coOpVazia(2),coOpVazia(3)] });
+  // v4.7 — antes marca e fornecedor padrão eram buscados no banco e jogados
+  // fora, e o saldo entrava nulo. Agora tudo que o sistema sabe vem junto.
+  let saldo = null;
+  try{
+    const sc = await sbFetch(`vw_saldo_consolidado?select=saldo_total&material=eq.${encodeURIComponent(m.nome)}&limit=1`);
+    if(sc && sc.length) saldo = sc[0].saldo_total;
+  }catch(e){}
+  const linhaCC = (typeof ccDados!=='undefined' && ccDados) ? ccDados.find(x=>x.material_id===m.id) : null;
+  const op1 = coOpVazia(1);
+  if(m.fornecedor_padrao_id) op1.fornecedor_id = m.fornecedor_padrao_id;
+  if(m.marca) op1.marca = m.marca;
+  coItens.push(Object.assign(coContexto({
+    id:null, material_id:m.id, material_nome:m.nome, qtd_desejada:null,
+    saldo: saldo, minimo:m.estoque_minimo, grupo:coGrupoAtual, descricao_nf:m.descricao_nf||'',
+    opcoes:[op1,coOpVazia(2),coOpVazia(3)],
+  }, { qtd_kit:m.qtd_kit, unidade:m.unidade_medida, uc_valor:m.ultimo_valor_pago,
+       uc_data: linhaCC?linhaCC.uc_data:null, consumo: linhaCC?linhaCC.consumo_medio_mensal:null })));
   document.getElementById('co-busca').value=''; document.getElementById('co-busca-res').style.display='none';
   coRender(); toast(m.nome+' adicionado.','sucesso');
+}
+
+// junta ao item da cotação o que o sistema já sabe sobre ele
+function coContexto(item, extra){
+  const nome = (item.material_nome||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const f = (typeof ccFontes!=='undefined' && ccFontes) ? ccFontes[nome] : null;
+  item.qtd_kit = extra.qtd_kit ?? null;
+  item.unidade = extra.unidade ?? null;
+  item.uc_valor = extra.uc_valor ?? null;
+  item.uc_data = extra.uc_data ?? null;
+  item.consumo = extra.consumo ?? null;
+  item.marcas_conhecidas = f && f.marcas ? f.marcas : null;
+  item.forn_conhecidos = f && f.fornecedores ? f.fornecedores : null;
+  return item;
 }
 // mover item entre grupos pelo seletor (alternativa ao arrastar)
 function coMoverItem(i, destino){
@@ -4123,7 +4152,7 @@ function coCardOpcao(i, it, fid){
       : `<input placeholder="🏷️ marca oferecida" value="${o.marca||''}" oninput="coSetOp(${i},${fid},'marca',this.value)">
     <input placeholder="apresentação (ex: cx 6 fr)" value="${o.apresentacao||''}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)">
     <div class="co-op-row">
-      <input class="co-nn" type="number" step="any" placeholder="un/emb" value="${o.qtd_embalagem??''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)">
+      <input class="co-nn" type="number" step="any" placeholder="un/emb" title="vem da embalagem do cadastro quando existe" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)">
       <input class="co-nn" type="number" step="any" placeholder="preço total" value="${o.preco_total??''}" oninput="coSetOp(${i},${fid},'preco_total',this.value)">
     </div>
     <div class="co-op-row">
@@ -4142,6 +4171,12 @@ function coCardItem(i, it){
   const g = it.grupo||'Orçamento 1';
   const fids = coFornGrupo[g]||[];
   const info=[]; if(it.saldo!=null) info.push('saldo '+it.saldo); if(it.minimo!=null) info.push('mín '+it.minimo);
+  if(it.consumo) info.push('consumo/mês '+Math.round(it.consumo));
+  if(it.qtd_kit) info.push('embalagem '+it.qtd_kit+(it.unidade?' '+it.unidade:''));
+  const ctx=[];
+  if(it.uc_valor!=null) ctx.push('🧾 última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):''));
+  if(it.forn_conhecidos) ctx.push('🏪 '+it.forn_conhecidos);
+  if(it.marcas_conhecidas) ctx.push('🏷️ '+it.marcas_conhecidas);
   const ops = fids.length
     ? fids.map(fid=>coCardOpcao(i,it,fid)).join('')
     : '<div style="font-size:12px;color:var(--cinza-4);padding:8px">Adicione fornecedores ao grupo (acima) para abrir os cartões de orçamento.</div>';
@@ -4156,6 +4191,7 @@ function coCardItem(i, it){
         <button class="co-x" style="background:var(--azul-claro);color:var(--azul);border-color:var(--azul-claro)" onclick="coDevolverParaCompras(${i})" title="devolver para a lista de compras">↩ voltar</button>
         <button class="co-x" onclick="coRemoveItem(${i})" title="tirar item">✕ tirar</button></div>
     </div>
+    ${ctx.length?`<div style="padding:7px 14px 0;font-size:11px;color:var(--cinza-5);line-height:1.6">${ctx.join('<br>')}</div>`:''}
     <div style="padding:6px 14px 0;font-size:11px;color:var(--cinza-4)">📄 Descrição NF (vai no WhatsApp):
       <input style="width:min(420px,92%);border:1px dashed var(--cinza-3);border-radius:6px;padding:3px 7px;font-size:11px;font-family:var(--fonte)" value="${it.descricao_nf||''}" oninput="coSetItem(${i},'descricao_nf',this.value)"></div>
     <div class="co-ops">${ops}</div>
@@ -4754,7 +4790,10 @@ async function deCancelarPedido(pid){
 let hiNfs = [];
 let hiItensPorNf = {};
 let hiPedidos = [];
-let hiComEntrada = new Set();   // nf_id que já geraram movimentação de estoque
+let hiComEntrada = new Set();   // nf_id que já geraram movimentação de estoque APROVADA
+let hiLotesPorItem = {};       // nf_item_id -> [{lote, validade, qtd}]
+let hiOrdens = [];             // ordens de pedidos, para saber o que já foi recebido
+let hiFiltroStatus = 'TODOS';  // chip de situação
 let hiVisao = 'nota';          // 'nota' | 'produto'
 function hiSetVisao(v){
   hiVisao=v;
@@ -4797,6 +4836,17 @@ async function hiCarregarLista(){
       }
     }
     try{ hiPedidos = (await sbFetch('pedidos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ hiPedidos=[]; }
+    try{ hiOrdens = (await sbFetch('ordens_compra?select=id,pedido_id,material_id,situacao,qtd_a_comprar,qtd_comprada&pedido_id=not.is.null&limit=2000'))||[]; }catch(e){ hiOrdens=[]; }
+    // lote e validade por item, para a coluna do histórico
+    hiLotesPorItem = {};
+    try{
+      const idsItens = Object.values(hiItensPorNf).flat().map(x=>x.id);
+      for(let i=0;i<idsItens.length;i+=200){
+        const lote = idsItens.slice(i,i+200);
+        const ls = (await sbFetch(`lotes?select=id,nf_item_id,lote,validade,qtd,status&nf_item_id=in.(${lote.join(',')})&limit=3000`))||[];
+        for(const l of ls) (hiLotesPorItem[l.nf_item_id]=hiLotesPorItem[l.nf_item_id]||[]).push(l);
+      }
+    }catch(e){}
     // quais notas já movimentaram o estoque (movimentação ligada ao item da NF)
     hiComEntrada=new Set();
     try{
@@ -4841,6 +4891,44 @@ const HI_STATUS = {
 };
 function hiStatusInfo(s){ return HI_STATUS[(s||'').toUpperCase()] || { rot:(s||'—'), cor:'var(--cinza-4)', bg:'var(--cinza-1)' }; }
 
+function hiFreteDe(nf, its){
+  const f = Number(nf.frete);
+  if(!isNaN(f) && f > 0) return f;
+  // as notas da planilha não têm coluna de frete: deduz pela diferença entre o
+  // valor da nota e a soma dos itens (o dash antigo fazia assim)
+  const soma = (its||[]).reduce((a,x)=>a+(Number(x.valor_item)||0),0);
+  const tot = Number(nf.valor_total);
+  if(!isNaN(tot) && tot > 0 && soma > 0){
+    const dif = Math.round((tot - soma)*100)/100;
+    if(dif > 0.05) return dif;
+  }
+  return 0;
+}
+function hiTotalItens(its){ return (its||[]).reduce((a,x)=>a+(Number(x.valor_item)||0),0); }
+function hiLoteTxt(itemId){
+  const ls = (hiLotesPorItem||{})[itemId] || [];
+  if(!ls.length) return '';
+  return ls.map(l=>`${l.lote&&l.lote!=='—'?l.lote:'(sem nº)'}${l.validade?' · val '+hiData(l.validade):''}${l.qtd?' ('+l.qtd+')':''}`).join('<br>');
+}
+// situação real da nota: o que decide o que aparece e o que pode ser feito
+function hiSituacao(nf){
+  const its = hiItensPorNf[nf.id]||[];
+  const st = (nf.status||'ENTREGUE').toUpperCase();
+  if(st==='DEVOLVIDO') return 'DEVOLVIDO';
+  if(nf.entrada_dispensada) return 'DISPENSADA';
+  if(its.length && hiComEntrada.has(nf.id)) return 'ENTREGUE';
+  if(its.length) return 'SEM ENTRADA';
+  return st==='AGUARDANDO ENTREGA' ? 'AGUARDANDO ENTREGA' : 'ENTREGUE';
+}
+const HI_BADGE = {
+  'ENTREGUE':           { rot:'✅ Entregue',                cor:'var(--verde)',    bg:'#EAF7EE', borda:'#A9DFBF' },
+  'SEM ENTRADA':        { rot:'⚠️ Sem entrada no estoque',  cor:'#D35400',         bg:'#FDF2E9', borda:'#EDBB99' },
+  'DISPENSADA':         { rot:'✓ Saldo no estoque inicial', cor:'var(--cinza-5)',  bg:'var(--cinza-1)', borda:'var(--cinza-2)' },
+  'AGUARDANDO ENTREGA': { rot:'🚚 Aguardando entrega',      cor:'#D35400',         bg:'#FDF2E9', borda:'#EDBB99' },
+  'DEVOLVIDO':          { rot:'↩️ Devolvido',               cor:'var(--vermelho)', bg:'#FDEDEC', borda:'var(--vermelho)' },
+};
+function hiSetStatus(s){ hiFiltroStatus = (hiFiltroStatus===s ? 'TODOS' : s); hiRenderizarLista(); }
+
 function hiRenderizarLista(){
   if(hiVisao==='produto') return hiRenderPorProduto();
   const div = document.getElementById('hi-lista');
@@ -4849,95 +4937,157 @@ function hiRenderizarLista(){
     document.getElementById('hi-resumo').textContent='';
     return;
   }
-  const lista = hiFiltrar();
-  // pedidos aprovados que ainda não viraram NF entram como "aguardando"
+  let lista = hiFiltrar();
   const termo = hiNorm((document.getElementById('hi-busca')||{}).value);
+
+  // ── pedidos aprovados: aguardando NF, recebidos em parte, ou prontos para encerrar
   const pedAguard = (hiPedidos||[]).filter(p=>{
     if(!['APROVADO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'].includes(p.status)) return false;
     if(!termo) return true;
     return hiNorm(rcNomeFornecedor(p.fornecedor_id)).includes(termo) || hiNorm('pedido '+p.id).includes(termo);
+  }).map(p=>{
+    const ords = (hiOrdens||[]).filter(o=>Number(o.pedido_id)===Number(p.id));
+    const pend = ords.filter(o=>(o.situacao||'')==='PENDENTE');
+    let sit = 'SEM_NF';
+    if(ords.length && !pend.length) sit = 'TUDO_RECEBIDO';
+    else if(ords.length && pend.length < ords.length) sit = 'PARCIAL';
+    return { pedido:p, ords, pend, sit };
   });
 
-  // agrupa por mês
+  // ── contagens por situação, antes do filtro de chip
+  const cont = { ENTREGUE:0, 'SEM ENTRADA':0, DISPENSADA:0, 'AGUARDANDO ENTREGA':0, DEVOLVIDO:0 };
+  let valEntregue=0, valSemEntrada=0;
+  for(const nf of lista){
+    const s = hiSituacao(nf);
+    cont[s] = (cont[s]||0)+1;
+    const its = hiItensPorNf[nf.id]||[];
+    const tot = hiTotalItens(its) || Number(nf.valor_total)||0;
+    if(s==='ENTREGUE') valEntregue += tot;
+    if(s==='SEM ENTRADA') valSemEntrada += tot;
+  }
+  if(hiFiltroStatus && hiFiltroStatus!=='TODOS') lista = lista.filter(nf=>hiSituacao(nf)===hiFiltroStatus);
+
+  // ── resumo + chips
+  const nItens = lista.reduce((a,nf)=>a+((hiItensPorNf[nf.id]||[]).length),0);
+  const totalGeral = lista.reduce((a,nf)=>a+(hiTotalItens(hiItensPorNf[nf.id]||[]) || Number(nf.valor_total)||0),0);
+  const chip = (s, rot, n) => `<button onclick="hiSetStatus('${s}')" style="border:1.5px solid ${hiFiltroStatus===s?'transparent':'var(--cinza-2)'};background:${hiFiltroStatus===s?(HI_BADGE[s]?HI_BADGE[s].cor:'var(--azul-medio)'):'#fff'};color:${hiFiltroStatus===s?'#fff':'var(--cinza-5)'};border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--fonte)">${rot}${n?' ('+n+')':''}</button>`;
+  document.getElementById('hi-resumo').innerHTML =
+    `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px">
+      <span><b>${lista.length}</b> nota(s) · <b>${nItens}</b> item(ns) · total <b>${hiMoney(totalGeral)}</b></span>
+      <span style="font-size:11.5px;color:var(--cinza-4)">✅ ${hiMoney(valEntregue)} no estoque · ⚠️ ${hiMoney(valSemEntrada)} sem entrada</span>
+      ${pedAguard.length?`<span style="font-size:11.5px;color:var(--azul);font-weight:700">${pedAguard.length} pedido(s) em andamento</span>`:''}
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${chip('TODOS','Todas', lista.length===hiNfs.length?0:hiNfs.length)}
+      ${chip('SEM ENTRADA','⚠️ Sem entrada', cont['SEM ENTRADA'])}
+      ${chip('ENTREGUE','✅ No estoque', cont['ENTREGUE'])}
+      ${cont['DISPENSADA']?chip('DISPENSADA','✓ Estoque inicial', cont['DISPENSADA']):''}
+      ${cont['AGUARDANDO ENTREGA']?chip('AGUARDANDO ENTREGA','🚚 Aguardando', cont['AGUARDANDO ENTREGA']):''}
+      ${cont['DEVOLVIDO']?chip('DEVOLVIDO','↩️ Devolvidas', cont['DEVOLVIDO']):''}
+    </div>`;
+
+  // ── cards de pedido em andamento, antes dos meses
+  let htmlPed = '';
+  if(pedAguard.length && (!hiFiltroStatus || hiFiltroStatus==='TODOS')){
+    htmlPed = pedAguard.map(x=>{
+      const p = x.pedido;
+      const rot = x.sit==='TUDO_RECEBIDO' ? '<span style="color:var(--verde);font-weight:800">✔ tudo recebido — pode encerrar</span>'
+                : x.sit==='PARCIAL' ? `<span style="color:#D35400;font-weight:800">📦 recebido em parte — faltam ${x.pend.length} de ${x.ords.length} item(ns)</span>`
+                : '<span style="color:var(--azul);font-weight:700">aguardando NF</span>';
+      return `<div class="hi-card" style="padding:12px 16px;margin-bottom:10px;border-left:4px solid var(--azul);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div><b style="font-size:13.5px">Pedido #${p.id}</b> · ${rcNomeFornecedor(p.fornecedor_id)}
+          <div style="font-size:11px;color:var(--cinza-4)">aprovado ${hiData(p.aprovado_em)}${p.prazo_previsto?' · prazo '+p.prazo_previsto:''}${p.pedido_por?' · '+p.pedido_por:''}</div></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${rot}
+          ${x.sit==='TUDO_RECEBIDO'?`<button class="rc-btn-editar" style="padding:6px 11px;font-size:11.5px" onclick="hiEncerrarPedido(${p.id})">✔ Encerrar pedido</button>`:''}
+        </div></div>`;
+    }).join('');
+  }
+
+  if(!lista.length && !htmlPed){ div.innerHTML='<div class="hi-empty">Nada encontrado com esse filtro.</div>'; return; }
+
+  // ── agrupa por mês
   const meses = {};
   for(const nf of lista){
     const d=((nf.data_entrega||nf.data_emissao||'')+'').slice(0,10);
-    const m=d?d.slice(0,7):'sem data';
-    (meses[m]=meses[m]||{nfs:[],peds:[],total:0})['nfs'].push(nf);
-    if((nf.status||'').toUpperCase()!=='DEVOLVIDO') meses[m].total+=Number(nf.valor_total)||0;
+    const mes = d ? d.slice(0,7) : 'sem data';
+    if(!meses[mes]) meses[mes]={ nfs:[], total:0 };
+    meses[mes].nfs.push(nf);
+    meses[mes].total += hiTotalItens(hiItensPorNf[nf.id]||[]) || Number(nf.valor_total)||0;
   }
-  for(const p of pedAguard){
-    const d=((p.aprovado_em||p.created_at||'')+'').slice(0,10);
-    const m=d?d.slice(0,7):'sem data';
-    (meses[m]=meses[m]||{nfs:[],peds:[],total:0})['peds'].push(p);
-  }
-  const ordem=Object.keys(meses).sort().reverse();
-  const totalGeral=ordem.reduce((s,m)=>s+meses[m].total,0);
-  const nNfs=lista.length;
-  document.getElementById('hi-resumo').innerHTML =
-    `<b>${nNfs}</b> nota(s) em <b>${ordem.length}</b> mês(es) · total comprado <b>${hiMoney(totalGeral)}</b>${pedAguard.length?` · <span style="color:var(--azul)">${pedAguard.length} pedido(s) sem NF</span>`:''}${nNfs!==hiNfs.length?` <span style="color:var(--azul)">(filtrado de ${hiNfs.length})</span>`:''}`;
-  if(!ordem.length){ div.innerHTML='<div class="hi-empty">Nada encontrado com esse filtro.</div>'; return; }
+  const ordem = Object.keys(meses).sort().reverse();
 
-  div.innerHTML = ordem.map(mes=>{
-    const g=meses[mes];
-    // separa por status
-    const porStatus={};
-    for(const nf of g.nfs){
-      let st=(nf.status||'ENTREGUE').toUpperCase();
-      const its=hiItensPorNf[nf.id]||[];
-      // nota com itens que ainda não movimentaram o estoque = aguardando entrada
-      if(st==='ENTREGUE' && its.length && !hiComEntrada.has(nf.id)) st='SEM ENTRADA';
-      (porStatus[st]=porStatus[st]||[]).push({tipo:'nf', o:nf});
-    }
-    if(g.peds.length) porStatus['PEDIDO']=g.peds.map(p=>({tipo:'ped', o:p}));
-    const blocos=Object.keys(porStatus).sort().map(st=>{
-      const i=hiStatusInfo(st), its=porStatus[st];
-      const soma=its.reduce((s,x)=>s+(x.tipo==='nf'?(Number(x.o.valor_total)||0):0),0);
-      const linhas=its.map(x=>{
-        if(x.tipo==='ped'){
-          const p=x.o;
-          return `<div style="padding:9px 14px;border-bottom:1px solid var(--cinza-1);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-            <div><b style="font-size:13px">Pedido #${p.id}</b> · ${rcNomeFornecedor(p.fornecedor_id)}
-              <div style="font-size:11px;color:var(--cinza-4)">aprovado ${hiData(p.aprovado_em)}${p.prazo_previsto?' · prazo '+p.prazo_previsto:''}${p.pedido_por?' · '+p.pedido_por:''}</div></div>
-            <span style="font-size:11px;color:var(--azul);font-weight:700">aguardando NF</span></div>`;
-        }
-        const nf=x.o, its2=hiItensPorNf[nf.id]||[];
-        return `<div style="border-bottom:1px solid var(--cinza-1)">
-          <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="hiToggle(${nf.id})">
-            <div><b style="font-size:13px">NF ${rcNumNf(nf.numero_nf)}</b> · ${rcNomeFornecedor(nf.fornecedor_id)}
-              ${nf.origem==='PLANILHA'?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:1px 6px;border-radius:10px;margin-left:5px">planilha</span>':''}
-              <div style="font-size:11px;color:var(--cinza-4)">entrega ${hiData(nf.data_entrega)} · ${its2.length} item(ns)${nf.vencimentos_obs?' · '+nf.vencimentos_obs:''}</div>
-              ${its2.length?(hiComEntrada.has(nf.id)
-                ? '<div style="font-size:10px;color:var(--verde);font-weight:700;margin-top:2px">✓ já entrou no estoque</div>'
-                : '<div style="font-size:10px;color:#D35400;font-weight:700;margin-top:2px">⚠ ainda não entrou no estoque</div>'):''}</div>
-            <div style="text-align:right"><b style="font-size:14px">${(nf.valor_total===null||nf.valor_total===undefined||Number(nf.valor_total)===0) && its2.length
-                ? hiMoney(its2.reduce((a,x)=>a+(Number(x.valor_item)||0),0))+'<span style="font-size:9px;font-weight:600;color:var(--cinza-4);display:block">soma dos itens</span>'
-                : hiMoney(nf.valor_total)}</b>
-              ${(its2.length && !hiComEntrada.has(nf.id))?`<div><button class="rc-btn-editar" style="padding:5px 9px;font-size:10px;margin-top:4px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button></div>`:''}
-            </div></div>
-          <div class="hi-corpo${(its2.length && !hiComEntrada.has(nf.id))?' aberto':''}" id="hi-corpo-${nf.id}" style="padding:0 16px 12px;background:var(--cinza-1)">
-            <table style="width:100%;border-collapse:collapse;font-size:12px">
-              <thead><tr><th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
-              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
+  div.innerHTML = htmlPed + ordem.map(mes=>{
+    const g = meses[mes];
+    const cards = g.nfs.map(nf=>{
+      const its = hiItensPorNf[nf.id]||[];
+      const sit = hiSituacao(nf);
+      const b = HI_BADGE[sit] || HI_BADGE['ENTREGUE'];
+      const frete = hiFreteDe(nf, its);
+      const somaItens = hiTotalItens(its);
+      const totalNota = (somaItens || Number(nf.valor_total)||0);
+      const semNum = !nf.numero_nf || /^(nan|null|—)$/i.test(String(nf.numero_nf).trim());
+      const podeEntrar = its.length && sit==='SEM ENTRADA';
+      const aberto = podeEntrar;
+
+      const linhas = its.map(it=>{
+        const lote = hiLoteTxt(it.id);
+        return `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">${it.qtd??'—'}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(it.valor_unitario)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:10.5px;color:${lote?'var(--cinza-5)':'var(--cinza-3)'}">${lote||'—'}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>';
+
+      return `<div style="border:1px solid var(--cinza-2);border-radius:9px;margin-bottom:9px;overflow:hidden;background:#fff">
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;cursor:pointer;background:${b.bg}" onclick="hiToggle(${nf.id})">
+          <div style="flex:1;min-width:250px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:10px;font-weight:800;border:1px solid ${b.borda};color:${b.cor};background:#fff;border-radius:10px;padding:2px 8px;white-space:nowrap">${b.rot}</span>
+              <b style="font-size:13.5px">🏢 ${rcNomeFornecedor(nf.fornecedor_id)}</b>
+              ${nf.origem==='PLANILHA'?'<span style="font-size:9px;font-weight:700;background:#FEF9E7;color:#B7950B;border:1px solid #F9E79F;padding:1px 6px;border-radius:10px">planilha</span>':''}
+            </div>
+            <div style="font-size:11.5px;color:var(--cinza-5);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
+              <span>📋 ${semNum?'<b style="color:#D35400">Pedido em andamento</b>':'NF <b>'+rcNumNf(nf.numero_nf)+'</b>'}</span>
+              <span>📅 Emissão <b>${hiData(nf.data_emissao)}</b></span>
+              <span>🚚 ${nf.data_entrega?('Entrega <b>'+hiData(nf.data_entrega)+'</b>'):'<b style="color:#D35400">Aguardando entrega</b>'}</span>
+              <span>📦 ${its.length} ${its.length===1?'item':'itens'}</span>
+              ${nf.mes_referencia?`<span>📆 ${nf.mes_referencia}</span>`:''}
+            </div>
+            ${nf.vencimentos_obs?`<div style="margin-top:5px;font-size:11.5px;color:var(--azul);background:var(--azul-claro);border-radius:6px;padding:4px 9px;display:inline-block">💳 ${nf.vencimentos_obs}</div>`:''}
+            ${nf.entrada_dispensada&&nf.entrada_dispensada_motivo?`<div style="margin-top:5px;font-size:11px;color:var(--cinza-4)">🛈 ${nf.entrada_dispensada_motivo}</div>`:''}
+          </div>
+          <div style="text-align:right">
+            <b style="font-size:15px">${hiMoney(totalNota)}</b>
+            ${(!Number(nf.valor_total) && somaItens)?'<div style="font-size:9px;color:var(--cinza-4)">soma dos itens</div>':''}
+            ${frete>0?`<div style="font-size:11px;color:var(--azul-medio);font-weight:700">🚛 Frete ${hiMoney(frete)} · c/ frete ${hiMoney(totalNota+frete)}</div>`:''}
+            <div style="margin-top:5px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+              ${podeEntrar?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button>`:''}
+              ${(podeEntrar && nf.origem==='PLANILHA')?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px" onclick="event.stopPropagation();hiDispensar(${nf.id})" title="O saldo desta compra já está no estoque inicial">✓ já está no estoque</button>`:''}
+            </div>
+          </div>
+        </div>
+        <div class="hi-corpo${aberto?' aberto':''}" id="hi-corpo-${nf.id}" style="padding:0 14px 12px;background:var(--cinza-1)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr>
+              <th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
+              <th style="text-align:center;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
               <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Unit.</th>
-              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Total</th><th></th></tr></thead>
-              <tbody>${its2.map(it=>`<tr>
-                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}</td>
-                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.qtd??'—'}</td>
-                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(it.valor_unitario)}</td>
-                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
-                <td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
-              </tr>`).join('')||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>'}</tbody>
-            </table>
-            ${(its2.length && !hiComEntrada.has(nf.id)) ? hiPainelEntrada(nf, its2) : ''}
-            <div style="text-align:right;margin-top:8px"><button class="rc-btn-editar" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button></div>
-          </div></div>`;
-      }).join('');
-      return `<details ${st==='ENTREGUE'?'':'open'} style="margin-bottom:6px">
-        <summary style="cursor:pointer;list-style:none;padding:9px 14px;background:${i.bg};color:${i.cor};font-size:12px;font-weight:800;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
-          <span>${i.rot} — ${its.length}</span><span>${soma?hiMoney(soma):''} ▾</span></summary>
-        <div style="background:#fff;border:1px solid var(--cinza-2);border-top:none;border-radius:0 0 6px 6px">${linhas}</div>
-      </details>`;
+              <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Total</th>
+              <th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Lote / validade</th>
+              <th></th></tr></thead>
+            <tbody>${linhas}</tbody>
+            <tfoot>
+              ${frete>0?`<tr><td colspan="3" style="padding:6px 8px;color:var(--azul-medio);font-weight:700">🚛 Frete</td><td style="padding:6px 8px;text-align:right;color:var(--azul-medio);font-weight:700">${hiMoney(frete)}</td><td colspan="2"></td></tr>`:''}
+              <tr><td colspan="3" style="padding:7px 8px;font-weight:800;border-top:1.5px solid var(--cinza-3)">TOTAL DA NF</td>
+                  <td style="padding:7px 8px;text-align:right;font-weight:800;border-top:1.5px solid var(--cinza-3)">${hiMoney(totalNota+frete)}</td><td colspan="2" style="border-top:1.5px solid var(--cinza-3)"></td></tr>
+            </tfoot>
+          </table>
+          ${podeEntrar ? hiPainelEntrada(nf, its) : ''}
+          <div style="text-align:right;margin-top:8px"><button class="rc-btn-editar" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();hiCorrigirNf(${nf.id})">✎ Corrigir dados da nota</button></div>
+        </div></div>`;
     }).join('');
 
     return `<div class="hi-card" style="padding:0;overflow:visible">
@@ -4945,10 +5095,43 @@ function hiRenderizarLista(){
         <span style="font-size:14px;font-weight:800;text-transform:capitalize">📅 ${mes==='sem data'?'Sem data':hiMesLabel(mes)}</span>
         <span style="font-size:15px;font-weight:800">${hiMoney(g.total)}<span style="font-size:11px;font-weight:600;opacity:.8"> · ${g.nfs.length} nota(s)</span></span>
       </div>
-      <div style="padding:12px 14px">${blocos}</div>
+      <div style="padding:12px 14px">${cards}</div>
     </div>`;
   }).join('');
 }
+
+// ── encerrar pedido que já recebeu tudo, sem precisar de SQL ───────────────
+async function hiEncerrarPedido(pid){
+  const x = (hiPedidos||[]).find(p=>Number(p.id)===Number(pid)); if(!x) return;
+  const ords = (hiOrdens||[]).filter(o=>Number(o.pedido_id)===Number(pid));
+  const pend = ords.filter(o=>(o.situacao||'')==='PENDENTE');
+  if(pend.length){ toast('Este pedido ainda tem '+pend.length+' item(ns) pendente(s) — não dá para encerrar.','erro'); return; }
+  if(!confirm(`Encerrar o pedido #${pid} (${rcNomeFornecedor(x.fornecedor_id)})?\n\nTodos os ${ords.length} item(ns) já saíram de pendente. Isso só muda o status do pedido — não mexe em estoque nem em nota.`)) return;
+  try{
+    await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CONCLUIDO',
+      observacao: ((x.observacao||'')+' | Encerrado na tela em '+new Date().toLocaleDateString('pt-BR')).trim() });
+    toast('Pedido #'+pid+' encerrado ✓','sucesso');
+    hiCarregarLista();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ── nota cujo saldo já veio no estoque inicial: dispensa a entrada ─────────
+async function hiDispensar(nfId){
+  const nf = hiNfs.find(n=>n.id===nfId); if(!nf) return;
+  if(!confirm(`Marcar a NF ${rcNumNf(nf.numero_nf)} como já contida no estoque?\n\nUse isto quando a quantidade desta compra já está no saldo porque veio do estoque inicial da importação ou de uma contagem de inventário.\n\nO botão de dar entrada desaparece e o motivo fica registrado na nota. Nenhuma movimentação é criada.`)) return;
+  const motivo = prompt('Por que a entrada é dispensada?',
+    nf.origem==='PLANILHA' ? 'Saldo já contido no estoque inicial da importação de 21/07/2026' : 'Saldo já contabilizado no inventário');
+  if(motivo===null) return;
+  try{
+    await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{ entrada_dispensada:true,
+      entrada_dispensada_motivo: (motivo||'').trim() || 'Saldo já contabilizado' });
+    toast('Entrada dispensada — a nota fica no histórico com o motivo. ✓','sucesso');
+    hiCarregarLista();
+  }catch(e){
+    toast('O banco ainda não tem a coluna entrada_dispensada — rode o v47_dispensa_entrada.sql. ('+e.message+')','erro');
+  }
+}
+
 // visão por PRODUTO — o que foi comprado, de quem, quando e por quanto
 function hiRenderPorProduto(){
   const div=document.getElementById('hi-lista');
@@ -5075,6 +5258,10 @@ function hiPainelEntrada(nf, its){
     </div>
     <div style="padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--cinza-2)">
       <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Nº da NF</label>
+        <input id="hi-nf-num-${nf.id}" placeholder="número da nota" value="${(!nf.numero_nf||/^(nan|null)$/i.test(String(nf.numero_nf).trim()))?'':String(nf.numero_nf).replace(/"/g,'&quot;')}"
+               style="width:130px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Data de entrega</label>
         <input type="date" id="hi-nf-entrega-${nf.id}" value="${(nf.data_entrega||'').slice(0,10)||hoje}"
                style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>
@@ -5166,9 +5353,11 @@ async function hiDarEntrada(nfId){
     }
     const entregaEl=(document.getElementById(`hi-nf-entrega-${nfId}`)||{}).value;
     const pgtoEl=((document.getElementById(`hi-nf-pgto-${nfId}`)||{}).value||'').trim();
+    const numEl=((document.getElementById(`hi-nf-num-${nfId}`)||{}).value||'').trim();
     const patchNf={ status:'ENTREGUE',
       data_entrega: entregaEl || nf.data_entrega || new Date().toISOString().slice(0,10) };
     if(pgtoEl) patchNf.vencimentos_obs = pgtoEl;
+    if(numEl) patchNf.numero_nf = numEl;
     try{ patchNf.confirmada = true; patchNf.confirmada_por = quem; patchNf.confirmada_em = new Date().toISOString(); }catch(e){}
     await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',patchNf);
     toast(`${n} item(ns) da NF ${rcNumNf(nf.numero_nf)} entraram no estoque ✓`,'sucesso');
@@ -5192,20 +5381,170 @@ async function hiCorrigirItem(itemId, nfId){
     hiCarregarLista();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
-async function hiCorrigirNf(nfId){
+// ── v4.7 · CORRIGIR A NOTA NUM PAINEL, NÃO EM QUATRO PROMPTS ──────────────
+// Antes eram quatro prompt() em sequência: cancelar em um perdia os anteriores,
+// não dava para ver os valores atuais juntos, faltavam emissão, frete e
+// fornecedor — e lote e validade não existiam em tela nenhuma do app.
+let hiCorrForn = {};   // nfId -> fornecedor_id escolhido no painel
+
+function hiCorrigirNf(nfId){
   const nf = hiNfs.find(n=>n.id===nfId); if(!nf) return;
-  const num = prompt('Número da NF:', nf.numero_nf||''); if(num===null) return;
-  const ent = prompt('Data de entrega (aaaa-mm-dd):', (nf.data_entrega||'').slice(0,10)); if(ent===null) return;
-  const tot = prompt('Valor total da nota (R$):', nf.valor_total??''); if(tot===null) return;
-  const obs = prompt('Vencimentos / observação:', nf.vencimentos_obs||''); if(obs===null) return;
-  const body={ numero_nf:num.trim()||null, vencimentos_obs:obs.trim()||null };
-  if(ent.trim()) body.data_entrega=ent.trim();
-  const t=parseFloat(String(tot).replace(',','.')); if(!isNaN(t)) body.valor_total=t;
+  const its = hiItensPorNf[nfId]||[];
+  const corpo = document.getElementById('hi-corpo-'+nfId);
+  if(!corpo) return;
+  corpo.classList.add('aberto');
+  const jaTem = document.getElementById('hi-corr-'+nfId);
+  if(jaTem){ jaTem.remove(); hiCorrForn[nfId]=undefined; return; }   // clicou de novo: fecha
+
+  hiCorrForn[nfId] = nf.fornecedor_id || null;
+  const frete = (nf.frete===null||nf.frete===undefined||nf.frete==='') ? '' : Number(nf.frete);
+  const campo = (rot, id, val, tipo, larg) =>
+    `<div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">${rot}</label>
+      <input ${tipo?`type="${tipo}"`:''} id="${id}" value="${val==null?'':String(val).replace(/"/g,'&quot;')}"
+             style="width:${larg||'130px'};border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>`;
+
+  const linhas = its.map(it=>{
+    const lotes = (hiLotesPorItem[it.id]||[]);
+    const l0 = lotes[0] || null;
+    const exige = rcControlaLote.has(it.material_id);
+    return `<tr>
+      <td style="padding:7px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}
+        ${exige?'<span style="font-size:9px;font-weight:700;color:var(--vermelho);display:block">controla lote</span>':''}
+        ${lotes.length>1?`<span style="font-size:9.5px;color:var(--cinza-4);display:block">tem ${lotes.length} lotes — aqui você edita o primeiro; os outros pela planilha de saldo</span>`:''}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
+        <input type="number" step="any" id="hi-cq-${nfId}-${it.id}" value="${it.qtd??''}"
+               style="width:72px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center;font-family:var(--fonte)"></td>
+      <td style="padding:7px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
+        <input type="number" step="0.01" id="hi-cv-${nfId}-${it.id}" value="${it.valor_unitario??''}"
+               style="width:88px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center;font-family:var(--fonte)"></td>
+      <td style="padding:7px 8px;border-bottom:1px solid var(--cinza-2)">
+        <input id="hi-cl-${nfId}-${it.id}" placeholder="lote" value="${l0&&l0.lote&&l0.lote!=='—'?String(l0.lote).replace(/"/g,'&quot;'):''}"
+               data-lote-id="${l0?l0.id:''}"
+               style="width:118px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;font-family:var(--fonte)"></td>
+      <td style="padding:7px 8px;border-bottom:1px solid var(--cinza-2)">
+        <input type="date" id="hi-cd-${nfId}-${it.id}" value="${l0&&l0.validade?String(l0.validade).slice(0,10):''}"
+               style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;font-family:var(--fonte)"></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--cinza-4)">esta nota não tem itens detalhados</td></tr>';
+
+  const html = `<div id="hi-corr-${nfId}" style="margin-top:12px;background:#fff;border:2px solid var(--azul-medio);border-radius:10px;overflow:hidden">
+    <div style="background:var(--azul-medio);color:#fff;padding:9px 14px;font-size:12.5px;font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>✎ Corrigir a nota inteira</span>
+      <span style="font-size:10.5px;font-weight:600;opacity:.9">nada é salvo até você clicar em Salvar</span></div>
+    <div style="padding:11px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--cinza-2)">
+      ${campo('Nº da NF','hi-cn-'+nfId, (!nf.numero_nf||/^(nan|null)$/i.test(String(nf.numero_nf).trim()))?'':nf.numero_nf)}
+      ${campo('Emissão','hi-ce-'+nfId,(nf.data_emissao||'').slice(0,10),'date')}
+      ${campo('Entrega','hi-ct-'+nfId,(nf.data_entrega||'').slice(0,10),'date')}
+      ${campo('Valor total (R$)','hi-cvt-'+nfId, nf.valor_total??'','number','120px')}
+      ${campo('Frete (R$)','hi-cf-'+nfId, (frete===''||isNaN(frete))?'':frete,'number','100px')}
+      ${campo('Mês de referência','hi-cm-'+nfId, nf.mes_referencia||'', '', '110px')}
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Forma de pagamento / vencimentos</label>
+        <input id="hi-co-${nfId}" value="${(nf.vencimentos_obs||'').replace(/"/g,'&quot;')}"
+               style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Fornecedor</label>
+        <button class="rc-btn-editar" id="hi-cfo-${nfId}" style="padding:8px 11px;font-size:12px" onclick="hiTrocarFornecedor(${nfId})">🏪 ${rcNomeFornecedor(nf.fornecedor_id)}</button></div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>
+        <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>
+        <th style="text-align:center;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Valor unit.</th>
+        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Lote</th>
+        <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Validade</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div style="padding:11px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--cinza-1)">
+      <span style="font-size:11px;color:var(--cinza-5)">Corrigir aqui <b>não</b> move o saldo do estoque — só arruma o cadastro da nota, os itens e os lotes.</span>
+      <button class="rc-btn-editar" style="margin-left:auto;padding:8px 12px;font-size:12px" onclick="document.getElementById('hi-corr-${nfId}').remove()">Cancelar</button>
+      <button class="rc-confirmar" style="padding:8px 14px;font-size:12.5px" onclick="hiSalvarCorrecao(${nfId})">💾 Salvar correções</button>
+    </div>
+  </div>`;
+
+  const painel = document.getElementById('hi-painel-'+nfId);
+  if(painel) painel.insertAdjacentHTML('afterend', html);
+  else corpo.insertAdjacentHTML('beforeend', html);
+  document.getElementById('hi-corr-'+nfId).scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+async function hiTrocarFornecedor(nfId){
+  if(!(coFornecedores && coFornecedores.length)){
+    try{ coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000')) || []; }catch(e){}
+  }
+  const esc = await pkEscolher({ titulo:'Fornecedor desta nota',
+    subtitulo:'Digite qualquer pedaço do nome para filtrar.',
+    itens:(coFornecedores||[]).map(f=>({id:f.id,nome:f.nome})) });
+  if(!esc) return;
+  hiCorrForn[nfId] = esc.id;
+  const b = document.getElementById('hi-cfo-'+nfId);
+  if(b) b.textContent = '🏪 ' + esc.nome;
+}
+
+async function hiSalvarCorrecao(nfId){
+  const nf = hiNfs.find(n=>n.id===nfId); if(!nf) return;
+  const its = hiItensPorNf[nfId]||[];
+  const v = id => (document.getElementById(id)||{}).value;
+  const num = (v('hi-cn-'+nfId)||'').trim();
+  const emi = v('hi-ce-'+nfId)||null;
+  const ent = v('hi-ct-'+nfId)||null;
+  const tot = String(v('hi-cvt-'+nfId)||'').replace(',','.');
+  const fre = String(v('hi-cf-'+nfId)||'').replace(',','.');
+  const mes = (v('hi-cm-'+nfId)||'').trim();
+  const obs = (v('hi-co-'+nfId)||'').trim();
+
+  const body = {
+    numero_nf: num || null,
+    data_emissao: emi, data_entrega: ent,
+    vencimentos_obs: obs || null,
+    mes_referencia: mes || null,
+    fornecedor_id: hiCorrForn[nfId] ?? nf.fornecedor_id ?? null,
+  };
+  if(tot!=='' && !isNaN(parseFloat(tot))) body.valor_total = parseFloat(tot);
+  if(fre!=='' && !isNaN(parseFloat(fre))) body.frete = parseFloat(fre);
+
+  // itens e lotes
+  const mudaItens = [], mudaLotes = [], criaLotes = [];
+  for(const it of its){
+    const q = String(v(`hi-cq-${nfId}-${it.id}`)||'').replace(',','.');
+    const u = String(v(`hi-cv-${nfId}-${it.id}`)||'').replace(',','.');
+    const qtd = parseFloat(q), val = parseFloat(u);
+    if(!isNaN(qtd) && !isNaN(val) && (qtd!==Number(it.qtd) || val!==Number(it.valor_unitario))){
+      mudaItens.push({ id:it.id, qtd, valor_unitario:val, valor_item: Math.round(qtd*val*100)/100 });
+    }
+    const el = document.getElementById(`hi-cl-${nfId}-${it.id}`);
+    const lote = (el ? el.value : '').trim();
+    const validade = v(`hi-cd-${nfId}-${it.id}`) || null;
+    const loteId = el ? (el.dataset.loteId||'') : '';
+    if(loteId){
+      const atual = (hiLotesPorItem[it.id]||[]).find(x=>String(x.id)===String(loteId)) || {};
+      const mudouL = (lote||'—') !== (atual.lote||'—');
+      const mudouV = (validade||'') !== ((atual.validade||'').slice(0,10));
+      if(mudouL || mudouV) mudaLotes.push({ id:loteId, lote: lote||'—', validade });
+    } else if(lote || validade){
+      criaLotes.push({ material_id:it.material_id, lote: lote||'—', validade, qtd: isNaN(qtd)?it.qtd:qtd, nf_item_id:it.id, status:'ativo' });
+    }
+  }
+
+  const resumo = [];
+  resumo.push('• cabeçalho da nota');
+  if(mudaItens.length) resumo.push('• '+mudaItens.length+' item(ns) com qtd/valor alterado');
+  if(mudaLotes.length) resumo.push('• '+mudaLotes.length+' lote(s) corrigido(s)');
+  if(criaLotes.length) resumo.push('• '+criaLotes.length+' lote(s) novo(s)');
+  if(!confirm('Salvar as correções?\n\n'+resumo.join('\n')+'\n\nO saldo do estoque não muda.')) return;
+
   try{
     await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',body);
-    toast('Nota corrigida ✓','sucesso'); hiCarregarLista();
-  }catch(e){ toast('Erro: '+e.message,'erro'); }
+    for(const m of mudaItens) await sbFetch(`nf_itens?id=eq.${m.id}`,'PATCH',{ qtd:m.qtd, valor_unitario:m.valor_unitario, valor_item:m.valor_item });
+    for(const l of mudaLotes) await sbFetch(`lotes?id=eq.${l.id}`,'PATCH',{ lote:l.lote, validade:l.validade });
+    for(const l of criaLotes) await sbFetch('lotes','POST', l);
+    toast('Nota corrigida ✓'+(mudaLotes.length||criaLotes.length?' (lote e validade incluídos)':''),'sucesso');
+    hiCarregarLista();
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
 }
+
 </script>
 
 <script>
@@ -5544,6 +5883,22 @@ function rcFidDaChave(chave){
   if(s[0]==='F') return Number(s.slice(1))||0;
   return Number(s)||0;
 }
+// ── v4.7 · concluir o pedido quando a última ordem sai de pendente ────────
+// Isto ficava enterrado no fim do rcGravarNF, DEPOIS do return do "Salvar".
+// Resultado: salvar a nota marcava as ordens como NF EMITIDA e deixava o
+// pedido preso em AGUARDANDO_ENTREGA para sempre — foi o que aconteceu com o
+// pedido 4 da CAMPFARMA. E o rcConfirmarEntrada nunca tocou em pedido nenhum.
+async function rcConcluirPedidoSePronto(pedidoId, quem){
+  if(!pedidoId) return false;
+  try{
+    const rest = (await sbFetch(`ordens_compra?select=id&pedido_id=eq.${pedidoId}&situacao=eq.PENDENTE&limit=5`)) || [];
+    if(rest.length) return false;
+    await sbFetch(`pedidos?id=eq.${pedidoId}`,'PATCH',{ status:'CONCLUIDO' });
+    toast('Pedido #'+pedidoId+' concluído — não sobrou item pendente. ✓','sucesso');
+    return true;
+  }catch(e){ return false; }
+}
+
 // ── v4.6 · duas portas para a mesma nota ──────────────────────────────────
 // Salvar   → grava tudo com aprovado=false. O estoque não sente nada.
 // Confirmar→ pede assinatura e faz o UPDATE para true. O gatilho
@@ -5698,6 +6053,8 @@ async function rcGravarNF(chave, confirmar){
       });
     }
     if(!confirmar){
+      // as ordens já saíram de pendente: o pedido não pode ficar pendurado
+      await rcConcluirPedidoSePronto(pedidoDoGrupo, registrante);
       toast(`💾 NF ${numeroNf||''} salva — ${itensParaGravar.length} item(ns). O estoque ainda NÃO se mexeu.`,'sucesso');
       rcCarregar();
       return;
@@ -5707,13 +6064,7 @@ async function rcGravarNF(chave, confirmar){
       try{ await ocAbaterCreditos(fid, cred); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
       catch(e){ toast('⚠ NF ok, mas o crédito não foi baixado: '+e.message,'erro'); }
     }
-    // pedido totalmente recebido → conclui
-    if(pedidoDoGrupo){
-      try{
-        const rest=(await sbFetch(`ordens_compra?select=id&pedido_id=eq.${pedidoDoGrupo}&situacao=eq.PENDENTE&limit=5`))||[];
-        if(!rest.length) await sbFetch(`pedidos?id=eq.${pedidoDoGrupo}`,'PATCH',{ status:'CONCLUIDO' });
-      }catch(e){}
-    }
+    await rcConcluirPedidoSePronto(pedidoDoGrupo, registrante);
     toast(`NF registrada — ${itensParaGravar.length} item(ns) receb​ido(s), estoque atualizado ✓`,'sucesso');
     rcCarregar();
   }catch(e){ toast('Erro ao registrar NF: '+e.message,'erro'); }
@@ -5742,6 +6093,14 @@ async function rcConfirmarEntrada(nfId){
       status:'ENTREGUE',
       data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10),
     });
+    // e conclui o pedido, se as ordens daqueles materiais já saíram de pendente
+    try{
+      const mats = [...new Set(itens.map(i=>i.material_id).filter(Boolean))];
+      if(mats.length){
+        const ords = (await sbFetch(`ordens_compra?select=pedido_id&material_id=in.(${mats.join(',')})&pedido_id=not.is.null&limit=200`))||[];
+        for(const pid of [...new Set(ords.map(o=>o.pedido_id))]) await rcConcluirPedidoSePronto(pid, registrante);
+      }
+    }catch(e){}
     toast(`✔ NF ${nf.numero_nf||''} confirmada — ${movs.length} entrada(s) no estoque.`,'sucesso');
     rcCarregar();
   }catch(e){ toast('Erro ao confirmar: '+e.message,'erro'); }
@@ -6059,6 +6418,28 @@ async function apMostrarHist(pid, cid){
   catch(e){ div.innerHTML='Erro ao carregar histórico: '+e.message; }
 }
 
+// ── v4.7 · imprimir sem depender de aba nova ──────────────────────────────
+// O PDF do comparativo abria com window.open e morria em silêncio quando o
+// bloqueador de pop-up do Chrome barrava a aba. Agora, se a aba for bloqueada,
+// a impressão acontece aqui mesmo, por um iframe — o diálogo do Chrome já
+// oferece "Salvar como PDF".
+function hogImprimir(html){
+  let w = null;
+  try{ w = window.open('','_blank'); }catch(e){}
+  if(w){ w.document.write(html); w.document.close(); return true; }
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  document.body.appendChild(f);
+  f.onload = function(){
+    try{ f.contentWindow.focus(); f.contentWindow.print(); }
+    catch(e){ toast('Não consegui abrir a impressão: '+e.message,'erro'); }
+    setTimeout(function(){ f.remove(); }, 60000);
+  };
+  f.srcdoc = html;
+  toast('O navegador bloqueou a aba nova — abri a impressão aqui mesmo. 🖨','');
+  return true;
+}
+
 async function apGerarPDF(pid){
   const b=apPedidos.find(x=>x.pedido.id===pid); if(!b) return;
   const p=b.pedido;
@@ -6069,9 +6450,7 @@ async function apGerarPDF(pid){
   }
   const totItens=apTotalItens(b), frete=Number(p.frete)||0;
   const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
-  const w=window.open('','_blank');
-  if(!w){ toast('Bloqueador de pop-up impediu o PDF. Libere pop-ups para este site.','erro'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
+  hogImprimir(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px}h2{font-size:13px;margin:16px 0 6px}
   table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}
   th{background:#f0f3f7;text-transform:uppercase;font-size:10px}.tot{text-align:right;font-weight:bold;font-size:13px;margin-top:6px}
@@ -6088,7 +6467,6 @@ async function apGerarPDF(pid){
   <p class="meta" style="margin-top:20px">Aprovação: ______________________________ &nbsp;&nbsp; Data: ____/____/______</p>
   <button onclick="window.print()" style="margin-top:14px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>
   </body></html>`);
-  w.document.close();
 }
 
 async function apAprovarPedido(pid){
