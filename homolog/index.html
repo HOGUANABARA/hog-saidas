@@ -8351,10 +8351,185 @@ function ivRender(){
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px;margin-bottom:14px">${cards}</div>
     <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button class="inv-btn roxo" onclick="ivAcrescentarItem()" title="item que não veio na planilha do local porque este mês está guardado em outro lugar">➕ Acrescentar item contado</button>
       <button class="inv-btn azul" onclick="ivApurar()" ${contados?'':'disabled style="opacity:.5"'}>🔍 Apurar divergências (${ivItens.length} contagens)</button>
     </div>
     <div id="iv-diverg" style="margin-top:16px"></div>`;
   if(ivDiverg) ivRenderDivergencias();
+}
+
+// ── v4.8 · ACRESCENTAR ITEM CONTADO, SEM PLANILHA ─────────────────────────
+// A planilha de cada local é montada pela foto de alocação do mês anterior.
+// Quando o material muda de lugar — e muda, por falta de espaço — ele não
+// aparece na planilha do local onde está. Este painel resolve item a item:
+// escolhe o material, corrige o cadastro dele se estiver errado, informa a
+// quantidade contada e diz em qual local ela está.
+// A apuração soma as contagens de TODOS os locais por material e compara com o
+// Estoque Geral, então contar num local diferente do mês passado não gera
+// divergência nenhuma. O que gera é não contar.
+function ivAcrescentarItem(){
+  if(!ivAtual){ toast('Comece uma contagem antes.','erro'); return; }
+  const jaExiste = document.getElementById('iv-add-painel');
+  if(jaExiste){ jaExiste.remove(); return; }
+  const alvo = document.getElementById('iv-painel');
+  if(!alvo) return;
+  alvo.insertAdjacentHTML('beforeend', `<div id="iv-add-painel" style="margin-top:14px;background:#fff;border:2px solid #6f42c1;border-radius:10px;overflow:hidden">
+    <div style="background:#6f42c1;color:#fff;padding:10px 14px;font-size:13px;font-weight:800">➕ Acrescentar item contado</div>
+    <div style="padding:12px 14px;font-size:12px;color:var(--cinza-5);line-height:1.55;background:#F4ECF7">
+      Use quando o item existe no cadastro mas <b>não veio na planilha do local</b> — normalmente porque este mês ele está guardado em outro lugar.
+      Contar num local diferente do mês passado <b>não gera divergência</b>: a apuração soma todos os locais e compara com o Estoque Geral.
+    </div>
+    <div style="padding:12px 14px" id="iv-add-corpo">
+      <button class="inv-btn roxo" onclick="ivAddEscolher()">🔍 Escolher o material contado</button>
+    </div>
+  </div>`);
+  document.getElementById('iv-add-painel').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+let ivAddMat = null;
+
+async function ivAddEscolher(){
+  if(!catalogoMateriais.length){
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+  }
+  const esc = await pkEscolher({
+    titulo: 'Qual material você contou?',
+    subtitulo: 'Digite qualquer pedaço do nome. Depois você confere e corrige os dados do cadastro, se precisar.',
+    itens: catalogoMateriais.map(m=>{
+      const s = saldosCache[(m.nome||'').toUpperCase()];
+      return { id:m.id, nome:m.nome, meta:(s===undefined||s===null)?'':('saldo '+s) };
+    }),
+  });
+  if(!esc) return;
+  // busca o cadastro completo para poder editar
+  let cad = {};
+  try{
+    const r = await sbFetch(`materiais?select=*&id=eq.${esc.id}&limit=1`);
+    if(r && r.length) cad = r[0];
+  }catch(e){}
+  ivAddMat = Object.assign({ id:esc.id, nome:esc.nome }, cad);
+  ivAddRender();
+}
+
+function ivAddRender(){
+  const corpo = document.getElementById('iv-add-corpo');
+  if(!corpo || !ivAddMat) return;
+  const m = ivAddMat;
+  const locais = ivLocaisFisicos();
+  const campo = (rot, id, val, tipo, larg, dica) =>
+    `<div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">${rot}</label>
+      <input ${tipo?`type="${tipo}"`:''} id="${id}" value="${val==null?'':String(val).replace(/"/g,'&quot;')}"
+             ${dica?`placeholder="${dica}"`:''}
+             style="width:${larg||'150px'};border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)"></div>`;
+
+  corpo.innerHTML = `
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;color:#6f42c1;margin-bottom:8px">Dados do material — corrija o que estiver errado</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+      ${campo('Nome no cadastro','iv-add-nome', m.nome, '', 'min(320px,90vw)')}
+      ${campo('Descrição na NF','iv-add-desc', m.descricao_nf, '', 'min(300px,90vw)', 'como o fornecedor chama')}
+      ${campo('Marca','iv-add-marca', m.marca, '', '150px')}
+      ${campo('Unidade','iv-add-un', m.unidade_medida, '', '90px', 'un, fr, cx')}
+      ${campo('Qtd por pacote','iv-add-kit', m.qtd_kit, 'number', '110px')}
+      ${campo('Estoque mínimo','iv-add-min', m.estoque_minimo, 'number', '110px')}
+      <label style="display:flex;gap:6px;align-items:center;font-size:12px;font-weight:700;color:var(--cinza-5);padding-bottom:8px">
+        <input type="checkbox" id="iv-add-lote" ${m.controla_lote?'checked':''}> controla lote</label>
+    </div>
+
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;color:#6f42c1;margin-bottom:8px">A contagem</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      ${campo('Quantidade contada','iv-add-qtd', '', 'number', '130px')}
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Onde está o material contado</label>
+        <select id="iv-add-local" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--fonte)">
+          ${locais.map(l=>`<option value="${l.id}">${l.nome}</option>`).join('')}
+        </select></div>
+      ${campo('Lote','iv-add-lotenum', '', '', '130px', 'se houver')}
+      ${campo('Validade','iv-add-val', '', 'date', '150px')}
+      ${campo('Observação','iv-add-obs', '', '', 'min(240px,90vw)', 'opcional')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px">
+      <span style="font-size:11px;color:var(--cinza-5)">A contagem entra no inventário aberto e aparece na apuração junto com o resto. Pede assinatura.</span>
+      <button class="inv-btn" style="margin-left:auto;background:var(--cinza-2);color:var(--cinza-5);padding:8px 12px;font-size:12px" onclick="ivAddMat=null;ivAcrescentarItem();ivAcrescentarItem()">Trocar material</button>
+      <button class="inv-btn roxo" style="padding:9px 14px" onclick="ivAddSalvar()">💾 Gravar contagem deste item</button>
+    </div>`;
+}
+
+async function ivAddSalvar(){
+  if(!ivAtual || !ivAddMat) return;
+  const quem = (document.getElementById('inv-registrado-por')||{}).value || '';
+  if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  const v = id => (document.getElementById(id)||{}).value;
+  const qtd = parseFloat(String(v('iv-add-qtd')||'').replace(',','.'));
+  if(isNaN(qtd) || qtd < 0){ toast('Informe a quantidade contada.','erro'); return; }
+  const localId = Number(v('iv-add-local'));
+  if(!localId){ toast('Escolha onde o material está.','erro'); return; }
+
+  const controla = !!(document.getElementById('iv-add-lote')||{}).checked;
+  const loteNum = (v('iv-add-lotenum')||'').trim();
+  const validade = v('iv-add-val') || null;
+  if(controla && qtd > 0 && (!loteNum || !validade)){
+    toast('Este material controla lote — informe lote e validade.','erro'); return;
+  }
+
+  // o que mudou no cadastro
+  const m = ivAddMat;
+  const novo = {
+    nome: (v('iv-add-nome')||'').trim(),
+    descricao_nf: (v('iv-add-desc')||'').trim() || null,
+    marca: (v('iv-add-marca')||'').trim() || null,
+    unidade_medida: (v('iv-add-un')||'').trim() || null,
+    qtd_kit: v('iv-add-kit')==='' ? null : parseFloat(v('iv-add-kit')),
+    estoque_minimo: v('iv-add-min')==='' ? null : parseFloat(v('iv-add-min')),
+    controla_lote: controla,
+  };
+  if(!novo.nome){ toast('O nome não pode ficar vazio.','erro'); return; }
+  const mudou = {};
+  for(const k of Object.keys(novo)){
+    const antes = (m[k]===undefined||m[k]==='') ? null : m[k];
+    const depois = (novo[k]===undefined||novo[k]==='') ? null : novo[k];
+    if(String(antes) !== String(depois)) mudou[k] = depois;
+  }
+
+  const nomeLocal = (invLocais.find(l=>l.id===localId)||{}).nome || ('#'+localId);
+  const resumo = [`• ${qtd} de "${novo.nome}" contado(s) em ${nomeLocal}`];
+  if(loteNum || validade) resumo.push(`• lote ${loteNum||'—'}${validade?' · val '+ivData(validade):''}`);
+  if(Object.keys(mudou).length) resumo.push(`• ${Object.keys(mudou).length} campo(s) do cadastro corrigido(s): ${Object.keys(mudou).join(', ')}`);
+  if(!confirm('Gravar?\n\n'+resumo.join('\n')+'\n\nA contagem entra no inventário aberto. O saldo do estoque só muda na confirmação do inventário.')) return;
+  if(!exigirAssinatura('Acrescentar item à contagem de '+nomeLocal)) return;
+
+  try{
+    if(Object.keys(mudou).length){
+      await sbFetch(`materiais?id=eq.${m.id}`,'PATCH', mudou);
+      const cm = catalogoMateriais.find(x=>x.id===m.id);
+      if(cm && mudou.nome) cm.nome = mudou.nome;
+    }
+    // recontagem do mesmo item no mesmo local: substitui em vez de duplicar
+    try{ await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}&material_id=eq.${m.id}`,'DELETE'); }catch(e){}
+    await sbFetch('inventario_itens','POST',{
+      inventario_id: ivAtual.id, material_id: m.id, local_id: localId,
+      qtd_contada: qtd, contado_por: quem, contado_em: new Date().toISOString(),
+      lotes: (loteNum||validade) ? [{ lote: loteNum||'—', validade, qtd }] : null,
+      observacao: (v('iv-add-obs')||'').trim() || null,
+    });
+    toast(`${qtd} de "${novo.nome}" gravado(s) na contagem de ${nomeLocal} ✓`,'sucesso');
+    ivAddMat = null;
+    const p = document.getElementById('iv-add-painel'); if(p) p.remove();
+    ivCarregar();
+  }catch(e){
+    // observacao pode não existir na tabela: tenta sem ela antes de desistir
+    try{
+      await sbFetch('inventario_itens','POST',{
+        inventario_id: ivAtual.id, material_id: m.id, local_id: localId,
+        qtd_contada: qtd, contado_por: quem, contado_em: new Date().toISOString(),
+        lotes: (loteNum||validade) ? [{ lote: loteNum||'—', validade, qtd }] : null,
+      });
+      toast(`${qtd} de "${novo.nome}" gravado(s) em ${nomeLocal} ✓ (observação não gravada)`,'sucesso');
+      ivAddMat = null;
+      const p2 = document.getElementById('iv-add-painel'); if(p2) p2.remove();
+      ivCarregar();
+    }catch(e2){ toast('Erro ao gravar: '+e2.message,'erro'); }
+  }
 }
 
 async function ivIniciar(){
@@ -8419,12 +8594,26 @@ async function ivSubirLocal(localId, file){
     const iId=cab.indexOf('ID'), iMat=cab.indexOf('MATERIAL');
     if(iId<0 || iCont<0){ toast('Planilha fora do modelo — use a que o botão ⬇ planilha gera.','erro'); return; }
     const iL1=cab.indexOf('LOTE 1');
-    const regs=[]; let ignoradas=0;
+    const iDesc=cab.indexOf('DESCRIÇÃO NF'), iMarca=cab.indexOf('MARCA');
+    const regs=[]; let ignoradas=0, naoReconhecidas=[];
+    // cadastro atual, para saber o que ela mudou na planilha
+    const cadastroDesc={}, cadastroMarca={};
+    if(iDesc>=0 || iMarca>=0){
+      try{
+        const cads=(await sbFetch('materiais?select=id,descricao_nf,marca&limit=2000'))||[];
+        for(const c of cads){ cadastroDesc[c.id]=c.descricao_nf||''; cadastroMarca[c.id]=c.marca||''; }
+      }catch(e){}
+    }
+    const correcoes=[];
     for(let i=1;i<linhas.length;i++){
       const r=linhas[i]||[];
       let mid=r[iId]!==undefined&&r[iId]!==''?Number(r[iId]):null;
       if(!mid && iMat>=0 && r[iMat]){ const m=resolverMaterial(String(r[iMat]).trim()); mid=m?m.id:null; }
-      if(!mid){ continue; }
+      if(!mid){
+        const cru = (iMat>=0 && r[iMat]) ? String(r[iMat]).trim() : '';
+        if(cru) naoReconhecidas.push(cru);
+        continue;
+      }
       // lotes (3 blocos) quando existirem
       const lotes=[];
       if(iL1>=0){
@@ -8442,13 +8631,37 @@ async function ivSubirLocal(localId, file){
       regs.push({ inventario_id:ivAtual.id, material_id:mid, local_id:localId, qtd_contada:cont,
                   contado_por:quem, contado_em:new Date().toISOString(),
                   lotes: lotes.length?lotes:null });
+      // v4.8 — a planilha traz DESCRIÇÃO NF e MARCA, e ela corrige a nomenclatura
+      // ali. Antes essas colunas eram lidas e descartadas: o trabalho se perdia.
+      if(iDesc>=0 || iMarca>=0){
+        const dNovo = iDesc>=0 ? String(r[iDesc]??'').trim() : null;
+        const mNovo = iMarca>=0 ? String(r[iMarca]??'').trim() : null;
+        const cad = catalogoMateriais.find(x=>x.id===mid) || {};
+        const nomeMat = cad.nome || ('material #'+mid);
+        if(dNovo!==null && dNovo!=='' && dNovo!==(cadastroDesc[mid]||'')) correcoes.push({ material_id:mid, nome:nomeMat, campo:'descricao_nf', de:cadastroDesc[mid]||'—', para:dNovo });
+        if(mNovo!==null && mNovo!=='' && mNovo!==(cadastroMarca[mid]||'')) correcoes.push({ material_id:mid, nome:nomeMat, campo:'marca', de:cadastroMarca[mid]||'—', para:mNovo });
+      }
     }
     if(!regs.length){ toast('Nenhuma contagem preenchida nessa planilha.','erro'); return; }
-    if(!confirm(`${local.nome}: ${regs.length} item(ns) contados${ignoradas?` (${ignoradas} linha(s) em branco ignoradas)`:''}.\n\nGravar esta contagem?`)) return;
+    const avisoNao = naoReconhecidas.length
+      ? `\n\n⚠️ ${naoReconhecidas.length} linha(s) NÃO foram reconhecidas e ficarão de fora:\n` +
+        naoReconhecidas.slice(0,8).map(n=>'• '+n).join('\n') + (naoReconhecidas.length>8?`\n• +${naoReconhecidas.length-8}`:'') +
+        '\n\nEsses nomes não existem no cadastro. Cadastre pela aba 🔔 Alertas ou use "➕ Acrescentar item contado".'
+      : '';
+    const avisoCorr = correcoes.length
+      ? `\n\n✎ ${correcoes.length} correção(ões) de cadastro na planilha, que serão aplicadas:\n` +
+        correcoes.slice(0,6).map(c=>`• ${c.nome} — ${c.campo==='marca'?'marca':'descrição NF'}: "${c.de}" → "${c.para}"`).join('\n') +
+        (correcoes.length>6?`\n• +${correcoes.length-6}`:'')
+      : '';
+    if(!confirm(`${local.nome}: ${regs.length} item(ns) contados${ignoradas?` (${ignoradas} linha(s) em branco ignoradas)`:''}.${avisoNao}${avisoCorr}\n\nGravar esta contagem?`)) return;
     // recontagem: limpa o local antes
     await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}`,'DELETE');
     for(let i=0;i<regs.length;i+=50) await sbFetch('inventario_itens','POST', regs.slice(i,i+50));
-    toast(`${local.nome}: ${regs.length} contagem(ns) gravada(s) ✓`,'sucesso');
+    let nCorr=0;
+    for(const c of correcoes){
+      try{ await sbFetch(`materiais?id=eq.${c.material_id}`,'PATCH',{ [c.campo]: c.para }); nCorr++; }catch(e){}
+    }
+    toast(`${local.nome}: ${regs.length} contagem(ns) gravada(s) ✓`+(nCorr?` · ${nCorr} correção(ões) de cadastro aplicada(s)`:''),'sucesso');
     ivCarregar();
   }catch(e){ toast('Erro ao ler a planilha: '+e.message,'erro'); }
 }
