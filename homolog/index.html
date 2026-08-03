@@ -373,7 +373,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.8 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.9 · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1440,6 +1440,7 @@ const PERFIS = {
 const PAINEL_SECOES = {
   alertas:     ['COMPRAS','ADMINISTRATIVO'],
   saldos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
+  cirurgias:   ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
   cobertura:   ['COMPRAS','ADMINISTRATIVO'],
   custos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
   emprestimos: ['COMPRAS','ADMINISTRATIVO'],
@@ -7196,7 +7197,22 @@ async function invAplicarAjustesImportados(){
 
 <!-- ═══ ABA PAINEL v2 (aprovado) — Alertas & Ação · Cobertura & Capital · Custos por período · Empréstimos · Simulador ═══ -->
 <style>
-  #aba-painel .pn-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  #aba-painel .pn-pills{display:flex;gap:8px;flex-wrap:wrap}
+  #aba-painel .pn-grupos{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:16px;
+    padding-bottom:12px;border-bottom:1px solid var(--cinza-2)}
+  #aba-painel .pn-gr-rot{font-size:9.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.7px;color:var(--cinza-4);margin-bottom:5px}
+  #aba-painel .pn-fl{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  #aba-painel .pn-fl .cp{display:flex;flex-direction:column;gap:3px}
+  #aba-painel .pn-fl label{font-size:10px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.4px;color:var(--cinza-4)}
+  #aba-painel .pn-fl input,#aba-painel .pn-fl select{border:1.5px solid var(--cinza-2);
+    border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);background:#fff}
+  #aba-painel .pn-chip{font-size:11px;font-weight:700;padding:5px 11px;border-radius:14px;
+    border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);cursor:pointer;font-family:var(--fonte)}
+  #aba-painel .pn-chip.on{background:var(--azul);color:#fff;border-color:var(--azul)}
+  #aba-painel tr.pn-cl{cursor:pointer}
+  #aba-painel tr.pn-cl:hover td{background:var(--azul-claro,#EAF3F8)}
   #aba-painel .pn-pill{font-family:var(--fonte);font-size:12px;font-weight:700;padding:8px 14px;border-radius:20px;border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-4);cursor:pointer}
   #aba-painel .pn-pill.ativa{background:var(--azul);color:#fff;border-color:var(--azul)}
   #aba-painel .pn-pill .pb{font-size:8px;background:var(--cinza-1);border-radius:10px;padding:1px 6px;margin-left:4px;color:var(--cinza-4)}
@@ -7255,17 +7271,36 @@ async function invAplicarAjustesImportados(){
   #aba-painel .pn-emp-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:var(--cinza-1);border-radius:8px;padding:12px 14px;margin-bottom:14px}
 </style>
 <div id="aba-painel" class="container" style="display:none">
-  <div class="pn-pills">
-    <button class="pn-pill ativa" data-sec="alertas" onclick="pnIr('alertas',this)">🚨 Alertas & Ação <span class="pb">OPERAÇÃO</span></button>
-    <button class="pn-pill" data-sec="saldos" onclick="pnIr('saldos',this)">📦 Saldo & Preço <span class="pb">FIN/DIRETORIA</span></button>
-    <button class="pn-pill" data-sec="cobertura" onclick="pnIr('cobertura',this)">📈 Cobertura & Capital <span class="pb">OPERAÇÃO</span></button>
-    <button class="pn-pill" data-sec="custos" onclick="pnIr('custos',this)">💰 Custos <span class="pb">SÓCIOS/FIN</span></button>
-    <button class="pn-pill" data-sec="emprestimos" onclick="pnIr('emprestimos',this)">🤝 Empréstimos <span class="pb">OPERAÇÃO</span></button>
-    <button class="pn-pill" data-sec="simulador" onclick="pnIr('simulador',this)">🔮 Simulador <span class="pb">COMPRAS</span></button>
-    <button class="pn-pill" data-sec="base" onclick="pnIr('base',this)">🔧 Base <span class="pb">OPERAÇÃO</span></button>
-    <span id="pn-status" style="margin-left:auto;font-size:11px;color:var(--cinza-4);align-self:center"></span>
+  <!-- v4.9 — as telas passaram a ficar agrupadas por assunto. Antes era uma fileira
+       só, com sete temas diferentes lado a lado, e não dava para saber onde procurar. -->
+  <div class="pn-grupos">
+    <div class="pn-gr" data-gr="dia">
+      <div class="pn-gr-rot">Dia a dia</div>
+      <div class="pn-pills">
+        <button class="pn-pill ativa" data-sec="alertas" onclick="pnIr('alertas',this)">🚨 Alertas & Ação</button>
+        <button class="pn-pill" data-sec="emprestimos" onclick="pnIr('emprestimos',this)">🤝 Empréstimos</button>
+        <button class="pn-pill" data-sec="base" onclick="pnIr('base',this)">🔧 Base do item</button>
+      </div>
+    </div>
+    <div class="pn-gr" data-gr="cir">
+      <div class="pn-gr-rot">Cirurgias</div>
+      <div class="pn-pills">
+        <button class="pn-pill" data-sec="cirurgias" onclick="pnIr('cirurgias',this)">🔬 Consumo por cirurgia</button>
+      </div>
+    </div>
+    <div class="pn-gr" data-gr="dinheiro">
+      <div class="pn-gr-rot">Estoque e valores</div>
+      <div class="pn-pills">
+        <button class="pn-pill" data-sec="saldos" onclick="pnIr('saldos',this)">📦 Saldo & Preço</button>
+        <button class="pn-pill" data-sec="custos" onclick="pnIr('custos',this)">💰 Custos</button>
+        <button class="pn-pill" data-sec="cobertura" onclick="pnIr('cobertura',this)">📈 Cobertura & Capital</button>
+        <button class="pn-pill" data-sec="simulador" onclick="pnIr('simulador',this)">🔮 Simulador</button>
+      </div>
+    </div>
+    <span id="pn-status" style="margin-left:auto;font-size:11px;color:var(--cinza-4);align-self:flex-end;padding-bottom:9px"></span>
   </div>
   <div class="pn-sec on" id="pn-sec-alertas"><div class="pn-empty">Carregando…</div></div>
+  <div class="pn-sec" id="pn-sec-cirurgias"></div>
   <div class="pn-sec" id="pn-sec-saldos"></div>
   <div class="pn-sec" id="pn-sec-cobertura"></div>
   <div class="pn-sec" id="pn-sec-custos"></div>
@@ -7314,6 +7349,7 @@ function pnIr(sec, btn){
     toast('Seu perfil não tem acesso a esta parte do painel.','erro'); return;
   }
   if(sec==='saldos') pnSaldos();
+  if(sec==='cirurgias') pnCirurgias();
   document.querySelectorAll('#aba-painel .pn-sec').forEach(s=>s.classList.remove('on'));
   document.getElementById('pn-sec-'+sec).classList.add('on');
   document.querySelectorAll('#aba-painel .pn-pill').forEach(p=>p.classList.remove('ativa'));
@@ -7328,11 +7364,220 @@ function pnAplicarSecoes(){
     p.style.display = ok ? '' : 'none';
     if(ok && !primeira) primeira = p;
   });
+  // grupo sem nenhuma tela liberada não precisa aparecer
+  document.querySelectorAll('#aba-painel .pn-gr').forEach(g=>{
+    const algum = [...g.querySelectorAll('.pn-pill')].some(p=>p.style.display !== 'none');
+    g.style.display = algum ? '' : 'none';
+  });
   const ativa = document.querySelector('#aba-painel .pn-pill.ativa');
   if((!ativa || ativa.style.display==='none') && primeira){
     primeira.click();
   }
 }
+
+
+// ═══ CONSUMO POR CIRURGIA (v4.9) ═══════════════════════════════
+// Responde três perguntas que antes só saíam por SQL:
+//   • em que períodos cirúrgicos este material foi usado?
+//   • quanto consome cada médico, cada tipo de cirurgia, ou o cruzamento dos dois?
+//   • qual o custo por paciente disso?
+// Nada aqui é média do app inteiro: tudo obedece aos filtros de cima.
+let pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:'medico' };
+let pnCirAberto = null;
+
+function pnCirSet(campo, valor){
+  pnCirF[campo] = valor;
+  if (campo === 'agrupar') pnCirAberto = null;
+  pnCirurgias();
+}
+function pnCirPeriodoRapido(dias){
+  if (!dias) { pnCirF.de=''; pnCirF.ate=''; }
+  else {
+    const a = new Date(); const d = new Date(); d.setDate(d.getDate() - dias);
+    pnCirF.de = d.toISOString().slice(0,10);
+    pnCirF.ate = a.toISOString().slice(0,10);
+  }
+  pnCirurgias();
+}
+function pnCirLimpar(){
+  pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:pnCirF.agrupar };
+  pnCirAberto = null; pnCirurgias();
+}
+function pnCirBr(d){ return d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'; }
+
+function pnCirurgias(){
+  const el = document.getElementById('pn-sec-cirurgias'); if(!el) return;
+
+  const perMap = {}; for (const p of (pnPeriodos||[])) perMap[p.id] = p;
+  const medicos = [...new Set((pnPeriodos||[]).map(p=>p.medicos&&p.medicos.nome).filter(Boolean))].sort();
+  const tipos   = [...new Set((pnPeriodos||[]).map(p=>p.tipos_cirurgia&&p.tipos_cirurgia.nome).filter(Boolean))].sort();
+
+  // ── filtra os movimentos ligados a período cirúrgico ──
+  const termo = (pnCirF.material||'').trim().toUpperCase();
+  const movs = (pnMovs||[]).filter(m=>{
+    if (!m.periodoId) return false;
+    if (pnCirF.medico && m.medico !== pnCirF.medico) return false;
+    if (pnCirF.tipo   && m.tipoCir !== pnCirF.tipo) return false;
+    if (pnCirF.de  && m.dia < pnCirF.de)  return false;
+    if (pnCirF.ate && m.dia > pnCirF.ate) return false;
+    if (termo){
+      const nome = (pnUvp[m.material_id] && pnUvp[m.material_id].nome) || '';
+      if (nome.toUpperCase().indexOf(termo) < 0) return false;
+    }
+    return true;
+  });
+
+  // ── totais ──
+  const periodosSet = new Set(movs.map(m=>m.periodoId));
+  const pacientes = [...periodosSet].reduce((sm,id)=>{
+    const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+  const custoTot = movs.reduce((sm,m)=>sm+m.custo,0);
+  const qtdTot   = movs.reduce((sm,m)=>sm+m.qtd,0);
+
+  // ── agrupamento ──
+  const chave = m => {
+    if (pnCirF.agrupar === 'medico')   return m.medico  || '(sem médico)';
+    if (pnCirF.agrupar === 'cirurgia') return m.tipoCir || '(sem tipo)';
+    if (pnCirF.agrupar === 'ambos')    return (m.medico||'(sem médico)') + '  ·  ' + (m.tipoCir||'(sem tipo)');
+    return null;
+  };
+  const grupos = {};
+  if (pnCirF.agrupar !== 'periodo'){
+    for (const m of movs){
+      const k = chave(m);
+      const g = grupos[k] || (grupos[k] = { k, custo:0, qtd:0, periodos:new Set(), itens:{} });
+      g.custo += m.custo; g.qtd += m.qtd; g.periodos.add(m.periodoId);
+      const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
+      const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
+      it.qtd += m.qtd; it.custo += m.custo;
+    }
+  }
+  const lista = Object.values(grupos).map(g=>{
+    const pac = [...g.periodos].reduce((sm,id)=>{
+      const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+    return { ...g, nPer:g.periodos.size, pac, porPac: pac>0 ? g.custo/pac : null };
+  }).sort((a,b)=>b.custo-a.custo);
+
+  // ── lista de períodos (é o que responde "onde este material foi usado") ──
+  const porPeriodo = {};
+  for (const m of movs){
+    const g = porPeriodo[m.periodoId] || (porPeriodo[m.periodoId] = { id:m.periodoId, custo:0, qtd:0, itens:{} });
+    g.custo += m.custo; g.qtd += m.qtd;
+    const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
+    const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
+    it.qtd += m.qtd; it.custo += m.custo;
+  }
+  const periodos = Object.values(porPeriodo).map(g=>{
+    const p = perMap[g.id] || {};
+    return { ...g, data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
+             tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—',
+             pac:Number(p.qtd_pacientes)||0, modalidade:p.modalidade||'' };
+  }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+
+  const opc = (arr, sel) => ['<option value="">todos</option>']
+    .concat(arr.map(x=>`<option value="${x.replace(/"/g,'&quot;')}"${x===sel?' selected':''}>${x}</option>`)).join('');
+  const chip = (rot, ativo, fn) =>
+    `<button class="pn-chip${ativo?' on':''}" onclick="${fn}">${rot}</button>`;
+
+  const semPreco = movs.filter(m=>!(pnUvp[m.material_id]&&pnUvp[m.material_id].uvp>0)).length;
+
+  el.innerHTML = `
+    <div class="pn-card">
+      <div class="pn-ct"><span>🔎 Filtros</span><span class="pn-funcao">tudo abaixo obedece a esta linha</span></div>
+      <div class="pn-fl">
+        <div class="cp" style="flex:1;min-width:210px">
+          <label>Material</label>
+          <input id="pn-cir-mat" list="pn-mat-datalist" value="${(pnCirF.material||'').replace(/"/g,'&quot;')}"
+            placeholder="digite parte do nome do item…"
+            oninput="clearTimeout(window._pncm);window._pncm=setTimeout(()=>{pnCirSet('material',this.value);const e=document.getElementById('pn-cir-mat');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},300)">
+        </div>
+        <div class="cp"><label>Médico</label>
+          <select onchange="pnCirSet('medico',this.value)">${opc(medicos, pnCirF.medico)}</select></div>
+        <div class="cp"><label>Cirurgia</label>
+          <select onchange="pnCirSet('tipo',this.value)">${opc(tipos, pnCirF.tipo)}</select></div>
+        <div class="cp"><label>De</label>
+          <input type="date" value="${pnCirF.de}" onchange="pnCirSet('de',this.value)"></div>
+        <div class="cp"><label>Até</label>
+          <input type="date" value="${pnCirF.ate}" onchange="pnCirSet('ate',this.value)"></div>
+        <div class="cp"><label>&nbsp;</label>
+          <button class="pn-btn" onclick="pnCirLimpar()">limpar</button></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);margin-right:2px">Período</span>
+        ${chip('30 dias', pnCirF.de&&!!pnCirF.ate&&false, "pnCirPeriodoRapido(30)")}
+        ${chip('90 dias', false, "pnCirPeriodoRapido(90)")}
+        ${chip('tudo', !pnCirF.de&&!pnCirF.ate, "pnCirPeriodoRapido(0)")}
+        <span style="width:14px"></span>
+        <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);margin-right:2px">Ver por</span>
+        ${chip('Médico',   pnCirF.agrupar==='medico',   "pnCirSet('agrupar','medico')")}
+        ${chip('Cirurgia', pnCirF.agrupar==='cirurgia', "pnCirSet('agrupar','cirurgia')")}
+        ${chip('Médico + cirurgia', pnCirF.agrupar==='ambos', "pnCirSet('agrupar','ambos')")}
+        ${chip('Só a lista de períodos', pnCirF.agrupar==='periodo', "pnCirSet('agrupar','periodo')")}
+      </div>
+    </div>
+
+    <div class="pn-duo">
+      <div class="pn-card"><div class="pn-ct"><span>💰 Custo no filtro</span></div>
+        <div style="font-size:24px;font-weight:800;color:var(--azul);padding:4px 2px">${pnMoney(custoTot)}</div>
+        <div class="pn-nota">${periodosSet.size} período(s) · ${pacientes} paciente(s) · ${qtdTot.toLocaleString('pt-BR')} unidade(s)${semPreco?` · ⚠️ ${semPreco} lançamento(s) sem valor de compra`:''}</div>
+      </div>
+      <div class="pn-card"><div class="pn-ct"><span>👤 Custo por paciente</span><span class="pn-funcao">custo ÷ pacientes do filtro</span></div>
+        <div style="font-size:24px;font-weight:800;color:var(--azul);padding:4px 2px">${pacientes>0?pnMoney(custoTot/pacientes):'—'}</div>
+        <div class="pn-nota">${pacientes>0?'vale para o recorte acima, não para o hospital inteiro':'nenhum paciente no filtro'}</div>
+      </div>
+    </div>
+
+    ${termo ? `<div class="pn-card" style="padding:12px 16px;font-size:12.5px;background:#FFFDF3">
+      🔬 <b>${termo}</b> aparece em <b>${periodosSet.size}</b> período(s) cirúrgico(s) no filtro,
+      somando <b>${qtdTot.toLocaleString('pt-BR')}</b> unidade(s) e <b>${pnMoney(custoTot)}</b>.
+      A lista de períodos está no fim desta tela.</div>` : ''}
+
+    ${pnCirF.agrupar!=='periodo' ? `
+    <div class="pn-card">
+      <div class="pn-ct"><span>📊 ${pnCirF.agrupar==='medico'?'Por médico':pnCirF.agrupar==='cirurgia'?'Por tipo de cirurgia':'Por médico e cirurgia'} (${lista.length})</span>
+        <span class="pn-funcao">clique na linha para ver os itens</span></div>
+      ${lista.length?`<table class="pn-tb">
+        <thead><tr><th>${pnCirF.agrupar==='ambos'?'Médico · Cirurgia':(pnCirF.agrupar==='medico'?'Médico':'Cirurgia')}</th>
+          <th class="num">Períodos</th><th class="num">Pacientes</th><th class="num">Unid.</th>
+          <th class="num">Custo</th><th class="num">Por paciente</th></tr></thead>
+        <tbody>${lista.map(g=>`
+          <tr class="pn-cl" onclick="pnCirAbrir(${JSON.stringify(g.k).replace(/"/g,'&quot;')})">
+            <td>${g.k}</td><td class="num">${g.nPer}</td><td class="num">${g.pac||'—'}</td>
+            <td class="num">${g.qtd.toLocaleString('pt-BR')}</td>
+            <td class="num" style="font-weight:700">${pnMoney(g.custo)}</td>
+            <td class="num">${g.porPac!=null?pnMoney(g.porPac):'—'}</td></tr>
+          ${pnCirAberto===g.k?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
+            <table class="pn-tb" style="margin:0">
+              <thead><tr><th>Item</th><th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
+              <tbody>${Object.values(g.itens).sort((a,b)=>b.custo-a.custo).map(it=>
+                `<tr><td>${it.nome}</td><td class="num">${it.qtd.toLocaleString('pt-BR')}</td><td class="num">${pnMoney(it.custo)}</td></tr>`).join('')}</tbody>
+            </table></td></tr>`:''}
+        `).join('')}</tbody></table>`
+      :'<div class="pn-empty">Nenhuma saída cirúrgica no filtro.</div>'}
+    </div>`:''}
+
+    <div class="pn-card">
+      <div class="pn-ct"><span>📅 Períodos cirúrgicos (${periodos.length})</span>
+        <span class="pn-funcao">clique para ver o que saiu em cada um</span></div>
+      ${periodos.length?`<div style="max-height:520px;overflow:auto"><table class="pn-tb">
+        <thead><tr><th>Data</th><th>Médico</th><th>Cirurgia</th><th class="num">Pac.</th>
+          <th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
+        <tbody>${periodos.map(p=>`
+          <tr class="pn-cl" onclick="pnCirAbrir('P'+${p.id})">
+            <td>${pnCirBr(p.data)}</td><td>${p.medico}</td><td>${p.tipo}</td>
+            <td class="num">${p.pac||'—'}</td><td class="num">${p.qtd.toLocaleString('pt-BR')}</td>
+            <td class="num" style="font-weight:700">${pnMoney(p.custo)}</td></tr>
+          ${pnCirAberto===('P'+p.id)?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
+            <table class="pn-tb" style="margin:0">
+              <thead><tr><th>Item</th><th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
+              <tbody>${Object.values(p.itens).sort((a,b)=>b.custo-a.custo).map(it=>
+                `<tr><td>${it.nome}</td><td class="num">${it.qtd.toLocaleString('pt-BR')}</td><td class="num">${pnMoney(it.custo)}</td></tr>`).join('')}</tbody>
+            </table></td></tr>`:''}
+        `).join('')}</tbody></table></div>`
+      :'<div class="pn-empty">Nenhum período cirúrgico no filtro.</div>'}
+    </div>`;
+}
+function pnCirAbrir(k){ pnCirAberto = (pnCirAberto === k) ? null : k; pnCirurgias(); }
 
 // ── SALDO & PREÇO — o que o Financeiro e a Diretoria enxergam ──
 // Sem cobertura, sem projeção, sem média: só o que é fato hoje.
@@ -7427,6 +7672,7 @@ async function pnCarregar(){
     pnMontaHist();
     document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
     pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
+    pnSaldos(); pnCirurgias();
     pnGravarSnapshot();
   }catch(e){
     st.textContent='erro';
