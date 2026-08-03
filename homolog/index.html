@@ -1340,6 +1340,50 @@ details[open] summary { margin-bottom: 6px; }
   </div>
 </div>
 
+
+<style>
+/* ── Caixas do próprio app (v4.8b) — substituem prompt/confirm do navegador ── */
+#hogdlg-fundo{position:fixed;inset:0;z-index:100000;background:rgba(20,30,45,.55);
+  display:none;align-items:center;justify-content:center;padding:18px;font-family:var(--fonte)}
+#hogdlg-fundo.on{display:flex}
+#hogdlg{background:#fff;border-radius:14px;max-width:430px;width:100%;
+  box-shadow:0 18px 50px rgba(0,0,0,.32);overflow:hidden;animation:hogdlgIn .13s ease-out}
+@keyframes hogdlgIn{from{transform:translateY(8px);opacity:.4}to{transform:none;opacity:1}}
+#hogdlg .hd-cab{padding:18px 22px 4px;font-size:17px;font-weight:800;color:var(--azul)}
+#hogdlg .hd-sub{padding:0 22px 4px;font-size:12.5px;color:var(--cinza-5);line-height:1.5}
+#hogdlg .hd-corpo{padding:12px 22px 4px}
+#hogdlg .hd-corpo label{display:block;font-size:11.5px;font-weight:700;
+  color:var(--cinza-5);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.3px}
+#hogdlg .hd-corpo input,#hogdlg .hd-corpo textarea,#hogdlg .hd-corpo select{
+  width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid var(--cinza-2);
+  border-radius:9px;font-size:15px;font-family:var(--fonte)}
+#hogdlg .hd-corpo textarea{min-height:74px;resize:vertical}
+#hogdlg .hd-erro{color:var(--vermelho);font-size:12.5px;font-weight:600;padding:6px 22px 0;display:none}
+#hogdlg .hd-opcoes{padding:8px 16px 4px;display:flex;flex-direction:column;gap:6px}
+#hogdlg .hd-op{display:flex;align-items:center;gap:11px;text-align:left;width:100%;
+  padding:12px 14px;border:1.5px solid var(--cinza-2);border-radius:10px;background:#fff;
+  font-family:var(--fonte);font-size:14px;font-weight:700;color:var(--cinza-6,#2c3e50);cursor:pointer}
+#hogdlg .hd-op:hover{border-color:var(--azul);background:var(--azul-claro,#EAF3F8)}
+#hogdlg .hd-op .hd-ico{font-size:19px;line-height:1}
+#hogdlg .hd-op .hd-desc{display:block;font-size:11.5px;font-weight:500;color:var(--cinza-5);margin-top:2px}
+#hogdlg .hd-acoes{display:flex;gap:9px;justify-content:flex-end;padding:16px 22px 18px}
+#hogdlg .hd-b{padding:10px 18px;border:0;border-radius:9px;font-family:var(--fonte);
+  font-size:14px;font-weight:800;cursor:pointer}
+#hogdlg .hd-b-ok{background:var(--azul);color:#fff}
+#hogdlg .hd-b-perigo{background:var(--vermelho);color:#fff}
+#hogdlg .hd-b-nao{background:var(--cinza-1);color:var(--cinza-5)}
+</style>
+<div id="hogdlg-fundo" onclick="if(event.target===this)hogDlgFechar(null)">
+  <div id="hogdlg" role="dialog" aria-modal="true">
+    <div class="hd-cab" id="hd-cab"></div>
+    <div class="hd-sub" id="hd-sub"></div>
+    <div class="hd-opcoes" id="hd-opcoes"></div>
+    <div class="hd-corpo" id="hd-corpo"></div>
+    <div class="hd-erro" id="hd-erro"></div>
+    <div class="hd-acoes" id="hd-acoes"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1365,6 +1409,10 @@ const PERFIS = {
     rot: 'Enfermagem', cor: '#2E86AB',
     abas: ['alertas','registro','diversas','remessas','comprar']
   },
+  RECEPCAO: {
+    rot: 'Recepção', cor: '#16A085',
+    abas: ['diversas','comprar']
+  },
   COMPRAS: {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','comprar','cotacao','decisao',
@@ -1374,11 +1422,36 @@ const PERFIS = {
     rot: 'Financeiro', cor: '#8E44AD',
     abas: ['alertas','painel','aprovarpedido','receber','historico','ocorrencias']
   },
+  DIRETORIA: {
+    rot: 'Diretoria', cor: '#34495E',
+    abas: ['painel','historico']
+  },
   ADMINISTRATIVO: {
     rot: 'Administrativo', cor: '#27AE60',
     abas: '*'   // acesso total, inclusive o cadastro de usuários
   }
 };
+
+// ── SEÇÕES DO PAINEL, por perfil ────────────────────────────────
+// Cobertura & Capital fica FORA do Financeiro e da Diretoria por decisão
+// dela (02/08): cobertura em dias é média de consumo, e julho ficou
+// distorcido pelas férias — o número induz a leitura errada. No lugar,
+// esses perfis têm "Saldo & Preço": saldo atual e último valor pago.
+const PAINEL_SECOES = {
+  alertas:     ['COMPRAS','ADMINISTRATIVO'],
+  saldos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
+  cobertura:   ['COMPRAS','ADMINISTRATIVO'],
+  custos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
+  emprestimos: ['COMPRAS','ADMINISTRATIVO'],
+  simulador:   ['COMPRAS','ADMINISTRATIVO'],
+  base:        ['COMPRAS','ADMINISTRATIVO']
+};
+function podeSecao(sec){
+  if (!SESSAO) return false;
+  if (SESSAO.perfil === 'ADMINISTRATIVO') return true;
+  const l = PAINEL_SECOES[sec];
+  return !l || l.indexOf(SESSAO.perfil) >= 0;
+}
 
 // ── O QUE CADA PERFIL PODE FAZER ────────────────────────────────
 const ATOS = {
@@ -1406,6 +1479,11 @@ function perfilCor(p){ return (PERFIS[p] && PERFIS[p].cor) || 'var(--cinza-5)'; 
 
 function podeAba(aba){
   if (!SESSAO) return false;
+  // exceção da pessoa vence o perfil; bloqueio vence liberação
+  const bloq = SESSAO.abas_bloqueadas || [];
+  if (bloq.indexOf(aba) >= 0) return false;
+  const extra = SESSAO.abas_extra || [];
+  if (extra.indexOf(aba) >= 0) return true;
   const P = PERFIS[SESSAO.perfil];
   if (!P) return false;
   if (P.abas === '*') return true;
@@ -1503,7 +1581,8 @@ async function fazerLogin(){
     const r = await sbFetch('rpc/fn_login', 'POST', { p_login: login, p_senha: senha });
     const u = Array.isArray(r) ? r[0] : r;
     if (!u || !u.id) { lgErro('Login ou senha incorretos.'); return; }
-    SESSAO = { id: u.id, nome: u.nome, login: u.login, perfil: u.perfil };
+    SESSAO = { id: u.id, nome: u.nome, login: u.login, perfil: u.perfil,
+               abas_extra: u.abas_extra || [], abas_bloqueadas: u.abas_bloqueadas || [] };
     if (SESSAO.perfil === 'ADMINISTRATIVO') ADM_SENHA = senha;
     try{ localStorage.setItem('hog_sessao', JSON.stringify(SESSAO)); }catch(e){}
     document.getElementById('lg-senha').value = '';
@@ -1524,35 +1603,60 @@ async function fazerLogin(){
     btn.disabled = false; btn.textContent = 'Entrar';
   }
 }
-function sairDaSessao(){
-  if (!confirm('Sair do sistema?')) return;
+async function sairDaSessao(){
+  const ok = await hogConfirma({ titulo:'Sair do sistema?',
+    texto:'Você vai precisar do login e da senha para entrar de novo.',
+    ok:'Sair', perigo:true });
+  if (!ok) return;
   SESSAO = null; ADM_SENHA = null;
   try{ localStorage.removeItem('hog_sessao'); }catch(e){}
   location.reload();
 }
-function menuUsuario(){
+async function menuUsuario(){
   if (!SESSAO) { abrirLogin(); return; }
-  const o = prompt('👤 ' + SESSAO.nome + ' — ' + perfilRot(SESSAO.perfil) +
-                   '\n\nDigite:\n  1 para TROCAR MINHA SENHA\n  2 para SAIR' +
-                   (podeAto('cadastrar_usuarios') ? '\n  3 para CADASTRO DE USUÁRIOS' : ''));
-  if (o === '1') trocarMinhaSenha();
-  else if (o === '2') sairDaSessao();
-  else if (o === '3' && podeAto('cadastrar_usuarios')) trocarAba('usuarios');
+  const opcoes = [
+    { valor:'senha', ico:'🔑', rot:'Trocar minha senha',
+      desc:'a senha atual continua valendo até você confirmar' }
+  ];
+  if (podeAto('cadastrar_usuarios'))
+    opcoes.push({ valor:'usuarios', ico:'👥', rot:'Cadastro de usuários',
+                  desc:'criar, editar perfil e redefinir senha da equipe' });
+  opcoes.push({ valor:'sair', ico:'🚪', rot:'Sair do sistema',
+                desc:'o próximo acesso pedirá login e senha' });
+
+  const o = await hogMenu({
+    titulo: SESSAO.nome,
+    texto: perfilRot(SESSAO.perfil) + ' · login ' + SESSAO.login,
+    opcoes
+  });
+  if (o === 'senha') trocarMinhaSenha();
+  else if (o === 'sair') sairDaSessao();
+  else if (o === 'usuarios') trocarAba('usuarios');
 }
 async function trocarMinhaSenha(){
-  const atual = prompt('Senha atual:');
-  if (atual === null) return;
-  const nova = prompt('Senha nova (mínimo 4 caracteres):');
-  if (nova === null) return;
-  const conf = prompt('Repita a senha nova:');
-  if (conf === null) return;
-  if (nova !== conf) { toast('As senhas não conferem.', 'erro'); return; }
+  const r = await hogPergunta({
+    titulo: 'Trocar minha senha',
+    texto: 'A senha nova passa a valer no próximo acesso, em qualquer aparelho.',
+    ok: 'Trocar senha',
+    campos: [
+      { id:'atual', rot:'Senha atual',            tipo:'senha', obrigatorio:true },
+      { id:'nova',  rot:'Senha nova',             tipo:'senha', obrigatorio:true,
+        placeholder:'mínimo 4 caracteres' },
+      { id:'conf',  rot:'Repita a senha nova',    tipo:'senha', obrigatorio:true }
+    ]
+  });
+  if (!r) return;
+  if (r.nova !== r.conf) { toast('As senhas não conferem.', 'erro'); return; }
+  if (r.nova.length < 4) { toast('A senha nova precisa ter pelo menos 4 caracteres.', 'erro'); return; }
   try{
     await sbFetch('rpc/fn_trocar_senha', 'POST',
-      { p_login: SESSAO.login, p_senha_atual: atual, p_senha_nova: nova });
-    if (SESSAO.perfil === 'ADMINISTRATIVO') ADM_SENHA = nova;
+      { p_login: SESSAO.login, p_senha_atual: r.atual, p_senha_nova: r.nova });
+    if (SESSAO.perfil === 'ADMINISTRATIVO') ADM_SENHA = r.nova;
     toast('Senha alterada. ✓', 'sucesso');
-  }catch(e){ toast('Não foi possível trocar: ' + (e.message||e), 'erro'); }
+  }catch(e){
+    const m = String(e.message||e);
+    toast((m.match(/"message":"([^"]+)"/)||[null,m])[1], 'erro');
+  }
 }
 function abrirPrimeiraAbaPermitida(){
   const preferida = ['registro','alertas','painel','comprar','receber','historico'];
@@ -3057,6 +3161,7 @@ function trocarAba(aba) {
   document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
   { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
   if (aba==='usuarios') { usCarregar(); }
+  if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
   if (aba==='remessas') { rmCarregar(); }
   if (aba==='alertas')  { alCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
@@ -7152,7 +7257,8 @@ async function invAplicarAjustesImportados(){
 <div id="aba-painel" class="container" style="display:none">
   <div class="pn-pills">
     <button class="pn-pill ativa" data-sec="alertas" onclick="pnIr('alertas',this)">🚨 Alertas & Ação <span class="pb">OPERAÇÃO</span></button>
-    <button class="pn-pill" data-sec="cobertura" onclick="pnIr('cobertura',this)">📈 Cobertura & Capital <span class="pb">SÓCIOS/FIN</span></button>
+    <button class="pn-pill" data-sec="saldos" onclick="pnIr('saldos',this)">📦 Saldo & Preço <span class="pb">FIN/DIRETORIA</span></button>
+    <button class="pn-pill" data-sec="cobertura" onclick="pnIr('cobertura',this)">📈 Cobertura & Capital <span class="pb">OPERAÇÃO</span></button>
     <button class="pn-pill" data-sec="custos" onclick="pnIr('custos',this)">💰 Custos <span class="pb">SÓCIOS/FIN</span></button>
     <button class="pn-pill" data-sec="emprestimos" onclick="pnIr('emprestimos',this)">🤝 Empréstimos <span class="pb">OPERAÇÃO</span></button>
     <button class="pn-pill" data-sec="simulador" onclick="pnIr('simulador',this)">🔮 Simulador <span class="pb">COMPRAS</span></button>
@@ -7160,6 +7266,7 @@ async function invAplicarAjustesImportados(){
     <span id="pn-status" style="margin-left:auto;font-size:11px;color:var(--cinza-4);align-self:center"></span>
   </div>
   <div class="pn-sec on" id="pn-sec-alertas"><div class="pn-empty">Carregando…</div></div>
+  <div class="pn-sec" id="pn-sec-saldos"></div>
   <div class="pn-sec" id="pn-sec-cobertura"></div>
   <div class="pn-sec" id="pn-sec-custos"></div>
   <div class="pn-sec" id="pn-sec-emprestimos"></div>
@@ -7203,17 +7310,79 @@ function pnCusto(materialId, qtd){ const m=pnUvp[materialId]; return Math.abs(qt
 function pnTemOp(){ return podeAba('cotacao') || podeAba('decisao'); }
 function pnTemInd(){ return podeAba('painel'); }
 function pnIr(sec, btn){
-  const precisaInd = (sec==='cobertura'||sec==='custos');
-  if(precisaInd && !pnTemInd()){
-    toast('Seu perfil não tem acesso aos indicadores.','erro'); return;
+  if(!podeSecao(sec)){
+    toast('Seu perfil não tem acesso a esta parte do painel.','erro'); return;
   }
-  if(!precisaInd && !pnTemOp()){
-    toast('Seu perfil não tem acesso a esta área do painel.','erro'); return;
-  }
+  if(sec==='saldos') pnSaldos();
   document.querySelectorAll('#aba-painel .pn-sec').forEach(s=>s.classList.remove('on'));
   document.getElementById('pn-sec-'+sec).classList.add('on');
   document.querySelectorAll('#aba-painel .pn-pill').forEach(p=>p.classList.remove('ativa'));
   if(btn) btn.classList.add('ativa');
+}
+
+function pnAplicarSecoes(){
+  let primeira = null;
+  document.querySelectorAll('#aba-painel .pn-pill').forEach(p=>{
+    const sec = p.getAttribute('data-sec');
+    const ok = podeSecao(sec);
+    p.style.display = ok ? '' : 'none';
+    if(ok && !primeira) primeira = p;
+  });
+  const ativa = document.querySelector('#aba-painel .pn-pill.ativa');
+  if((!ativa || ativa.style.display==='none') && primeira){
+    primeira.click();
+  }
+}
+
+// ── SALDO & PREÇO — o que o Financeiro e a Diretoria enxergam ──
+// Sem cobertura, sem projeção, sem média: só o que é fato hoje.
+let pnSaldoBusca='';
+function pnSaldos(){
+  const el=document.getElementById('pn-sec-saldos'); if(!el) return;
+  const linhas=(ccDados||[]).map(r=>{
+    const mid=r.material_id;
+    const uvp=(pnUvp[mid]&&pnUvp[mid].uvp)||0;
+    const saldo=Number(r.saldo)||0;
+    return { mid, nome:r.material||((pnUvp[mid]&&pnUvp[mid].nome)||('#'+mid)),
+             un:r.unidade_medida||'', saldo, uvp, valor:saldo*uvp };
+  }).filter(x=>x.saldo!==0 || x.uvp>0);
+  const termo=(pnSaldoBusca||'').trim().toUpperCase();
+  const vis=termo?linhas.filter(x=>(x.nome||'').toUpperCase().indexOf(termo)>=0):linhas;
+  vis.sort((a,b)=>b.valor-a.valor);
+  const total=vis.reduce((s,x)=>s+x.valor,0);
+  const semPreco=vis.filter(x=>!(x.uvp>0)).length;
+  el.innerHTML=`
+    <div class="pn-card" style="padding:12px 16px;font-size:12px;color:var(--cinza-4)">
+      📦 <b>Saldo atual e último valor pago</b> — foto de hoje, item a item.
+      Não há projeção nem média de consumo aqui: são os dois números que não dependem de estimativa.
+    </div>
+    <div class="pn-duo">
+      <div class="pn-card"><div class="pn-ct"><span>💵 Valor em estoque</span><span class="pn-funcao">saldo × último valor pago</span></div>
+        <div style="font-size:26px;font-weight:800;color:var(--azul);padding:6px 2px">${pnMoney(total)}</div>
+        <div class="pn-nota">${vis.length} item(ns)${semPreco?` · ⚠️ ${semPreco} sem valor de compra, contam como zero`:''}</div>
+      </div>
+      <div class="pn-card"><div class="pn-ct"><span>🔎 Procurar item</span></div>
+        <input id="pn-saldo-busca" value="${(pnSaldoBusca||'').replace(/"/g,'&quot;')}" placeholder="digite parte do nome…"
+          style="width:100%;box-sizing:border-box;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:14px;font-family:var(--fonte)"
+          oninput="pnSaldoBusca=this.value;clearTimeout(window._pnsb);window._pnsb=setTimeout(()=>{pnSaldos();const e=document.getElementById('pn-saldo-busca');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},280)">
+      </div>
+    </div>
+    <div class="pn-card">
+      <div class="pn-ct"><span>📋 Itens (${vis.length})</span><span class="pn-funcao">ordenado por valor em estoque</span></div>
+      <div style="max-height:520px;overflow:auto">
+        <table class="pn-tb">
+          <thead><tr><th>Item</th><th class="num">Saldo</th><th>Un</th><th class="num">Último valor pago</th><th class="num">Valor em estoque</th></tr></thead>
+          <tbody>${vis.map(x=>`<tr>
+            <td>${x.nome}</td>
+            <td class="num"${x.saldo<0?' style="color:var(--vermelho);font-weight:800"':''}>${x.saldo.toLocaleString('pt-BR')}</td>
+            <td style="font-size:11px;color:var(--cinza-4)">${x.un}</td>
+            <td class="num">${x.uvp>0?pnMoney(x.uvp):'<span style="color:var(--cinza-4)">—</span>'}</td>
+            <td class="num" style="font-weight:700">${pnMoney(x.valor)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+      ${vis.length?'':'<div class="pn-empty">Nenhum item encontrado.</div>'}
+    </div>`;
 }
 
 async function pnCarregar(){
@@ -10635,8 +10804,10 @@ async function alIgnorar(id){
           <div class="campo"><label>Perfil</label>
             <select id="us-perfil">
               <option value="ENFERMAGEM">Enfermagem</option>
+              <option value="RECEPCAO">Recepção</option>
               <option value="COMPRAS">Compras</option>
               <option value="FINANCEIRO">Financeiro</option>
+              <option value="DIRETORIA">Diretoria</option>
               <option value="ADMINISTRATIVO">Administrativo (acesso total)</option>
             </select></div>
           <div class="campo"><label>Situação</label>
@@ -10645,6 +10816,15 @@ async function alIgnorar(id){
             <input type="password" id="us-nova-senha" placeholder="mínimo 4 caracteres"></div>
         </div>
         <div id="us-perfil-desc" style="font-size:12px;color:var(--cinza-5);margin-top:10px"></div>
+
+        <div style="margin-top:16px;border-top:1px dashed var(--cinza-2);padding-top:12px">
+          <div style="font-weight:800;font-size:12.5px;margin-bottom:3px">Exceções só para esta pessoa</div>
+          <div style="font-size:11.5px;color:var(--cinza-5);margin-bottom:10px">
+            Deixe em <b>Segue o perfil</b> quando não houver exceção. Use com parcimônia:
+            exceção demais e ninguém mais sabe quem vê o quê.
+          </div>
+          <div id="us-excecoes" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px"></div>
+        </div>
         <div style="display:flex;gap:10px;margin-top:14px">
           <button class="btn btn-primario" onclick="usSalvar()">Salvar</button>
           <button class="btn btn-secundario" onclick="usCancelar()">Cancelar</button>
@@ -10725,7 +10905,7 @@ function usRenderMatriz(){
     comprar:'O que comprar', cotacao:'Orçamentos', decisao:'Pedidos',
     aprovarpedido:'Aprovar Pedido', receber:'Receber NF', inventario:'Contagem e ajustes',
     historico:'Compras e notas', ocorrencias:'Ocorrências', usuarios:'Usuários' };
-  const perfis = ['ENFERMAGEM','COMPRAS','FINANCEIRO','ADMINISTRATIVO'];
+  const perfis = ['ENFERMAGEM','RECEPCAO','COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'];
   let h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tr>' +
           '<th style="text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--cinza-2)">Tela</th>';
   for (const p of perfis) h += '<th style="padding:6px 8px;border-bottom:1.5px solid var(--cinza-2);color:' + perfilCor(p) + '">' + perfilRot(p) + '</th>';
@@ -10743,6 +10923,43 @@ function usRenderMatriz(){
   document.getElementById('us-matriz').innerHTML = h;
 }
 
+// ── grade de exceções: uma linha por tela ────────────────────────
+const US_ROT_ABA = { alertas:'Alertas', painel:'Dashboard', registro:'Saída Cirúrgica',
+  diversas:'Saídas Diversas', aprovacao:'Aprovação de saídas', remessas:'Fora de casa',
+  comprar:'O que comprar', cotacao:'Orçamentos', decisao:'Pedidos',
+  aprovarpedido:'Aprovar Pedido', receber:'Receber NF', inventario:'Contagem e ajustes',
+  historico:'Compras e notas', ocorrencias:'Ocorrências', usuarios:'Usuários' };
+
+function usRenderExcecoes(extra, bloq){
+  extra = extra || []; bloq = bloq || [];
+  const perfil = document.getElementById('us-perfil').value;
+  const P = PERFIS[perfil] || { abas: [] };
+  const el = document.getElementById('us-excecoes');
+  if (!el) return;
+  el.innerHTML = ABAS_TODAS.map(a => {
+    const noPerfil = P.abas === '*' || P.abas.indexOf(a) >= 0;
+    const v = bloq.indexOf(a) >= 0 ? 'B' : (extra.indexOf(a) >= 0 ? 'L' : '');
+    return `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
+      <span style="flex:1;min-width:0">${US_ROT_ABA[a] || a}
+        <span style="color:var(--cinza-4);font-size:10.5px">${noPerfil ? '· no perfil' : ''}</span></span>
+      <select id="us-ex-${a}" style="font-size:11.5px;padding:4px 6px;border:1.5px solid var(--cinza-2);border-radius:6px;font-family:var(--fonte)">
+        <option value=""${v===''?' selected':''}>Segue o perfil</option>
+        <option value="L"${v==='L'?' selected':''}>Liberar</option>
+        <option value="B"${v==='B'?' selected':''}>Bloquear</option>
+      </select></div>`;
+  }).join('');
+}
+function usLerExcecoes(){
+  const extra = [], bloq = [];
+  for (const a of ABAS_TODAS){
+    const el = document.getElementById('us-ex-' + a);
+    if (!el) continue;
+    if (el.value === 'L') extra.push(a);
+    else if (el.value === 'B') bloq.push(a);
+  }
+  return { extra, bloq };
+}
+
 function usNovo(){
   document.getElementById('us-id').value = '';
   document.getElementById('us-nome').value = '';
@@ -10751,6 +10968,7 @@ function usNovo(){
   document.getElementById('us-ativo').value = '1';
   document.getElementById('us-nova-senha').value = '';
   document.getElementById('us-lb-senha').textContent = 'Senha (obrigatória)';
+  usRenderExcecoes([], []);
   document.getElementById('us-form').style.display = '';
   document.getElementById('us-nome').focus();
 }
@@ -10763,6 +10981,7 @@ function usEditar(id){
   document.getElementById('us-ativo').value = u.ativo ? '1' : '0';
   document.getElementById('us-nova-senha').value = '';
   document.getElementById('us-lb-senha').textContent = 'Nova senha (deixe vazio para manter)';
+  usRenderExcecoes(u.abas_extra || [], u.abas_bloqueadas || []);
   document.getElementById('us-form').style.display = '';
   document.getElementById('us-form').scrollIntoView({ behavior:'smooth', block:'center' });
 }
@@ -10776,7 +10995,9 @@ async function usSalvar(){
     p_novo_login: document.getElementById('us-login').value.trim().toLowerCase(),
     p_perfil: document.getElementById('us-perfil').value,
     p_ativo: document.getElementById('us-ativo').value === '1',
-    p_nova_senha: document.getElementById('us-nova-senha').value || ''
+    p_nova_senha: document.getElementById('us-nova-senha').value || '',
+    p_abas_extra: usLerExcecoes().extra,
+    p_abas_bloqueadas: usLerExcecoes().bloq
   });
   if (!corpo.p_nome || !corpo.p_novo_login) { toast('Preencha nome e login.', 'erro'); return; }
   if (!id && corpo.p_nova_senha.length < 4) { toast('A senha precisa ter pelo menos 4 caracteres.', 'erro'); return; }
@@ -10802,9 +11023,127 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!P || !d) return;
     d.textContent = P.abas === '*'
       ? 'Acesso total, inclusive cadastro de usuários.'
-      : 'Telas liberadas: ' + P.abas.join(', ') + '.';
+      : 'Telas liberadas: ' + P.abas.map(a=>US_ROT_ABA[a]||a).join(' · ') + '.';
+    const ex = usLerExcecoes();
+    usRenderExcecoes(ex.extra, ex.bloq);
   });
 });
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CAIXAS DO PRÓPRIO APP (v4.8b)
+// Regra permanente: nenhuma tela nova usa prompt(), confirm() ou alert()
+// do navegador. Aquelas caixas cinzas escritas "hoguanabara.github.io diz"
+// não são do sistema, não têm o visual do app e não aceitam mais de um
+// campo — foi por isso que a escolha de menu virava "digite 1, 2 ou 3".
+// Use hogPergunta / hogConfirma / hogMenu. Todas devolvem Promise:
+//   const v = await hogPergunta({titulo:'Quantidade', campos:[...]});
+// O verificar.py conta quantos prompt/confirm nativos ainda existem e
+// o número só pode cair de uma versão para a outra.
+// ═══════════════════════════════════════════════════════════════
+let _hogDlgResolver = null;
+
+function hogDlgFechar(valor){
+  const f = document.getElementById('hogdlg-fundo');
+  if (f) f.classList.remove('on');
+  document.onkeydown = null;
+  const r = _hogDlgResolver; _hogDlgResolver = null;
+  if (r) r(valor);
+}
+function hogDlgErro(msg){
+  const e = document.getElementById('hd-erro');
+  if (e) { e.textContent = msg || ''; e.style.display = msg ? '' : 'none'; }
+}
+function _hogEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function _hogAbrir({titulo, texto, opcoesHtml, corpoHtml, acoesHtml, aoAbrir}){
+  document.getElementById('hd-cab').textContent = titulo || '';
+  const sub = document.getElementById('hd-sub');
+  sub.innerHTML = texto ? _hogEsc(texto).replace(/\n/g,'<br>') : '';
+  sub.style.display = texto ? '' : 'none';
+  const op = document.getElementById('hd-opcoes');
+  op.innerHTML = opcoesHtml || ''; op.style.display = opcoesHtml ? '' : 'none';
+  const co = document.getElementById('hd-corpo');
+  co.innerHTML = corpoHtml || ''; co.style.display = corpoHtml ? '' : 'none';
+  document.getElementById('hd-acoes').innerHTML = acoesHtml || '';
+  hogDlgErro('');
+  document.getElementById('hogdlg-fundo').classList.add('on');
+  document.onkeydown = ev => { if (ev.key === 'Escape') hogDlgFechar(null); };
+  if (aoAbrir) setTimeout(aoAbrir, 60);
+}
+
+// ── menu de opções (substitui o "digite 1, 2 ou 3") ─────────────
+// opcoes: [{valor, ico, rot, desc}]
+function hogMenu({titulo, texto, opcoes}){
+  return new Promise(res => {
+    _hogDlgResolver = res;
+    const html = (opcoes||[]).map((o,i)=>
+      `<button class="hd-op" onclick="hogDlgFechar(${_hogEsc(JSON.stringify(o.valor))})">
+         <span class="hd-ico">${o.ico||'•'}</span>
+         <span>${_hogEsc(o.rot)}${o.desc?`<span class="hd-desc">${_hogEsc(o.desc)}</span>`:''}</span>
+       </button>`).join('');
+    _hogAbrir({ titulo, texto, opcoesHtml: html,
+      acoesHtml: '<button class="hd-b hd-b-nao" onclick="hogDlgFechar(null)">Fechar</button>' });
+  });
+}
+
+// ── confirmação (substitui confirm) ─────────────────────────────
+function hogConfirma({titulo, texto, ok, perigo}){
+  return new Promise(res => {
+    _hogDlgResolver = v => res(v === true);
+    _hogAbrir({ titulo, texto,
+      acoesHtml:
+        '<button class="hd-b hd-b-nao" onclick="hogDlgFechar(false)">Cancelar</button>' +
+        `<button class="hd-b ${perigo?'hd-b-perigo':'hd-b-ok'}" onclick="hogDlgFechar(true)">${_hogEsc(ok||'Confirmar')}</button>` });
+  });
+}
+
+// ── formulário (substitui prompt, e aceita vários campos) ───────
+// campos: [{id, rot, tipo, valor, placeholder, obrigatorio, opcoes:[{v,r}]}]
+// devolve {id: valor} ou null se cancelou
+function hogPergunta({titulo, texto, campos, ok}){
+  return new Promise(res => {
+    const cps = campos || [];
+    _hogDlgResolver = v => res(v);
+    const html = cps.map(c=>{
+      const v = _hogEsc(c.valor==null?'':c.valor);
+      if (c.tipo === 'texto-longo')
+        return `<label for="hd-c-${c.id}">${_hogEsc(c.rot)}</label><textarea id="hd-c-${c.id}" placeholder="${_hogEsc(c.placeholder||'')}">${v}</textarea>`;
+      if (c.tipo === 'lista')
+        return `<label for="hd-c-${c.id}">${_hogEsc(c.rot)}</label><select id="hd-c-${c.id}">${
+          (c.opcoes||[]).map(o=>`<option value="${_hogEsc(o.v)}"${String(o.v)===String(c.valor)?' selected':''}>${_hogEsc(o.r)}</option>`).join('')}</select>`;
+      const t = c.tipo === 'senha' ? 'password' : (c.tipo === 'numero' ? 'number' : (c.tipo==='data'?'date':'text'));
+      const passo = c.tipo === 'numero' ? ' step="any"' : '';
+      return `<label for="hd-c-${c.id}">${_hogEsc(c.rot)}</label><input id="hd-c-${c.id}" type="${t}"${passo} value="${v}" placeholder="${_hogEsc(c.placeholder||'')}">`;
+    }).join('');
+    const enviar = () => {
+      const out = {};
+      for (const c of cps){
+        const el = document.getElementById('hd-c-' + c.id);
+        const val = el ? el.value : '';
+        if (c.obrigatorio && !String(val).trim()){
+          hogDlgErro('Preencha: ' + c.rot); if (el) el.focus(); return;
+        }
+        out[c.id] = val;
+      }
+      hogDlgFechar(out);
+    };
+    window._hogEnviar = enviar;
+    _hogAbrir({ titulo, texto, corpoHtml: html,
+      acoesHtml:
+        '<button class="hd-b hd-b-nao" onclick="hogDlgFechar(null)">Cancelar</button>' +
+        `<button class="hd-b hd-b-ok" onclick="window._hogEnviar()">${_hogEsc(ok||'Confirmar')}</button>`,
+      aoAbrir: () => {
+        const p = cps[0] && document.getElementById('hd-c-' + cps[0].id);
+        if (p) p.focus();
+        document.querySelectorAll('#hd-corpo input').forEach(i=>{
+          i.onkeydown = ev => { if (ev.key === 'Enter') window._hogEnviar(); };
+        });
+      }});
+  });
+}
 </script>
 
 </body>
