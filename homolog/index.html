@@ -373,9 +373,9 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.7 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.8 · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
-  <div class="badge-perfil">👤 Equipe CC</div>
+  <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
 
 <button class="hs-burger" onclick="hsMobile()" aria-label="menu">☰ Menu</button>
@@ -430,7 +430,9 @@ details[open] summary { margin-bottom: 6px; }
 
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-ocorrencias" onclick="trocarAba('ocorrencias')"><span class="hs-ico">⚠️</span> Ocorrências</div>
 
-    <div class="hs-item hs-solo hs-cadeado" id="aba-btn-cadeado" onclick="desbloquearRestrito()" title="Área restrita (senha)"><span class="hs-ico">🔒</span> Área restrita</div>
+    <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-usuarios" onclick="trocarAba('usuarios')"><span class="hs-ico">👥</span> Usuários</div>
+
+    <div class="hs-item hs-solo hs-cadeado" id="aba-btn-cadeado" onclick="menuUsuario()" title="Trocar senha ou sair"><span class="hs-ico">👤</span> Minha conta</div>
   </nav>
 </aside>
 <main class="hog-main">
@@ -581,10 +583,10 @@ details[open] summary { margin-bottom: 6px; }
             <option value="">Selecione...</option>
             <option value="CONSULTÓRIOS">🏥 Consultórios</option>
             <option value="USO CC">🔧 Uso CC</option>
-            <option value="USO RPA">🛏️ Uso RPA</option>
             <option value="USO CME">♻️ Uso CME</option>
             <option value="PERDA">⚠️ Perda</option>
             <option value="VENCIMENTO">📅 Vencimento</option>
+            <option value="DESCARTE">🗑️ Descarte</option>
             <option value="EMPRESTIMO">🤝 Empréstimo</option>
             <option value="AUTORREFRATOR">👁️ Autorrefrator</option>
           </select>
@@ -1309,6 +1311,35 @@ details[open] summary { margin-bottom: 6px; }
   </div>
 </div>
 
+
+<!-- ── LOGIN (v4.8) ─────────────────────────────────────────── -->
+<div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(20,30,45,.93);align-items:center;justify-content:center;padding:18px;font-family:var(--fonte)">
+  <div style="background:#fff;border-radius:16px;max-width:390px;width:100%;padding:26px 24px;box-shadow:0 18px 50px rgba(0,0,0,.35)">
+    <div style="font-size:22px;font-weight:800;color:var(--azul);margin-bottom:2px">🏥 HOG — Centro Cirúrgico</div>
+    <div style="font-size:13px;color:var(--cinza-5);margin-bottom:18px">Entre com seu login e senha</div>
+
+    <label style="display:block;font-size:12px;font-weight:700;color:var(--cinza-5);margin-bottom:4px">Login</label>
+    <input id="lg-login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"
+           style="width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid var(--cinza-2);border-radius:9px;font-size:15px;font-family:var(--fonte);margin-bottom:12px"
+           onkeydown="if(event.key==='Enter'){document.getElementById('lg-senha').focus()}">
+
+    <label style="display:block;font-size:12px;font-weight:700;color:var(--cinza-5);margin-bottom:4px">Senha</label>
+    <input id="lg-senha" type="password" autocomplete="current-password"
+           style="width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid var(--cinza-2);border-radius:9px;font-size:15px;font-family:var(--fonte)"
+           onkeydown="if(event.key==='Enter'){fazerLogin()}">
+
+    <div id="lg-erro" style="display:none;color:var(--vermelho);font-size:13px;font-weight:600;margin-top:10px"></div>
+
+    <button id="lg-btn" onclick="fazerLogin()"
+            style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:9px;background:var(--azul);color:#fff;font-size:15px;font-weight:800;font-family:var(--fonte);cursor:pointer">Entrar</button>
+
+    <div style="font-size:11.5px;color:var(--cinza-4);margin-top:14px;line-height:1.5">
+      Cada lançamento fica registrado no seu nome. Esqueceu a senha? Peça para o
+      Administrativo redefinir em <b>Usuários</b>.
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1320,66 +1351,261 @@ url: 'https://uewfqkvjfdhnugvjrilr.supabase.co',
 key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 };
 
-// ═══ ACESSOS (v4.5) ═══
-// NÍVEL 1 — sem senha: Saída Cirúrgica, Saídas Diversas, O que comprar.
-// NÍVEL 2 — uma senha: orçamento, pedido, receber NF, inventário, relatórios,
-//           dashboard e ocorrências. Fica lembrada no aparelho.
-// NÍVEL 3 — assinatura: os atos que aprovam ou movem saldo. Pedida SEMPRE.
-const SENHA_ACESSO2 = 'hog2026';
-const SENHA_ASSINATURA = 'cps2026';
+// ═══════════════════════════════════════════════════════════════
+// ACESSOS v4.8 — USUÁRIOS, PERFIS E SESSÃO
+// Não existe mais senha escrita no código. Cada pessoa entra com login e
+// senha próprios, guardados com hash no Supabase (tabela `usuarios`).
+// Quem lançou fica gravado em registrado_por / aprovado_por automaticamente.
+// ═══════════════════════════════════════════════════════════════
 
-// aliases mantidos para não quebrar chamadas antigas espalhadas pelo app
-const SENHA_APROVACAO = SENHA_ACESSO2;
-const SENHA_ENTRADA = SENHA_ACESSO2;
-const SENHA_COMPRAS = SENHA_ACESSO2;
-const SENHA_INDICADORES = SENHA_ACESSO2;
+// ── O QUE CADA PERFIL VÊ ────────────────────────────────────────
+// Para mudar quem acessa o quê, edite só esta tabela.
+const PERFIS = {
+  ENFERMAGEM: {
+    rot: 'Enfermagem', cor: '#2E86AB',
+    abas: ['alertas','registro','diversas','remessas','comprar']
+  },
+  COMPRAS: {
+    rot: 'Compras', cor: '#E67E22',
+    abas: ['alertas','registro','diversas','remessas','comprar','cotacao','decisao',
+           'receber','inventario','historico','ocorrencias','painel']
+  },
+  FINANCEIRO: {
+    rot: 'Financeiro', cor: '#8E44AD',
+    abas: ['alertas','painel','aprovarpedido','receber','historico','ocorrencias']
+  },
+  ADMINISTRATIVO: {
+    rot: 'Administrativo', cor: '#27AE60',
+    abas: '*'   // acesso total, inclusive o cadastro de usuários
+  }
+};
 
-// ── ASSINATURA: pedida a cada ato, nunca memorizada ──
+// ── O QUE CADA PERFIL PODE FAZER ────────────────────────────────
+const ATOS = {
+  aprovar_saida:      ['ADMINISTRATIVO'],
+  aprovar_pedido:     ['FINANCEIRO','ADMINISTRATIVO'],
+  entrada_nf:         ['COMPRAS','FINANCEIRO','ADMINISTRATIVO'],
+  inventario:         ['COMPRAS','ADMINISTRATIVO'],
+  remessa:            ['COMPRAS','ADMINISTRATIVO'],
+  liberar_pagamento:  ['FINANCEIRO','ADMINISTRATIVO'],
+  cadastrar_usuarios: ['ADMINISTRATIVO']
+};
+
+const ATO_ROTULO = {
+  aprovar_saida:'aprovar saídas', aprovar_pedido:'aprovar pedidos',
+  entrada_nf:'dar entrada de nota fiscal', inventario:'mexer no inventário',
+  remessa:'mexer no livro de remessas', liberar_pagamento:'liberar nota para pagamento',
+  cadastrar_usuarios:'cadastrar usuários'
+};
+
+let SESSAO = null;        // {id, nome, login, perfil}
+let ADM_SENHA = null;     // senha do administrativo, só na memória desta aba
+
+function perfilRot(p){ return (PERFIS[p] && PERFIS[p].rot) || p || '—'; }
+function perfilCor(p){ return (PERFIS[p] && PERFIS[p].cor) || 'var(--cinza-5)'; }
+
+function podeAba(aba){
+  if (!SESSAO) return false;
+  const P = PERFIS[SESSAO.perfil];
+  if (!P) return false;
+  if (P.abas === '*') return true;
+  return P.abas.indexOf(aba) >= 0;
+}
+function podeAto(ato){
+  if (!SESSAO) return false;
+  const lista = ATOS[ato];
+  if (!lista) return SESSAO.perfil === 'ADMINISTRATIVO';
+  return lista.indexOf(SESSAO.perfil) >= 0;
+}
+
+// ── ASSINATURA (v4.5) → agora é o próprio login ─────────────────
+// A senha de assinatura deixou de existir: quem está logado já é a assinatura.
+// A função continua com o mesmo nome e a mesma chamada em todo o app; o que ela
+// faz agora é conferir se o PERFIL da pessoa pode praticar aquele ato.
+function atoDoTexto(txt){
+  const t = (txt || '').toLowerCase();
+  if (t.indexOf('pagamento') >= 0) return 'liberar_pagamento';
+  if (t.indexOf('remessa')   >= 0) return 'remessa';
+  if (t.indexOf('pedido')    >= 0) return 'aprovar_pedido';
+  if (t.indexOf('nota') >= 0 || t.indexOf('entrada') >= 0) return 'entrada_nf';
+  if (t.indexOf('invent') >= 0 || t.indexOf('contagem') >= 0) return 'inventario';
+  return 'aprovar_saida';
+}
 function exigirAssinatura(ato){
-  const s = prompt('🖊 ASSINATURA — ' + ato + '\n\nEste ato é registrado no seu nome.\nDigite a senha de aprovação:');
-  if (s === null) return false;
-  if (s !== SENHA_ASSINATURA) { toast('Senha de aprovação incorreta.', 'erro'); return false; }
+  if (!SESSAO) { abrirLogin(); return false; }
+  const chave = atoDoTexto(ato);
+  if (!podeAto(chave)) {
+    toast('Seu perfil (' + perfilRot(SESSAO.perfil) + ') não pode ' +
+          (ATO_ROTULO[chave] || 'praticar este ato') + '.', 'erro');
+    return false;
+  }
   return true;
 }
 
-// ── ÁREA RESTRITA: revela as abas escondidas mediante qualquer senha válida ──
-function revelarAbasRestritas(){
-  document.querySelectorAll('.aba-restrita').forEach(a => a.style.display = '');
+// ── ABAS: mostrar só o que o perfil enxerga ─────────────────────
+const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
+                    'comprar','cotacao','decisao','aprovarpedido','receber',
+                    'inventario','historico','ocorrencias','usuarios'];
+
+function aplicarPermissoes(){
+  for (const aba of ABAS_TODAS){
+    const btn = document.getElementById('aba-btn-' + aba);
+    if (btn) btn.style.display = podeAba(aba) ? '' : 'none';
+  }
+  const relEst = document.getElementById('hs-rel-estoque');
+  if (relEst) relEst.style.display = podeAba('inventario') ? '' : 'none';
   const cad = document.getElementById('aba-btn-cadeado');
-  if (cad) cad.innerHTML = '<span class="hs-ico">🔓</span> Área liberada';
+  if (cad && SESSAO) {
+    cad.innerHTML = '<span class="hs-ico">👤</span> ' + SESSAO.nome +
+      '<br><span style="font-size:11px;opacity:.75;font-weight:600">' +
+      perfilRot(SESSAO.perfil) + ' · sair / trocar senha</span>';
+  }
+  const bd = document.getElementById('badge-usuario');
+  if (bd && SESSAO) {
+    bd.textContent = '👤 ' + SESSAO.nome + ' · ' + perfilRot(SESSAO.perfil);
+    bd.style.background = perfilCor(SESSAO.perfil);
+  }
   if (typeof hsAjustarGrupos === 'function') hsAjustarGrupos();
 }
-function desbloquearRestrito(){
-  if (localStorage.getItem('hog_restrito_ok') === '1') { revelarAbasRestritas(); return; }
-  const sn = prompt('🔒 Área restrita.\n\nDigite uma senha válida (gestão, compras ou entrada):');
-  if (sn === null) return;
-  if (sn === SENHA_APROVACAO || sn === SENHA_COMPRAS || sn === SENHA_ENTRADA) {
-    localStorage.setItem('hog_restrito_ok', '1');
-    revelarAbasRestritas();
-    toast('Área restrita liberada neste dispositivo. ✓', 'sucesso');
-  } else { toast('Senha incorreta.', 'erro'); }
-}
+// nome antigo mantido: o app inteiro chamava esta função
+function revelarAbasRestritas(){ aplicarPermissoes(); }
+function desbloquearRestrito(){ menuUsuario(); }
 function exigirSenhaCompras(){
-  if (localStorage.getItem('hog_compras_ok') === '1') return true;
-  const sn = prompt('🔑 Ação de COMPRAS.\n\nDigite a senha de compras:');
-  if (sn === null) return false;
-  if (sn === SENHA_COMPRAS || sn === SENHA_APROVACAO) {
-    localStorage.setItem('hog_compras_ok', '1');
-    revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
-    toast('Acesso de compras liberado neste dispositivo. ✓', 'sucesso');
-    return true;
+  if (!SESSAO) { abrirLogin(); return false; }
+  if (!podeAba('cotacao')) {
+    toast('Seu perfil (' + perfilRot(SESSAO.perfil) + ') não tem acesso a compras.', 'erro');
+    return false;
   }
-  toast('Senha incorreta.', 'erro'); return false;
+  return true;
 }
 
-// Equipe do Centro Cirúrgico — edite os nomes conforme necessário
-const EQUIPE = [
-  'Evelise (Gestora)',
-  'Técnica Talita',
-  'Lucas (Adm)',
-  'Bethânia (Fin)',
-  'Recepção',
-];
+// ── LOGIN ───────────────────────────────────────────────────────
+function abrirLogin(){
+  const ov = document.getElementById('login-overlay');
+  if (ov) { ov.style.display = 'flex'; setTimeout(()=>{ const i=document.getElementById('lg-login'); if(i) i.focus(); },80); }
+}
+function fecharLogin(){
+  const ov = document.getElementById('login-overlay');
+  if (ov) ov.style.display = 'none';
+}
+function lgErro(msg){
+  const e = document.getElementById('lg-erro');
+  if (e) { e.textContent = msg || ''; e.style.display = msg ? '' : 'none'; }
+}
+async function fazerLogin(){
+  const login = (document.getElementById('lg-login').value || '').trim();
+  const senha = document.getElementById('lg-senha').value || '';
+  if (!login || !senha) { lgErro('Preencha login e senha.'); return; }
+  const btn = document.getElementById('lg-btn');
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  lgErro('');
+  try{
+    const r = await sbFetch('rpc/fn_login', 'POST', { p_login: login, p_senha: senha });
+    const u = Array.isArray(r) ? r[0] : r;
+    if (!u || !u.id) { lgErro('Login ou senha incorretos.'); return; }
+    SESSAO = { id: u.id, nome: u.nome, login: u.login, perfil: u.perfil };
+    if (SESSAO.perfil === 'ADMINISTRATIVO') ADM_SENHA = senha;
+    try{ localStorage.setItem('hog_sessao', JSON.stringify(SESSAO)); }catch(e){}
+    document.getElementById('lg-senha').value = '';
+    fecharLogin();
+    aplicarPermissoes();
+    await carregarEquipe();
+    aplicarUsuarioNosSelects();
+    abrirPrimeiraAbaPermitida();
+    toast('Bem-vinda, ' + SESSAO.nome + '. ✓', 'sucesso');
+  }catch(e){
+    const m = String(e.message || e);
+    if (m.indexOf('fn_login') >= 0 || m.indexOf('404') === 0 || m.indexOf('PGRST202') >= 0) {
+      lgErro('O cadastro de usuários ainda não existe no banco. Rode o script v48_usuarios.sql no Supabase.');
+    } else {
+      lgErro('Erro ao entrar: ' + m);
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+function sairDaSessao(){
+  if (!confirm('Sair do sistema?')) return;
+  SESSAO = null; ADM_SENHA = null;
+  try{ localStorage.removeItem('hog_sessao'); }catch(e){}
+  location.reload();
+}
+function menuUsuario(){
+  if (!SESSAO) { abrirLogin(); return; }
+  const o = prompt('👤 ' + SESSAO.nome + ' — ' + perfilRot(SESSAO.perfil) +
+                   '\n\nDigite:\n  1 para TROCAR MINHA SENHA\n  2 para SAIR' +
+                   (podeAto('cadastrar_usuarios') ? '\n  3 para CADASTRO DE USUÁRIOS' : ''));
+  if (o === '1') trocarMinhaSenha();
+  else if (o === '2') sairDaSessao();
+  else if (o === '3' && podeAto('cadastrar_usuarios')) trocarAba('usuarios');
+}
+async function trocarMinhaSenha(){
+  const atual = prompt('Senha atual:');
+  if (atual === null) return;
+  const nova = prompt('Senha nova (mínimo 4 caracteres):');
+  if (nova === null) return;
+  const conf = prompt('Repita a senha nova:');
+  if (conf === null) return;
+  if (nova !== conf) { toast('As senhas não conferem.', 'erro'); return; }
+  try{
+    await sbFetch('rpc/fn_trocar_senha', 'POST',
+      { p_login: SESSAO.login, p_senha_atual: atual, p_senha_nova: nova });
+    if (SESSAO.perfil === 'ADMINISTRATIVO') ADM_SENHA = nova;
+    toast('Senha alterada. ✓', 'sucesso');
+  }catch(e){ toast('Não foi possível trocar: ' + (e.message||e), 'erro'); }
+}
+function abrirPrimeiraAbaPermitida(){
+  const preferida = ['registro','alertas','painel','comprar','receber','historico'];
+  for (const a of preferida) if (podeAba(a)) { trocarAba(a); return; }
+  for (const a of ABAS_TODAS) if (podeAba(a)) { trocarAba(a); return; }
+}
+async function restaurarSessao(){
+  let sv = null;
+  try{ sv = JSON.parse(localStorage.getItem('hog_sessao') || 'null'); }catch(e){}
+  if (sv && sv.id && sv.perfil && PERFIS[sv.perfil]) {
+    SESSAO = sv;
+    aplicarPermissoes();
+    await carregarEquipe();
+    aplicarUsuarioNosSelects();
+    abrirPrimeiraAbaPermitida();
+    // o administrativo precisa reconfirmar a senha para abrir o cadastro de usuários
+  } else {
+    aplicarPermissoes();
+    abrirLogin();
+  }
+}
+
+// ── EQUIPE: nomes vêm da tabela de usuários ─────────────────────
+let EQUIPE = ['Evelise'];
+async function carregarEquipe(){
+  try{
+    const r = await sbFetch('rpc/fn_usuarios_nomes', 'POST', {});
+    if (Array.isArray(r) && r.length) EQUIPE = r.map(x => x.nome);
+  }catch(e){ console.warn('lista de usuários:', e.message || e); }
+  if (SESSAO && EQUIPE.indexOf(SESSAO.nome) < 0) EQUIPE.push(SESSAO.nome);
+}
+const SELECTS_REGISTRANTE = ['sel-registrante','sel-registrante-div','co-criado-por',
+                             'rc-registrado-por','al-quem','rm-registrado-por','inv-registrado-por'];
+function aplicarUsuarioNosSelects(){
+  if (!SESSAO) return;
+  // O administrativo pode lançar no lugar de outra pessoa; os demais ficam
+  // presos ao próprio nome — é isso que faz o registro valer como identificação.
+  const livre = SESSAO.perfil === 'ADMINISTRATIVO';
+  for (const id of SELECTS_REGISTRANTE){
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.innerHTML = '';
+    for (const nome of EQUIPE){
+      const o = document.createElement('option');
+      o.value = nome; o.textContent = nome;
+      el.appendChild(o);
+    }
+    el.value = SESSAO.nome;
+    el.disabled = !livre;
+    el.title = livre ? 'Você pode lançar no nome de outra pessoa'
+                     : 'Registrado no seu nome (' + SESSAO.nome + ')';
+  }
+}
 
 // ── ESTADO ────────────────────────────────────────────────────
 let sbUrl = '', sbKey = '';
@@ -2415,7 +2641,8 @@ async function aprovar(i) {
     try {
       for (const it of p.itens) {
         const patch = {
-          aprovado: true, aprovado_por: 'Gestora', aprovado_em: new Date().toISOString(),
+          aprovado: true, aprovado_por: (SESSAO ? SESSAO.nome : 'Gestora'),
+          aprovado_por_id: (SESSAO ? SESSAO.id : null), aprovado_em: new Date().toISOString(),
         };
         // Se a quantidade foi editada na aprovação, salvar o novo valor (negativo = saída)
         if (it.editado) {
@@ -2793,41 +3020,11 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 function trocarAba(aba) {
-  // ESQUEMA DE SENHAS v3.1:
-  // • Saídas + Compras(Etapa 1): visíveis a todos — o botão Orçar pede senha de compras
-  // • Cotação/Decisão/Histórico: senha de COMPRAS
-  // • Aprovação de saídas: senha de GESTÃO (memoriza no dispositivo)
-  // • Aprovar Pedido: senha de GESTÃO pedida SEMPRE (não memoriza)
-  // • Receber NF / Inventário: senha de ENTRADA (memoriza)
-  if ((aba === 'cotacao' || aba === 'decisao' || aba === 'historico' || aba === 'ocorrencias') && !exigirSenhaCompras()) return;
-  if (aba === 'aprovacao' && localStorage.getItem('hog_aprov_ok') !== '1') {
-    const s = prompt('🔒 Área restrita à gestão.\n\nDigite a senha de aprovação:');
-    if (s === null) return; // cancelou
-    if (s !== SENHA_APROVACAO) { toast('Senha incorreta.', 'erro'); return; }
-    localStorage.setItem('hog_aprov_ok', '1');
-    revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
-    toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
-  }
-  if (aba === 'painel'
-      && localStorage.getItem('hog_aprov_ok') !== '1'
-      && localStorage.getItem('hog_compras_ok') !== '1'
-      && localStorage.getItem('hog_indic_ok') !== '1') {
-    const s = prompt('🔒 PAINEL.\n\nDigite sua senha (compras, indicadores ou gestão):');
-    if (s === null) return;
-    if (s === SENHA_APROVACAO) { localStorage.setItem('hog_aprov_ok','1'); }
-    else if (s === SENHA_COMPRAS) { localStorage.setItem('hog_compras_ok','1'); }
-    else if (s === SENHA_INDICADORES) { localStorage.setItem('hog_indic_ok','1'); }
-    else { toast('Senha incorreta.', 'erro'); return; }
-    revelarAbasRestritas(); localStorage.setItem('hog_restrito_ok','1');
-  }
-  if (aba === 'aprovarpedido' && !exigirAssinatura('Aprovação de pedidos')) return;
-  // Receber NF e Inventário usam senha PRÓPRIA e diferente — únicas etapas que efetivamente movem o saldo
-  if ((aba === 'receber' || aba === 'inventario') && localStorage.getItem('hog_entrada_ok') !== '1') {
-    const s = prompt('🔒 Área restrita — Entrada de Estoque.\n\nEsta etapa move o saldo real. Digite a senha de entrada:');
-    if (s === null) return;
-    if (s !== SENHA_ENTRADA) { toast('Senha incorreta.', 'erro'); return; }
-    localStorage.setItem('hog_entrada_ok', '1');
-    toast('Acesso liberado neste dispositivo. ✓', 'sucesso');
+  // v4.8 — quem manda é o PERFIL do usuário logado (ver PERFIS, no topo).
+  if (!SESSAO) { abrirLogin(); return; }
+  if (!podeAba(aba)) {
+    toast('Seu perfil (' + perfilRot(SESSAO.perfil) + ') não tem acesso a esta tela.', 'erro');
+    return;
   }
   document.getElementById('aba-btn-registro').classList.toggle('ativa', aba==='registro');
   document.getElementById('aba-btn-diversas').classList.toggle('ativa', aba==='diversas');
@@ -2843,6 +3040,7 @@ function trocarAba(aba) {
   document.getElementById('aba-btn-painel').classList.toggle('ativa', aba==='painel');
   document.getElementById('aba-btn-remessas').classList.toggle('ativa', aba==='remessas');
   document.getElementById('aba-btn-alertas').classList.toggle('ativa', aba==='alertas');
+  { const b=document.getElementById('aba-btn-usuarios'); if(b) b.classList.toggle('ativa', aba==='usuarios'); }
   document.getElementById('aba-registro').style.display  = aba==='registro'  ? '' : 'none';
   document.getElementById('aba-diversas').style.display  = aba==='diversas'  ? '' : 'none';
   document.getElementById('aba-aprovacao').style.display = aba==='aprovacao' ? '' : 'none';
@@ -2857,6 +3055,8 @@ function trocarAba(aba) {
   document.getElementById('aba-painel').style.display = aba==='painel' ? '' : 'none';
   document.getElementById('aba-remessas').style.display = aba==='remessas' ? '' : 'none';
   document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
+  { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
+  if (aba==='usuarios') { usCarregar(); }
   if (aba==='remessas') { rmCarregar(); }
   if (aba==='alertas')  { alCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
@@ -2894,71 +3094,9 @@ function toast(msg, tipo) {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // Popular lista da equipe
-  const selReg = document.getElementById('sel-registrante');
-  for (const nome of EQUIPE) {
-    const opt = document.createElement('option');
-    opt.value = nome; opt.textContent = nome;
-    selReg.appendChild(opt);
-  }
-  const selRegDiv = document.getElementById('sel-registrante-div');
-  for (const nome of EQUIPE) {
-    const opt = document.createElement('option');
-    opt.value = nome; opt.textContent = nome;
-    selRegDiv.appendChild(opt);
-  }
-  // Restaurar último nome usado neste dispositivo
-  const ultimoNome = localStorage.getItem('hog_registrante');
-  if (ultimoNome && EQUIPE.includes(ultimoNome)) { selReg.value = ultimoNome; selRegDiv.value = ultimoNome; }
+  // v4.8 — os seletores de "quem registrou" são preenchidos depois do login,
+  // a partir da tabela `usuarios`. Ver carregarEquipe() e aplicarUsuarioNosSelects().
   document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
-
-  // Campo próprio da aba Cotação — separado do "quem está registrando" das saídas
-  const selCotCriador = document.getElementById('co-criado-por');
-  if (selCotCriador) {
-    for (const nome of EQUIPE) {
-      const opt = document.createElement('option');
-      opt.value = nome; opt.textContent = nome;
-      selCotCriador.appendChild(opt);
-    }
-    const ultimoCriador = localStorage.getItem('hog_cotacao_criador');
-    if (ultimoCriador && EQUIPE.includes(ultimoCriador)) selCotCriador.value = ultimoCriador;
-  }
-
-  // Campo próprio da aba Receber NF — também separado, evita repetir o bug do nome errado
-  const selRcReg = document.getElementById('rc-registrado-por');
-  if (selRcReg) {
-    for (const nome of EQUIPE) {
-      const opt = document.createElement('option');
-      opt.value = nome; opt.textContent = nome;
-      selRcReg.appendChild(opt);
-    }
-    const ultimoRc = localStorage.getItem('hog_rc_registrante');
-    if (ultimoRc && EQUIPE.includes(ultimoRc)) selRcReg.value = ultimoRc;
-  }
-
-  // Campo próprio da aba Alertas
-  const selAlReg = document.getElementById('al-quem');
-  if (selAlReg) {
-    for (const nome of EQUIPE) {
-      const opt = document.createElement('option');
-      opt.value = nome; opt.textContent = nome;
-      selAlReg.appendChild(opt);
-    }
-    const ultimoAl = localStorage.getItem('hog_registrante');
-    if (ultimoAl && EQUIPE.includes(ultimoAl)) selAlReg.value = ultimoAl;
-  }
-
-  // Campo próprio da aba Remessas
-  const selRmReg = document.getElementById('rm-registrado-por');
-  if (selRmReg) {
-    for (const nome of EQUIPE) {
-      const opt = document.createElement('option');
-      opt.value = nome; opt.textContent = nome;
-      selRmReg.appendChild(opt);
-    }
-    const ultimoRm = localStorage.getItem('hog_rm_registrante');
-    if (ultimoRm && EQUIPE.includes(ultimoRm)) selRmReg.value = ultimoRm;
-  }
 
   // Prioridade 1: configuração fixa embutida no código
   if (CONFIG_FIXA.url && CONFIG_FIXA.key) {
@@ -2979,10 +3117,10 @@ window.addEventListener('load', () => {
   }
   document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
   renderizarTipos();
-  if (localStorage.getItem('hog_restrito_ok') === '1'
-      || localStorage.getItem('hog_aprov_ok') === '1'
-      || localStorage.getItem('hog_compras_ok') === '1'
-      || localStorage.getItem('hog_entrada_ok') === '1') { revelarAbasRestritas(); }
+  // v4.8 — limpa as liberações por senha do modelo antigo
+  ['hog_restrito_ok','hog_aprov_ok','hog_compras_ok','hog_entrada_ok','hog_indic_ok']
+    .forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });
+  restaurarSessao();
 });
 </script>
 <script>
@@ -5298,12 +5436,7 @@ async function hiDarEntrada(nfId){
   const nf=hiNfs.find(n=>n.id===nfId); if(!nf) return;
   const its=hiItensPorNf[nfId]||[];
   if(!its.length){ toast('Esta nota não tem itens detalhados.','erro'); return; }
-  if(localStorage.getItem('hog_entrada_ok')!=='1'){
-    const s=prompt('🔒 Esta ação MOVE o saldo do estoque.\n\nDigite a senha de entrada:');
-    if(s===null) return;
-    if(s!==SENHA_ENTRADA){ toast('Senha incorreta.','erro'); return; }
-    localStorage.setItem('hog_entrada_ok','1');
-  }
+  if(!exigirAssinatura('Entrada de nota fiscal no estoque')) return;
   // só entra o que ela marcou, na quantidade que ela conferiu
   const escolhidos=[];
   for(const it of its){
@@ -7067,23 +7200,15 @@ function pnDiasDesde(d){ if(!d) return null; return Math.round((new Date(pnHojeS
 function pnCusto(materialId, qtd){ const m=pnUvp[materialId]; return Math.abs(qtd)*(m&&m.uvp?m.uvp:0); }
 
 // perfis: operação (compras/gestão) · indicadores (indicadores/gestão)
-function pnTemOp(){ return localStorage.getItem('hog_compras_ok')==='1' || localStorage.getItem('hog_aprov_ok')==='1'; }
-function pnTemInd(){ return localStorage.getItem('hog_indic_ok')==='1' || localStorage.getItem('hog_aprov_ok')==='1'; }
+function pnTemOp(){ return podeAba('cotacao') || podeAba('decisao'); }
+function pnTemInd(){ return podeAba('painel'); }
 function pnIr(sec, btn){
   const precisaInd = (sec==='cobertura'||sec==='custos');
   if(precisaInd && !pnTemInd()){
-    const s=prompt('🔒 Indicadores (sócios/financeiro).\n\nDigite a senha de indicadores (ou de gestão):');
-    if(s===null) return;
-    if(s===SENHA_INDICADORES){ localStorage.setItem('hog_indic_ok','1'); }
-    else if(s===SENHA_APROVACAO){ localStorage.setItem('hog_aprov_ok','1'); }
-    else { toast('Senha incorreta.','erro'); return; }
+    toast('Seu perfil não tem acesso aos indicadores.','erro'); return;
   }
   if(!precisaInd && !pnTemOp()){
-    const s=prompt('🔒 Área da operação.\n\nDigite a senha de compras (ou de gestão):');
-    if(s===null) return;
-    if(s===SENHA_COMPRAS){ localStorage.setItem('hog_compras_ok','1'); }
-    else if(s===SENHA_APROVACAO){ localStorage.setItem('hog_aprov_ok','1'); }
-    else { toast('Senha incorreta.','erro'); return; }
+    toast('Seu perfil não tem acesso a esta área do painel.','erro'); return;
   }
   document.querySelectorAll('#aba-painel .pn-sec').forEach(s=>s.classList.remove('on'));
   document.getElementById('pn-sec-'+sec).classList.add('on');
@@ -7641,12 +7766,7 @@ async function pnSetPreco(mid){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 async function pnCorrigirSaldo(mid){
-  if(localStorage.getItem('hog_entrada_ok')!=='1'){
-    const s=prompt('🔒 Corrigir saldo MOVE o estoque real.\n\nDigite a senha de entrada:');
-    if(s===null) return;
-    if(s!==SENHA_ENTRADA){ toast('Senha incorreta.','erro'); return; }
-    localStorage.setItem('hog_entrada_ok','1');
-  }
+  if(!exigirAssinatura('Corrigir saldo — ajuste de inventário')) return;
   const r = ccDados.find(x=>x.material_id===mid); if(!r) return;
   const s = prompt(`Saldo correto de "${r.material}" (contagem real):`, Math.max(0,Number(r.saldo)||0));
   if(s===null) return;
@@ -8676,6 +8796,10 @@ async function ivApurar(){
     const saldo={}; for(const e of est) saldo[e.material_id]=Number(e.saldo)||0;
     let controla=new Set();
     try{ const cl=await sbFetch('materiais?select=id&controla_lote=eq.true&limit=500'); controla=new Set((cl||[]).map(x=>x.id)); }catch(e){}
+    // v4.8 — itens que vivem no livro de remessas (Esterileno, pijama) não são
+    // contados no inventário do estoque: apareciam como "não contado" indevidamente.
+    let remessaSet=new Set();
+    try{ const rr=await sbFetch('materiais?select=id&controla_remessa=eq.true&limit=500'); remessaSet=new Set((rr||[]).map(x=>x.id)); }catch(e){}
 
     // saídas lançadas DEPOIS que o item foi contado — divergência legítima, não erro de contagem
     const movDepois={};
@@ -8718,6 +8842,7 @@ async function ivApurar(){
     for(const midStr of Object.keys(saldo)){
       const mid=Number(midStr);
       if(cont[mid]) continue;
+      if(remessaSet.has(mid)) continue;   // v4.8 — vive no livro de remessas
       const sis=saldo[mid];
       if(sis===0) continue;
       linhas.push({ mid, nome:nome(mid), contado:null, sistema:sis, dif:null,
@@ -10474,7 +10599,213 @@ async function alIgnorar(id){
 }
 </script>
 
+
+<!-- ── CADASTRO DE USUÁRIOS (v4.8) ──────────────────────────── -->
+<div id="aba-usuarios" class="container" style="display:none">
+  <div class="card">
+    <h2 style="margin-top:0">👥 Usuários e permissões</h2>
+    <p style="color:var(--cinza-5);font-size:13px;margin-top:-6px">
+      Cada pessoa da equipe tem login e senha próprios. O nome de quem está logado é
+      gravado automaticamente em toda saída, aprovação e entrada.
+    </p>
+
+    <div id="us-trava" style="background:#FFF6E9;border:1.5px solid #F0C36D;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">🔐 Confirme sua senha para abrir o cadastro</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="us-senha-adm" type="password" placeholder="sua senha"
+               style="padding:9px 11px;border:1.5px solid var(--cinza-2);border-radius:8px;font-size:14px;font-family:var(--fonte)"
+               onkeydown="if(event.key==='Enter'){usConfirmar()}">
+        <button class="btn btn-primario" onclick="usConfirmar()">Confirmar</button>
+      </div>
+    </div>
+
+    <div id="us-corpo" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-verde" onclick="usNovo()">+ Novo usuário</button>
+        <button class="btn btn-secundario" onclick="usCarregar(true)">↻ Atualizar</button>
+      </div>
+
+      <div id="us-form" style="display:none;background:var(--cinza-1);border-radius:10px;padding:16px;margin-bottom:16px">
+        <input type="hidden" id="us-id">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+          <div class="campo"><label>Nome (aparece nos registros)</label>
+            <input type="text" id="us-nome" placeholder="Ex.: Talita Souza"></div>
+          <div class="campo"><label>Login</label>
+            <input type="text" id="us-login" placeholder="talita" autocapitalize="none" spellcheck="false"></div>
+          <div class="campo"><label>Perfil</label>
+            <select id="us-perfil">
+              <option value="ENFERMAGEM">Enfermagem</option>
+              <option value="COMPRAS">Compras</option>
+              <option value="FINANCEIRO">Financeiro</option>
+              <option value="ADMINISTRATIVO">Administrativo (acesso total)</option>
+            </select></div>
+          <div class="campo"><label>Situação</label>
+            <select id="us-ativo"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
+          <div class="campo"><label id="us-lb-senha">Senha</label>
+            <input type="password" id="us-nova-senha" placeholder="mínimo 4 caracteres"></div>
+        </div>
+        <div id="us-perfil-desc" style="font-size:12px;color:var(--cinza-5);margin-top:10px"></div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn btn-primario" onclick="usSalvar()">Salvar</button>
+          <button class="btn btn-secundario" onclick="usCancelar()">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="us-lista"></div>
+
+      <div style="margin-top:22px;border-top:1px solid var(--cinza-2);padding-top:14px">
+        <div style="font-weight:800;font-size:13px;margin-bottom:8px">O que cada perfil enxerga</div>
+        <div id="us-matriz" style="overflow-x:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </main>
 </div>
+
+<script>
+// ═══ CADASTRO DE USUÁRIOS (v4.8) ═══════════════════════════════
+let usLista = [];
+
+function usCred(){ return { p_login: SESSAO ? SESSAO.login : '', p_senha: ADM_SENHA || '' }; }
+
+async function usConfirmar(){
+  const sn = document.getElementById('us-senha-adm').value || '';
+  if (!sn) { toast('Digite sua senha.', 'erro'); return; }
+  ADM_SENHA = sn;
+  document.getElementById('us-senha-adm').value = '';
+  await usCarregar(true);
+}
+
+async function usCarregar(forcar){
+  if (!podeAto('cadastrar_usuarios')) {
+    toast('Só o perfil Administrativo abre o cadastro de usuários.', 'erro');
+    return;
+  }
+  const trava = document.getElementById('us-trava');
+  const corpo = document.getElementById('us-corpo');
+  if (!ADM_SENHA) { trava.style.display = ''; corpo.style.display = 'none'; return; }
+  try{
+    const r = await sbFetch('rpc/fn_usuarios_listar', 'POST', usCred());
+    usLista = Array.isArray(r) ? r : [];
+    trava.style.display = 'none'; corpo.style.display = '';
+    usRender(); usRenderMatriz();
+  }catch(e){
+    ADM_SENHA = null;
+    trava.style.display = ''; corpo.style.display = 'none';
+    toast('Não foi possível abrir: ' + (e.message || e), 'erro');
+  }
+}
+
+function usEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function usRender(){
+  const alvo = document.getElementById('us-lista');
+  if (!usLista.length) { alvo.innerHTML = '<div style="color:var(--cinza-5);padding:12px">Nenhum usuário cadastrado.</div>'; return; }
+  alvo.innerHTML = usLista.map(u => {
+    const cor = perfilCor(u.perfil);
+    const acesso = u.ultimo_acesso ? ('último acesso ' + (''+u.ultimo_acesso).slice(0,10).split('-').reverse().join('/')) : 'nunca entrou';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--cinza-2);border-radius:10px;margin-bottom:8px;' +
+      (u.ativo ? '' : 'opacity:.55;background:var(--cinza-1)') + '">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:800;font-size:14px">' + usEsc(u.nome) +
+          (u.ativo ? '' : ' <span style="font-size:11px;color:var(--vermelho)">· inativo</span>') + '</div>' +
+        '<div style="font-size:12px;color:var(--cinza-5)">🔑 ' + usEsc(u.login) + ' · ' + acesso + '</div>' +
+      '</div>' +
+      '<span style="background:' + cor + ';color:#fff;border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800">' + perfilRot(u.perfil) + '</span>' +
+      '<button class="btn btn-secundario" style="padding:6px 12px;font-size:12px" onclick="usEditar(' + u.id + ')">Editar</button>' +
+    '</div>';
+  }).join('');
+}
+
+function usRenderMatriz(){
+  const rotAba = { alertas:'Alertas', painel:'Dashboard', registro:'Saída Cirúrgica',
+    diversas:'Saídas Diversas', aprovacao:'Aprovação de saídas', remessas:'Fora de casa',
+    comprar:'O que comprar', cotacao:'Orçamentos', decisao:'Pedidos',
+    aprovarpedido:'Aprovar Pedido', receber:'Receber NF', inventario:'Contagem e ajustes',
+    historico:'Compras e notas', ocorrencias:'Ocorrências', usuarios:'Usuários' };
+  const perfis = ['ENFERMAGEM','COMPRAS','FINANCEIRO','ADMINISTRATIVO'];
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tr>' +
+          '<th style="text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--cinza-2)">Tela</th>';
+  for (const p of perfis) h += '<th style="padding:6px 8px;border-bottom:1.5px solid var(--cinza-2);color:' + perfilCor(p) + '">' + perfilRot(p) + '</th>';
+  h += '</tr>';
+  for (const a of ABAS_TODAS){
+    h += '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--cinza-1)">' + (rotAba[a] || a) + '</td>';
+    for (const p of perfis){
+      const P = PERFIS[p];
+      const ok = P.abas === '*' || P.abas.indexOf(a) >= 0;
+      h += '<td style="text-align:center;padding:5px 8px;border-bottom:1px solid var(--cinza-1)">' + (ok ? '✅' : '·') + '</td>';
+    }
+    h += '</tr>';
+  }
+  h += '</table>';
+  document.getElementById('us-matriz').innerHTML = h;
+}
+
+function usNovo(){
+  document.getElementById('us-id').value = '';
+  document.getElementById('us-nome').value = '';
+  document.getElementById('us-login').value = '';
+  document.getElementById('us-perfil').value = 'ENFERMAGEM';
+  document.getElementById('us-ativo').value = '1';
+  document.getElementById('us-nova-senha').value = '';
+  document.getElementById('us-lb-senha').textContent = 'Senha (obrigatória)';
+  document.getElementById('us-form').style.display = '';
+  document.getElementById('us-nome').focus();
+}
+function usEditar(id){
+  const u = usLista.find(x => x.id === id); if (!u) return;
+  document.getElementById('us-id').value = u.id;
+  document.getElementById('us-nome').value = u.nome;
+  document.getElementById('us-login').value = u.login;
+  document.getElementById('us-perfil').value = u.perfil;
+  document.getElementById('us-ativo').value = u.ativo ? '1' : '0';
+  document.getElementById('us-nova-senha').value = '';
+  document.getElementById('us-lb-senha').textContent = 'Nova senha (deixe vazio para manter)';
+  document.getElementById('us-form').style.display = '';
+  document.getElementById('us-form').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+function usCancelar(){ document.getElementById('us-form').style.display = 'none'; }
+
+async function usSalvar(){
+  const id = document.getElementById('us-id').value;
+  const corpo = Object.assign(usCred(), {
+    p_id: id ? Number(id) : null,
+    p_nome: document.getElementById('us-nome').value.trim(),
+    p_novo_login: document.getElementById('us-login').value.trim().toLowerCase(),
+    p_perfil: document.getElementById('us-perfil').value,
+    p_ativo: document.getElementById('us-ativo').value === '1',
+    p_nova_senha: document.getElementById('us-nova-senha').value || ''
+  });
+  if (!corpo.p_nome || !corpo.p_novo_login) { toast('Preencha nome e login.', 'erro'); return; }
+  if (!id && corpo.p_nova_senha.length < 4) { toast('A senha precisa ter pelo menos 4 caracteres.', 'erro'); return; }
+  try{
+    await sbFetch('rpc/fn_usuario_salvar', 'POST', corpo);
+    toast('Usuário salvo. ✓', 'sucesso');
+    document.getElementById('us-form').style.display = 'none';
+    await usCarregar(true);
+    await carregarEquipe();
+    aplicarUsuarioNosSelects();
+  }catch(e){
+    const m = String(e.message || e);
+    const msg = (m.match(/"message":"([^"]+)"/) || [null, m])[1];
+    toast(msg, 'erro');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sp = document.getElementById('us-perfil');
+  if (sp) sp.addEventListener('change', () => {
+    const P = PERFIS[sp.value];
+    const d = document.getElementById('us-perfil-desc');
+    if (!P || !d) return;
+    d.textContent = P.abas === '*'
+      ? 'Acesso total, inclusive cadastro de usuários.'
+      : 'Telas liberadas: ' + P.abas.join(', ') + '.';
+  });
+});
+</script>
+
 </body>
 </html>
