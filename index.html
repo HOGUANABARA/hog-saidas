@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.9 · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.9b · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5972,48 +5972,218 @@ function rcRenderizar(){
 }
 
 // ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
+// ── observação da ordem: acrescenta sem repetir e sem deixar rabo vazio ──
+// v4.9b — antes cada ajuste emendava "| Ajustado: " no mesmo campo, mesmo com o
+// motivo em branco. A observação virava log e a linha não cabia mais na tela.
+function rcObsAcrescenta(obsAtual, texto){
+  const t = String(texto||'').trim();
+  if(!t) return obsAtual || null;                    // nada a dizer: não suja o campo
+  const base = String(obsAtual||'').trim();
+  if(!base) return t;
+  if(base.indexOf(t) >= 0) return base;              // já está lá, não repete
+  const partes = base.split(' | ').filter(Boolean);
+  partes.push(t);
+  // guarda a origem (primeira parte) e no máximo as 3 anotações mais recentes
+  const cortado = partes.length > 4 ? [partes[0], '…'].concat(partes.slice(-3)) : partes;
+  return cortado.join(' | ');
+}
+
+function rcOrfaForn(o){ return o.fornecedor_compra_id || o.fornecedor_id || 0; }
+function rcOrfaQtd(o){ return Number(o.qtd_a_comprar ?? o.qtd_comprada ?? 0) || 0; }
+
+// ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
+// v4.9b — agrupadas POR FORNECEDOR: a conversa de cobrança é com o fornecedor, não com
+// o item. Cada linha aceita quantidade e valor recebidos (parcial), e abre ocorrência.
 function rcHtmlOrfas(){
   if(!rcOrfas || !rcOrfas.length) return '';
   const dias = d => d ? Math.round((Date.now()-new Date(d).getTime())/86400000) : null;
-  const linhas = rcOrfas.map(o=>{
-    const dd = dias(o.created_at);
-    return `<tr>
-      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
-      <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
-      <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
-      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
-      <td style="text-align:center;font-size:11px;${dd&&dd>30?'color:var(--vermelho);font-weight:700':'color:var(--cinza-4)'}">${dd!==null?dd+' dias':'—'}</td>
-      <td style="white-space:nowrap;text-align:right">
-        <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde)" onclick="rcLiberarOrfa(${o.id})" title="a compra aconteceu: liberar para dar entrada da NF">✔ recebi</button>
-        <button class="rc-btn-problema" onclick="rcDescartarOrfa(${o.id})" title="não vai chegar: devolve o item para a lista de compras">🚫 não veio</button>
-      </td></tr>`;
+
+  const porForn = {};
+  for(const o of rcOrfas){
+    const fid = rcOrfaForn(o);
+    (porForn[fid] = porForn[fid] || []).push(o);
+  }
+  const blocos = Object.keys(porForn).map(fid=>{
+    const itens = porForn[fid];
+    const total = itens.reduce((sm,o)=>sm + rcOrfaQtd(o)*(Number(o.valor_unitario)||0), 0);
+    const maisAntiga = Math.max(...itens.map(o=>dias(o.created_at)||0));
+    const linhas = itens.map(o=>{
+      const dd = dias(o.created_at);
+      const q = rcOrfaQtd(o);
+      const v = Number(o.valor_unitario)||0;
+      return `<tr>
+        <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+        <td style="text-align:center">
+          <input id="rc-of-q-${o.id}" type="number" step="any" min="0" value="${q}" title="quantidade que realmente chegou"
+            style="width:78px;text-align:right;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte)">
+          <div style="font-size:9.5px;color:var(--cinza-4)">pedida: ${q.toLocaleString('pt-BR')}</div>
+        </td>
+        <td style="text-align:center">
+          <input id="rc-of-v-${o.id}" type="number" step="0.01" min="0" value="${v||''}" title="valor unitário cobrado"
+            style="width:88px;text-align:right;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte)">
+          <div style="font-size:9.5px;color:var(--cinza-4)">pedido: ${rcMoney(v)}</div>
+        </td>
+        <td style="text-align:center;font-size:11px;${dd&&dd>30?'color:var(--vermelho);font-weight:700':'color:var(--cinza-4)'}">${dd!==null?dd+' dias':'—'}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde)" onclick="rcLiberarOrfa(${o.id})" title="a compra chegou (na quantidade e valor ao lado): libera para dar entrada da NF">✔ recebi</button>
+          <button class="rc-btn-editar" style="background:#FDEBD0;color:#B9770E" onclick="rcOcorrenciaOrfa(${o.id})" title="veio errado, quantidade diferente, cobrança errada…">⚠️ ocorrência</button>
+          <button class="rc-btn-problema" onclick="rcDescartarOrfa(${o.id})" title="não vai chegar: devolve o item para a lista de compras">🚫 não veio</button>
+        </td></tr>`;
+    }).join('');
+
+    return `<div style="border-top:1px solid #F9E79F">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#FDF6D8">
+        <div style="font-weight:800;font-size:13.5px;color:#7a6408">🏪 ${rcNomeFornecedor(Number(fid))}
+          <span style="font-weight:600;font-size:11.5px;color:#9a8420">· ${itens.length} item(ns) · ${rcMoney(total)} parado${maisAntiga?` · mais antiga há ${maisAntiga} dias`:''}</span></div>
+        <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde);font-weight:700"
+          onclick="rcLiberarFornecedor(${fid})" title="libera todos os itens deste fornecedor, nas quantidades e valores mostrados">✔ recebi tudo deste fornecedor</button>
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Material</th><th style="text-align:center">Qtd recebida</th>
+          <th style="text-align:center">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody></table></div>
+    </div>`;
   }).join('');
+
   return `<div class="rc-grupo" style="border:2px solid var(--amarelo)">
     <div class="rc-ghead" style="background:#B7950B">⚠️ PENDÊNCIAS ANTIGAS SEM DONO <span class="rc-count">${rcOrfas.length}</span></div>
     <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7a6408;border-bottom:1px solid #F9E79F">
       Compras que ficaram marcadas como pendentes mas nunca foram liberadas — elas <b>não apareciam em nenhuma tela</b> e ainda seguravam o item na lista de compras.
-      Diga o que aconteceu com cada uma: <b>✔ recebi</b> abre a entrada da NF · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
-    <div style="overflow-x:auto"><table>
-      <thead><tr><th>Material</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
-      <tbody>${linhas}</tbody></table></div>
+      Estão <b>agrupadas por fornecedor</b>. Se veio quantidade ou valor diferente, <b>corrija nos campos</b> antes de clicar em recebi:
+      o que sobrar da quantidade volta para a lista de compras.
+      <b>✔ recebi</b> abre a entrada da NF · <b>⚠️ ocorrência</b> registra o problema · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
+    ${blocos}
   </div>`;
 }
-async function rcLiberarOrfa(id){
+
+// ── liberar uma pendência, já com o ajuste digitado na linha ─────
+async function rcLiberarOrfa(id, emLote){
   const o=rcOrfas.find(x=>x.id===id); if(!o) return;
-  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — confirmar que essa compra chegou?\n\nEla vai para a lista de entrada de NF logo abaixo.`)) return;
+  const qPed = rcOrfaQtd(o), vPed = Number(o.valor_unitario)||0;
+  const elQ = document.getElementById('rc-of-q-'+id), elV = document.getElementById('rc-of-v-'+id);
+  const qRec = elQ ? (parseFloat(elQ.value)||0) : qPed;
+  const vRec = elV && elV.value!=='' ? parseFloat(elV.value) : vPed;
+
+  if(qRec <= 0){ toast('Quantidade recebida precisa ser maior que zero. Se não veio nada, use 🚫 não veio.','erro'); return; }
+
+  const mudouQtd = Math.abs(qRec - qPed) > 0.0001;
+  const mudouVal = Math.abs((vRec||0) - vPed) > 0.0001;
+  const falta = qPed - qRec;
+
+  if(!emLote){
+    const partes = [];
+    if(mudouQtd) partes.push(`Quantidade: pedida ${qPed.toLocaleString('pt-BR')} → recebida ${qRec.toLocaleString('pt-BR')}` +
+      (falta>0?` (faltam ${falta.toLocaleString('pt-BR')}, que voltam para a lista de compras)`:''));
+    if(mudouVal) partes.push(`Valor unitário: ${rcMoney(vPed)} → ${rcMoney(vRec)}`);
+    const ok = await hogConfirma({
+      titulo: rcNomeMaterial(o.material_id),
+      texto: 'Confirmar que essa compra chegou?\n' + (partes.length?partes.join('\n')+'\n':'') +
+             'Ela vai para a lista de entrada de NF logo abaixo.',
+      ok: 'Sim, chegou' });
+    if(!ok) return;
+  }
+
   try{
-    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ aprovado_pedido:true });
-    toast('Liberada — agora dê entrada da NF abaixo ✓','sucesso');
-    rcCarregar();
-  }catch(e){ toast('Erro: '+e.message,'erro'); }
+    const patch = { aprovado_pedido:true };
+    if(mudouQtd){ patch.qtd_a_comprar = qRec; patch.qtd_comprada = qRec; }
+    if(mudouVal){ patch.valor_unitario = vRec; }
+    const nota = [];
+    if(mudouQtd) nota.push(`qtd ${qPed}→${qRec}`);
+    if(mudouVal) nota.push(`valor ${vPed}→${vRec}`);
+    if(nota.length) patch.observacao = rcObsAcrescenta(o.observacao, 'Recebido com ajuste: ' + nota.join(', '));
+
+    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',patch);
+
+    // o que faltou volta para a lista de compras como pendência nova
+    if(falta > 0.0001){
+      try{
+        await sbFetch('ordens_compra','POST',{
+          material_id:o.material_id, fornecedor_compra_id:o.fornecedor_compra_id||null,
+          fornecedor_id:o.fornecedor_id||null, qtd_a_comprar:falta, qtd_comprada:falta,
+          valor_unitario:vRec||null, situacao:'PENDENTE', aprovado_pedido:false,
+          observacao:`Saldo de recebimento parcial da ordem #${id} (faltaram ${falta})` });
+      }catch(e){ console.warn('saldo parcial:', e); }
+    }
+    if(!emLote){
+      toast(falta>0.0001 ? `Liberada — ${falta.toLocaleString('pt-BR')} voltaram para a lista de compras ✓`
+                         : 'Liberada — agora dê entrada da NF abaixo ✓','sucesso');
+      rcCarregar();
+    }
+    return true;
+  }catch(e){ toast('Erro: '+e.message,'erro'); return false; }
 }
+
+// ── liberar tudo de um fornecedor de uma vez ─────────────────────
+async function rcLiberarFornecedor(fid){
+  const itens = rcOrfas.filter(o=>rcOrfaForn(o)===Number(fid));
+  if(!itens.length) return;
+  const total = itens.reduce((sm,o)=>{
+    const el=document.getElementById('rc-of-q-'+o.id);
+    const q = el ? (parseFloat(el.value)||0) : rcOrfaQtd(o);
+    const ev=document.getElementById('rc-of-v-'+o.id);
+    const v = ev && ev.value!=='' ? parseFloat(ev.value) : (Number(o.valor_unitario)||0);
+    return sm + q*v; }, 0);
+  const ok = await hogConfirma({
+    titulo: rcNomeFornecedor(Number(fid)),
+    texto: `Liberar ${itens.length} item(ns) deste fornecedor, nas quantidades e valores que estão na tela?\n` +
+           `Total: ${rcMoney(total)}\n\nTodos vão para a lista de entrada de NF.`,
+    ok: 'Liberar todos' });
+  if(!ok) return;
+  let n=0;
+  for(const o of itens){ if(await rcLiberarOrfa(o.id, true)) n++; }
+  toast(`${n} item(ns) liberados — dê entrada da NF abaixo ✓`,'sucesso');
+  rcCarregar();
+}
+
+// ── ocorrência a partir da linha ─────────────────────────────────
+async function rcOcorrenciaOrfa(id){
+  const o=rcOrfas.find(x=>x.id===id); if(!o) return;
+  const r = await hogPergunta({
+    titulo:'Abrir ocorrência',
+    texto: rcNomeMaterial(o.material_id) + ' · ' + rcNomeFornecedor(rcOrfaForn(o)),
+    ok:'Registrar ocorrência',
+    campos:[
+      { id:'sit', rot:'O que aconteceu', tipo:'lista', obrigatorio:true,
+        opcoes: OC_SITUACOES.map(x=>({ v:x.k, r:x.rot })) },
+      { id:'nf',  rot:'Número da NF (se já tiver)', tipo:'texto' },
+      { id:'val', rot:'Valor envolvido (R$), quando fizer sentido', tipo:'numero' },
+      { id:'obs', rot:'Observação', tipo:'texto-longo' }
+    ]});
+  if(!r) return;
+  const sit = OC_SITUACOES.find(x=>x.k===r.sit);
+  try{
+    const oc = await sbFetch('ocorrencias','POST',{
+      situacao:r.sit, fornecedor_id:rcOrfaForn(o)||null, material_id:o.material_id||null,
+      numero_nf:(r.nf||'').trim()||null, valor:r.val?parseFloat(r.val):null,
+      criado_por:(SESSAO?SESSAO.nome:null),
+      acao_aplicada:((r.obs||'').trim() || (sit?sit.acao:null)), status:'aberta' });
+    if(!oc||!oc.length) throw new Error('sem permissão (RLS)');
+    if(r.sit==='VALOR_ERRADO_CREDITO' && r.val){
+      await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:rcOrfaForn(o), valor:parseFloat(r.val),
+        origem:'Ocorrência #'+oc[0].id+((r.nf||'').trim()?(' — NF '+r.nf.trim()):''),
+        ocorrencia_id:oc[0].id, status:'ABERTO' });
+    }
+    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{
+      observacao: rcObsAcrescenta(o.observacao, 'Ocorrência #'+oc[0].id+' — '+(sit?sit.rot:r.sit)) });
+    toast('Ocorrência registrada ✓ — veja na aba Ocorrências','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro ao registrar: '+e.message,'erro'); }
+}
+
 async function rcDescartarOrfa(id){
   const o=rcOrfas.find(x=>x.id===id); if(!o) return;
-  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — essa compra não vai chegar?\n\nO item volta a aparecer na lista de compras normalmente.`)) return;
-  const motivo=prompt('Motivo (opcional):')||'';
+  const r = await hogPergunta({
+    titulo:'Essa compra não vai chegar?',
+    texto: rcNomeMaterial(o.material_id) + ' · ' + rcNomeFornecedor(rcOrfaForn(o)) +
+           '\nO item volta a aparecer na lista de compras normalmente.',
+    ok:'Encerrar pendência',
+    campos:[{ id:'motivo', rot:'Motivo (opcional)', tipo:'texto',
+              placeholder:'ex: fornecedor cancelou' }]});
+  if(!r) return;
+  const motivo=(r.motivo||'').trim();
   try{
     await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ situacao:'NAO COMPRAR AGORA',
-      observacao:((o.observacao?o.observacao+' | ':'')+'Pendência antiga encerrada'+(motivo?': '+motivo:'')) });
+      observacao: rcObsAcrescenta(o.observacao, 'Pendência antiga encerrada'+(motivo?': '+motivo:'')) });
     toast('Encerrada — o item voltou para a lista de compras ✓','sucesso');
     rcCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -6533,7 +6703,7 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
       qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
-      observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
+      observacao: rcObsAcrescenta(ordem.observacao, motivo.trim() ? 'Ajustado: '+motivo.trim() : ''),
     });
     toast('Item ajustado ✓','sucesso');
     if(typeof recarregarFn === 'function') recarregarFn();
