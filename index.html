@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HOG — Registro de Saídas Cirúrgicas</title>
+<title>🧪 HOMOLOGAÇÃO — HOG Saídas</title>
 <style>
 :root {
   --azul:       #1B4F72;
@@ -366,10 +366,14 @@ details[open] summary { margin-bottom: 6px; }
 </head>
 <body>
 
+<div style="background:#E67E22;color:#fff;text-align:center;font-weight:800;font-size:13px;padding:8px 12px;letter-spacing:.5px;position:sticky;top:0;z-index:999">
+  🧪 AMBIENTE DE HOMOLOGAÇÃO — versão de teste. O app oficial da equipe é <a href="https://hoguanabara.github.io/hog-saidas/" style="color:#fff;text-decoration:underline">este link</a>.
+</div>
+
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.9b · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.9c · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -911,6 +915,16 @@ details[open] summary { margin-bottom: 6px; }
   #aba-receber .rc-grupo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
   #aba-receber .rc-ghead{padding:12px 16px;background:var(--cinza-5);color:#fff;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
   #aba-receber .rc-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+  #aba-receber .rc-secrot{display:flex;align-items:baseline;gap:8px;padding:11px 16px 3px;
+    font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-5)}
+  #aba-receber .rc-secrot span{font-size:10.5px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--cinza-4)}
+  #aba-receber .rc-confere{font-size:12.5px;font-weight:700;padding:9px 11px;border-radius:8px;
+    background:var(--cinza-1);color:var(--cinza-5);border:1.5px solid var(--cinza-2);line-height:1.45}
+  #aba-receber .rc-confere.ok{background:#EAF7EE;border-color:#A9DFBF;color:#1E7A46}
+  #aba-receber .rc-confere.ruim{background:#FDEDEC;border-color:#F5B7B1;color:#B03A2E}
+  #aba-receber .rc-vai{border-top:2px solid var(--cinza-2);padding:12px 16px;background:#F7FBFF}
+  #aba-receber .rc-vai b{color:var(--azul)}
+  #aba-receber .rc-vai .rc-vai-l{font-size:12.5px;line-height:1.6}
   #aba-receber .rc-nfform{padding:12px 16px;background:var(--azul-claro);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
   #aba-receber .rc-nfform .campo label{font-size:10px}
   #aba-receber .rc-nfform .campo input{padding:6px 8px;font-size:12px}
@@ -5942,14 +5956,27 @@ function rcRenderizar(){
         <span style="margin-left:auto;color:var(--cinza-4)">confira o que foi pedido e marque o que chegou</span>
       </div>`:''}
       ${semCusto?`<div style="background:#EAF7EE;border-bottom:1.5px solid #A9DFBF;color:var(--verde);padding:8px 16px;font-size:12px;font-weight:700">🎁 ENTRADA SEM CUSTO (amostra grátis / bonificação) — valores ficam zerados, o nº da NF é opcional e o <b>preço de referência do item é preservado</b> para quando precisar comprar.</div>`:''}
+      <div class="rc-secrot">📄 Dados da nota <span>copie do papel, como está impresso</span></div>
       <div class="rc-nfform">
         <div class="campo"><label>Nº da NF</label><input type="text" id="rc-nf-num-${chave}"></div>
         <div class="campo"><label>Data emissão</label><input type="date" id="rc-nf-emissao-${chave}"></div>
         <div class="campo"><label>Data entrega</label><input type="date" id="rc-nf-entrega-${chave}" value="${new Date().toISOString().split('T')[0]}"></div>
+        <div class="campo"><label>💳 Forma de pagamento</label>
+          <input type="text" id="rc-nf-pag-${chave}" placeholder="ex: boleto 28d / 3x / à vista" value="${ped&&ped.condicao_pagamento?String(ped.condicao_pagamento).replace(/"/g,'&quot;'):''}">
+          ${ped&&ped.condicao_pagamento?'<span style="font-size:10px;color:var(--azul);font-weight:700">veio do pedido</span>':''}</div>
+        <div class="campo" style="grid-column:span 2"><label>Vencimento(s) / observação</label><input type="text" id="rc-nf-obs-${chave}" placeholder="ex: 15/09 e 15/10"></div>
+      </div>
+
+      <div class="rc-secrot">💰 Conferência de valores <span>o que a nota diz × o que os itens somam</span></div>
+      <div class="rc-nfform">
+        <div class="campo"><label>Valor TOTAL da nota (R$)</label>
+          <input type="number" step="0.01" min="0" id="rc-nf-total-${chave}" placeholder="o total impresso" oninput="rcAtualizaTotais('${chave}')">
+          <span style="font-size:10px;color:var(--cinza-4)">deixe em branco para usar a soma dos itens</span></div>
         <div class="campo"><label>Frete (R$)</label><input type="number" step="0.01" id="rc-nf-frete-${chave}" value="0" oninput="rcAtualizaTotais('${chave}')"></div>
         <div class="campo"><label>💳 Crédito utilizado (R$)</label><input type="number" step="0.01" min="0" id="rc-nf-cred-${chave}" value="0" oninput="rcAtualizaTotais('${chave}')">
           <span style="font-size:10px;color:var(--azul);font-weight:700">${(typeof ocSaldoCredito==='function'&&ocCreditos)?('disponível: '+rcMoney(ocSaldoCredito(fid))):''}</span></div>
-        <div class="campo" style="grid-column:span 2"><label>Vencimentos / Obs.</label><input type="text" id="rc-nf-obs-${chave}"></div>
+        <div class="campo" style="grid-column:span 3"><label>Confere?</label>
+          <div id="rc-confere-${chave}" class="rc-confere">marque os itens recebidos abaixo</div></div>
       </div>
       <div style="overflow-x:auto">
       <table>
@@ -5957,10 +5984,16 @@ function rcRenderizar(){
         <tbody>${linhas}</tbody>
       </table>
       </div>
+      <div class="rc-vai">
+        <div class="rc-vai-l" id="rc-vai-${chave}">Marque à esquerda o que chegou nesta nota.</div>
+        <div id="rc-resumo-${chave}" style="font-size:12.5px;color:var(--cinza-5);margin-top:6px">—</div>
+      </div>
       <div class="rc-rodape" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div id="rc-resumo-${chave}" style="font-size:13px;color:var(--cinza-5)">—</div>
+        <div style="font-size:11.5px;color:var(--cinza-5);max-width:430px;line-height:1.5">
+          <b>💾 Salvar NF</b> grava a nota e <b>não encosta no estoque</b> — dá para conferir depois.<br>
+          <b>🖊 Confirmar entrada</b> é o único botão que <b>muda o saldo</b>, e só dos itens marcados.
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <span style="font-size:11px;color:var(--cinza-4);max-width:230px;line-height:1.4">Salvar grava a nota sem mexer no saldo. Confirmar é o que dá entrada.</span>
           <button class="rc-btn-editar" style="padding:9px 14px;font-size:12px;font-weight:700" onclick="rcSalvarNF('${chave}')">💾 Salvar NF</button>
           <button class="rc-confirmar" onclick="rcConfirmarNF('${chave}')">🖊 Confirmar entrada no estoque</button>
         </div>
@@ -5972,218 +6005,48 @@ function rcRenderizar(){
 }
 
 // ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
-// ── observação da ordem: acrescenta sem repetir e sem deixar rabo vazio ──
-// v4.9b — antes cada ajuste emendava "| Ajustado: " no mesmo campo, mesmo com o
-// motivo em branco. A observação virava log e a linha não cabia mais na tela.
-function rcObsAcrescenta(obsAtual, texto){
-  const t = String(texto||'').trim();
-  if(!t) return obsAtual || null;                    // nada a dizer: não suja o campo
-  const base = String(obsAtual||'').trim();
-  if(!base) return t;
-  if(base.indexOf(t) >= 0) return base;              // já está lá, não repete
-  const partes = base.split(' | ').filter(Boolean);
-  partes.push(t);
-  // guarda a origem (primeira parte) e no máximo as 3 anotações mais recentes
-  const cortado = partes.length > 4 ? [partes[0], '…'].concat(partes.slice(-3)) : partes;
-  return cortado.join(' | ');
-}
-
-function rcOrfaForn(o){ return o.fornecedor_compra_id || o.fornecedor_id || 0; }
-function rcOrfaQtd(o){ return Number(o.qtd_a_comprar ?? o.qtd_comprada ?? 0) || 0; }
-
-// ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
-// v4.9b — agrupadas POR FORNECEDOR: a conversa de cobrança é com o fornecedor, não com
-// o item. Cada linha aceita quantidade e valor recebidos (parcial), e abre ocorrência.
 function rcHtmlOrfas(){
   if(!rcOrfas || !rcOrfas.length) return '';
   const dias = d => d ? Math.round((Date.now()-new Date(d).getTime())/86400000) : null;
-
-  const porForn = {};
-  for(const o of rcOrfas){
-    const fid = rcOrfaForn(o);
-    (porForn[fid] = porForn[fid] || []).push(o);
-  }
-  const blocos = Object.keys(porForn).map(fid=>{
-    const itens = porForn[fid];
-    const total = itens.reduce((sm,o)=>sm + rcOrfaQtd(o)*(Number(o.valor_unitario)||0), 0);
-    const maisAntiga = Math.max(...itens.map(o=>dias(o.created_at)||0));
-    const linhas = itens.map(o=>{
-      const dd = dias(o.created_at);
-      const q = rcOrfaQtd(o);
-      const v = Number(o.valor_unitario)||0;
-      return `<tr>
-        <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
-        <td style="text-align:center">
-          <input id="rc-of-q-${o.id}" type="number" step="any" min="0" value="${q}" title="quantidade que realmente chegou"
-            style="width:78px;text-align:right;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte)">
-          <div style="font-size:9.5px;color:var(--cinza-4)">pedida: ${q.toLocaleString('pt-BR')}</div>
-        </td>
-        <td style="text-align:center">
-          <input id="rc-of-v-${o.id}" type="number" step="0.01" min="0" value="${v||''}" title="valor unitário cobrado"
-            style="width:88px;text-align:right;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte)">
-          <div style="font-size:9.5px;color:var(--cinza-4)">pedido: ${rcMoney(v)}</div>
-        </td>
-        <td style="text-align:center;font-size:11px;${dd&&dd>30?'color:var(--vermelho);font-weight:700':'color:var(--cinza-4)'}">${dd!==null?dd+' dias':'—'}</td>
-        <td style="white-space:nowrap;text-align:right">
-          <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde)" onclick="rcLiberarOrfa(${o.id})" title="a compra chegou (na quantidade e valor ao lado): libera para dar entrada da NF">✔ recebi</button>
-          <button class="rc-btn-editar" style="background:#FDEBD0;color:#B9770E" onclick="rcOcorrenciaOrfa(${o.id})" title="veio errado, quantidade diferente, cobrança errada…">⚠️ ocorrência</button>
-          <button class="rc-btn-problema" onclick="rcDescartarOrfa(${o.id})" title="não vai chegar: devolve o item para a lista de compras">🚫 não veio</button>
-        </td></tr>`;
-    }).join('');
-
-    return `<div style="border-top:1px solid #F9E79F">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#FDF6D8">
-        <div style="font-weight:800;font-size:13.5px;color:#7a6408">🏪 ${rcNomeFornecedor(Number(fid))}
-          <span style="font-weight:600;font-size:11.5px;color:#9a8420">· ${itens.length} item(ns) · ${rcMoney(total)} parado${maisAntiga?` · mais antiga há ${maisAntiga} dias`:''}</span></div>
-        <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde);font-weight:700"
-          onclick="rcLiberarFornecedor(${fid})" title="libera todos os itens deste fornecedor, nas quantidades e valores mostrados">✔ recebi tudo deste fornecedor</button>
-      </div>
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>Material</th><th style="text-align:center">Qtd recebida</th>
-          <th style="text-align:center">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
-        <tbody>${linhas}</tbody></table></div>
-    </div>`;
+  const linhas = rcOrfas.map(o=>{
+    const dd = dias(o.created_at);
+    return `<tr>
+      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
+      <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
+      <td style="text-align:center;font-size:11px;${dd&&dd>30?'color:var(--vermelho);font-weight:700':'color:var(--cinza-4)'}">${dd!==null?dd+' dias':'—'}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="rc-btn-editar" style="background:var(--verde-claro);color:var(--verde)" onclick="rcLiberarOrfa(${o.id})" title="a compra aconteceu: liberar para dar entrada da NF">✔ recebi</button>
+        <button class="rc-btn-problema" onclick="rcDescartarOrfa(${o.id})" title="não vai chegar: devolve o item para a lista de compras">🚫 não veio</button>
+      </td></tr>`;
   }).join('');
-
   return `<div class="rc-grupo" style="border:2px solid var(--amarelo)">
     <div class="rc-ghead" style="background:#B7950B">⚠️ PENDÊNCIAS ANTIGAS SEM DONO <span class="rc-count">${rcOrfas.length}</span></div>
     <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7a6408;border-bottom:1px solid #F9E79F">
       Compras que ficaram marcadas como pendentes mas nunca foram liberadas — elas <b>não apareciam em nenhuma tela</b> e ainda seguravam o item na lista de compras.
-      Estão <b>agrupadas por fornecedor</b>. Se veio quantidade ou valor diferente, <b>corrija nos campos</b> antes de clicar em recebi:
-      o que sobrar da quantidade volta para a lista de compras.
-      <b>✔ recebi</b> abre a entrada da NF · <b>⚠️ ocorrência</b> registra o problema · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
-    ${blocos}
+      Diga o que aconteceu com cada uma: <b>✔ recebi</b> abre a entrada da NF · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Material</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
   </div>`;
 }
-
-// ── liberar uma pendência, já com o ajuste digitado na linha ─────
-async function rcLiberarOrfa(id, emLote){
+async function rcLiberarOrfa(id){
   const o=rcOrfas.find(x=>x.id===id); if(!o) return;
-  const qPed = rcOrfaQtd(o), vPed = Number(o.valor_unitario)||0;
-  const elQ = document.getElementById('rc-of-q-'+id), elV = document.getElementById('rc-of-v-'+id);
-  const qRec = elQ ? (parseFloat(elQ.value)||0) : qPed;
-  const vRec = elV && elV.value!=='' ? parseFloat(elV.value) : vPed;
-
-  if(qRec <= 0){ toast('Quantidade recebida precisa ser maior que zero. Se não veio nada, use 🚫 não veio.','erro'); return; }
-
-  const mudouQtd = Math.abs(qRec - qPed) > 0.0001;
-  const mudouVal = Math.abs((vRec||0) - vPed) > 0.0001;
-  const falta = qPed - qRec;
-
-  if(!emLote){
-    const partes = [];
-    if(mudouQtd) partes.push(`Quantidade: pedida ${qPed.toLocaleString('pt-BR')} → recebida ${qRec.toLocaleString('pt-BR')}` +
-      (falta>0?` (faltam ${falta.toLocaleString('pt-BR')}, que voltam para a lista de compras)`:''));
-    if(mudouVal) partes.push(`Valor unitário: ${rcMoney(vPed)} → ${rcMoney(vRec)}`);
-    const ok = await hogConfirma({
-      titulo: rcNomeMaterial(o.material_id),
-      texto: 'Confirmar que essa compra chegou?\n' + (partes.length?partes.join('\n')+'\n':'') +
-             'Ela vai para a lista de entrada de NF logo abaixo.',
-      ok: 'Sim, chegou' });
-    if(!ok) return;
-  }
-
+  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — confirmar que essa compra chegou?\n\nEla vai para a lista de entrada de NF logo abaixo.`)) return;
   try{
-    const patch = { aprovado_pedido:true };
-    if(mudouQtd){ patch.qtd_a_comprar = qRec; patch.qtd_comprada = qRec; }
-    if(mudouVal){ patch.valor_unitario = vRec; }
-    const nota = [];
-    if(mudouQtd) nota.push(`qtd ${qPed}→${qRec}`);
-    if(mudouVal) nota.push(`valor ${vPed}→${vRec}`);
-    if(nota.length) patch.observacao = rcObsAcrescenta(o.observacao, 'Recebido com ajuste: ' + nota.join(', '));
-
-    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',patch);
-
-    // o que faltou volta para a lista de compras como pendência nova
-    if(falta > 0.0001){
-      try{
-        await sbFetch('ordens_compra','POST',{
-          material_id:o.material_id, fornecedor_compra_id:o.fornecedor_compra_id||null,
-          fornecedor_id:o.fornecedor_id||null, qtd_a_comprar:falta, qtd_comprada:falta,
-          valor_unitario:vRec||null, situacao:'PENDENTE', aprovado_pedido:false,
-          observacao:`Saldo de recebimento parcial da ordem #${id} (faltaram ${falta})` });
-      }catch(e){ console.warn('saldo parcial:', e); }
-    }
-    if(!emLote){
-      toast(falta>0.0001 ? `Liberada — ${falta.toLocaleString('pt-BR')} voltaram para a lista de compras ✓`
-                         : 'Liberada — agora dê entrada da NF abaixo ✓','sucesso');
-      rcCarregar();
-    }
-    return true;
-  }catch(e){ toast('Erro: '+e.message,'erro'); return false; }
-}
-
-// ── liberar tudo de um fornecedor de uma vez ─────────────────────
-async function rcLiberarFornecedor(fid){
-  const itens = rcOrfas.filter(o=>rcOrfaForn(o)===Number(fid));
-  if(!itens.length) return;
-  const total = itens.reduce((sm,o)=>{
-    const el=document.getElementById('rc-of-q-'+o.id);
-    const q = el ? (parseFloat(el.value)||0) : rcOrfaQtd(o);
-    const ev=document.getElementById('rc-of-v-'+o.id);
-    const v = ev && ev.value!=='' ? parseFloat(ev.value) : (Number(o.valor_unitario)||0);
-    return sm + q*v; }, 0);
-  const ok = await hogConfirma({
-    titulo: rcNomeFornecedor(Number(fid)),
-    texto: `Liberar ${itens.length} item(ns) deste fornecedor, nas quantidades e valores que estão na tela?\n` +
-           `Total: ${rcMoney(total)}\n\nTodos vão para a lista de entrada de NF.`,
-    ok: 'Liberar todos' });
-  if(!ok) return;
-  let n=0;
-  for(const o of itens){ if(await rcLiberarOrfa(o.id, true)) n++; }
-  toast(`${n} item(ns) liberados — dê entrada da NF abaixo ✓`,'sucesso');
-  rcCarregar();
-}
-
-// ── ocorrência a partir da linha ─────────────────────────────────
-async function rcOcorrenciaOrfa(id){
-  const o=rcOrfas.find(x=>x.id===id); if(!o) return;
-  const r = await hogPergunta({
-    titulo:'Abrir ocorrência',
-    texto: rcNomeMaterial(o.material_id) + ' · ' + rcNomeFornecedor(rcOrfaForn(o)),
-    ok:'Registrar ocorrência',
-    campos:[
-      { id:'sit', rot:'O que aconteceu', tipo:'lista', obrigatorio:true,
-        opcoes: OC_SITUACOES.map(x=>({ v:x.k, r:x.rot })) },
-      { id:'nf',  rot:'Número da NF (se já tiver)', tipo:'texto' },
-      { id:'val', rot:'Valor envolvido (R$), quando fizer sentido', tipo:'numero' },
-      { id:'obs', rot:'Observação', tipo:'texto-longo' }
-    ]});
-  if(!r) return;
-  const sit = OC_SITUACOES.find(x=>x.k===r.sit);
-  try{
-    const oc = await sbFetch('ocorrencias','POST',{
-      situacao:r.sit, fornecedor_id:rcOrfaForn(o)||null, material_id:o.material_id||null,
-      numero_nf:(r.nf||'').trim()||null, valor:r.val?parseFloat(r.val):null,
-      criado_por:(SESSAO?SESSAO.nome:null),
-      acao_aplicada:((r.obs||'').trim() || (sit?sit.acao:null)), status:'aberta' });
-    if(!oc||!oc.length) throw new Error('sem permissão (RLS)');
-    if(r.sit==='VALOR_ERRADO_CREDITO' && r.val){
-      await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:rcOrfaForn(o), valor:parseFloat(r.val),
-        origem:'Ocorrência #'+oc[0].id+((r.nf||'').trim()?(' — NF '+r.nf.trim()):''),
-        ocorrencia_id:oc[0].id, status:'ABERTO' });
-    }
-    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{
-      observacao: rcObsAcrescenta(o.observacao, 'Ocorrência #'+oc[0].id+' — '+(sit?sit.rot:r.sit)) });
-    toast('Ocorrência registrada ✓ — veja na aba Ocorrências','sucesso');
+    await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ aprovado_pedido:true });
+    toast('Liberada — agora dê entrada da NF abaixo ✓','sucesso');
     rcCarregar();
-  }catch(e){ toast('Erro ao registrar: '+e.message,'erro'); }
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
-
 async function rcDescartarOrfa(id){
   const o=rcOrfas.find(x=>x.id===id); if(!o) return;
-  const r = await hogPergunta({
-    titulo:'Essa compra não vai chegar?',
-    texto: rcNomeMaterial(o.material_id) + ' · ' + rcNomeFornecedor(rcOrfaForn(o)) +
-           '\nO item volta a aparecer na lista de compras normalmente.',
-    ok:'Encerrar pendência',
-    campos:[{ id:'motivo', rot:'Motivo (opcional)', tipo:'texto',
-              placeholder:'ex: fornecedor cancelou' }]});
-  if(!r) return;
-  const motivo=(r.motivo||'').trim();
+  if(!confirm(`"${rcNomeMaterial(o.material_id)}" — essa compra não vai chegar?\n\nO item volta a aparecer na lista de compras normalmente.`)) return;
+  const motivo=prompt('Motivo (opcional):')||'';
   try{
     await sbFetch(`ordens_compra?id=eq.${id}`,'PATCH',{ situacao:'NAO COMPRAR AGORA',
-      observacao: rcObsAcrescenta(o.observacao, 'Pendência antiga encerrada'+(motivo?': '+motivo:'')) });
+      observacao:((o.observacao?o.observacao+' | ':'')+'Pendência antiga encerrada'+(motivo?': '+motivo:'')) });
     toast('Encerrada — o item voltou para a lista de compras ✓','sucesso');
     rcCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -6237,7 +6100,9 @@ function rcAtualizaTotais(chave){
   const grupo = document.querySelector(`.rc-grupo[data-forn="${chave}"]`);
   if(!grupo) return;
   const fid = rcFidDaChave(chave);
-  let totalItens = 0, marcados = 0;
+  let totalItens = 0, marcados = 0, unidades = 0;
+  const nomes = [];
+  let naoMarcados = 0;
   grupo.querySelectorAll('tr[data-ordem]').forEach(tr=>{
     const oid = tr.dataset.ordem;
     const qtd = parseFloat((document.getElementById('rc-qtd-'+oid)||{}).value)||0;
@@ -6246,16 +6111,63 @@ function rcAtualizaTotais(chave){
     const cel = document.getElementById('rc-tot-'+oid);
     if(cel) cel.textContent = tot>0 ? rcMoney(tot) : '—';
     const chk = document.getElementById('rc-chk-'+oid);
-    if(chk && chk.checked){ totalItens += tot; marcados++; }
+    if(chk && chk.checked){
+      totalItens += tot; marcados++; unidades += qtd;
+      const ordem = (typeof rcOrdens!=='undefined') ? rcOrdens.find(o=>o.id===Number(oid)) : null;
+      if(ordem) nomes.push(`${rcNomeMaterial(ordem.material_id)} <b>${qtd.toLocaleString('pt-BR')}</b>`);
+    } else naoMarcados++;
   });
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+chave)||{}).value)||0;
-  const cred = parseFloat((document.getElementById('rc-nf-cred-'+chave)||{}).value)||0;
+  const cred  = parseFloat((document.getElementById('rc-nf-cred-'+chave)||{}).value)||0;
+  const totalCalc = totalItens + frete;
+  const elTot = document.getElementById('rc-nf-total-'+chave);
+  const totalNota = elTot && elTot.value!=='' ? parseFloat(elTot.value) : null;
+  const semCusto = rcSemCusto(fid);
+
+  // ── conferência: o que a nota diz × o que os itens somam ──
+  const conf = document.getElementById('rc-confere-'+chave);
+  if(conf){
+    conf.className = 'rc-confere';
+    if(semCusto){
+      conf.textContent = 'Entrada sem custo — não há valor a conferir.';
+    } else if(!marcados){
+      conf.textContent = 'marque os itens recebidos abaixo';
+    } else if(totalNota === null){
+      conf.innerHTML = `Itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''} = <b>${rcMoney(totalCalc)}</b><br>
+        <span style="font-weight:600">Sem o total da nota preenchido, gravo esse valor.</span>`;
+    } else {
+      const dif = totalNota - totalCalc;
+      if(Math.abs(dif) < 0.01){
+        conf.classList.add('ok');
+        conf.innerHTML = `✅ Confere: nota ${rcMoney(totalNota)} = itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''}`;
+      } else {
+        conf.classList.add('ruim');
+        conf.innerHTML = `⚠️ Diferença de <b>${rcMoney(Math.abs(dif))}</b> — nota ${rcMoney(totalNota)} × itens${frete?' + frete':''} ${rcMoney(totalCalc)}.<br>
+          <span style="font-weight:600">${dif>0?'A nota cobra mais do que os itens somam. Falta lançar frete ou algum item?'
+                                              :'Os itens somam mais do que a nota. Confira quantidade ou valor unitário.'}</span>`;
+      }
+    }
+  }
+
+  // ── o que VAI ACONTECER com o estoque ──
+  const vai = document.getElementById('rc-vai-'+chave);
+  if(vai){
+    if(!marcados){
+      vai.innerHTML = 'Marque à esquerda o que chegou nesta nota. <span style="color:var(--cinza-4)">Nada foi marcado ainda — nenhum saldo vai se mexer.</span>';
+    } else {
+      vai.innerHTML =
+        `📥 <b>Vai ENTRAR no estoque:</b> ${marcados} item(ns), ${unidades.toLocaleString('pt-BR')} unidade(s) — ` +
+        nomes.slice(0,6).join(' · ') + (nomes.length>6?` · <i>e mais ${nomes.length-6}</i>`:'') +
+        (naoMarcados?`<br>⚪ <span style="color:var(--cinza-5)">${naoMarcados} item(ns) sem marcar continuam pendentes e <b>não</b> entram.</span>`:'');
+    }
+  }
+
   const res = document.getElementById('rc-resumo-'+chave);
-  if(rcSemCusto(fid) && res){
+  if(semCusto && res){
     res.innerHTML = `${marcados} item(ns) marcado(s) · <span class="rc-status-entregue" style="font-weight:800">🎁 ENTRADA SEM CUSTO — Total R$ 0,00</span> <span style="font-size:10px;color:var(--cinza-4)">(não entra em contas a pagar nem altera o preço de referência)</span>`;
     return;
   }
-  if(res) res.innerHTML = `${marcados} item(ns) marcado(s) · Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}${cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>`:''} · <span style="font-size:15px">${cred?'A pagar':'Total da NF'}: <b style="color:var(--azul)">${rcMoney(Math.max(0,totalItens+frete-cred))}</b></span>${cred?`<br><span style="font-size:10px;color:var(--cinza-4)">valor da NF (custos): ${rcMoney(totalItens+frete)} — o crédito abate só o financeiro</span>`:''}`;
+  if(res) res.innerHTML = `Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}${cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>`:''} · Total da nota: <b>${rcMoney(totalNota!==null?totalNota:totalCalc)}</b>${cred?` · a pagar <b>${rcMoney((totalNota!==null?totalNota:totalCalc)-cred)}</b>`:''}`;
 }
 
 async function rcMarcarProblema(ordemId){
@@ -6337,6 +6249,9 @@ async function rcGravarNF(chave, confirmar){
     if(cred > saldoCred+0.001){ toast('Crédito informado ('+rcMoney(cred)+') maior que o disponível ('+rcMoney(saldoCred)+').','erro'); return; }
   }
   let obs = document.getElementById(`rc-nf-obs-${chave}`).value.trim();
+  const formaPag = (document.getElementById(`rc-nf-pag-${chave}`)||{}).value || '';
+  const elTotNota = document.getElementById(`rc-nf-total-${chave}`);
+  const totalNotaDigitado = elTotNota && elTotNota.value!=='' ? parseFloat(elTotNota.value) : null;
 
   const itensParaGravar = [];
   let valorTotal = 0;
@@ -6365,10 +6280,40 @@ async function rcGravarNF(chave, confirmar){
   valorTotal += frete;
 
   if(cred>0 && cred>valorTotal+0.001){ toast('Crédito maior que o total da NF.','erro'); return; }
-  const resumoNf = `NF ${numeroNf||'(sem número)'} — ${itensParaGravar.length} item(ns) — total ${rcMoney(valorTotal)}${cred?` (💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorTotal-cred)})`:''}`;
-  if(!confirm(confirmar
-      ? `🖊 CONFIRMAR ENTRADA NO ESTOQUE\n\n${resumoNf}\n\nIsto move o saldo real e fica registrado no seu nome.`
-      : `💾 SALVAR a nota sem dar entrada?\n\n${resumoNf}\n\nO saldo do estoque NÃO se mexe. A nota fica esperando a confirmação assinada.`)) return;
+  // o valor gravado é o que está IMPRESSO na nota, quando ela foi informada
+  const valorNota = totalNotaDigitado !== null ? totalNotaDigitado : valorTotal;
+  const difNota = totalNotaDigitado !== null ? (totalNotaDigitado - valorTotal) : 0;
+
+  const listaItens = itensParaGravar
+    .map(x => `• ${rcNomeMaterial(x.ordem.material_id)} — ${x.qtd.toLocaleString('pt-BR')} un`)
+    .join('\n');
+  const cabecalhoTxt =
+    `NF ${numeroNf||'(sem número)'} · ${rcNomeFornecedor(Number(fid))}\n` +
+    (dataEntrega?`Entrega ${(''+dataEntrega).split('-').reverse().join('/')}\n`:'') +
+    (formaPag.trim()?`Pagamento: ${formaPag.trim()}\n`:'') +
+    `Total da nota ${rcMoney(valorNota)}` +
+    (frete?` · frete ${rcMoney(frete)}`:'') +
+    (cred?` · 💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorNota-cred)}`:'') +
+    (Math.abs(difNota) > 0.01
+      ? `\n\n⚠️ ATENÇÃO: a nota (${rcMoney(totalNotaDigitado)}) não bate com os itens${frete?' + frete':''} (${rcMoney(valorTotal)}). Diferença de ${rcMoney(Math.abs(difNota))}.`
+      : '');
+
+  const ok = confirmar
+    ? await hogConfirma({
+        titulo: '🖊 Confirmar entrada no estoque',
+        texto: cabecalhoTxt +
+          `\n\nESTES ${itensParaGravar.length} ITEM(NS) VÃO ENTRAR NO SALDO:\n${listaItens}\n\n` +
+          `Nada além disso é alterado. Fica registrado no seu nome.`,
+        ok: 'Sim, dar entrada' })
+    : await hogConfirma({
+        titulo: '💾 Salvar a nota sem dar entrada',
+        texto: cabecalhoTxt +
+          `\n\n${itensParaGravar.length} item(ns) ficam gravados na nota.\n` +
+          `O SALDO DO ESTOQUE NÃO SE MEXE — a nota fica esperando a confirmação.`,
+        ok: 'Salvar sem mexer no estoque' });
+  if(!ok) return;
+
+  if(formaPag.trim()) obs = (obs ? obs + ' | ' : '') + 'Pagamento: ' + formaPag.trim();
   if(cred>0){ obs = (obs?obs+' | ':'')+'CRÉDITO UTILIZADO: '+rcMoney(cred)+' — a pagar '+rcMoney(valorTotal-cred); }
 
   try{
@@ -6379,7 +6324,7 @@ async function rcGravarNF(chave, confirmar){
       mes_referencia: rcMesRef(dataEntrega || dataEmissao),
       data_emissao: dataEmissao,
       data_entrega: dataEntrega,
-      valor_total: valorTotal,
+      valor_total: valorNota,
       frete: frete,
       vencimentos_obs: obs || null,
       status: dataEntrega ? 'ENTREGUE' : 'AGUARDANDO ENTREGA',
@@ -6703,7 +6648,7 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
       qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
-      observacao: rcObsAcrescenta(ordem.observacao, motivo.trim() ? 'Ajustado: '+motivo.trim() : ''),
+      observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
     });
     toast('Item ajustado ✓','sucesso');
     if(typeof recarregarFn === 'function') recarregarFn();
