@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.9c · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.9d · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -829,6 +829,25 @@ details[open] summary { margin-bottom: 6px; }
   #aba-decisao .de-bar button{font-size:12px;font-weight:700;font-family:var(--fonte);padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
   #aba-decisao .de-refresh{background:var(--azul-medio);color:#fff}
   #aba-decisao .de-confirmar{background:var(--verde);color:#fff}
+  #aba-decisao .de-tag-sc{display:inline-block;background:#FDEBD0;color:#B9770E;border-radius:12px;
+    padding:1px 8px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;vertical-align:middle}
+  #aba-decisao .de-addbar{padding:10px 14px;background:#F2FBF5;border-bottom:1px solid var(--cinza-2)}
+  #aba-decisao .de-addform{display:none;padding:12px 14px;background:#F2FBF5;border-bottom:1px solid var(--cinza-2)}
+  #aba-decisao .de-addform.on{display:block}
+  #aba-decisao .de-addgrid{display:grid;grid-template-columns:2fr 1fr .7fr .9fr auto;gap:9px;align-items:end}
+  @media(max-width:760px){ #aba-decisao .de-addgrid{grid-template-columns:1fr 1fr} }
+  #aba-decisao .de-addgrid .campo{display:flex;flex-direction:column;gap:3px}
+  #aba-decisao .de-addgrid label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--cinza-4)}
+  #aba-decisao .de-addgrid input{padding:8px 10px;font-size:13px;font-family:var(--fonte);
+    border:1.5px solid var(--cinza-2);border-radius:7px;background:#fff}
+  #aba-decisao .de-addnota{margin-top:9px;font-size:11.5px;color:#7a6408;background:#FEF9E7;
+    border:1.5px solid #F9E79F;border-radius:8px;padding:8px 11px;line-height:1.5}
+  #aba-decisao .de-btn-add{background:var(--verde-claro);color:var(--verde);border:1.5px solid #A9DFBF;
+    border-radius:8px;padding:8px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-decisao .de-btn-ok{background:var(--verde);color:#fff;border:0;border-radius:8px;padding:9px 14px;
+    font-size:12.5px;font-weight:800;cursor:pointer;font-family:var(--fonte)}
+  #aba-decisao .de-btn-sec{background:var(--azul-claro);color:var(--azul);border:0;border-radius:8px;
+    padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-decisao .de-item{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:14px;overflow:hidden}
   #aba-decisao .de-ihead{padding:12px 14px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2)}
   #aba-decisao .de-inome{font-size:14px;font-weight:700}
@@ -858,6 +877,7 @@ details[open] summary { margin-bottom: 6px; }
   #aba-decisao .de-atrasado{color:var(--vermelho)}
 </style>
 <div id="aba-decisao" class="container" style="display:none">
+<datalist id="de-mats"></datalist>
   <div class="de-bar">
     <span class="de-status" id="de-status">Carregando...</span>
     <button class="de-refresh" onclick="deCarregar()">🔄 Atualizar</button>
@@ -4867,6 +4887,78 @@ function coCopiar(id){ const ta=document.getElementById(id); if(!ta) return; ta.
 // ═══ ABA PEDIDOS v3.2 — quadros por fornecedor (EM_MONTAGEM) · completa dados e envia p/ aprovação ═══
 let deBoards = []; // [{pedido, itens:[ordens_compra]}]
 
+// ═══ v4.9d — INCLUIR ITEM AVULSO NO PEDIDO EM MONTAGEM ═══════════
+// Antes só dava para editar e tirar itens vindos da cotação. Faltava o caso
+// real: o que não entrou no orçamento, ou o que o fornecedor ofereceu depois.
+// O item avulso fica MARCADO — sem isso o comparativo daria a entender que
+// aquele preço foi disputado entre fornecedores, e não foi.
+const DE_MARCA_AVULSO = 'Incluído na montagem';
+function deAvulso(o){ return String(o && o.observacao || '').indexOf(DE_MARCA_AVULSO) === 0; }
+
+function deAbrirAdd(pid){
+  const f = document.getElementById('de-add-'+pid); if(!f) return;
+  f.classList.add('on');
+  deMontarDatalist();
+  deCalcAdd(pid);
+  const i = document.getElementById('de-a-mat-'+pid); if(i) i.focus();
+}
+function deFecharAdd(pid){
+  const f = document.getElementById('de-add-'+pid); if(f) f.classList.remove('on');
+  ['de-a-mat-','de-a-marca-','de-a-val-'].forEach(p=>{ const e=document.getElementById(p+pid); if(e) e.value=''; });
+  const q = document.getElementById('de-a-qtd-'+pid); if(q) q.value = 1;
+  deCalcAdd(pid);
+}
+function deCalcAdd(pid){
+  const q = parseFloat((document.getElementById('de-a-qtd-'+pid)||{}).value) || 0;
+  const v = parseFloat((document.getElementById('de-a-val-'+pid)||{}).value) || 0;
+  const el = document.getElementById('de-a-sub-'+pid);
+  if(el) el.textContent = deMoney(q*v);
+}
+function deMontarDatalist(){
+  const dl = document.getElementById('de-mats'); if(!dl || dl.dataset.ok) return;
+  dl.innerHTML = (catalogoMateriais||[]).map(m=>`<option value="${String(m.nome).replace(/"/g,'&quot;')}">`).join('');
+  dl.dataset.ok = '1';
+}
+
+async function deIncluirItem(pid){
+  const b = deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  const nome = ((document.getElementById('de-a-mat-'+pid)||{}).value||'').trim();
+  const marca = ((document.getElementById('de-a-marca-'+pid)||{}).value||'').trim();
+  const qtd = parseFloat((document.getElementById('de-a-qtd-'+pid)||{}).value) || 0;
+  const val = parseFloat((document.getElementById('de-a-val-'+pid)||{}).value);
+
+  if(!nome){ toast('Escolha o material no cadastro.','erro'); return; }
+  const mat = (catalogoMateriais||[]).find(m => String(m.nome).toUpperCase() === nome.toUpperCase());
+  if(!mat){
+    toast('Material não encontrado no cadastro. Escolha da lista — ou cadastre pelo ➕ da aba Compras.','erro');
+    return;
+  }
+  if(!(qtd>0)){ toast('Informe a quantidade.','erro'); return; }
+  if(isNaN(val) || val<0){ toast('Informe o valor unitário.','erro'); return; }
+
+  if(b.itens.some(o=>o.material_id===mat.id)){
+    const ok = await hogConfirma({ titulo:'Item repetido',
+      texto: mat.nome + ' já está neste pedido.\nIncluir uma segunda linha mesmo assim?',
+      ok:'Incluir assim mesmo' });
+    if(!ok) return;
+  }
+
+  const fid = b.pedido.fornecedor_id || null;
+  try{
+    const r = await sbFetch('ordens_compra','POST',{
+      material_id: mat.id, fornecedor_id: fid, fornecedor_compra_id: fid,
+      status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id: pid,
+      qtd_a_comprar: qtd, qtd_comprada: qtd, valor_unitario: val,
+      marca_escolhida: marca || null,
+      observacao: DE_MARCA_AVULSO + ' do pedido #' + pid +
+                  (SESSAO ? ' por ' + SESSAO.nome : '') });
+    if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
+    toast(mat.nome + ' incluído no pedido ✓','sucesso');
+    deFecharAdd(pid);
+    deCarregar();
+  }catch(e){ toast('Erro ao incluir: '+e.message,'erro'); }
+}
+
 function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function deNomeForn(id){ if(!id) return '(sem fornecedor)'; const f=coFornecedores.find(x=>x.id===id); return f?f.nome:('fornecedor #'+id); }
 function deNomeMat(id){ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id); }
@@ -4905,8 +4997,8 @@ function deRenderizar(){
   }
   corpo.innerHTML = deBoards.map(b=>{
     const p=b.pedido, pid=p.id;
-    const linhas = b.itens.map(o=>`<tr>
-      <td>${deNomeMat(o.material_id)}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+    const linhas = b.itens.map(o=>`<tr${deAvulso(o)?' style="background:#F2FBF5"':''}>
+      <td>${deNomeMat(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
@@ -4925,6 +5017,31 @@ function deRenderizar(){
           <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
         <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+      </div>
+      <div class="de-addbar">
+        <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
+        <span style="font-size:11.5px;color:var(--cinza-4);margin-left:8px">para o que faltou na cotação, ou o que o fornecedor ofereceu depois</span>
+      </div>
+      <div class="de-addform" id="de-add-${pid}">
+        <div class="de-addgrid">
+          <div class="campo"><label>Material</label>
+            <input list="de-mats" id="de-a-mat-${pid}" placeholder="digite e escolha do cadastro…" autocomplete="off"></div>
+          <div class="campo"><label>Marca</label><input type="text" id="de-a-marca-${pid}" placeholder="opcional"></div>
+          <div class="campo"><label>Qtd</label>
+            <input type="number" id="de-a-qtd-${pid}" value="1" min="0" step="any" oninput="deCalcAdd(${pid})"></div>
+          <div class="campo"><label>Valor unit. (R$)</label>
+            <input type="number" id="de-a-val-${pid}" step="0.01" min="0" placeholder="0,00" oninput="deCalcAdd(${pid})"></div>
+          <div style="display:flex;gap:7px;align-items:flex-end">
+            <button class="de-btn-ok" onclick="deIncluirItem(${pid})">Incluir</button>
+            <button class="de-btn-sec" onclick="deFecharAdd(${pid})">Cancelar</button>
+          </div>
+        </div>
+        <div class="de-addnota">
+          <b>Subtotal:</b> <span id="de-a-sub-${pid}">R$ 0,00</span> &nbsp;·&nbsp;
+          ⚠️ Item incluído aqui <b>não passou pela cotação</b>: ele entra marcado como
+          <b>“sem cotação”</b>, para o comparativo e o PDF não darem a entender que houve
+          disputa de preço nesse item.
+        </div>
       </div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr>
@@ -6007,7 +6124,7 @@ function rcHtmlOrfas(){
   const linhas = rcOrfas.map(o=>{
     const dd = dias(o.created_at);
     return `<tr>
-      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
       <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
@@ -6681,7 +6798,7 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id)}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
