@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.9f · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.10 · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1121,6 +1121,33 @@ details[open] summary { margin-bottom: 6px; }
 
 <!-- ═══ ABA INVENTÁRIO / AJUSTES (MOVE SALDO — SENHA PRÓPRIA) ═══ -->
 <style>
+  #dml-card .dml-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px}
+  #dml-card .dml-tile{border:1.5px solid var(--cinza-2);border-radius:10px;padding:11px 13px}
+  #dml-card .dml-tile .r{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4)}
+  #dml-card .dml-tile .v{font-size:21px;font-weight:800;color:var(--laranja);margin-top:3px}
+  #dml-card .dml-tile .s{font-size:10.5px;color:var(--cinza-4);margin-top:2px}
+  #dml-card table{width:100%;border-collapse:collapse;font-size:13px}
+  #dml-card thead th{text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;
+    letter-spacing:.4px;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)}
+  #dml-card tbody td{padding:8px 10px;border-bottom:1px solid var(--cinza-2)}
+  #dml-card .num{text-align:right}
+  #dml-card .zero{color:var(--cinza-3)}
+  #dml-card .no-dml{font-weight:800;color:var(--laranja)}
+  #dml-card .no-ars{font-weight:700}
+  #dml-card .dml-b{padding:6px 11px;border:0;border-radius:7px;font-family:var(--fonte);
+    font-size:11.5px;font-weight:700;cursor:pointer}
+  #dml-card .dml-b-g{background:#FDEBD0;color:#B9770E}
+  #dml-card .dml-b-r{background:var(--verde-claro);color:var(--verde)}
+  #dml-card .dml-b-off{background:var(--cinza-1);color:var(--cinza-3);cursor:not-allowed}
+  #dml-card .dml-form{background:#FFFDF6;border:1.5px solid #F0C36D;border-radius:9px;padding:11px 13px}
+  #dml-card .dml-form input{border:1.5px solid var(--cinza-2);border-radius:7px;padding:8px 10px;
+    font-size:13px;font-family:var(--fonte)}
+  #dml-card .dml-prev{font-size:12px;line-height:1.5;color:var(--cinza-5);background:var(--cinza-1);
+    border-radius:7px;padding:8px 10px;margin-top:8px}
+  #dml-card .dml-erro{color:var(--vermelho);font-size:12px;font-weight:700;margin-top:6px}
+  #dml-card .dml-chip{display:inline-block;border-radius:12px;padding:2px 9px;font-size:10.5px;font-weight:800}
+  #dml-card .dml-chip.g{background:#FDEBD0;color:#B9770E}
+  #dml-card .dml-chip.r{background:var(--verde-claro);color:var(--verde)}
   #aba-inventario .inv-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px 18px;margin-bottom:18px}
   #aba-inventario .inv-card h3{font-size:14px;margin-bottom:4px}
   #aba-inventario .inv-sub{font-size:12px;color:var(--cinza-4);margin-bottom:14px}
@@ -1170,6 +1197,23 @@ details[open] summary { margin-bottom: 6px; }
       já têm conta própria e não entram aqui. A <b>cor não divide o saldo</b>: se precisar registrar, escreva na observação da linha.
     </div>
     <div id="rmc-corpo"><div class="inv-empty">Carregando o livro…</div></div>
+  </div>
+
+  <!-- ═══ LIVRO DO DML (v4.10) ═══
+       O DML guarda o excedente que não coube no Arsenal. O saldo dele JÁ ESTÁ
+       dentro do saldo total: este livro diz ONDE o material está, não quanto existe.
+       "No Arsenal" é calculado (total − DML) — número derivado não se guarda. -->
+  <div class="inv-card" id="dml-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--laranja);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📦 DML — guarda do excedente</span>
+      <button onclick="dmlCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#FDF2E4;border-left:4px solid var(--laranja);padding:10px 14px;font-size:12px;color:#7E4A11;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      O saldo do DML <b>já está dentro do saldo total</b> — este livro não cria estoque novo, ele diz
+      <b>onde o material está guardado</b>. Guardar move do Arsenal para o DML; retirar faz o caminho de volta.
+      <b>O total nunca muda.</b> Por isso a coluna <b>no Arsenal</b> é calculada: saldo total menos o que está no DML.
+    </div>
+    <div id="dml-corpo"><div class="inv-empty">Carregando o livro do DML…</div></div>
   </div>
 
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
@@ -3189,6 +3233,7 @@ function trocarAba(aba) {
   { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
   if (aba==='usuarios') { usCarregar(); }
   if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
+  if (aba==='inventario') { setTimeout(()=>{ if(!dmlMats.length) dmlCarregar(); }, 120); }
   if (aba==='remessas') { rmCarregar(); }
   if (aba==='alertas')  { alCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
@@ -11682,6 +11727,205 @@ function hogPergunta({titulo, texto, campos, ok}){
         });
       }});
   });
+}
+</script>
+
+
+<script>
+// ═══ LIVRO DO DML (v4.10) ════════════════════════════════════════
+// Regra que sustenta a tela, dita por ela em 04/08:
+//   "o saldo do dml está inserido no saldo total, só quero poder transferir
+//    o material quando for retirado ou incluir quando for colocado algo lá
+//    para rastreio."
+// Ou seja: o livro NÃO mexe em `estoque` nem em `movimentacoes`. Ele responde
+// ONDE está, não QUANTO existe. "No Arsenal" é derivado (total − DML) e por
+// isso nunca é gravado — número derivado guardado é número que diverge.
+let dmlMats = [];        // [{id,nome,unidade,uvp}]
+let dmlSaldoTotal = {};  // material_id -> saldo do Estoque Geral
+let dmlNoDml = {};       // material_id -> quanto está no DML
+let dmlHist = [];        // últimos movimentos
+let dmlBusca = '';
+let dmlAberto = null;    // {mid, sentido} da linha expandida
+
+function dmlN(v){ return Number(v||0).toLocaleString('pt-BR'); }
+function dmlArsenal(mid){ return (dmlSaldoTotal[mid]||0) - (dmlNoDml[mid]||0); }
+
+async function dmlCarregar(){
+  const alvo = document.getElementById('dml-corpo'); if(!alvo) return;
+  alvo.innerHTML = '<div class="inv-empty">Carregando o livro do DML…</div>';
+  try{
+    const mats = (await sbFetch('materiais?select=id,nome,unidade_medida,ultimo_valor_pago&ativo=eq.true&order=nome.asc&limit=1000')) || [];
+    dmlMats = mats.map(m=>({ id:m.id, nome:m.nome, unidade:m.unidade_medida||'',
+                             uvp:Number(m.ultimo_valor_pago)||0 }));
+
+    const geralId = await getEstoqueGeralId();
+    const est = (await sbFetch(`estoque?select=material_id,saldo&local_id=eq.${geralId}&limit=3000`)) || [];
+    dmlSaldoTotal = {}; for(const e of est) dmlSaldoTotal[e.material_id] = Number(e.saldo)||0;
+
+    let sal = [];
+    try{ sal = (await sbFetch('vw_dml_saldo?select=material_id,saldo_dml&limit=2000')) || []; }
+    catch(e){
+      alvo.innerHTML = '<div class="inv-empty" style="color:var(--vermelho)">O livro do DML ainda não existe no banco.<br>'
+        + '<span style="font-size:12px">Rode o script <b>v410_dml.sql</b> no Supabase e clique em Atualizar.</span></div>';
+      return;
+    }
+    dmlNoDml = {}; for(const r of sal) dmlNoDml[r.material_id] = Number(r.saldo_dml)||0;
+
+    try{ dmlHist = (await sbFetch('dml_movimentos?select=*&order=criado_em.desc&limit=30')) || []; }
+    catch(e){ dmlHist = []; }
+
+    dmlAberto = null;
+    dmlRender();
+  }catch(e){
+    alvo.innerHTML = '<div class="inv-empty" style="color:var(--vermelho)">Erro ao carregar: '+(e.message||e)+'</div>';
+  }
+}
+
+function dmlNome(mid){ const m = dmlMats.find(x=>x.id===mid); return m ? m.nome : ('material #'+mid); }
+function dmlBr(d){
+  if(!d) return '—';
+  const s = String(d);
+  return s.slice(8,10)+'/'+s.slice(5,7)+' '+s.slice(11,16);
+}
+
+function dmlRender(){
+  const alvo = document.getElementById('dml-corpo'); if(!alvo) return;
+
+  const comSaldo = dmlMats.filter(m => (dmlNoDml[m.id]||0) > 0);
+  const valor = comSaldo.reduce((sm,m)=> sm + (dmlNoDml[m.id]||0)*m.uvp, 0);
+
+  const termo = (dmlBusca||'').trim().toUpperCase();
+  // sem busca, mostra o que está no DML; com busca, procura no catálogo inteiro
+  const vis = termo
+    ? dmlMats.filter(m => m.nome.toUpperCase().indexOf(termo) >= 0).slice(0,120)
+    : comSaldo;
+
+  const linhas = vis.map(m=>{
+    const total = dmlSaldoTotal[m.id]||0, noDml = dmlNoDml[m.id]||0, ars = total - noDml;
+    const podeG = ars > 0, podeR = noDml > 0;
+    const ab = dmlAberto && dmlAberto.mid === m.id ? dmlAberto.sentido : null;
+    return `<tr>
+      <td>${m.nome}<span style="display:block;font-size:10px;color:var(--cinza-4)">${m.unidade}</span></td>
+      <td class="num">${dmlN(total)}</td>
+      <td class="num ${noDml>0?'no-dml':'zero'}">${dmlN(noDml)}</td>
+      <td class="num ${ars>0?'no-ars':'zero'}">${dmlN(ars)}</td>
+      <td class="num" style="white-space:nowrap">
+        <button class="dml-b ${podeG?'dml-b-g':'dml-b-off'}" ${podeG?`onclick="dmlAbrir(${m.id},'GUARDAR')"`:'disabled'} title="mover do Arsenal para o DML">↓ guardar no DML</button>
+        <button class="dml-b ${podeR?'dml-b-r':'dml-b-off'}" ${podeR?`onclick="dmlAbrir(${m.id},'RETIRAR')"`:'disabled'} title="trazer do DML para o Arsenal">↑ retirar</button>
+      </td></tr>
+      ${ab ? `<tr><td colspan="5" style="background:var(--cinza-1)">
+        <div class="dml-form">
+          <div style="font-weight:800;font-size:12.5px;color:${ab==='GUARDAR'?'#B9770E':'var(--verde)'};margin-bottom:8px">
+            ${ab==='GUARDAR'?'↓ Guardar no DML':'↑ Retirar do DML'} — ${m.nome}</div>
+          <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end">
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Quantidade (máximo ${dmlN(ab==='GUARDAR'?ars:noDml)})</label>
+              <input type="number" id="dml-q" step="any" min="0" style="width:130px" value="${ab==='RETIRAR'?noDml:''}" oninput="dmlPrever(${m.id})">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">
+              <label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Observação (opcional)</label>
+              <input type="text" id="dml-o" placeholder="ex: chegou NF 1204, não coube no arsenal">
+            </div>
+            <button class="dml-b" style="background:var(--azul);color:#fff;padding:9px 15px;font-size:12.5px" id="dml-ok" onclick="dmlGravar(${m.id})">Confirmar</button>
+            <button class="dml-b" style="background:var(--azul-claro);color:var(--azul);padding:9px 15px;font-size:12.5px" onclick="dmlFechar()">Cancelar</button>
+          </div>
+          <div class="dml-prev" id="dml-prev"></div>
+          <div class="dml-erro" id="dml-erro" style="display:none"></div>
+        </div></td></tr>` : ''}`;
+  }).join('');
+
+  alvo.innerHTML = `
+    <div class="dml-tiles">
+      <div class="dml-tile"><div class="r">Itens guardados no DML</div>
+        <div class="v">${comSaldo.length}</div><div class="s">com saldo maior que zero</div></div>
+      <div class="dml-tile"><div class="r">Valor guardado no DML</div>
+        <div class="v">${rcMoney(valor)}</div><div class="s">pelo último valor pago</div></div>
+      <div class="dml-tile"><div class="r">Última movimentação</div>
+        <div class="v" style="font-size:16px">${dmlHist.length?dmlBr(dmlHist[0].criado_em):'—'}</div>
+        <div class="s">${dmlHist.length?(dmlNome(dmlHist[0].material_id)+' · '+(dmlHist[0].sentido==='GUARDAR'?'guardado':'retirado')):'nenhuma ainda'}</div></div>
+    </div>
+
+    <input id="dml-busca" class="rel-busca" value="${(dmlBusca||'').replace(/"/g,'&quot;')}"
+      placeholder="procurar item… (vazio mostra só o que está no DML)"
+      style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte);margin-bottom:10px"
+      oninput="dmlBusca=this.value;clearTimeout(window._dmlb);window._dmlb=setTimeout(()=>{dmlRender();const e=document.getElementById('dml-busca');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},280)">
+
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Item</th><th class="num">Saldo total</th><th class="num">No DML</th>
+        <th class="num">No Arsenal</th><th></th></tr></thead>
+      <tbody>${linhas || '<tr><td colspan="5" style="color:var(--cinza-4);padding:14px">'
+        + (termo ? 'Nenhum item encontrado.' : 'Nada guardado no DML. Procure um item acima para guardar.')
+        + '</td></tr>'}</tbody>
+    </table></div>
+
+    ${dmlHist.length?`<div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:6px">🕘 Últimas movimentações</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Quando</th><th>Item</th><th class="num">Qtd</th><th>Sentido</th><th>Quem</th><th>Observação</th></tr></thead>
+        <tbody>${dmlHist.map(h=>`<tr>
+          <td style="white-space:nowrap;color:var(--cinza-4);font-size:12px">${dmlBr(h.criado_em)}</td>
+          <td style="font-size:12px">${dmlNome(h.material_id)}</td>
+          <td class="num" style="font-weight:700">${dmlN(h.qtd)}</td>
+          <td><span class="dml-chip ${h.sentido==='GUARDAR'?'g':'r'}">${h.sentido==='GUARDAR'?'↓ guardado no DML':'↑ retirado para o Arsenal'}</span></td>
+          <td style="font-size:12px">${h.registrado_por||'—'}</td>
+          <td style="font-size:11px;color:var(--cinza-4)">${h.observacao||'—'}</td></tr>`).join('')}</tbody>
+      </table></div></div>`:''}`;
+
+  if(dmlAberto) dmlPrever(dmlAberto.mid);
+}
+
+function dmlAbrir(mid, sentido){ dmlAberto = { mid, sentido }; dmlRender();
+  setTimeout(()=>{ const e=document.getElementById('dml-q'); if(e) e.focus(); }, 60); }
+function dmlFechar(){ dmlAberto = null; dmlRender(); }
+
+// mostra o efeito ANTES de confirmar — a tela não pode deixar dúvida
+function dmlPrever(mid){
+  if(!dmlAberto) return;
+  const prev = document.getElementById('dml-prev'); if(!prev) return;
+  const total = dmlSaldoTotal[mid]||0, noDml = dmlNoDml[mid]||0, ars = total - noDml;
+  const q = parseFloat((document.getElementById('dml-q')||{}).value) || 0;
+  const max = dmlAberto.sentido==='GUARDAR' ? ars : noDml;
+  const novoDml = dmlAberto.sentido==='GUARDAR' ? noDml + q : noDml - q;
+  const novoArs = total - novoDml;
+
+  prev.innerHTML = `<b>Saldo total continua ${dmlN(total)}</b> — só muda onde está.<br>
+    No DML: ${dmlN(noDml)} → <b>${dmlN(Math.max(0,novoDml))}</b> &nbsp;·&nbsp;
+    No Arsenal: ${dmlN(ars)} → <b>${dmlN(Math.max(0,novoArs))}</b>`;
+
+  const erro = document.getElementById('dml-erro');
+  const btn = document.getElementById('dml-ok');
+  if(q > max + 0.0001){
+    erro.textContent = dmlAberto.sentido==='GUARDAR'
+      ? `Só há ${dmlN(ars)} no Arsenal para guardar. O livro não pode dizer que existe mais no DML do que no estoque.`
+      : `Só há ${dmlN(noDml)} no DML.`;
+    erro.style.display = ''; if(btn) btn.disabled = true;
+  } else {
+    erro.style.display = 'none'; if(btn) btn.disabled = false;
+  }
+}
+
+async function dmlGravar(mid){
+  if(!dmlAberto) return;
+  const sentido = dmlAberto.sentido;
+  const q = parseFloat((document.getElementById('dml-q')||{}).value) || 0;
+  const obs = ((document.getElementById('dml-o')||{}).value || '').trim();
+  const total = dmlSaldoTotal[mid]||0, noDml = dmlNoDml[mid]||0, ars = total - noDml;
+  const max = sentido==='GUARDAR' ? ars : noDml;
+
+  if(!(q>0)){ toast('Informe a quantidade.','erro'); return; }
+  if(q > max + 0.0001){
+    toast(sentido==='GUARDAR' ? 'Não dá para guardar mais do que há no Arsenal.' : 'Não dá para retirar mais do que há no DML.','erro');
+    return;
+  }
+  try{
+    const r = await sbFetch('dml_movimentos','POST',{
+      material_id: mid, qtd: q, sentido, observacao: obs || null,
+      registrado_por: (SESSAO ? SESSAO.nome : null),
+      registrado_por_id: (SESSAO ? SESSAO.id : null) });
+    if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
+    toast(`${dmlNome(mid)} — ${dmlN(q)} ${sentido==='GUARDAR'?'guardado(s) no DML':'retirado(s) do DML'} ✓`,'sucesso');
+    dmlCarregar();
+  }catch(e){ toast('Erro ao registrar: '+(e.message||e),'erro'); }
 }
 </script>
 
