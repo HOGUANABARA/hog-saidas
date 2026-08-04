@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.9d · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.9f · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5914,6 +5914,7 @@ async function hiSalvarCorrecao(nfId){
 let rcOrdens = [];       // ordens_compra com situacao='PENDENTE'
 let rcControlaLote = new Set(); // materiais que exigem lote/validade na entrada
 let rcOrfas = [];              // ordens pendentes nunca liberadas (limbo)
+let rcEmFluxo = [];            // ordens de pedido vivo AINDA NÃO APROVADO — só informação
 let rcPedidos = [];            // pedidos, para abrir a compra por pedido
 let rcNfsRecentes = [];
 
@@ -5954,9 +5955,23 @@ async function rcCarregar(){
     rcOrdens = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.true&order=id.desc")) || [];
     // pendências ÓRFÃS: ordens antigas/migradas que nunca foram liberadas (não aparecem em lugar nenhum
     // e ainda bloqueiam o item na lista de compras) — ex.: METIL 4% OPHTHALMOS
+    // v4.9e — ÓRFÃ é ordem PENDENTE que não tem pedido vivo por trás.
+    // Antes o filtro era só `aprovado_pedido = false`, e isso capturava o fluxo
+    // inteiro: todo item de pedido em montagem ou aguardando aprovação tem
+    // aprovado_pedido = false — é o estado normal dele. O bloco "sem dono"
+    // mostrava os pedidos em andamento e oferecia "✔ recebi", que libera a
+    // entrada PULANDO a aprovação. Era um buraco no controle, não um incômodo.
     try{
-      rcOrfas = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc&limit=200")) || [];
-    }catch(e){ rcOrfas = []; }
+      const pend = (await sbFetch("ordens_compra?select=*&situacao=eq.PENDENTE&aprovado_pedido=eq.false&order=id.desc&limit=200")) || [];
+      // pedidos que ainda estão vivos (montagem, aprovação, entrega, conferência)
+      let vivos = new Set();
+      try{
+        const ps = (await sbFetch("pedidos?select=id&status=in.(EM_MONTAGEM,AGUARDANDO_APROVACAO,AGUARDANDO_ENTREGA,EM_CONFERENCIA)&limit=300")) || [];
+        vivos = new Set(ps.map(p=>p.id));
+      }catch(e){ /* sem a tabela, o filtro antigo ainda vale */ }
+      rcOrfas   = pend.filter(o => !o.pedido_id || !vivos.has(o.pedido_id));
+      rcEmFluxo = pend.filter(o =>  o.pedido_id &&  vivos.has(o.pedido_id));
+    }catch(e){ rcOrfas = []; rcEmFluxo = []; }
     rcPausados = (await sbFetch(`ordens_compra?select=*&situacao=eq.${encodeURIComponent('NAO COMPRAR AGORA')}&order=id.desc&limit=30`)) || [];
     // v4.6 — notas salvas que ainda NÃO deram entrada no estoque
     try{ rcNfsSalvas = (await sbFetch('notas_fiscais?select=*,nf_itens(*)&confirmada=eq.false&order=id.desc&limit=50')) || []; }
@@ -6013,7 +6028,7 @@ function rcHtmlSalvas(){
 function rcRenderizar(){
   const corpo = document.getElementById('rc-corpo');
   if(!rcOrdens.length){
-    corpo.innerHTML = rcHtmlOrfas() + rcHtmlSalvas() + '<div class="rc-empty">Nenhum pedido aguardando NF no momento. ✓<br><span style="font-size:12px">Pedidos aparecem aqui depois de aprovados na aba 🔏 Aprovar Pedido.</span></div>';
+    corpo.innerHTML = rcHtmlACaminho() + rcHtmlOrfas() + rcHtmlSalvas() + '<div class="rc-empty">Nenhum pedido aprovado aguardando nota no momento. ✓<br><span style="font-size:12px">Um pedido só chega aqui depois de aprovado na aba 🔏 Aprovar Pedido.</span></div>';
     corpo.innerHTML += rcHtmlPausados();
     return;
   }
@@ -6057,7 +6072,8 @@ function rcRenderizar(){
 
     return `<div class="rc-grupo" data-forn="${chave}">
       <div class="rc-ghead">
-        <span>${ped?`📦 Pedido #${ped.id} · `:''}🏪 ${nomeForn}</span>
+        <span>${ped?`📦 Pedido #${ped.id} · `:''}🏪 ${nomeForn}
+          <span style="background:rgba(255,255,255,.22);border-radius:14px;padding:2px 10px;font-size:11px;font-weight:800;margin-left:6px">✔ aprovado · aguardando entrega</span></span>
         <span class="rc-count">${itens.length} item(ns)${totalPedido?' · '+rcMoney(totalPedido):''}</span>
       </div>
       ${ped?`<div style="padding:9px 16px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2);display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--cinza-5)">
@@ -6113,8 +6129,58 @@ function rcRenderizar(){
       </div>
     </div>`;
   }).join('') + rcHtmlPausados();
-  corpo.innerHTML = rcHtmlOrfas() + rcHtmlSalvas() + corpo.innerHTML;
+  corpo.innerHTML = rcHtmlACaminho() + rcHtmlOrfas() + rcHtmlSalvas() + corpo.innerHTML;
   Object.keys(grupos).forEach(k=>rcAtualizaTotais(k));
+}
+
+// ═══ v4.9f — PEDIDOS QUE AINDA NÃO PODEM RECEBER NOTA ════════════
+// Regra da Evelise (04/08): "se não foi aprovado o pedido, não pode aparecer
+// para dar entrada na nota. Pode aparecer como pedido aguardando aprovação e
+// depois de aprovado, aguardando entrega."
+// Aqui eles aparecem SÓ COMO INFORMAÇÃO: sem campos de nota, sem botão de
+// entrada. O único caminho para o estoque continua sendo a aprovação.
+const RC_ESTADOS = {
+  EM_MONTAGEM:           { rot:'Em montagem',          cor:'#7F8C8D', bg:'#EEF1F4',
+                           ajuda:'ainda sendo montado na aba Pedidos', aba:'decisao', abaRot:'Pedidos' },
+  AGUARDANDO_APROVACAO:  { rot:'Aguardando aprovação', cor:'#B9770E', bg:'#FDEBD0',
+                           ajuda:'precisa ser aprovado antes de receber nota', aba:'aprovarpedido', abaRot:'Aprovar Pedido' },
+};
+
+function rcHtmlACaminho(){
+  if(!rcEmFluxo || !rcEmFluxo.length) return '';
+  const porPedido = {};
+  for(const o of rcEmFluxo){ (porPedido[o.pedido_id] = porPedido[o.pedido_id] || []).push(o); }
+
+  const linhas = Object.keys(porPedido).map(pidStr=>{
+    const pid = Number(pidStr);
+    const itens = porPedido[pid];
+    const ped = (rcPedidos||[]).find(p=>p.id===pid) || {};
+    const est = RC_ESTADOS[ped.status] || { rot: ped.status||'—', cor:'#7F8C8D', bg:'#EEF1F4', ajuda:'' };
+    const total = itens.reduce((sm,o)=>sm + (Number(o.qtd_a_comprar)||0)*(Number(o.valor_unitario)||0), 0);
+    return `<tr>
+      <td><b>🏪 ${rcNomeFornecedor(ped.fornecedor_id || itens[0].fornecedor_compra_id || itens[0].fornecedor_id)}</b>
+        <span style="font-size:10.5px;color:var(--cinza-4);display:block">Pedido #${pid}${ped.cotacao_id?` · Cotação #${ped.cotacao_id}`:''}</span></td>
+      <td style="text-align:center">${itens.length} item(ns)</td>
+      <td style="text-align:right;font-weight:700">${rcMoney(total)}</td>
+      <td style="text-align:center">
+        <span style="background:${est.bg};color:${est.cor};border-radius:14px;padding:3px 11px;font-size:11px;font-weight:800;white-space:nowrap">${est.rot}</span>
+        <span style="display:block;font-size:10px;color:var(--cinza-4);margin-top:2px">${est.ajuda}</span></td>
+      <td style="text-align:right">${est.aba?`<button class="rc-btn-editar" style="padding:6px 11px;font-size:11.5px" onclick="trocarAba('${est.aba}')">ir para ${est.abaRot} →</button>`:''}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="rc-grupo" style="border:1.5px solid var(--cinza-2)">
+    <div class="rc-ghead" style="background:var(--cinza-4)">⏳ PEDIDOS A CAMINHO — ainda não recebem nota <span class="rc-count">${Object.keys(porPedido).length}</span></div>
+    <div style="padding:10px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5);border-bottom:1px solid var(--cinza-2)">
+      Estes pedidos <b>ainda não foram aprovados</b>, então não há como lançar nota nem mexer no estoque por aqui.
+      Estão listados só para você saber onde cada um parou. Depois de aprovados, eles descem para a lista de entrada, como
+      <b>aguardando entrega</b>.
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Fornecedor</th><th style="text-align:center">Itens</th>
+        <th style="text-align:right">Total</th><th style="text-align:center">Situação</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+  </div>`;
 }
 
 // ── pendências antigas que ficaram no limbo (nem recebem, nem voltam para a compra) ──
@@ -6137,8 +6203,11 @@ function rcHtmlOrfas(){
   return `<div class="rc-grupo" style="border:2px solid var(--amarelo)">
     <div class="rc-ghead" style="background:#B7950B">⚠️ PENDÊNCIAS ANTIGAS SEM DONO <span class="rc-count">${rcOrfas.length}</span></div>
     <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7a6408;border-bottom:1px solid #F9E79F">
-      Compras que ficaram marcadas como pendentes mas nunca foram liberadas — elas <b>não apareciam em nenhuma tela</b> e ainda seguravam o item na lista de compras.
-      Diga o que aconteceu com cada uma: <b>✔ recebi</b> abre a entrada da NF · <b>🚫 não veio</b> devolve o item para a lista de compras.</div>
+      Compras pendentes <b>sem pedido vivo por trás</b> — o pedido foi cancelado, apagado, ou a ordem nasceu antes desta esteira.
+      Elas não apareciam em nenhuma tela e ainda seguravam o item na lista de compras.
+      Diga o que aconteceu com cada uma: <b>✔ recebi</b> abre a entrada da NF · <b>🚫 não veio</b> devolve o item para a lista de compras.
+      <br><span style="font-size:11px">Itens de pedidos <b>em montagem</b> ou <b>aguardando aprovação</b> não entram aqui: o caminho deles é a aba
+      🔏 Aprovar Pedido, que é o que separa quem decide a compra de quem dá entrada no estoque.</span></div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Material</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor un.</th><th style="text-align:center">Parada há</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div>
