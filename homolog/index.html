@@ -373,7 +373,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.11 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.11b · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2659,7 +2659,7 @@ async function carregarSaldos() {
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
@@ -2685,6 +2685,49 @@ async function carregarPendentes() {
     atualizarBadge();
     renderizarPendentes();
   } catch(e) {}
+}
+
+// ═══ v4.11b — o cabeçalho do cartão de aprovação ═══════════════════
+// Pedido dela em 06/08: "no material para aprovação não aparece a quantidade
+// de pacientes. preciso dessa informação para comparar com a quantidade
+// consumida" — e depois: "nas saídas diversas não tem paciente envolvido,
+// nas saídas cirúrgicas o consumo é proporcional à quantidade de pacientes".
+//
+// Daí o desenho: só a saída CIRÚRGICA ganha a linha de contexto e o consumo
+// por paciente. A saída diversa não tem denominador, e forçar um ali seria
+// inventar proporção onde ela não existe.
+//
+// Quando o período não tem `qtd_pacientes`, NÃO se calcula nada: a tela diz
+// que a informação falta. Dividir por zero, ou fingir 1 paciente, produziria
+// um número que parece certo e não é.
+function apdMeta(p, ehDiversa, tipos, data){
+  const sep = ' &nbsp;·&nbsp; ';
+  if (ehDiversa) {
+    return `<div class="info-meta">${tipos || ''}${tipos?sep:''}${p.itens.length} itens${sep}` +
+           `👤 ${p.registrado_por || 'Equipe CC'}${sep}` +
+           `<span style="color:var(--azul)">✏️ quantidades editáveis</span></div>`;
+  }
+  const per = p.periodo || {};
+  const pac = Number(per.qtd_pacientes) || 0;
+  const totalItens = p.itens.reduce((sm, it) => sm + (Number(it.qtd) || 0), 0);
+
+  const contexto = [
+    '📅 ' + (data || '—'),
+    pac > 0 ? `<b style="color:var(--azul)">👥 ${pac} paciente${pac===1?'':'s'}</b>`
+            : '<span style="color:var(--vermelho);font-weight:700">👥 pacientes não informados</span>',
+    per.protocolo  ? '💉 ' + per.protocolo  : null,
+    per.modalidade ? '🏷️ ' + per.modalidade : null,
+    per.fellow     ? '👨‍⚕️ com fellow'       : null,
+  ].filter(Boolean).join(sep);
+
+  const porPac = pac > 0
+    ? `<b style="color:var(--azul)">📊 ${(totalItens/pac).toLocaleString('pt-BR',{maximumFractionDigits:1})} por paciente</b>`
+    : '<span style="color:var(--cinza-4)">📊 sem pacientes, não dá para calcular o consumo por paciente</span>';
+
+  return `<div class="info-meta">${contexto}</div>` +
+         `<div class="info-meta">📦 ${p.itens.length} itens${sep}${totalItens.toLocaleString('pt-BR')} unidades${sep}${porPac}${sep}` +
+         `👤 ${p.registrado_por || 'Equipe CC'}${sep}` +
+         `<span style="color:var(--azul)">✏️ quantidades editáveis</span></div>`;
 }
 
 function renderizarPendentes() {
@@ -2735,7 +2778,7 @@ function renderizarPendentes() {
     <div class="item-pendente">
       <div>
         <div class="info-periodo">${ehDiversa ? medico : '🏥 ' + medico + ' — ' + tipos}</div>
-        <div class="info-meta">${ehDiversa ? (tipos || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || 'Equipe CC'} &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
+        ${apdMeta(p, ehDiversa, tipos, data)}
         <table class="mini-tabela">
           <tr style="background:var(--cinza-1)">
             <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Material</td>
