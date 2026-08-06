@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.10 · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.11b · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2655,7 +2655,7 @@ async function carregarSaldos() {
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
@@ -2681,6 +2681,49 @@ async function carregarPendentes() {
     atualizarBadge();
     renderizarPendentes();
   } catch(e) {}
+}
+
+// ═══ v4.11b — o cabeçalho do cartão de aprovação ═══════════════════
+// Pedido dela em 06/08: "no material para aprovação não aparece a quantidade
+// de pacientes. preciso dessa informação para comparar com a quantidade
+// consumida" — e depois: "nas saídas diversas não tem paciente envolvido,
+// nas saídas cirúrgicas o consumo é proporcional à quantidade de pacientes".
+//
+// Daí o desenho: só a saída CIRÚRGICA ganha a linha de contexto e o consumo
+// por paciente. A saída diversa não tem denominador, e forçar um ali seria
+// inventar proporção onde ela não existe.
+//
+// Quando o período não tem `qtd_pacientes`, NÃO se calcula nada: a tela diz
+// que a informação falta. Dividir por zero, ou fingir 1 paciente, produziria
+// um número que parece certo e não é.
+function apdMeta(p, ehDiversa, tipos, data){
+  const sep = ' &nbsp;·&nbsp; ';
+  if (ehDiversa) {
+    return `<div class="info-meta">${tipos || ''}${tipos?sep:''}${p.itens.length} itens${sep}` +
+           `👤 ${p.registrado_por || 'Equipe CC'}${sep}` +
+           `<span style="color:var(--azul)">✏️ quantidades editáveis</span></div>`;
+  }
+  const per = p.periodo || {};
+  const pac = Number(per.qtd_pacientes) || 0;
+  const totalItens = p.itens.reduce((sm, it) => sm + (Number(it.qtd) || 0), 0);
+
+  const contexto = [
+    '📅 ' + (data || '—'),
+    pac > 0 ? `<b style="color:var(--azul)">👥 ${pac} paciente${pac===1?'':'s'}</b>`
+            : '<span style="color:var(--vermelho);font-weight:700">👥 pacientes não informados</span>',
+    per.protocolo  ? '💉 ' + per.protocolo  : null,
+    per.modalidade ? '🏷️ ' + per.modalidade : null,
+    per.fellow     ? '👨‍⚕️ com fellow'       : null,
+  ].filter(Boolean).join(sep);
+
+  const porPac = pac > 0
+    ? `<b style="color:var(--azul)">📊 ${(totalItens/pac).toLocaleString('pt-BR',{maximumFractionDigits:1})} por paciente</b>`
+    : '<span style="color:var(--cinza-4)">📊 sem pacientes, não dá para calcular o consumo por paciente</span>';
+
+  return `<div class="info-meta">${contexto}</div>` +
+         `<div class="info-meta">📦 ${p.itens.length} itens${sep}${totalItens.toLocaleString('pt-BR')} unidades${sep}${porPac}${sep}` +
+         `👤 ${p.registrado_por || 'Equipe CC'}${sep}` +
+         `<span style="color:var(--azul)">✏️ quantidades editáveis</span></div>`;
 }
 
 function renderizarPendentes() {
@@ -2731,7 +2774,7 @@ function renderizarPendentes() {
     <div class="item-pendente">
       <div>
         <div class="info-periodo">${ehDiversa ? medico : '🏥 ' + medico + ' — ' + tipos}</div>
-        <div class="info-meta">${ehDiversa ? (tipos || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || 'Equipe CC'} &nbsp;·&nbsp; <span style="color:var(--azul)">✏️ quantidades editáveis</span></div>
+        ${apdMeta(p, ehDiversa, tipos, data)}
         <table class="mini-tabela">
           <tr style="background:var(--cinza-1)">
             <td style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Material</td>
@@ -3398,7 +3441,7 @@ async function ccCarregarAndamento(){
     }
     const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=20')) || [];
     if(cots.length){
-      const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&limit=1000`)) || [];
+      const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&fechado=is.false&limit=1000`)) || [];
       for(const it of cits) if(!ccAndamento[it.material_id]) ccAndamento[it.material_id] = 'EM COTAÇÃO';
     }
   }catch(e){}
@@ -3586,10 +3629,12 @@ async function ccSoltarDaCotacao(materialIds){
   try{
     const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=50')) || [];
     if(!cots.length) return 0;
-    const r = await sbFetch(`cotacao_itens?cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})`,'DELETE');
+    // v4.11 — tirar da cotação só remove item ABERTO. Item já fechado em
+    // pedido é histórico e não se apaga.
+    const r = await sbFetch(`cotacao_itens?cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})&fechado=is.false`,'DELETE');
     // cotação que ficou vazia se encerra sozinha
     for(const c of cots){
-      const restam = (await sbFetch(`cotacao_itens?select=id&cotacao_id=eq.${c.id}&limit=1`)) || [];
+      const restam = (await sbFetch(`cotacao_itens?select=id&cotacao_id=eq.${c.id}&fechado=is.false&limit=1`)) || [];
       if(!restam.length) await sbFetch(`cotacoes?id=eq.${c.id}`,'PATCH',{ status:'fechada' });
     }
     if(typeof coItens!=='undefined' && Array.isArray(coItens)){
@@ -4137,7 +4182,7 @@ async function coAbrir(id){
   const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo&id=eq.${id}&limit=1`);
   coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
   await coCarregarJaComprados(id);
-  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&order=id.asc`);
+  const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&fechado=is.false&order=id.asc`);
   coCotacaoId = id;
   coItens = (its||[]).map(it=>({
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
@@ -4573,6 +4618,52 @@ function coDnD(){
 }
 
 // ── salvar ──
+// ═══ v4.11 — a descrição da NF digitada no orçamento vai para o CADASTRO ═══
+// Antes ela ficava só em `cotacao_itens` e morria junto com a cotação fechada:
+// o material voltava a aparecer como "sem descrição de NF" no inventário
+// seguinte, e alguém digitava tudo de novo. Regra:
+//   • cadastro vazio  → preenche, sem perguntar
+//   • cadastro igual  → não faz nada
+//   • cadastro DIFERENTE → pergunta antes de trocar (nunca no salvamento
+//     silencioso, que roda sozinho ao fechar grupo — perguntar ali seria
+//     interromper a pessoa no meio de outra coisa)
+let coDescPendentes = [];
+
+async function coGravarDescricoes(silencioso){
+  const pend = coDescPendentes.filter(p => p.material_id && p.desc);
+  coDescPendentes = [];
+  if(!pend.length) return;
+  const ids = [...new Set(pend.map(p=>p.material_id))];
+  let atuais = {};
+  try{
+    const rows = await sbFetch(`materiais?select=id,descricao_nf&id=in.(${ids.join(',')})`);
+    for(const r of (rows||[])) atuais[r.id] = (r.descricao_nf||'').trim();
+  }catch(e){ return; }
+
+  let n = 0;
+  for(const p of pend){
+    const atual = atuais[p.material_id] ?? '';
+    if(atual === p.desc) continue;                 // já é isso
+    if(atual !== ''){                              // conteúdo diferente
+      if(silencioso) continue;                     // não interrompe
+      const ok = await hogConfirma({
+        titulo: 'Trocar a descrição de NF?',
+        texto: p.nome + '\n\nNo cadastro está:\n"' + atual +
+               '"\n\nNo orçamento você escreveu:\n"' + p.desc +
+               '"\n\nA descrição do cadastro é a que aparece no inventário e na conferência da nota.',
+        ok: 'Usar a do orçamento' });
+      if(!ok) continue;
+    }
+    try{
+      await sbFetch(`materiais?id=eq.${p.material_id}`,'PATCH',{ descricao_nf: p.desc });
+      if(typeof ccCadastro==='object' && ccCadastro[p.material_id])
+        ccCadastro[p.material_id].descricao_nf = p.desc;
+      n++;
+    }catch(e){ /* sem permissão: segue sem travar o salvamento */ }
+  }
+  if(n && !silencioso) toast('Descrição de NF gravada no cadastro de '+n+' item(ns) ✓','sucesso');
+}
+
 async function coSalvar(silencioso){
   // v4.6d — cotação que ficou SEM itens não podia sair pela porta dos fundos:
   // era aqui que a tag "EM COTAÇÃO" ficava presa. Se todos os itens viraram
@@ -4582,7 +4673,7 @@ async function coSalvar(silencioso){
   if(!coItens.length){
     if(coCotacaoId!==null){
       try{
-        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}`,'DELETE');
+        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
         await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ status:'fechada' });
         coCotacaoId = null;
         if(typeof ccCarregarAndamento==='function'){ await ccCarregarAndamento(); if(typeof ccRender==='function') ccRender(); }
@@ -4599,14 +4690,19 @@ async function coSalvar(silencioso){
       coCotacaoId=c[0].id;
     } else {
       await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
-      await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}`,'DELETE');
+      // v4.11 — ⚠️ salvar regrava a cotação apagando e reinserindo. Restringir
+      // a `fechado=is.false` é o que impede o histórico de ser apagado aqui —
+      // era por onde o problema voltaria pela porta dos fundos.
+      await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
     }
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
         qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo,
         grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || null });
-      const itemId=ins&&ins[0]&&ins[0].id; it.id=itemId;
+      const itemId=ins&&ins[0]&&ins[0].id;
+      coDescPendentes.push({ material_id: it.material_id, nome: it.material_nome,
+                             desc: (it.descricao_nf||'').trim() }); it.id=itemId;
       const ops=it.opcoes
         .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null||o.nao_tem)
         .map((o,k)=>({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:o.fornecedor_id,
@@ -4617,6 +4713,7 @@ async function coSalvar(silencioso){
           nao_tem:o.nao_tem, observacao:o.observacao||null }));
       if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
+    try{ await coGravarDescricoes(!!silencioso); }catch(e){ console.warn('descrição p/ cadastro:', e); }
     if(!silencioso){ coRender(); toast('Cotação #'+coCotacaoId+' salva ✓','sucesso'); }
     return true;
   }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
@@ -4696,10 +4793,21 @@ async function coFecharGrupo(g){
     // não acontecesse, o pedido existia e o item continuava preso na cotação,
     // bloqueando a próxima compra do mesmo produto.
     if(coCotacaoId && idsFechados.size){
+      // v4.11 — MARCA como fechado em vez de apagar. Apagar levava junto as
+      // ofertas (chave em cascata) e a descrição de NF digitada aqui: o
+      // comparativo do pedido abria vazio e o cadastro voltava a ficar
+      // incompleto. Fechado sai da fila de trabalho e FICA no histórico.
       try{
-        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`,'DELETE');
+        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})&fechado=is.false`,
+          'PATCH', { fechado:true, fechado_em:new Date().toISOString(), pedido_id: pedidoId||null });
       }catch(e){
-        toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e.message+' — use o ✕ da tag na lista de compras.','erro');
+        // banco ainda sem as colunas da v4.11 — mantém o comportamento antigo
+        try{
+          await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`,'DELETE');
+          toast('⚠ Rode o SQL v411_cotacao_nao_apaga.sql — sem ele o comparativo desta cotação se perde.','erro');
+        }catch(e2){
+          toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e2.message+' — use o ✕ da tag na lista de compras.','erro');
+        }
       }
     }
     await coSalvar(true);
