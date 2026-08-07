@@ -373,7 +373,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.12 · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.12b · HOMOLOGAÇÃO · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1114,6 +1114,7 @@ details[open] summary { margin-bottom: 6px; }
   <div class="rm-tiles" id="ci-tiles"></div>
 
   <div id="ci-tratativas"></div>
+  <div id="ci-emprestadas"></div>
   <div id="ci-consertos"></div>
   <div id="ci-caixas"></div>
 
@@ -10337,6 +10338,7 @@ async function rmCarregar(){
 // ═══════════════════════════════════════════════════════════════════════
 let ciCaixas = [], ciPecas = [], ciTrat = [], ciRemessas = [], ciItens = [];
 let ciSemBanco = false, ciFiltro = 'TODAS', ciBusca = '', ciAbertas = {};
+let ciEmprestadas = [];
 
 function ciEsc(t){ return (typeof rmEsc === 'function') ? rmEsc(t) : String(t == null ? '' : t); }
 function ciQuem(){ return (typeof rmQuem === 'function') ? rmQuem() : ((typeof SESSAO !== 'undefined' && SESSAO && SESSAO.nome) || 'Equipe CC'); }
@@ -10378,13 +10380,15 @@ async function ciCarregar(){
         e recarregue esta página. Enquanto isso o resto do app funciona normalmente.
         <div style="margin-top:8px;font-size:11px;color:var(--cinza-4)">Detalhe técnico: ${ciEsc(e.message)}</div>
       </div></div>`;
-    ['ci-filtros','ci-tiles','ci-tratativas','ci-consertos'].forEach(id => {
+    ['ci-filtros','ci-tiles','ci-tratativas','ci-emprestadas','ci-consertos'].forEach(id => {
       const el = document.getElementById(id); if(el) el.innerHTML = '';
     });
     return;
   }
   try{ ciTrat = (await sbFetch('instrumental_tratativas?select=*&desfecho=is.null&order=notado_em.asc&limit=300')) || []; }
   catch(e){ ciTrat = []; }
+  try{ ciEmprestadas = (await sbFetch('vw_instrumental_emprestado?select=*&order=data.asc&limit=300')) || []; }
+  catch(e){ ciEmprestadas = []; }   // banco ainda sem a v4.12b
   try{
     ciRemessas = (await sbFetch('remessas?select=*&tipo=eq.MANUTENCAO&order=id.desc&limit=60')) || [];
     ciItens = ciRemessas.length
@@ -10451,12 +10455,14 @@ function ciRenderizar(){
     <div class="rm-tile"><span>Peças contadas</span><b style="color:var(--verde)">${totalPecas}</b></div>
     <div class="rm-tile"><span>Sem contagem</span><b style="color:${semContar?'#D35400':'var(--cinza-4)'}">${semContar}</b></div>
     <div class="rm-tile"><span>Fora, no conserto</span><b style="color:#6f42c1">${fora}</b></div>
-    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${ciTrat.length?'var(--vermelho)':'var(--cinza-4)'}">${ciTrat.length}</b></div>`;
+    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${ciTrat.length?'var(--vermelho)':'var(--cinza-4)'}">${ciTrat.length}</b></div>
+    <div class="rm-tile"><span>Cedidas a outra caixa</span><b style="color:${ciEmprestadas.length?'#6f42c1':'var(--cinza-4)'}">${ciEmprestadas.length}</b></div>`;
 
   const badge = document.getElementById('badge-ci');
   if(badge){ const n = ciTrat.length; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
 
   ciRenderTratativas();
+  ciRenderEmprestadas();
   ciRenderConsertos();
   ciRenderCaixas();
 }
@@ -10559,6 +10565,7 @@ function ciRenderCaixas(){
           ${p.qtd==null?'<span class="ci-semqtd">a contar</span>':`<b>${ciNum(p.qtd)}</b>`}
           <button class="ci-acao" title="Ajustar a quantidade" onclick="ciAjustarQtd(${p.id})">✎</button>
           <button class="ci-acao" title="Registrar falta desta peça" onclick="ciRegistrarFalta(${p.id})">⚠️</button>
+          <button class="ci-acao" title="Veio de outra caixa (remanejamento)" onclick="ciRemanejarPeca(${p.id})">🔄</button>
         </div>
       </div>`).join('');
     return `<div class="ci-cx">
@@ -10680,6 +10687,131 @@ async function ciRegistrarFalta(pid){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// v4.12b — REMANEJAMENTO: a peça mudou de caixa
+//
+// Caso dela em 07/08: a tesoura da caixa do Dr. Guilherme não estava
+// faltando. Pegaram duas do avulso da casa e puseram lá.
+//
+// Fechar como "devolvido" somaria 2 na caixa dele sem tirar de lugar nenhum
+// — duas tesouras do nada. Aqui uma caixa ganha e a outra perde, e o total
+// da casa fica igual.
+//
+// A pergunta que o app faz quando os donos são diferentes ("continua do
+// hospital ou passa a ser dele?") é dela: hospital emprestando e hospital
+// cedendo são coisas diferentes na hora de cobrar de volta.
+// ═══════════════════════════════════════════════════════════════════════
+async function ciRemanejar(pecaDestinoId, tratativaId, qtdSugerida){
+  const pd = ciPeca(pecaDestinoId); if(!pd) return false;
+  const cd = ciCaixa(pd.caixa_id);
+
+  const po = await ciEscolherPeca('De qual caixa vieram as peças?');
+  if(!po){ toast('Sem dizer de onde veio, não é remanejamento — some de um lado e nasce do outro.','erro'); return false; }
+  if(po.id === pd.id){ toast('Origem e destino são a mesma peça.','erro'); return false; }
+  const co = ciCaixa(po.caixa_id);
+
+  const r = await hogPergunta({
+    titulo: 'Remanejar ' + po.nome,
+    texto: 'De ' + (co ? co.nome : '?') + ' (' + ciDono(co) + ')'
+         + ' para ' + (cd ? cd.nome : '?') + ' (' + ciDono(cd) + ').'
+         + (po.qtd != null ? ' A caixa de origem tem ' + ciNum(po.qtd) + '.' : ''),
+    campos: [
+      { id:'qtd', rot:'Quantas peças mudaram de caixa', tipo:'numero',
+        valor: qtdSugerida != null ? qtdSugerida : 1, obrigatorio:true },
+      { id:'mot', rot:'Por que foram remanejadas', tipo:'texto-longo',
+        placeholder:'ex.: a caixa dele estava incompleta e pegamos do avulso' },
+    ], ok:'Continuar' });
+  if(!r) return false;
+  const qtd = ciNum(r.qtd);
+  if(qtd <= 0){ toast('Quantidade inválida.','erro'); return false; }
+  if(po.qtd != null && qtd > ciNum(po.qtd)){
+    toast('A caixa de origem só tem ' + ciNum(po.qtd) + '. Confira antes de gravar.','erro'); return false;
+  }
+
+  // donos diferentes: quem cede precisa dizer se está emprestando ou dando
+  let propriedade = 'TRANSFERE';
+  const donosDiferentes = co && cd && co.proprietario !== cd.proprietario;
+  if(donosDiferentes){
+    const p = await hogMenu({
+      titulo: 'De quem passam a ser essas peças?',
+      texto: qtd + ' peça(s) saindo de ' + ciDono(co) + ' para ' + ciDono(cd) + '.',
+      opcoes: [
+        { ico:'🤝', rot:'Continuam de ' + ciDono(co),
+          desc:'estão na outra caixa, mas seguem sendo de quem cedeu', valor:'MANTEM_ORIGEM' },
+        { ico:'➡️', rot:'Passam a ser de ' + ciDono(cd),
+          desc:'mudam de dono de vez, sem cobrança futura', valor:'TRANSFERE' },
+      ] });
+    if(!p) return false;
+    propriedade = p;
+  }
+
+  try{
+    await sbFetch('instrumental_remanejamentos','POST',{
+      peca_origem_id: po.id, peca_destino_id: pd.id, qtd, propriedade,
+      motivo: (r.mot||'').trim() || null, tratativa_id: tratativaId || null,
+      data: ciHoje(), registrado_por: ciQuem() });
+    if(po.qtd != null) await sbFetch(`instrumental_pecas?id=eq.${po.id}`,'PATCH',{ qtd: Math.max(0, ciNum(po.qtd) - qtd) });
+    if(pd.qtd != null) await sbFetch(`instrumental_pecas?id=eq.${pd.id}`,'PATCH',{ qtd: ciNum(pd.qtd) + qtd });
+    toast(qtd + ' peça(s) mudaram de caixa — o total da casa continua igual ✓','sucesso');
+    return { po, pd, co, cd, qtd, propriedade, motivo:(r.mot||'').trim() };
+  }catch(e){
+    toast('Erro no remanejamento: '+e.message+' — rode o SQL da v4.12b se ainda não rodou.','erro');
+    return false;
+  }
+}
+
+// ── o que é de um e está na caixa de outro ───────────────────────────
+function ciRenderEmprestadas(){
+  const box = document.getElementById('ci-emprestadas'); if(!box) return;
+  if(!ciEmprestadas.length){ box.innerHTML = ''; return; }
+  const linhas = ciEmprestadas.map(e => `<div class="ci-p" style="align-items:flex-start">
+      <div style="flex:1">
+        <b>${ciEsc(e.peca)}</b> · ${ciNum(e.qtd)} un
+        <div style="font-size:11.5px;color:var(--cinza-4);margin-top:2px">
+          de <b>${ciEsc(e.caixa_origem)}</b> (${ciEsc(e.dono_origem)})
+          &nbsp;→&nbsp; está em <b>${ciEsc(e.caixa_destino)}</b> (${ciEsc(e.dono_destino)})
+          · desde ${ciData(e.data)}
+        </div>
+        ${e.motivo?`<div style="font-size:12px;margin-top:3px">${ciEsc(e.motivo)}</div>`:''}
+      </div>
+      <button class="rm-b claro" onclick="ciDevolverRemanejo(${e.id})">Voltou para a origem</button>
+    </div>`).join('');
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head roxo">🤝 Peças cedidas, ainda de quem cedeu <span class="rm-count">${ciEmprestadas.length}</span></div>
+    ${linhas}
+    <div style="padding:9px 14px;font-size:11.5px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">
+      É esta a lista para conferir antes de uma caixa de médico deixar a casa.
+    </div>
+  </div>`;
+}
+
+async function ciDevolverRemanejo(id){
+  const e = ciEmprestadas.find(x => x.id === id); if(!e) return;
+  const ok = await hogConfirma({
+    titulo: 'A peça voltou para a origem?',
+    texto: ciNum(e.qtd) + ' × ' + e.peca + '\n\nVolta para ' + e.caixa_origem
+         + ' e sai de ' + e.caixa_destino + '. O total da casa continua o mesmo.',
+    ok:'Sim, voltou' });
+  if(!ok) return;
+  try{
+    const r = (await sbFetch(`instrumental_remanejamentos?select=peca_origem_id,peca_destino_id,qtd&id=eq.${id}`)) || [];
+    const m = r[0];
+    if(!m) throw new Error('remanejamento não encontrado');
+    await sbFetch(`instrumental_remanejamentos?id=eq.${id}`,'PATCH',{
+      devolvido_em: ciHoje(), devolvido_por: ciQuem() });
+    const po = ciPeca(m.peca_origem_id), pd = ciPeca(m.peca_destino_id);
+    if(po && po.qtd != null) await sbFetch(`instrumental_pecas?id=eq.${po.id}`,'PATCH',{ qtd: ciNum(po.qtd) + ciNum(m.qtd) });
+    if(pd && pd.qtd != null) await sbFetch(`instrumental_pecas?id=eq.${pd.id}`,'PATCH',{ qtd: Math.max(0, ciNum(pd.qtd) - ciNum(m.qtd)) });
+    toast('Peça de volta na caixa de origem ✓','sucesso');
+    ciCarregar();
+  }catch(e2){ toast('Erro: '+e2.message,'erro'); }
+}
+
+async function ciRemanejarPeca(pid){
+  const r = await ciRemanejar(pid, null, 1);
+  if(r) ciCarregar();
+}
+
 async function ciTratar(tid){
   const t = ciTrat.find(x => x.id === tid); if(!t) return;
   const p = ciPeca(t.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
@@ -10691,6 +10823,7 @@ async function ciTratar(tid){
       { ico:'📅', rot:'Definir a data de devolução', desc:'sem fechar o caso', valor:'DATA' },
       { ico:'↩️', rot:'Devolvido',   desc:'alguém trouxe de volta', valor:'DEVOLVIDO' },
       { ico:'🔍', rot:'Localizado',  desc:'estava em outro lugar; nunca saiu', valor:'LOCALIZADO' },
+      { ico:'🔄', rot:'Remanejado',  desc:'veio de outra caixa — uma ganha, a outra perde', valor:'REMANEJADO' },
       { ico:'❌', rot:'Perda',       desc:'não foi encontrada — gera Saída Diversa', valor:'PERDA' },
       { ico:'💥', rot:'Quebra',      desc:'quebrou e não há conserto — gera Saída Diversa', valor:'QUEBRA' },
       { ico:'🤷', rot:'Sem solução', desc:'encerrado sem definição de destino', valor:'SEM_SOLUCAO' },
@@ -10713,6 +10846,15 @@ async function ciTratar(tid){
     return;
   }
 
+  // Remanejado tem caminho próprio: precisa saber DE ONDE a peça veio antes
+  // de qualquer outra coisa. Sem origem, não é remanejamento — é peça
+  // nascendo de um lado sem sair do outro, que é o erro que isto corrige.
+  let reman = null;
+  if(acao === 'REMANEJADO'){
+    reman = await ciRemanejar(t.peca_id, tid, ciNum(t.qtd));
+    if(!reman) return;
+  }
+
   const baixa = (acao === 'PERDA' || acao === 'QUEBRA');
   const r = await hogPergunta({
     titulo: 'Fechar o caso como ' + acao.toLowerCase().replace('_',' '),
@@ -10720,8 +10862,19 @@ async function ciTratar(tid){
       ? 'A peça sai do patrimônio: o app grava a Saída Diversa e só então fecha o caso. '
         + 'Se a saída não for gravada, o caso continua aberto — foi você quem pediu que perda e '
         + 'quebra fossem para as saídas diversas.'
-      : 'Escreva o que foi apurado. Daqui a seis meses alguém vai querer saber onde a peça estava.',
+      : (reman
+          ? 'As peças já mudaram de caixa: ' + (reman.co?reman.co.nome:'origem') + ' perdeu '
+            + reman.qtd + ' e ' + (reman.cd?reman.cd.nome:'destino') + ' ganhou. '
+            + 'O total da casa continua o mesmo — nada saiu do patrimônio.'
+          : 'Escreva o que foi apurado. Daqui a seis meses alguém vai querer saber onde a peça estava.'),
     campos: [{ id:'def', rot:'Definição do caso', tipo:'texto-longo', obrigatorio:true,
+               valor: reman
+                 ? ('Não faltavam: ' + reman.qtd + ' peça(s) vieram de ' + (reman.co?reman.co.nome:'outra caixa')
+                    + (reman.propriedade === 'MANTEM_ORIGEM'
+                       ? ' e continuam sendo de ' + ciDono(reman.co) + '.'
+                       : ' e passaram a ser de ' + ciDono(reman.cd) + '.')
+                    + (reman.motivo ? ' ' + reman.motivo : ''))
+                 : '',
                placeholder: baixa ? 'ex.: não localizada após busca no CME e nas salas; comunicado ao médico'
                                   : 'ex.: estava com a instrumentadora; devolvida hoje' }],
     ok:'Fechar caso' });
@@ -10749,7 +10902,9 @@ async function ciTratar(tid){
       desfecho: acao, definicao, desfecho_em: ciHoje(), desfecho_por: ciQuem(),
       movimentacao_id: movId });
 
-    // devolvido ou localizado: a peça volta a contar na caixa
+    // devolvido ou localizado: a peça volta a contar na caixa.
+    // REMANEJADO fica de fora de propósito — ciRemanejar já mexeu nas duas
+    // caixas; somar aqui outra vez faria a peça nascer duas vezes.
     if(acao === 'DEVOLVIDO' || acao === 'LOCALIZADO'){
       const p2 = ciPeca(t.peca_id);
       if(p2 && p2.qtd != null)
