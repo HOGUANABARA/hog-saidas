@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🧪 HOMOLOGAÇÃO — HOG Saídas</title>
+<title>HOG — Registro de Saídas Cirúrgicas</title>
 <style>
 :root {
   --azul:       #1B4F72;
@@ -366,14 +366,10 @@ details[open] summary { margin-bottom: 6px; }
 </head>
 <body>
 
-<div style="background:#E67E22;color:#fff;text-align:center;font-weight:800;font-size:13px;padding:8px 12px;letter-spacing:.5px;position:sticky;top:0;z-index:999">
-  🧪 AMBIENTE DE HOMOLOGAÇÃO — versão de teste. O app oficial da equipe é <a href="https://hoguanabara.github.io/hog-saidas/" style="color:#fff;text-decoration:underline">este link</a>.
-</div>
-
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.12b · HOMOLOGAÇÃO · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.13 · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -639,7 +635,8 @@ details[open] summary { margin-bottom: 6px; }
         <span>✅ Saídas Aprovadas Recentes</span>
         <button class="btn btn-secundario btn-sm" onclick="carregarAprovadas()">🔄 Atualizar</button>
       </div>
-      <p style="font-size:12px;color:var(--cinza-4);margin-bottom:14px">Últimos períodos aprovados — é possível imprimir o comprovante ou ajustar quantidades (o saldo do estoque será corrigido automaticamente).</p>
+      <p style="font-size:12px;color:var(--cinza-4);margin-bottom:14px">Períodos já aprovados — dá para imprimir o comprovante ou ajustar quantidades (o saldo do estoque é corrigido junto).</p>
+      <div id="apv-filtros" style="margin-bottom:14px"></div>
       <div id="lista-aprovadas">
         <div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>
       </div>
@@ -2933,44 +2930,204 @@ async function aprovar(i) {
 
 let aprovadas = [];
 
-async function carregarAprovadas() {
+// ═══════════════════════════════════════════════════════════════════════
+// v4.13 — FILTROS NAS SAÍDAS APROVADAS (grupo G)
+//
+// Pedido dela em 06/08: "as saídas que foram aprovadas, não consigo ver a
+// partir de uma quantidade, preciso de filtros nesta tela."
+//
+// Ao abrir o código, o teto que a estava travando não era o `limit=300` da
+// consulta: era um `.slice(0, 15)` logo depois. A tela mostrava os 15 grupos
+// mais recentes e não dizia nada. Os dois tetos foram tratados:
+//   • o de dentro (15) morreu — agora a tela mostra tudo o que passa no filtro
+//   • o do servidor (300) virou paginação com botão, e a tela SEMPRE diz
+//     quantos grupos existem e se ainda há mais para trazer
+//
+// Limite silencioso é pior que limite pequeno: quem olha acha que viu tudo.
+// ═══════════════════════════════════════════════════════════════════════
+const APV_PAGINA = 300;             // quantos movimentos por rodada de busca
+let apvMovs      = [];              // tudo o que já veio do servidor
+let apvFimDaLista = false;          // o servidor já devolveu tudo?
+let apvCarregando = false;
+let apvMostrar   = 30;              // quantos grupos desenhados de uma vez
+let apvF = { de:'', ate:'', medico:'', tipo:'', material:'', quem:'', kind:'TODAS' };
+
+// o app tem rmEsc, mas ela nasce depois desta função no arquivo — helper próprio
+// evita depender da ordem em que os blocos são definidos
+function apvEsc(t){ return String(t==null?'':t)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function apvNorm(t){ return (typeof pkNorm === 'function') ? pkNorm(t) : String(t||'').toUpperCase(); }
+function apvData(d){ if(!d) return '—'; const p = String(d).slice(0,10).split('-');
+  return (p.length===3 && p[0].length===4) ? p[2]+'/'+p[1]+'/'+p[0] : String(d); }
+
+// a data que vale para o filtro é a que a pessoa vê no cartão
+function apvDataDoGrupo(g){
+  if(g.periodo && g.periodo.data) return String(g.periodo.data).slice(0,10);
+  return String(g.aprovado_em || '').slice(0,10);
+}
+
+async function carregarAprovadas(reiniciar){
   if (!sbUrl || !sbKey) return;
+  if (reiniciar !== false){ apvMovs = []; apvFimDaLista = false; apvMostrar = 30; }
+  apvCarregando = true;
+  apvRenderizar();
   try {
-    let movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por,aprovado_em&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=aprovado_em.desc.nullslast&limit=300');
-    // Filtrar registros da migração no cliente (evita acentos na URL)
-    movs = (movs || []).filter(m => m.registrado_por !== 'MIGRAÇÃO');
-    const grupos = {};
-    for (const m of movs || []) {
-      const pc = m.periodos_cirurgicos;
-      let key;
-      if (pc) {
-        key = `PC_${pc.id}`;
-        if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por };
-      } else if (m.tipo === 'SAIDA_GERAL') {
-        key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
-        if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao, itens: [], registrado_por: m.registrado_por };
-      } else { continue; }
-      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), qtdOriginal: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
-    }
-    aprovadas = Object.values(grupos).slice(0, 15);
-    for (const g of aprovadas) g.itens = ordenarMateriais(g.itens);
-    renderizarAprovadas();
+    const campos = 'id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),'
+      + 'periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),'
+      + 'registrado_por,aprovado_em';
+    const novos = await sbFetch(`movimentacoes?select=${campos}&aprovado=eq.true`
+      + `&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)`
+      + `&order=aprovado_em.desc.nullslast&limit=${APV_PAGINA}&offset=${apvMovs.length}`) || [];
+    apvMovs = apvMovs.concat(novos);
+    // menos do que o pedido = acabou. É assim que a tela sabe dizer "fim da lista"
+    // em vez de deixar a pessoa achando que talvez tenha mais.
+    if (novos.length < APV_PAGINA) apvFimDaLista = true;
   } catch(e) {
     document.getElementById('lista-aprovadas').innerHTML =
       '<div class="empty"><p style="color:var(--vermelho)">Erro ao carregar aprovadas: ' + e.message + '</p></div>';
+    apvCarregando = false;
+    return;
   }
+  apvCarregando = false;
+  apvAgrupar();
+  apvRenderizar();
 }
+
+async function apvCarregarMais(){
+  if (apvCarregando || apvFimDaLista) return;
+  await carregarAprovadas(false);
+}
+
+function apvAgrupar(){
+  const movs = apvMovs.filter(m => m.registrado_por !== 'MIGRAÇÃO');
+  const grupos = {};
+  for (const m of movs) {
+    const pc = m.periodos_cirurgicos;
+    let key;
+    if (pc) {
+      key = `PC_${pc.id}`;
+      if (!grupos[key]) grupos[key] = { periodo: pc, itens: [], registrado_por: m.registrado_por, aprovado_em: m.aprovado_em };
+    } else if (m.tipo === 'SAIDA_GERAL') {
+      key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
+      if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao,
+                                        itens: [], registrado_por: m.registrado_por, aprovado_em: m.aprovado_em };
+    } else { continue; }
+    grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd),
+      qtdOriginal: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
+  }
+  aprovadas = Object.values(grupos);
+  for (const g of aprovadas) g.itens = ordenarMateriais(g.itens);
+}
+
+// ── os filtros ───────────────────────────────────────────────────────
+function apvGrupoPassa(g){
+  const ehDiversa = !g.periodo && g.destino;
+  if (apvF.kind === 'CIRURGICA' && ehDiversa) return false;
+  if (apvF.kind === 'DIVERSA'  && !ehDiversa) return false;
+
+  const d = apvDataDoGrupo(g);
+  if (apvF.de  && (!d || d < apvF.de))  return false;
+  if (apvF.ate && (!d || d > apvF.ate)) return false;
+
+  if (apvF.medico && (!g.periodo || String(g.periodo.medicos?.nome || '') !== apvF.medico)) return false;
+  if (apvF.tipo   && (!g.periodo || String(g.periodo.tipos_cirurgia?.nome || '') !== apvF.tipo)) return false;
+  if (apvF.quem   && String(g.registrado_por || '') !== apvF.quem) return false;
+
+  if (apvF.material){
+    const alvo = apvNorm(apvF.material);
+    if (!g.itens.some(it => apvNorm(it.nome).includes(alvo))) return false;
+  }
+  return true;
+}
+
+function apvSetFiltro(campo, valor){ apvF[campo] = valor; apvMostrar = 30; apvRenderizar(); }
+function apvLimpar(){ apvF = { de:'', ate:'', medico:'', tipo:'', material:'', quem:'', kind:'TODAS' };
+  apvMostrar = 30; apvRenderizar(); }
+function apvVerMais(){ apvMostrar += 30; apvRenderizar(); }
+
+function apvOpcoes(pegar){
+  const s = new Set();
+  for (const g of aprovadas){ const v = pegar(g); if (v) s.add(v); }
+  return [...s].sort((a,b)=>String(a).localeCompare(String(b)));
+}
+
+function apvRenderFiltros(vis){
+  const box = document.getElementById('apv-filtros');
+  if (!box) return;
+  const sel = (campo, rot, ops) => `
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:700;color:var(--cinza-4)">
+      ${rot}
+      <select onchange="apvSetFiltro('${campo}', this.value)"
+        style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px;font-size:13px;font-family:var(--fonte);min-width:135px">
+        <option value="">todos</option>
+        ${ops.map(o=>`<option value="${apvEsc(o)}"${apvF[campo]===o?' selected':''}>${apvEsc(o)}</option>`).join('')}
+      </select></label>`;
+  const dt = (campo, rot) => `
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:700;color:var(--cinza-4)">
+      ${rot}
+      <input type="date" value="${apvF[campo]}" onchange="apvSetFiltro('${campo}', this.value)"
+        style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px;font-size:13px;font-family:var(--fonte)"></label>`;
+  const chip = (v, rot) => `<button onclick="apvSetFiltro('kind','${v}')"
+      style="border:1.5px solid ${apvF.kind===v?'var(--verde)':'var(--cinza-2)'};background:${apvF.kind===v?'var(--verde)':'#fff'};
+      color:${apvF.kind===v?'#fff':'var(--cinza-5)'};border-radius:18px;padding:5px 13px;font-size:12px;font-weight:700;
+      cursor:pointer;font-family:var(--fonte)">${rot}</button>`;
+
+  const filtrando = apvF.de||apvF.ate||apvF.medico||apvF.tipo||apvF.material||apvF.quem||apvF.kind!=='TODAS';
+
+  box.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${chip('TODAS','Todas')}${chip('CIRURGICA','🏥 Cirúrgicas')}${chip('DIVERSA','📦 Diversas')}
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      ${dt('de','De')}
+      ${dt('ate','Até')}
+      ${sel('medico','Médico',  apvOpcoes(g=>g.periodo && g.periodo.medicos && g.periodo.medicos.nome))}
+      ${sel('tipo','Tipo de cirurgia', apvOpcoes(g=>g.periodo && g.periodo.tipos_cirurgia && g.periodo.tipos_cirurgia.nome))}
+      ${sel('quem','Registrado por', apvOpcoes(g=>g.registrado_por))}
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:700;color:var(--cinza-4)">
+        Material
+        <input type="text" value="${apvEsc(apvF.material)}" placeholder="parte do nome…"
+          oninput="clearTimeout(window._apvT); window._apvT=setTimeout(()=>apvSetFiltro('material',this.value),250)"
+          style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px;font-size:13px;font-family:var(--fonte);min-width:170px"></label>
+      ${filtrando?`<button class="btn btn-secundario btn-sm" onclick="apvLimpar()">✕ limpar filtros</button>`:''}
+    </div>
+    <div style="font-size:12px;color:var(--cinza-4);display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+      <span>Mostrando <b style="color:var(--cinza-5)">${Math.min(vis.length, apvMostrar)}</b>
+        de <b style="color:var(--cinza-5)">${vis.length}</b>${filtrando?` (${aprovadas.length} carregados)`:''}</span>
+      ${apvFimDaLista
+        ? '<span style="color:var(--verde);font-weight:700">✓ tudo o que existe já está carregado</span>'
+        : `<span style="color:#D35400;font-weight:700">⚠ ainda há registros mais antigos no servidor</span>
+           <button class="btn btn-secundario btn-sm" onclick="apvCarregarMais()"
+             ${apvCarregando?'disabled':''}>${apvCarregando?'buscando…':'⬇ carregar mais antigas'}</button>`}
+    </div>`;
+}
+
+function apvRenderizar(){ renderizarAprovadas(); }
+
 
 function renderizarAprovadas() {
   const div = document.getElementById('lista-aprovadas');
+  const vis = aprovadas.filter(apvGrupoPassa);
+  apvRenderFiltros(vis);
   if (!aprovadas.length) {
-    div.innerHTML = '<div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>'; return;
+    div.innerHTML = apvCarregando
+      ? '<div class="empty"><p>Carregando…</p></div>'
+      : '<div class="empty"><p>Nenhuma saída aprovada encontrada.</p></div>';
+    return;
+  }
+  if (!vis.length) {
+    div.innerHTML = '<div class="empty"><p>Nenhuma saída aprovada com esse filtro.</p>'
+      + '<p style="font-size:12px">' + aprovadas.length + ' grupo(s) carregado(s). '
+      + (apvFimDaLista ? 'Tudo o que existe já está aqui.' : 'Pode haver mais no servidor — use "carregar mais antigas".')
+      + '</p></div>';
+    return;
   }
   const ordemCat = {};
   for (const cat of CATEGORIAS_ORDEM) {
     for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
   }
-  div.innerHTML = aprovadas.map((p, i) => {
+  div.innerHTML = vis.slice(0, apvMostrar).map((p) => {
+    const i = aprovadas.indexOf(p);   // índice REAL: é por ele que o ajuste grava
     const ehDiversa = !p.periodo && p.destino;
     const medico = ehDiversa ? `📦 Saída Diversa — ${p.destino}` : (p.periodo?.medicos?.nome || '—');
     const tipo   = ehDiversa ? (p.obs || '') : (p.periodo?.tipos_cirurgia?.nome || '—');
@@ -2996,7 +3153,7 @@ function renderizarAprovadas() {
     <div class="item-pendente" style="border-left:4px solid var(--verde)">
       <div>
         <div class="info-periodo" style="color:var(--verde)">✅ ${ehDiversa ? medico : medico + ' — ' + tipo}</div>
-        <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + data} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
+        <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + apvData(data)} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
         <details>
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--verde);padding:4px 0">▶ Ver itens (${p.itens.length})</summary>
           <table class="mini-tabela">${linhas}</table>
@@ -3007,7 +3164,13 @@ function renderizarAprovadas() {
         <button class="btn btn-verde btn-sm" onclick="salvarAjustesAprovada(${i})" ${temEdicao ? '' : ''}>💾 Salvar ajustes</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('')
+  + (vis.length > apvMostrar
+      ? `<div style="text-align:center;padding:12px">
+           <button class="btn btn-secundario btn-sm" onclick="apvVerMais()">
+             ▼ mostrar mais ${Math.min(30, vis.length - apvMostrar)} (faltam ${vis.length - apvMostrar})</button>
+         </div>`
+      : '');
 }
 
 function editarQtdAprovada(i, k, val) {
