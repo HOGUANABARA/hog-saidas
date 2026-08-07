@@ -1032,46 +1032,46 @@ details[open] summary { margin-bottom: 6px; }
      pergunta — o que está fora de casa e ainda não voltou.
      Nível 1: registra sem senha. Só a perda definitiva pede assinatura. -->
 <style>
-  #aba-remessas .rm-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
-  #aba-remessas .rm-head{padding:11px 16px;font-weight:700;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:#fff}
-  #aba-remessas .rm-head.laranja{background:#E67E22}
-  #aba-remessas .rm-head.azul{background:var(--azul-medio)}
-  #aba-remessas .rm-head.roxo{background:#6f42c1}
-  #aba-remessas .rm-head.verm{background:var(--vermelho)}
-  #aba-remessas .rm-head.cinza{background:var(--cinza-5)}
-  #aba-remessas .rm-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px}
+  #aba-remessas .rm-card, #aba-instrumentais .rm-card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head{padding:11px 16px;font-weight:700;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:#fff}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head.laranja{background:#E67E22}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head.azul{background:var(--azul-medio)}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head.roxo{background:#6f42c1}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head.verm{background:var(--vermelho)}
+  #aba-remessas .rm-head, #aba-instrumentais .rm-head.cinza{background:var(--cinza-5)}
+  #aba-remessas .rm-count, #aba-instrumentais .rm-count{font-size:11px;font-weight:600;background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px}
   #aba-remessas table{width:100%;border-collapse:collapse;font-size:12px}
   #aba-remessas thead th{text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)}
   #aba-remessas tbody td{padding:7px 10px;border-bottom:1px solid var(--cinza-1);vertical-align:middle}
-  #aba-remessas .rm-empty{text-align:center;padding:22px;color:var(--cinza-4);font-size:13px}
-  #aba-remessas .rm-b{border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)}
-  #aba-remessas .rm-b.verde{background:var(--verde)}
-  #aba-remessas .rm-b.laranja{background:#E67E22}
-  #aba-remessas .rm-b.roxo{background:#6f42c1}
-  #aba-remessas .rm-b.claro{background:var(--azul-claro);color:var(--azul)}
-  #aba-remessas .rm-b.perigo{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho)}
-  #aba-remessas .rm-b:hover{opacity:.9}
-  #aba-remessas .rm-n{width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)}
-  #aba-remessas .rm-topo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  #aba-remessas .rm-topo select,#aba-remessas .rm-topo input{border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)}
-  #aba-remessas .rm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
-  #aba-remessas .rm-tile{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px}
-  #aba-remessas .rm-tile b{display:block;font-size:22px;line-height:1.1}
-  #aba-remessas .rm-tile span{font-size:11px;color:var(--cinza-4);text-transform:uppercase;font-weight:700}
-  #aba-remessas .rm-aviso{background:#FEF9E7;border-left:4px solid #E67E22;padding:10px 14px;font-size:12px;color:#7D6608;border-radius:0 8px 8px 0;margin-bottom:16px;line-height:1.5}
-  #aba-remessas .rm-tag{font-size:10px;font-weight:700;border-radius:10px;padding:2px 8px;white-space:nowrap}
-  #aba-remessas .rm-tag.ok{background:#EAF7EE;color:var(--verde)}
-  #aba-remessas .rm-tag.falta{background:#FDEDEC;color:var(--vermelho)}
-  #aba-remessas .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
-  #aba-remessas .rm-filtros{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px}
-  #aba-remessas .rm-flin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  #aba-remessas .rm-flin:last-child{margin-bottom:0}
-  #aba-remessas .rm-flab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);min-width:78px}
-  #aba-remessas .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
-  #aba-remessas .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul)}
-  #aba-remessas .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
-  #aba-remessas .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22}
-  #aba-remessas .rm-fbusca{flex:1;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 11px;font-size:13px;font-family:var(--fonte)}
+  #aba-remessas .rm-empty, #aba-instrumentais .rm-empty{text-align:center;padding:22px;color:var(--cinza-4);font-size:13px}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b{border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b.verde{background:var(--verde)}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b.laranja{background:#E67E22}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b.roxo{background:#6f42c1}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b.claro{background:var(--azul-claro);color:var(--azul)}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b.perigo{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho)}
+  #aba-remessas .rm-b, #aba-instrumentais .rm-b:hover{opacity:.9}
+  #aba-remessas .rm-n, #aba-instrumentais .rm-n{width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)}
+  #aba-remessas .rm-topo, #aba-instrumentais .rm-topo{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  #aba-remessas .rm-topo, #aba-instrumentais .rm-topo select,#aba-remessas .rm-topo, #aba-instrumentais .rm-topo input{border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)}
+  #aba-remessas .rm-tiles, #aba-instrumentais .rm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  #aba-remessas .rm-tile, #aba-instrumentais .rm-tile{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 14px}
+  #aba-remessas .rm-tile, #aba-instrumentais .rm-tile b{display:block;font-size:22px;line-height:1.1}
+  #aba-remessas .rm-tile, #aba-instrumentais .rm-tile span{font-size:11px;color:var(--cinza-4);text-transform:uppercase;font-weight:700}
+  #aba-remessas .rm-aviso, #aba-instrumentais .rm-aviso{background:#FEF9E7;border-left:4px solid #E67E22;padding:10px 14px;font-size:12px;color:#7D6608;border-radius:0 8px 8px 0;margin-bottom:16px;line-height:1.5}
+  #aba-remessas .rm-tag, #aba-instrumentais .rm-tag{font-size:10px;font-weight:700;border-radius:10px;padding:2px 8px;white-space:nowrap}
+  #aba-remessas .rm-tag, #aba-instrumentais .rm-tag.ok{background:#EAF7EE;color:var(--verde)}
+  #aba-remessas .rm-tag, #aba-instrumentais .rm-tag.falta{background:#FDEDEC;color:var(--vermelho)}
+  #aba-remessas .rm-tag, #aba-instrumentais .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
+  #aba-remessas .rm-filtros, #aba-instrumentais .rm-filtros{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px}
+  #aba-remessas .rm-flin, #aba-instrumentais .rm-flin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  #aba-remessas .rm-flin, #aba-instrumentais .rm-flin:last-child{margin-bottom:0}
+  #aba-remessas .rm-flab, #aba-instrumentais .rm-flab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);min-width:78px}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul)}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22}
+  #aba-remessas .rm-fbusca, #aba-instrumentais .rm-fbusca{flex:1;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 11px;font-size:13px;font-family:var(--fonte)}
 </style>
 <!-- ═══ ABA INSTRUMENTAIS DO CME (v4.12) ═══════════════════════════ -->
 <style>
@@ -10372,7 +10372,7 @@ async function ciCarregar(){
     ciCaixas = caixas || []; ciPecas = pecas || []; ciSemBanco = false;
   }catch(e){
     ciSemBanco = true;
-    alvo.innerHTML = `<div class="rm-card"><div class="rm-head">🔩 Instrumentais do CME</div>
+    alvo.innerHTML = `<div class="rm-card"><div class="rm-head cinza">🔩 Instrumentais do CME</div>
       <div style="padding:16px;font-size:13px;line-height:1.6">
         Rode o script <b>v412_oxido_manutencao_instrumentais.sql</b> no SQL Editor do Supabase
         e recarregue esta página. Enquanto isso o resto do app funciona normalmente.
@@ -10488,7 +10488,7 @@ function ciRenderTratativas(){
     </div>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head">⚠️ Faltas em tratativa <span class="rm-count">${ciTrat.length}</span></div>
+    <div class="rm-head verm">⚠️ Faltas em tratativa <span class="rm-count">${ciTrat.length}</span></div>
     ${linhas}
     <div style="padding:9px 14px;font-size:11.5px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">
       Perda e quebra geram Saída Diversa — o app faz isso ao fechar o caso.
@@ -10523,7 +10523,7 @@ function ciRenderConsertos(){
       </div>`;
     }).join('');
     return `<div class="rm-card">
-      <div class="rm-head">🔧 Conserto · bloco ${ciEsc(r.numero_bloco||('#'+r.id))} · ${ciEsc(ciForn(r.fornecedor_id))}
+      <div class="rm-head roxo">🔧 Conserto · bloco ${ciEsc(r.numero_bloco||('#'+r.id))} · ${ciEsc(ciForn(r.fornecedor_id))}
         <span class="rm-count">${itens.length} peça(s)</span></div>
       ${linhas || '<div class="rm-empty">Sem peças nesta remessa.</div>'}
       <div style="padding:10px 14px;border-top:1px solid var(--cinza-2);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -11078,7 +11078,7 @@ function rmRenderDesgaste(){
     </div>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head">📉 Desgaste nos últimos 90 dias <span class="rm-count">${linhas.length}</span></div>
+    <div class="rm-head cinza">📉 Desgaste nos últimos 90 dias <span class="rm-count">${linhas.length}</span></div>
     ${corpo}
     <div style="padding:9px 14px;font-size:11.5px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">
       A conta compara o que se perdeu com o que existia. Comprar aqui manda o item para o
