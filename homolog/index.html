@@ -8166,17 +8166,52 @@ function pnCirLimpar(){
 }
 function pnCirBr(d){ return d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'; }
 
+// v4.14d — junta as duas fontes do consumo por cirurgia num formato só.
+// app      → pnMovs com periodoId, chave 'p<id>'
+// planilha → pnHistPer (junho/julho), chave 'h<key>'
+// `perInfo` guarda data, médico, cirurgia e pacientes de cada chave, para os
+// totais e a lista de períodos não precisarem saber de onde a linha veio.
+function pnCirFonte(){
+  const movs = [], perInfo = {};
+  for (const p of (pnPeriodos||[])){
+    perInfo['p'+p.id] = { data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
+      tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—', pac:Number(p.qtd_pacientes)||0,
+      modalidade:p.modalidade||'', origem:'app' };
+  }
+  for (const m of (pnMovs||[])){
+    if(!m.periodoId) continue;
+    movs.push({ ...m, chave:'p'+m.periodoId });
+  }
+  for (const h of (pnHistPer||[])){
+    perInfo['h'+h.key] = { data:h.data, medico:h.medico||'—', tipo:h.tipo||'—',
+      pac:Number(h.pac)||0, modalidade:'', origem:'planilha' };
+    for (const it of (h.itens||[])){
+      movs.push({ qtd:Number(it.qtd)||0, material_id:it.mid, dia:h.data, mes:h.mes,
+        chave:'h'+h.key, medico:h.medico||'—', tipoCir:h.tipo||'—',
+        custo:Number(it.custo)||0, nomeHist:it.nome, origem:'planilha' });
+    }
+  }
+  return { movs, perInfo };
+}
+
 function pnCirurgias(){
   const el = document.getElementById('pn-sec-cirurgias'); if(!el) return;
 
-  const perMap = {}; for (const p of (pnPeriodos||[])) perMap[p.id] = p;
-  const medicos = [...new Set((pnPeriodos||[]).map(p=>p.medicos&&p.medicos.nome).filter(Boolean))].sort();
-  const tipos   = [...new Set((pnPeriodos||[]).map(p=>p.tipos_cirurgia&&p.tipos_cirurgia.nome).filter(Boolean))].sort();
+  // ── v4.14d · AS DUAS FONTES ──────────────────────────────────────────────
+  // Antes esta seção lia só `pnMovs` — as movimentações do app, que começam em
+  // 21/07. Junho e julho vivem em `staging_saidas_hist`, já carregados em
+  // `pnHistPer` e já usados por Custos. Só o Consumo por cirurgia ignorava,
+  // e o Painel mostrava dois meses a menos do que ele tem.
+  // `chave` unifica: 'p<id>' para período do app, 'h<key>' para o da planilha.
+  const fonte = pnCirFonte();
+  const movsTodos = fonte.movs, perInfo = fonte.perInfo;
+
+  const medicos = [...new Set(Object.values(perInfo).map(p=>p.medico).filter(x=>x&&x!=='—'))].sort();
+  const tipos   = [...new Set(Object.values(perInfo).map(p=>p.tipo ).filter(x=>x&&x!=='—'))].sort();
 
   // ── filtra os movimentos ligados a período cirúrgico ──
   const termo = (pnCirF.material||'').trim().toUpperCase();
-  const movs = (pnMovs||[]).filter(m=>{
-    if (!m.periodoId) return false;
+  const movs = movsTodos.filter(m=>{
     if (pnCirF.medico && m.medico !== pnCirF.medico) return false;
     if (pnCirF.tipo   && m.tipoCir !== pnCirF.tipo) return false;
     if (pnCirF.de  && m.dia < pnCirF.de)  return false;
@@ -8189,9 +8224,9 @@ function pnCirurgias(){
   });
 
   // ── totais ──
-  const periodosSet = new Set(movs.map(m=>m.periodoId));
-  const pacientes = [...periodosSet].reduce((sm,id)=>{
-    const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+  const periodosSet = new Set(movs.map(m=>m.chave));
+  const pacientes = [...periodosSet].reduce((sm,k)=>{
+    const p = perInfo[k]; return sm + (Number(p&&p.pac)||0); }, 0);
   const custoTot = movs.reduce((sm,m)=>sm+m.custo,0);
   const qtdTot   = movs.reduce((sm,m)=>sm+m.qtd,0);
 
@@ -8207,32 +8242,31 @@ function pnCirurgias(){
     for (const m of movs){
       const k = chave(m);
       const g = grupos[k] || (grupos[k] = { k, custo:0, qtd:0, periodos:new Set(), itens:{} });
-      g.custo += m.custo; g.qtd += m.qtd; g.periodos.add(m.periodoId);
-      const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
+      g.custo += m.custo; g.qtd += m.qtd; g.periodos.add(m.chave);
+      const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome) || m.nomeHist || ('#'+m.material_id);
       const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
       it.qtd += m.qtd; it.custo += m.custo;
     }
   }
   const lista = Object.values(grupos).map(g=>{
-    const pac = [...g.periodos].reduce((sm,id)=>{
-      const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+    const pac = [...g.periodos].reduce((sm,k)=>{
+      const p = perInfo[k]; return sm + (Number(p&&p.pac)||0); }, 0);
     return { ...g, nPer:g.periodos.size, pac, porPac: pac>0 ? g.custo/pac : null };
   }).sort((a,b)=>b.custo-a.custo);
 
   // ── lista de períodos (é o que responde "onde este material foi usado") ──
   const porPeriodo = {};
   for (const m of movs){
-    const g = porPeriodo[m.periodoId] || (porPeriodo[m.periodoId] = { id:m.periodoId, custo:0, qtd:0, itens:{} });
+    const g = porPeriodo[m.chave] || (porPeriodo[m.chave] = { chave:m.chave, custo:0, qtd:0, itens:{} });
     g.custo += m.custo; g.qtd += m.qtd;
     const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
     const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
     it.qtd += m.qtd; it.custo += m.custo;
   }
   const periodos = Object.values(porPeriodo).map(g=>{
-    const p = perMap[g.id] || {};
-    return { ...g, data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
-             tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—',
-             pac:Number(p.qtd_pacientes)||0, modalidade:p.modalidade||'' };
+    const p = perInfo[g.chave] || {};
+    return { ...g, data:p.data||'', medico:p.medico||'—', tipo:p.tipo||'—',
+             pac:Number(p.pac)||0, modalidade:p.modalidade||'', origem:p.origem||'app' };
   }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 
   const opc = (arr, sel) => ['<option value="">todos</option>']
@@ -8324,11 +8358,11 @@ function pnCirurgias(){
         <thead><tr><th>Data</th><th>Médico</th><th>Cirurgia</th><th class="num">Pac.</th>
           <th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
         <tbody>${periodos.map(p=>`
-          <tr class="pn-cl" onclick="pnCirAbrir('P'+${p.id})">
-            <td>${pnCirBr(p.data)}</td><td>${p.medico}</td><td>${p.tipo}</td>
+          <tr class="pn-cl" onclick="pnCirAbrir(${JSON.stringify('P'+p.chave).replace(/"/g,'&quot;')})">
+            <td>${pnCirBr(p.data)}${p.origem==='planilha'?' <span style="font-size:9px;color:var(--cinza-4);font-weight:700">planilha</span>':''}</td><td>${p.medico}</td><td>${p.tipo}</td>
             <td class="num">${p.pac||'—'}</td><td class="num">${p.qtd.toLocaleString('pt-BR')}</td>
             <td class="num" style="font-weight:700">${pnMoney(p.custo)}</td></tr>
-          ${pnCirAberto===('P'+p.id)?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
+          ${pnCirAberto===('P'+p.chave)?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
             <table class="pn-tb" style="margin:0">
               <thead><tr><th>Item</th><th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
               <tbody>${Object.values(p.itens).sort((a,b)=>b.custo-a.custo).map(it=>
