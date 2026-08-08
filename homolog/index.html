@@ -1266,6 +1266,27 @@ details[open] summary { margin-bottom: 6px; }
     <div id="dml-corpo"><div class="inv-empty">Carregando o livro do DML…</div></div>
   </div>
 
+  <!-- ═══ DE-PARA DE NOMES (v4.14b) ═══
+       A ficha de saída usa nomes curtos ("LUVA 7") e o cadastro usa nomes
+       completos ("LUVA 7.0"). O de-para liga os dois — e o casamento é POR
+       NOME, então toda renomeação de material deixa uma seta morta aqui.
+       Em 08/08 havia 9 setas mortas e 43 unidades de saída invisíveis no
+       Painel. Esta tela existe para isso ser visto no dia, e não seis
+       semanas depois num diagnóstico. -->
+  <div class="inv-card" id="dp-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#117A65;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>🔀 De-para de nomes — o que a ficha chama × o que o cadastro chama</span>
+      <button onclick="dpCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#E8F6F3;border-left:4px solid #117A65;padding:10px 14px;font-size:12px;color:#0B5345;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      O histórico de saídas casa com o cadastro <b>pelo nome</b>. Quando um material é renomeado, a seta
+      do mapa continua apontando para o nome antigo e <b>a saída some do Painel</b> — sem erro, sem aviso.
+      Aqui isso aparece: <b>seta morta</b> é destino que não existe mais, e <b>nome órfão</b> é saída que
+      não achou material nenhum.
+    </div>
+    <div id="dp-corpo"><div class="inv-empty">Carregando o mapa…</div></div>
+  </div>
+
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
   <div class="inv-card" id="rel-card">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1912,6 +1933,17 @@ async function testarConexao() {
 // Quem define é o ITEM, nunca o fornecedor — a Sterileno também vende
 // descartável (capa protetora), e isso é compra comum, estoque comum.
 let matRemessa = {};
+
+// ── A PONTE DA PEÇA NOVA (v4.14c) ────────────────────────────
+// material_id -> bem_id. Regra dela: "a nova baixa estoque e envia para
+// reprocessado". A peça nova usada NÃO some — ela baixa o estoque de novas e
+// entra suja na fila do bem correspondente, para seguir o ciclo.
+// Sem esta ponte, o saldo do reprocessado só crescia por carga ou contagem e
+// a conta de quantas peças estão em circulação nunca fechava.
+// A ligação é por ID (coluna `vira_sujo_bem_id`), não por nome: hoje aprendemos
+// três vezes que renomear quebra casamento por nome em silêncio.
+let matViraSujo = {};
+
 async function carregarBensRemessa(){
   try{
     const bens = (await sbFetch('remessa_bens?select=id,material_id&material_id=not.is.null&limit=500')) || [];
@@ -1919,6 +1951,42 @@ async function carregarBensRemessa(){
     for(const b of bens) matRemessa[b.material_id] = b.id;
   }catch(e){
     matRemessa = {};   // banco ainda sem as tabelas da v4.6 — app segue normal
+  }
+  try{
+    const nv = (await sbFetch('materiais?select=id,vira_sujo_bem_id&vira_sujo_bem_id=not.is.null&limit=500')) || [];
+    matViraSujo = {};
+    for(const m of nv) matViraSujo[m.id] = m.vira_sujo_bem_id;
+  }catch(e){
+    matViraSujo = {};  // coluna ainda não existe — a saída da nova segue como antes
+  }
+}
+
+// Peça nova usada na cirurgia entra suja na fila do bem.
+// Não mexe em estoque: a baixa da nova já foi gravada em `movimentacoes`.
+// Só soma em `d_sujo` — a peça não vinha de "em casa", está entrando no livro
+// agora, vinda do estoque de novas.
+// Falha aqui NUNCA derruba a saída: a baixa é o que não pode se perder.
+async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
+  const bemId = matViraSujo ? matViraSujo[mat.id] : null;
+  if(!bemId) return false;
+  try{
+    await sbFetch('remessa_sujos','POST',{
+      bem_id: bemId, qtd: qtd, origem: 'SAIDA_NOVA',
+      periodo_cirurgico_id: periodoId || null, registrado_por: quem });
+    const obs = 'Peça nova usada na cirurgia ("'+mat.nome+'") — entrou no ciclo de reprocessamento';
+    try{
+      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'USO_NOVA', d_sujo: qtd,
+        registrado_por: quem, observacao: obs });
+    }catch(e){
+      // `remessa_mov.tipo` pode ser enum e recusar valor novo. O movimento é o
+      // que importa; o rótulo é secundário. Cai para um tipo que já existe.
+      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'AJUSTE', d_sujo: qtd,
+        registrado_por: quem, observacao: obs + ' [entrada de peça nova]' });
+    }
+    return true;
+  }catch(e){
+    console.warn('ponte nova→sujo:', e);
+    return false;
   }
 }
 
@@ -2679,6 +2747,12 @@ async function enviarSupabase(reg) {
         qtd: -qtd, periodo_cirurgico_id: periodoId,
         aprovado: false, registrado_por: quem,
       });
+      // v4.14c — peça nova usada não some: entra suja na fila do bem.
+      // Só depois da baixa, e sem poder derrubá-la.
+      if (await bridgeNovaParaSujo(mat, qtd, periodoId, quem)) {
+        if (!reg.novasParaSujo) reg.novasParaSujo = [];
+        reg.novasParaSujo.push(`${qtd}x ${mat.nome}`);
+      }
     }
   }
   if (reg.naoEncontrados && reg.naoEncontrados.length) {
@@ -2689,6 +2763,9 @@ async function enviarSupabase(reg) {
   }
   if (reg.foramParaRemessa && reg.foramParaRemessa.length) {
     toast('🔁 ' + reg.foramParaRemessa.length + ' item(ns) foram para a fila de remessa (não baixaram estoque).', '');
+  }
+  if (reg.novasParaSujo && reg.novasParaSujo.length) {
+    toast('♻️ ' + reg.novasParaSujo.length + ' peça(s) nova(s) baixaram o estoque e entraram na fila de sujos.', '');
   }
 }
 
@@ -2890,6 +2967,9 @@ async function aprIncluirItem(i){
       aprovado: false, registrado_por: quem,
       observacao: 'Incluído na aprovação' + (ehDiversa && p.obs ? ' — '+p.obs : ''),
     });
+    // v4.14c — mesma ponte do formulário de saída: peça nova usada entra suja.
+    const foiSujo = await bridgeNovaParaSujo(mat, q, p.periodo ? p.periodo.id : null, quem);
+    if(foiSujo) toast('♻️ "'+mat.nome+'" baixou o estoque e entrou na fila de sujos.','');
     toast('"'+mat.nome+'" incluído — confira e aprove.','sucesso');
     carregarPendentes();
   }catch(e){ toast('Erro ao incluir: '+e.message,'erro'); }
@@ -3505,7 +3585,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); }
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   hsSincronizar();
@@ -12480,6 +12560,159 @@ async function rmLiberarNf(nfId){
 // viviam espalhadas: nome que não casou no cadastro (a saída se perdia),
 // item que saiu na remessa e não voltou, e nota travada para pagamento.
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// DE-PARA DE NOMES (v4.14b)
+// A ficha de saída usa nome curto, o cadastro usa nome completo, e o app casa
+// os dois POR NOME. Consequência: toda renomeação de material deixa uma seta
+// morta no mapa e a saída correspondente some do Painel — calada.
+// Esta tela torna isso visível no dia em que acontece.
+// ═══════════════════════════════════════════════════════════════════════════
+let dpMapa = [], dpOrfas = [];
+
+// valor entre aspas no filtro do PostgREST: nome tem parêntese, vírgula e
+// acento, e sem aspas o filtro quebra.
+function dpEq(v){ return 'eq.' + encodeURIComponent('"' + String(v).replace(/"/g,'\\"') + '"'); }
+function dpEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dpQuem(){ const el=document.getElementById('inv-registrado-por'); return (el&&el.value)||localStorage.getItem('hog_inv_registrante')||'Equipe CC'; }
+function dpData(d){ if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+
+async function dpCarregar(){
+  const box = document.getElementById('dp-corpo'); if(!box) return;
+  if(!sbUrl || !sbKey){ box.innerHTML = '<div class="inv-empty">Conecte ao banco.</div>'; return; }
+  box.innerHTML = '<div class="inv-empty">Carregando o mapa…</div>';
+  try{
+    dpMapa  = (await sbFetch('vw_depara_mapa?select=*&order=de.asc&limit=500')) || [];
+    dpOrfas = (await sbFetch('vw_saidas_orfas?select=*&limit=300')) || [];
+  }catch(e){
+    box.innerHTML = '<div class="inv-empty" style="color:var(--vermelho);line-height:1.6">As views do de-para ainda não existem no banco.<br>'
+      + 'Rode o <b>35_depara_tela.sql</b> e clique em Atualizar. O resto do Inventário funciona normalmente.</div>';
+    return;
+  }
+  if(!catalogoMateriais.length){
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&ativo=eq.true&limit=1000')) || []; }catch(e){}
+  }
+  dpRenderizar();
+}
+
+function dpRenderizar(){
+  const box = document.getElementById('dp-corpo'); if(!box) return;
+  const mortas = dpMapa.filter(m=>!m.destino_existe);
+  const vivas  = dpMapa.filter(m=>m.destino_existe);
+  let html = '';
+
+  // ── resumo ──
+  const unOrfas = dpOrfas.reduce((s,o)=>s+(Number(o.unidades)||0),0);
+  html += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${dpTile('Linhas no mapa', dpMapa.length, 'var(--azul)')}
+    ${dpTile('Setas mortas', mortas.length, mortas.length?'var(--vermelho)':'var(--verde)')}
+    ${dpTile('Nomes órfãos', dpOrfas.length, dpOrfas.length?'var(--laranja)':'var(--verde)')}
+    ${dpTile('Unidades invisíveis', unOrfas, unOrfas?'var(--laranja)':'var(--verde)')}
+  </div>`;
+
+  // ── nomes órfãos: a lista de trabalho ──
+  html += `<div style="font-size:12px;font-weight:800;color:var(--laranja);margin:6px 0 6px">🚩 Nomes órfãos — saída que não achou material</div>`;
+  if(!dpOrfas.length){
+    html += `<div class="inv-empty" style="padding:12px">Nenhum. Todo nome da ficha casa com o cadastro. ✓</div>`;
+  }else{
+    html += `<table><thead><tr><th>Nome na ficha de saída</th><th style="text-align:center">Linhas</th><th style="text-align:center">Un</th><th>Período</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    for(const o of dpOrfas){
+      const de = o.nome_original || o.nome;
+      html += `<tr>
+        <td><b>${dpEsc(o.nome)}</b>${o.nome_original && o.nome_original!==o.nome ? `<br><span style="font-size:10.5px;color:var(--cinza-4)">a ficha trouxe “${dpEsc(o.nome_original)}”</span>` : ''}</td>
+        <td style="text-align:center">${o.linhas}</td>
+        <td style="text-align:center"><b>${Number(o.unidades)||0}</b></td>
+        <td style="font-size:11px;color:var(--cinza-4)">${dpData(o.primeira)} → ${dpData(o.ultima)}</td>
+        <td style="text-align:right"><button class="inv-btn verde" style="padding:5px 10px;font-size:11.5px" onclick="dpApontar('${dpAttr(de)}','${dpAttr(o.nome)}')">🔗 apontar</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table>
+      <div style="font-size:11px;color:var(--cinza-4);margin-top:6px;line-height:1.5">Apontar grava a linha no mapa <b>e</b> religa o histórico na hora — as saídas voltam para o Painel, o consumo e o gatilho de compra.</div>`;
+  }
+
+  // ── setas mortas ──
+  if(mortas.length){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--vermelho);margin:18px 0 6px">✕ Setas mortas — o destino não existe mais no cadastro</div>
+      <table><thead><tr><th>A ficha chama</th><th>Aponta para</th><th style="text-align:center">Linhas</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    for(const m of mortas){
+      html += `<tr>
+        <td>${dpEsc(m.de)}</td>
+        <td style="color:var(--vermelho)"><s>${dpEsc(m.para)}</s></td>
+        <td style="text-align:center">${m.linhas}</td>
+        <td style="text-align:right">
+          <button class="inv-btn" style="padding:5px 10px;font-size:11.5px" onclick="dpApontar('${dpAttr(m.de)}','${dpAttr(m.para)}')">✏️ corrigir destino</button>
+          <button class="inv-btn" style="padding:5px 10px;font-size:11.5px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApagar('${dpAttr(m.de)}')">✕ apagar</button>
+        </td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+
+  // ── o mapa inteiro, recolhido ──
+  html += `<details style="margin-top:18px">
+    <summary style="cursor:pointer;font-size:12px;font-weight:800;color:var(--azul)">📋 O mapa inteiro (${vivas.length} linhas em ordem)</summary>
+    <table><thead><tr><th>A ficha chama</th><th>Aponta para</th><th style="text-align:center">Linhas</th><th>Quando · por quê</th><th style="text-align:right"></th></tr></thead><tbody>`;
+  for(const m of vivas){
+    html += `<tr>
+      <td>${dpEsc(m.de)}</td><td>${dpEsc(m.para)}</td>
+      <td style="text-align:center">${m.linhas}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${dpData(m.criado_em)}${m.motivo?' · '+dpEsc(m.motivo):''}</td>
+      <td style="text-align:right">
+        <button class="inv-btn" style="padding:4px 9px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApontar('${dpAttr(m.de)}','${dpAttr(m.para)}')">✏️</button>
+        <button class="inv-btn" style="padding:4px 9px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApagar('${dpAttr(m.de)}')">✕</button>
+      </td>
+    </tr>`;
+  }
+  html += `</tbody></table></details>`;
+  box.innerHTML = html;
+}
+
+function dpTile(rot, val, cor){
+  return `<div style="background:var(--cinza-1);border-radius:8px;padding:9px 14px;min-width:120px">
+    <div style="font-size:10.5px;text-transform:uppercase;color:var(--cinza-4);font-weight:700">${rot}</div>
+    <div style="font-size:19px;font-weight:800;color:${cor}">${val}</div></div>`;
+}
+function dpAttr(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+// ── apontar / corrigir destino ───────────────────────────────────────────
+// Grava a linha no mapa E reescreve o histórico, porque as duas coisas juntas
+// são o que faz a saída voltar para o Painel. Separadas, o mapa vira enfeite.
+async function dpApontar(de, nomeAtual){
+  const esc = await pkEscolher({
+    titulo: 'Para qual material aponta “'+de+'”?',
+    subtitulo: 'A ficha de saída chama assim. Escolha o nome do cadastro que corresponde.',
+    itens: (catalogoMateriais||[]).map(m=>({ id:m.id, nome:m.nome })),
+  });
+  if(!esc) return;
+  const linhas = (dpOrfas.find(o=>String(o.nome_original||o.nome)===String(de))||{}).linhas
+              || (dpMapa.find(m=>String(m.de)===String(de))||{}).linhas || 0;
+  if(!confirm(`Apontar “${de}” para “${esc.nome}”?\n\n${linhas} linha(s) do histórico passam a contar nesse material — elas voltam para o Painel, o consumo e o gatilho de compra.\n\nSaldo e movimentação não são tocados.`)) return;
+  try{
+    const jaTem = dpMapa.some(m=>String(m.de)===String(de));
+    if(jaTem){
+      await sbFetch(`depara_saidas?de=${dpEq(de)}`,'PATCH',{ para: esc.nome, motivo: 'Corrigido na tela por '+dpQuem() });
+    }else{
+      await sbFetch('depara_saidas','POST',{ de: de, para: esc.nome, motivo: 'Apontado na tela por '+dpQuem() });
+    }
+    // religa o histórico: o app casa por `nome`, e `nome_original` guarda o que a ficha trouxe
+    await sbFetch(`staging_saidas_hist?nome_original=${dpEq(de)}`,'PATCH',{ nome: esc.nome });
+    toast('“'+de+'” → “'+esc.nome+'” ✓ histórico religado','sucesso');
+    dpCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function dpApagar(de){
+  const m = dpMapa.find(x=>String(x.de)===String(de));
+  const av = (m && !m.destino_existe)
+    ? 'Essa seta está morta — apagar não muda nada no histórico, só limpa o mapa.'
+    : 'ATENÇÃO: essa seta está funcionando. Apagar não desfaz o histórico já reescrito, mas uma recarga futura da planilha deixa de traduzir esse nome.';
+  if(!confirm(`Apagar a linha “${de}” → “${m?m.para:''}”?\n\n${av}`)) return;
+  try{
+    await sbFetch(`depara_saidas?de=${dpEq(de)}`,'DELETE');
+    toast('Linha apagada do mapa ✓','sucesso');
+    dpCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
 const AL_SETORES = {
   ESTOQUE:          { nome:'Estoque e cadastro', quem:'quem cuida do cadastro de materiais', cor:'#1B4F72' },
   COMPRAS:          { nome:'Compras',            quem:'quem cota e faz pedido',              cor:'#2E86AB' },
