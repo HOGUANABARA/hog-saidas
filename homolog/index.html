@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.14 · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.14d · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8460,12 +8460,29 @@ async function pnCarregar(){
     try{ pnPedidos=(await sbFetch('pedidos?select=*&status=in.(EM_MONTAGEM,AGUARDANDO_APROVACAO,AGUARDANDO_ENTREGA,EM_CONFERENCIA)&order=id.asc&limit=100'))||[]; }catch(e){ pnPedidos=[]; }
     try{ pnNfItens=(await sbFetch('nf_itens?select=id,material_id,valor_unitario,nota_fiscal_id&order=id.asc&limit=3000'))||[]; }catch(e){ pnNfItens=[]; }
     try{ pnSnaps=(await sbFetch('painel_snapshots?select=*&order=mes.asc&limit=36'))||[]; }catch(e){ pnSnaps=[]; }
-    try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }catch(e){ pnHistRows=[]; }
+    // v4.14d — o histórico de junho/julho carregava dentro de um catch mudo:
+    // se falhasse, o Painel simplesmente ficava sem dois meses e ninguém sabia
+    // por quê. Agora o erro (ou a contagem) aparece na linha de status.
+    pnHistErro = null;
+    try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }
+    catch(e){ pnHistRows=[]; pnHistErro = e.message || String(e); }
     try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
     try{ pnOcorrencias=(await sbFetch('ocorrencias?select=*&status=eq.aberta&order=id.desc&limit=100'))||[]; }catch(e){ pnOcorrencias=[]; }
     try{ pnInvAberto=((await sbFetch("inventarios?select=id,data_contagem,criado_por,created_at&status=eq.aberto&limit=1"))||[])[0]||null; }catch(e){ pnInvAberto=null; }
     pnMontaHist();
-    document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
+    // diagnóstico visível: quantas linhas de planilha entraram e quantos
+    // períodos de junho/julho o Painel montou com elas.
+    let dia = 'atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
+    if(pnHistErro){
+      dia += ' · ⚠️ planilha jun/jul NÃO carregou: '+pnHistErro;
+    }else if(!pnHistRows.length){
+      dia += ' · ⚠️ planilha jun/jul veio vazia (0 linhas em staging_saidas_hist)';
+    }else{
+      dia += ' · planilha: '+pnHistRows.length+' linhas → '+pnHistPer.length+' período(s)';
+      if(pnHistRows.length>=3000) dia += ' ⚠️ no teto de 3000 — pode estar cortando';
+      if(!pnHistPer.length) dia += ' ⚠️ nenhum período montado: confira a coluna `data`';
+    }
+    document.getElementById('pn-status').textContent = dia;
     pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
     pnSaldos(); pnCirurgias();
     pnGravarSnapshot();
