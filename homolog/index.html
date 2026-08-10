@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.14e · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.14f · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3930,7 +3930,7 @@ async function ccSoltarDaCotacao(materialIds){
     if(!cots.length) return 0;
     // v4.11 — tirar da cotação só remove item ABERTO. Item já fechado em
     // pedido é histórico e não se apaga.
-    const r = await sbFetch(`cotacao_itens?cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})&fechado=is.false`,'DELETE');
+    const r = await coApagarItens(`cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})&fechado=is.false`);
     // cotação que ficou vazia se encerra sozinha
     for(const c of cots){
       const restam = (await sbFetch(`cotacao_itens?select=id&cotacao_id=eq.${c.id}&fechado=is.false&limit=1`)) || [];
@@ -4963,6 +4963,26 @@ async function coGravarDescricoes(silencioso){
   if(n && !silencioso) toast('Descrição de NF gravada no cadastro de '+n+' item(ns) ✓','sucesso');
 }
 
+// ── v4.14f · APAGAR ITEM DE COTAÇÃO ─────────────────────────────────────────
+// A FK `cotacao_opcoes_cotacao_item_id_fkey` NÃO está em cascata. Apagar o
+// item com ofertas penduradas devolve 409 / 23503 e o orçamento não salva —
+// que é o erro que apareceu ao fechar grupo com o COLÍRIO FENILEFRINA.
+// O comentário da v4.11 dizia "chave em cascata"; o banco discorda. Aqui a
+// ordem é explícita: primeiro as ofertas, depois o item.
+// Isto conserta o sintoma no app; a raiz é o `on delete cascade`, no
+// 39_cotacao_opcoes_cascade.sql.
+async function coApagarItens(filtro){
+  let ids = [];
+  try{ ids = (await sbFetch(`cotacao_itens?select=id&${filtro}&limit=2000`)) || []; }
+  catch(e){ console.warn('coApagarItens/listar:', e); }
+  if(ids.length){
+    const lista = ids.map(x=>x.id).join(',');
+    try{ await sbFetch(`cotacao_opcoes?cotacao_item_id=in.(${lista})`,'DELETE'); }
+    catch(e){ console.warn('coApagarItens/ofertas:', e); }
+  }
+  return await sbFetch(`cotacao_itens?${filtro}`,'DELETE');
+}
+
 async function coSalvar(silencioso){
   // v4.6d — cotação que ficou SEM itens não podia sair pela porta dos fundos:
   // era aqui que a tag "EM COTAÇÃO" ficava presa. Se todos os itens viraram
@@ -4972,7 +4992,7 @@ async function coSalvar(silencioso){
   if(!coItens.length){
     if(coCotacaoId!==null){
       try{
-        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
+        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
         await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ status:'fechada' });
         coCotacaoId = null;
         if(typeof ccCarregarAndamento==='function'){ await ccCarregarAndamento(); if(typeof ccRender==='function') ccRender(); }
@@ -4992,7 +5012,7 @@ async function coSalvar(silencioso){
       // v4.11 — ⚠️ salvar regrava a cotação apagando e reinserindo. Restringir
       // a `fechado=is.false` é o que impede o histórico de ser apagado aqui —
       // era por onde o problema voltaria pela porta dos fundos.
-      await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
+      await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
     }
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
@@ -5102,7 +5122,7 @@ async function coFecharGrupo(g){
       }catch(e){
         // banco ainda sem as colunas da v4.11 — mantém o comportamento antigo
         try{
-          await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`,'DELETE');
+          await coApagarItens(`cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`);
           toast('⚠ Rode o SQL v411_cotacao_nao_apaga.sql — sem ele o comparativo desta cotação se perde.','erro');
         }catch(e2){
           toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e2.message+' — use o ✕ da tag na lista de compras.','erro');
