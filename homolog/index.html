@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.14f · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.15 · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -733,6 +733,7 @@ details[open] summary { margin-bottom: 6px; }
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="ac-filtro" style="flex:1;min-width:180px" placeholder="digite o nome do item… ex: metil, adrenalina, touca" oninput="ccFiltrar()">
       <span id="cc-triagem-chip"></span>
+      <button id="cc-btn-pedir" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px;background:var(--verde)" onclick="fcAbrirEscolha()" title="Manda os marcados para a fila de espera, no orçamento que você escolher. Não abre cotação.">📥 Pedir compra (0)</button>
       <button id="cc-btn-orcar-sel" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px" onclick="ccOrcarSelecionados()">📤 Orçar selecionados (0) 🔒</button>
     </div>
     <div id="cc-prio-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"></div>
@@ -747,6 +748,51 @@ details[open] summary { margin-bottom: 6px; }
     <div class="ac-res" id="ac-res"></div>
   </div>
   <div id="ac-lista"><div class="ac-empty">Carregando…</div></div>
+</div>
+
+<!-- ═══ v4.15 · FILA DE ESPERA + JANELA "PARA QUAL ORÇAMENTO" ═══ -->
+<style>
+  .fc-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px;overflow:hidden;border-left:5px solid #6C3483}
+  .fc-head{background:#6C3483;color:#fff;padding:10px 15px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .fc-grupo{border-bottom:1px solid var(--cinza-2)}
+  .fc-grupo:last-child{border-bottom:none}
+  .fc-ghead{background:#F4ECF7;color:#4A235A;font-weight:800;font-size:11.5px;padding:7px 15px;display:flex;justify-content:space-between}
+  .fc-linha{display:flex;align-items:center;gap:10px;padding:9px 15px;border-bottom:1px solid var(--cinza-1);flex-wrap:wrap}
+  .fc-nome{flex:1;min-width:200px;font-size:13px;font-weight:600}
+  .fc-nome small{display:block;font-weight:400;font-size:11px;color:var(--cinza-4);margin-top:2px}
+  .fc-qtd{font-size:12px;color:var(--cinza-4);white-space:nowrap}
+  .fc-b{border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--cinza-2);color:var(--cinza-5)}
+  .fc-b:hover{opacity:.85}
+  .fc-gfoot{padding:9px 15px;background:var(--cinza-1);display:flex;justify-content:flex-end}
+  .fc-b-pu{border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--fonte);background:#6C3483;color:#fff}
+  .fc-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9000;padding:16px}
+  .fc-modal.on{display:flex}
+  .fc-box{background:#fff;border-radius:12px;max-width:460px;width:100%;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,.3);max-height:92vh;overflow:auto}
+  .fc-opc{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid var(--cinza-2);border-radius:9px;margin-bottom:8px;cursor:pointer;font-size:13.5px}
+  .fc-opc:hover{border-color:var(--azul-medio);background:var(--cinza-1)}
+  .fc-opc.sel{border-color:var(--azul);background:var(--azul-claro);font-weight:700}
+</style>
+<div class="fc-modal" id="fc-modal">
+  <div class="fc-box">
+    <h3 style="margin:0 0 4px;font-size:16px">Para qual orçamento?</h3>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--cinza-4);line-height:1.55">
+      Os <b id="fc-qtd">0</b> itens marcados vão para a fila de espera deste orçamento. Da para trocar depois.</p>
+    <div id="fc-opcoes"></div>
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--cinza-4);display:block;margin-bottom:5px">Observação para quem vai cotar (opcional)</label>
+      <input id="fc-obs" placeholder="ex: acabando no arsenal, pedir com urgência"
+        style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)">
+    </div>
+    <div style="background:var(--cinza-1);border-radius:8px;padding:11px 14px;font-size:11.5px;color:var(--cinza-4);line-height:1.6;margin-top:13px">
+      <b>O que acontece:</b> o item entra na fila com <b>seu nome e a hora</b>, e continua aparecendo na lista de
+      prioridade com a etiqueta 🕐 — sumir da lista seria dizer que a urgência acabou, e ela não acabou.
+      <b>Não vira cotação agora</b>: quem cuida de compras é que envia a fila.
+    </div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:15px">
+      <button class="fc-b" style="padding:9px 14px;font-size:12.5px" onclick="fcFecharModal()">cancelar</button>
+      <button id="fc-ok" class="fc-b-pu" style="background:var(--verde)" onclick="fcConfirmar()">✓ Enviar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) ═══ -->
@@ -3682,6 +3728,7 @@ function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLoc
 function ccHoje(){ return new Date().toISOString().split('T')[0]; }
 
 async function acCarregar(){
+  try{ await fcCarregar(); }catch(e){ console.warn('fila de compra:', e); }
   try{
     if(!acFornecedores.length){
       try{ acFornecedores = await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=300'); }catch(e){}
@@ -4041,7 +4088,10 @@ function ccRender(){
       <div class="cc-bbody">${classe==='POR_PROCEDIMENTO' ? ccPrevBox() : ''}${ccTabela(classe, doGrupo)}</div>
     </div>`;
   }
-  lista.innerHTML = html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>';
+  // v4.15 — a fila de espera vem antes das listas automáticas: é o que alguém
+  // já pediu e está esperando virar orçamento.
+  lista.innerHTML = (typeof fcCardHtml==='function' ? fcCardHtml() : '')
+    + (html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>');
   ccFiltrar();
   ccAtualizaBotaoSel();
 }
@@ -4058,8 +4108,15 @@ function ccSetPrevisao(v){
 
 function ccChk(r){
   const and = ccAndamento[r.material_id];
-  return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${and?'disabled title="já em andamento: '+and+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
-    <button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button></td>`;
+  // v4.15 — item já na fila de espera continua VISÍVEL na lista de prioridade,
+  // com etiqueta. Sumir daria a impressão de que a urgência foi resolvida, e
+  // ela não foi: só foi pedida.
+  const naFila = fcPorMaterial[r.material_id];
+  const trava = and ? 'já em andamento: '+and
+              : naFila ? 'já pedido para '+naFila.grupo+' por '+(naFila.pedido_por||'—') : '';
+  return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${trava?'disabled title="'+trava.replace(/"/g,'&quot;')+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
+    ${naFila?`<span title="${('em espera · '+naFila.grupo).replace(/"/g,'&quot;')}" style="font-size:10px">🕐</span>`:
+    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>`}</td>`;
 }
 
 function ccTabela(classe, rows, mostrarTodos){
@@ -4207,11 +4264,204 @@ async function ccRestaurar(materialId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FILA DE ESPERA PARA ORÇAMENTO (v4.15)
+// Quem lança saída vê a prateleira mas não abre cotação. Antes o pedido dela
+// ia por WhatsApp e se perdia. Agora fica aqui, com nome, hora e motivo, já
+// endereçado a um orçamento — e só quem tem permissão de compras é que manda
+// a fila para a Cotação.
+// A fila NÃO é cotação: nada aqui vira pedido sozinho.
+// ═══════════════════════════════════════════════════════════════════════════
+let fcFila = [];            // linhas em ESPERA
+let fcPorMaterial = {};     // material_id -> linha (para a etiqueta 🕐 na lista)
+let fcSelDestino = null;    // grupo escolhido na janela
+
+function fcQuem(){
+  return (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome
+       : (localStorage.getItem('hog_registrante') || 'Equipe');
+}
+function fcPodeCompras(){
+  return typeof podeAba!=='function' || podeAba('cotacao') || podeAba('decisao');
+}
+function fcEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fcQuando(d){
+  if(!d) return '';
+  const dt=new Date(d), hoje=new Date();
+  const mesmoDia = dt.toDateString()===hoje.toDateString();
+  const hh=dt.toLocaleTimeString('pt-BR').slice(0,5);
+  return mesmoDia ? ('hoje '+hh) : (dt.toLocaleDateString('pt-BR').slice(0,5)+' '+hh);
+}
+
+async function fcCarregar(){
+  try{
+    fcFila = (await sbFetch('fila_compra?select=*&status=eq.ESPERA&order=pedido_em.asc&limit=500')) || [];
+  }catch(e){ fcFila = []; }   // tabela ainda não existe: o resto da tela segue igual
+  fcPorMaterial = {};
+  for(const f of fcFila) fcPorMaterial[f.material_id] = f;
+}
+
+// os grupos que já existem, para a janela de escolha
+function fcGrupos(){
+  const s = new Set(fcFila.map(f=>f.grupo));
+  if(typeof coFornGrupo!=='undefined' && coFornGrupo) Object.keys(coFornGrupo).forEach(g=>s.add(g));
+  if(typeof coItens!=='undefined' && Array.isArray(coItens)) coItens.forEach(it=>s.add(it.grupo||'Orçamento 1'));
+  if(!s.size) s.add('Orçamento 1');
+  return [...s].sort();
+}
+
+// ── janela: para qual orçamento vão os selecionados ──
+function fcAbrirEscolha(){
+  if(!ccSel.size){ toast('Marque primeiro (☑) os itens que quer pedir.',''); return; }
+  const grupos = fcGrupos();
+  fcSelDestino = grupos[0];
+  const linhas = grupos.map(g=>{
+    const n = fcFila.filter(f=>f.grupo===g).length;
+    const forns = (typeof coFornGrupo!=='undefined' && coFornGrupo[g]||[])
+      .map(fid=> typeof coFornNomeById==='function' ? coFornNomeById(fid) : '').filter(Boolean).join(' · ');
+    return `<div class="fc-opc" data-g="${fcEsc(g)}" onclick="fcEscolher(this)">🗂️ <b>${fcEsc(g)}</b>
+      <span style="margin-left:auto;font-size:11px;color:var(--cinza-4);font-weight:400">${n} em espera${forns?' · '+fcEsc(forns):''}</span></div>`;
+  }).join('');
+  const box = document.getElementById('fc-modal');
+  box.querySelector('#fc-qtd').textContent = ccSel.size;
+  box.querySelector('#fc-opcoes').innerHTML = linhas +
+    `<div class="fc-opc" data-g="__novo__" onclick="fcEscolher(this)">➕ <b>Criar orçamento novo</b>
+      <span style="margin-left:auto;font-size:11px;color:var(--cinza-4);font-weight:400">nomear na hora</span></div>`;
+  box.querySelector('.fc-opc').classList.add('sel');
+  box.querySelector('#fc-obs').value = '';
+  fcAtualizaBotaoModal();
+  box.classList.add('on');
+}
+function fcEscolher(el){
+  document.querySelectorAll('#fc-opcoes .fc-opc').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+  fcSelDestino = el.getAttribute('data-g');
+  fcAtualizaBotaoModal();
+}
+function fcAtualizaBotaoModal(){
+  const b=document.getElementById('fc-ok'); if(!b) return;
+  b.textContent = fcSelDestino==='__novo__' ? '✓ Criar e enviar' : ('✓ Enviar para '+fcSelDestino);
+}
+function fcFecharModal(){ document.getElementById('fc-modal').classList.remove('on'); }
+
+async function fcConfirmar(){
+  let grupo = fcSelDestino;
+  if(grupo==='__novo__'){
+    grupo = (prompt('Nome do orçamento novo:','Orçamento '+(fcGrupos().length+1))||'').trim();
+    if(!grupo) return;
+  }
+  const obs = (document.getElementById('fc-obs').value||'').trim();
+  const quem = fcQuem();
+  const linhas = [];
+  for(const mid of ccSel){
+    const r = ccDados.find(x=>x.material_id===mid); if(!r) continue;
+    const gt = (typeof ccGatilho==='function') ? ccGatilho(r) : {};
+    const sug = gt.sugestao || Math.max(0, Math.round((Number(r.estoque_minimo)||0)-(Number(r.saldo)||0)));
+    linhas.push({ material_id: mid, material_nome: r.material, qtd: sug>0?sug:null,
+                  grupo, observacao: obs||null, pedido_por: quem });
+  }
+  if(!linhas.length){ toast('Nada a enviar.',''); return; }
+  try{
+    await sbFetch('fila_compra','POST',linhas);
+    ccSel.clear(); fcFecharModal();
+    await fcCarregar(); ccRender();
+    toast(linhas.length+' item(ns) na fila de '+grupo+' ✓ — quem cuida de compras vai ver.','sucesso');
+  }catch(e){
+    toast('Não consegui gravar a fila: '+e.message+' — rode o 40_fila_compra.sql.','erro');
+  }
+}
+
+// ── ações sobre a fila ──
+async function fcTrocarGrupo(id){
+  const f = fcFila.find(x=>x.id===id); if(!f) return;
+  const grupos = fcGrupos().filter(g=>g!==f.grupo);
+  const escolha = prompt('Mandar "'+f.material_nome+'" para qual orçamento?\n\n'+
+    grupos.map((g,i)=>(i+1)+' · '+g).join('\n')+'\n\nDigite o número, ou o nome de um orçamento novo:', grupos[0]||'');
+  if(!escolha) return;
+  const n = parseInt(escolha);
+  const destino = (!isNaN(n) && grupos[n-1]) ? grupos[n-1] : escolha.trim();
+  if(!destino) return;
+  try{
+    await sbFetch(`fila_compra?id=eq.${id}`,'PATCH',{ grupo: destino });
+    await fcCarregar(); ccRender();
+    toast('Agora em '+destino+' ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function fcTirar(id){
+  const f = fcFila.find(x=>x.id===id); if(!f) return;
+  // quem pediu pode tirar o próprio; quem cuida de compras tira qualquer um
+  if(!fcPodeCompras() && (f.pedido_por||'') !== fcQuem()){
+    toast('Só quem pediu (ou quem cuida de compras) pode tirar este item da fila.','erro'); return;
+  }
+  if(!confirm('Tirar "'+f.material_nome+'" da fila?\n\nEle volta a ser pedível na lista de compras. Nada é apagado do histórico.')) return;
+  try{
+    await sbFetch(`fila_compra?id=eq.${id}`,'PATCH',
+      { status:'CANCELADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
+    await fcCarregar(); ccRender();
+    toast('Fora da fila ↩','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ── mandar um orçamento inteiro da fila para a Cotação (só compras) ──
+async function fcMandarParaCotacao(grupo){
+  if(!exigirSenhaCompras()) return;
+  const doGrupo = fcFila.filter(f=>f.grupo===grupo);
+  if(!doGrupo.length) return;
+  const antes = (typeof coGrupoAtual!=='undefined') ? coGrupoAtual : 'Orçamento 1';
+  if(typeof coGrupoAtual!=='undefined') coGrupoAtual = grupo;
+  let n=0;
+  for(const f of doGrupo){
+    if(acEnviarParaCotacao(f.material_id, true)){
+      // respeita a quantidade que quem pediu digitou
+      const it = coItens.find(x=>x.material_id===f.material_id);
+      if(it && f.qtd) it.qtd_desejada = Number(f.qtd);
+      if(it) it.grupo = grupo;
+      n++;
+    }
+  }
+  if(typeof coGrupoAtual!=='undefined') coGrupoAtual = antes;
+  try{
+    await sbFetch(`fila_compra?grupo=eq.${encodeURIComponent('"'+grupo.replace(/"/g,'\\"')+'"')}&status=eq.ESPERA`,'PATCH',
+      { status:'ENVIADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
+  }catch(e){ console.warn('fila->enviado:', e); }
+  if(typeof coSalvar==='function') await coSalvar(true);
+  await fcCarregar();
+  if(typeof coRender==='function') coRender();
+  ccRender();
+  toast(n+' item(ns) de '+grupo+' foram para a Cotação ✓','sucesso');
+}
+
+// ── o card da fila, desenhado no topo da lista ──
+function fcCardHtml(){
+  if(!fcFila.length) return '';
+  const grupos = [...new Set(fcFila.map(f=>f.grupo))].sort();
+  const blocos = grupos.map(g=>{
+    const itens = fcFila.filter(f=>f.grupo===g);
+    const linhas = itens.map(f=>`<div class="fc-linha">
+      <span class="fc-nome">${fcEsc(f.material_nome)}
+        <small>pedido por <b>${fcEsc(f.pedido_por||'—')}</b> · ${fcQuando(f.pedido_em)}${f.observacao?' · “'+fcEsc(f.observacao)+'”':''}</small></span>
+      <span class="fc-qtd">qtd <b>${f.qtd==null?'—':Number(f.qtd)}</b></span>
+      <button class="fc-b" onclick="fcTrocarGrupo(${f.id})">✎ trocar</button>
+      <button class="fc-b" onclick="fcTirar(${f.id})">✕</button>
+    </div>`).join('');
+    const botao = fcPodeCompras()
+      ? `<button class="fc-b-pu" onclick="fcMandarParaCotacao('${g.replace(/'/g,"\\'")}')">🗂️ Mandar ${fcEsc(g)} para Cotação (${itens.length})</button>`
+      : `<span style="font-size:11px;color:var(--cinza-4)">quem cuida de compras é que envia para a cotação</span>`;
+    return `<div class="fc-grupo"><div class="fc-ghead">🗂️ ${fcEsc(g)} <span>${itens.length} ${itens.length===1?'item':'itens'}</span></div>
+      ${linhas}<div class="fc-gfoot">${botao}</div></div>`;
+  }).join('');
+  return `<div class="fc-card">
+    <div class="fc-head"><span>🕐 Em espera para orçamento</span>
+      <span style="font-size:11px;font-weight:600;opacity:.9">pedido à mão · ainda não virou cotação</span></div>
+    ${blocos}</div>`;
+}
+
 // ── seleção ☑ para orçar ──
 function ccToggleSel(mid, on){ if(on) ccSel.add(mid); else ccSel.delete(mid); ccAtualizaBotaoSel(); }
 function ccAtualizaBotaoSel(){
   const b=document.getElementById('cc-btn-orcar-sel');
   if(b){ b.textContent=`📤 Orçar selecionados (${ccSel.size}) 🔒`; b.style.opacity = ccSel.size? '1':'0.55'; }
+  const p=document.getElementById('cc-btn-pedir');
+  if(p){ p.textContent=`📥 Pedir compra (${ccSel.size})`; p.style.opacity = ccSel.size? '1':'0.55'; }
 }
 function ccMarcarClasse(classe){
   for(const r of ccDados){
@@ -4718,29 +4968,53 @@ function coTextoGrupo(g, fid){
   const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
   return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
 }
-// mostra o texto na tela (conferir/editar antes de enviar) + copiar + abrir WhatsApp
+// ── v4.14g · O TEXTO DO WHATSAPP ACOMPANHA O ORÇAMENTO ──────────────────────
+// Antes todos os textos iam para um `#co-textos` único, no TOPO da página —
+// longe do grupo a que pertencem. Com dois ou três orçamentos abertos virava
+// adivinhação de qual texto era de qual.
+// Agora o texto é desenhado DENTRO do grupo, logo abaixo dos fornecedores.
+// Como `#co-corpo` é reconstruído a cada clique, o texto não pode viver só no
+// DOM: fica guardado aqui e é redesenhado a cada render — inclusive o que você
+// editou à mão.
+let coTextosAbertos = {};   // 'grupofid' -> texto (já editado, se for o caso)
+
+function coTxKey(g, fid){ return g + '' + fid; }
+function coTxId(g, fid){ return 'co-tx-' + g.replace(/[^a-zA-Z0-9]/g,'') + '-' + fid; }
+function coTextoEditado(g, fid, val){ coTextosAbertos[coTxKey(g,fid)] = val; }   // não re-renderiza: perderia o cursor
+function coFecharTexto(g, fid){ delete coTextosAbertos[coTxKey(g,fid)]; coRender(); }
+
 function coWhatsGrupo(g, fid){
   const r = coTextoGrupo(g, fid);
   if(!r){ toast('Nenhum item para este fornecedor neste grupo (todos estão como "não pedir" ou "não tem").',''); return; }
-  const box = document.getElementById('co-textos');
-  if(!box){ if(navigator.clipboard) navigator.clipboard.writeText(r.texto); toast('Texto copiado ✓','sucesso'); return; }
-  const id = 'co-tx-'+g.replace(/[^a-zA-Z0-9]/g,'')+'-'+fid;
-  const bloco = `<div class="co-card" style="margin-bottom:10px" data-tx="${id}">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-      <b style="font-size:13px">💬 ${g} → 🏪 ${r.forn}</b>
-      <span style="display:flex;gap:6px">
-        <button class="co-b1" style="padding:6px 10px;font-size:11px" onclick="coCopiar('${id}')">📋 Copiar</button>
-        <button class="co-b3" style="padding:6px 10px;font-size:11px" onclick="coAbrirWhats('${id}')">💬 Abrir WhatsApp</button>
-        <button class="co-b2" style="padding:6px 10px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="this.closest('[data-tx]').remove()">✕</button>
-      </span>
-    </div>
-    <textarea id="${id}" rows="7" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--fonte);resize:vertical">${r.texto}</textarea>
-    <div style="font-size:10px;color:var(--cinza-4);margin-top:4px">Pode editar o texto aqui antes de copiar/enviar.</div>
-  </div>`;
-  const existente = box.querySelector('[data-tx="'+id+'"]');
-  if(existente) existente.outerHTML = bloco; else box.insertAdjacentHTML('afterbegin', bloco);
-  box.style.display='';
-  document.getElementById(id).scrollIntoView({behavior:'smooth',block:'center'});
+  coTextosAbertos[coTxKey(g,fid)] = r.texto;
+  coRender();
+  const el = document.getElementById(coTxId(g,fid));
+  if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// desenha os textos abertos de um grupo, para entrar no meio do coRender
+function coTextosDoGrupo(g){
+  const ge = g.replace(/'/g,"\\'");
+  return Object.keys(coTextosAbertos)
+    .filter(k => k.split('')[0] === g)
+    .map(k => {
+      const fid = Number(k.split('')[1]);
+      const id = coTxId(g, fid);
+      const txt = coTextosAbertos[k];
+      return `<div class="co-card" style="margin-bottom:10px;border-left:4px solid var(--verde)" data-tx="${id}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <b style="font-size:13px">💬 texto para 🏪 ${coFornNomeById(fid)}</b>
+          <span style="display:flex;gap:6px">
+            <button class="co-b1" style="padding:6px 10px;font-size:11px" onclick="coCopiar('${id}')">📋 Copiar</button>
+            <button class="co-b3" style="padding:6px 10px;font-size:11px" onclick="coAbrirWhats('${id}')">💬 Abrir WhatsApp</button>
+            <button class="co-b2" style="padding:6px 10px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="coFecharTexto('${ge}',${fid})">✕</button>
+          </span>
+        </div>
+        <textarea id="${id}" rows="7" oninput="coTextoEditado('${ge}',${fid},this.value)"
+          style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--fonte);resize:vertical">${txt}</textarea>
+        <div style="font-size:10px;color:var(--cinza-4);margin-top:4px">Pode editar antes de copiar. A edição fica guardada enquanto o orçamento estiver aberto.</div>
+      </div>`;
+    }).join('');
 }
 function coAbrirWhats(id){
   const ta=document.getElementById(id); if(!ta) return;
@@ -4883,6 +5157,7 @@ function coRender(){
       ${chips || '<span style="color:var(--cinza-4);font-size:11px">nenhum fornecedor ainda</span>'}
       ${fids.length<3?`<span style="cursor:pointer;font-size:11px;font-weight:800;color:var(--azul)" onclick="coAddFornGrupo('${g.replace(/'/g,"\\'")}')">+ fornecedor ▾</span>`:''}
     </div>
+    ${coTextosDoGrupo(g)}
     <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px">
       ${idxs.map(i=>coCardItem(i, coItens[i])).join('') || '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
     </div>`;
