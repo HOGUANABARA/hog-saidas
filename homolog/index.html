@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.15d · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.16 · Módulo Higiene</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -422,6 +422,15 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-rel">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">Compras e notas</div>
         <div class="hs-item aba-restrita" style="display:none" id="hs-rel-estoque" onclick="trocarAba('inventario');setTimeout(()=>{var e=document.getElementById('rel-card');if(e)e.scrollIntoView({behavior:'smooth'})},300)">Saldo de estoque</div>
+      </div>
+    </div>
+
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('hig')"><span><span class="hs-ico">🧼</span> Higiene</span><span class="hs-seta" id="hs-s-hig">▾</span></div>
+      <div class="hs-lista" id="hs-l-hig">
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_comp" onclick="trocarAba('hig_comp')">Compras</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_rel" onclick="trocarAba('hig_rel')">Relatório</div>
       </div>
     </div>
 
@@ -1609,7 +1618,8 @@ const PERFIS = {
   COMPRAS: {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
-           'receber','inventario','historico','ocorrencias','painel']
+           'receber','inventario','historico','ocorrencias','painel',
+           'hig_inv','hig_comp','hig_rel']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -1717,7 +1727,8 @@ function exigirAssinatura(ato){
 // ── ABAS: mostrar só o que o perfil enxerga ─────────────────────
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
-                    'inventario','historico','ocorrencias','usuarios'];
+                    'inventario','historico','ocorrencias','usuarios',
+                    'hig_inv','hig_comp','hig_rel'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -3640,6 +3651,13 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
+  ['hig_inv','hig_comp','hig_rel'].forEach(function(a){
+    var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
+    var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
+  });
+  if (aba==='hig_inv')  { hgInvCarregar(); }
+  if (aba==='hig_comp') { hgCompCarregar(); }
+  if (aba==='hig_rel')  { hgRelCarregar(); }
   hsSincronizar();
   if (aba==='ocorrencias'){ ocCarregar(); }
 }
@@ -13464,6 +13482,56 @@ async function alIgnorar(id){
   </div>
 </div>
 
+<!-- ═══════════ MÓDULO HIGIENE (v4.16) ═══════════ -->
+<style>
+  .hg-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .hg-filtros input[type=text]{flex:1;min-width:180px;border:1.5px solid var(--cinza-2);border-radius:var(--radius);padding:8px 12px;font-size:14px;font-family:var(--fonte);outline:none}
+  .hg-filtros select{border:1.5px solid var(--cinza-2);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:var(--fonte);background:var(--branco)}
+  .hg-tab{width:100%;border-collapse:collapse;font-size:13px}
+  .hg-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700;padding:9px 10px;border-bottom:2px solid var(--cinza-2);white-space:nowrap}
+  .hg-tab td{padding:9px 10px;border-bottom:1px solid var(--cinza-2);vertical-align:middle}
+  .hg-tab tr:hover td{background:var(--cinza-1)}
+  .hg-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .hg-cod{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:var(--azul);background:var(--azul-claro,#EAF2F8);padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .hg-cod.vazio{color:#B9770E;background:#FDEBD0}
+  .hg-prod{font-weight:600;color:var(--cinza-5)}
+  .hg-sub{display:block;font-size:11px;color:var(--cinza-4);font-weight:400}
+  .hg-kpis{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .hg-kpi{flex:1;min-width:150px;background:var(--branco);border:1px solid var(--cinza-2);border-radius:var(--radius);padding:14px 16px}
+  .hg-kpi .rot{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700}
+  .hg-kpi .val{font-size:22px;font-weight:800;color:var(--cinza-5);margin-top:4px}
+  .hg-aguardando{color:var(--cinza-3);font-weight:400}
+  .hg-nota{font-size:12px;color:#7D6608;background:var(--amarelo-claro,#FEF9E7);border-left:3px solid var(--amarelo,#B7950B);padding:10px 14px;border-radius:0 var(--radius) var(--radius) 0;margin-bottom:16px;line-height:1.5}
+</style>
+
+<div id="aba-hig_inv" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🧼 Inventário de Higiene</div>
+    <div class="hg-nota">O <b>saldo</b> é a contagem de consumo (rolo/pacote/frasco). <b>Consumo</b> e <b>sugestão</b> acendem quando existirem duas contagens fechadas — a de <b>31/08</b> é o marco zero.</div>
+    <div class="hg-filtros">
+      <input type="text" id="hg-inv-busca" placeholder="🔍 Buscar por código ou produto..." oninput="hgInvRender()">
+      <select id="hg-inv-forn" onchange="hgInvRender()"><option value="">Fornecedor: todos</option></select>
+      <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="hg-inv-sempreco" onchange="hgInvRender()"> só sem preço</label>
+    </div>
+    <div id="hg-inv-tabela"></div>
+  </div>
+</div>
+
+<div id="aba-hig_comp" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🛒 Compras de Higiene</div>
+    <div id="hg-comp-box"></div>
+  </div>
+</div>
+
+<div id="aba-hig_rel" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">📊 Relatório de Higiene</div>
+    <div id="hg-rel-box"></div>
+  </div>
+</div>
+<!-- ═══════════ FIM MÓDULO HIGIENE ═══════════ -->
+
 </main>
 </div>
 
@@ -13968,6 +14036,103 @@ async function dmlGravar(mid){
     toast(`${dmlNome(mid)} — ${dmlN(q)} ${sentido==='GUARDAR'?'guardado(s) no DML':'retirado(s) do DML'} ✓`,'sucesso');
     dmlCarregar();
   }catch(e){ toast('Erro ao registrar: '+(e.message||e),'erro'); }
+}
+</script>
+
+<script>
+// ═══ MÓDULO HIGIENE (v4.16) — leitura de vw_higiene_inventario ═══
+let hgDados = [];
+function hgMoeda(v){ return (v==null)?'—':('R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+function hgN(v){ return (v==null)?'—':Number(v).toLocaleString('pt-BR'); }
+function hgEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+async function hgCarregarDados(){
+  try{ hgDados = (await sbFetch('vw_higiene_inventario?select=*&order=material.asc')) || []; }
+  catch(e){ hgDados = []; toast('Erro ao carregar higiene: '+(e.message||e),'erro'); }
+}
+
+function hgPreencherFornecedores(){
+  const sel = document.getElementById('hg-inv-forn'); if(!sel) return;
+  const atual = sel.value;
+  const forns = Array.from(new Set(hgDados.map(function(r){return r.fornecedor||'—';}))).sort();
+  sel.innerHTML = '<option value="">Fornecedor: todos</option>' + forns.map(function(f){return '<option value="'+hgEsc(f)+'">'+hgEsc(f)+'</option>';}).join('');
+  sel.value = atual;
+}
+
+async function hgInvCarregar(){ await hgCarregarDados(); hgPreencherFornecedores(); hgInvRender(); }
+
+function hgInvFiltrar(){
+  const busca=(document.getElementById('hg-inv-busca').value||'').toLowerCase();
+  const forn=document.getElementById('hg-inv-forn').value;
+  const semPreco=document.getElementById('hg-inv-sempreco').checked;
+  return hgDados.filter(function(r){
+    if(forn && (r.fornecedor||'—')!==forn) return false;
+    if(semPreco && !(r.valor_compra==null || Number(r.valor_compra)===0)) return false;
+    if(busca){ const alvo=((r.codigo||'')+' '+(r.material||'')).toLowerCase(); if(alvo.indexOf(busca)<0) return false; }
+    return true;
+  });
+}
+
+function hgInvRender(){
+  const dados=hgInvFiltrar();
+  let semPreco=0; hgDados.forEach(function(r){ if(r.valor_compra==null||Number(r.valor_compra)===0) semPreco++; });
+  let h='<div class="hg-kpis">'
+    +'<div class="hg-kpi"><div class="rot">Produtos</div><div class="val">'+hgDados.length+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Sem preço</div><div class="val" style="color:var(--vermelho)">'+semPreco+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Mostrando</div><div class="val">'+dados.length+'</div></div>'
+    +'</div>';
+  h+='<table class="hg-tab"><thead><tr>'
+    +'<th>Código</th><th>Produto</th><th>Fornecedor</th>'
+    +'<th class="hg-num">Valor compra</th><th class="hg-num">Valor/unid</th>'
+    +'<th class="hg-num">Saldo</th><th class="hg-num">Consumo 3m</th><th class="hg-num">Sugestão</th>'
+    +'</tr></thead><tbody>';
+  if(!dados.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
+  dados.forEach(function(r){
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
+    h+='<tr>'
+      +'<td>'+cod+'</td>'
+      +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(r.qtd_kit>1?(' · '+r.qtd_kit+'/caixa'):'')+'</span></td>'
+      +'<td>'+hgEsc(r.fornecedor||'—')+'</td>'
+      +'<td class="hg-num">'+(semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':hgMoeda(r.valor_compra))+'</td>'
+      +'<td class="hg-num">'+(semP?'—':hgMoeda(r.valor_unid))+'</td>'
+      +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
+      +'<td class="hg-num hg-aguardando">'+(r.consumo_3m==null?'—':hgN(r.consumo_3m))+'</td>'
+      +'<td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-inv-tabela').innerHTML=h;
+}
+
+async function hgCompCarregar(){
+  if(!hgDados.length) await hgCarregarDados();
+  let h='<div class="hg-nota">A sugestão de compra (em caixa/pacote) acende quando houver histórico de consumo. Por ora a lista mostra saldo e valor; o pedido para a fila entra na próxima entrega.</div>';
+  h+='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Sugestão (caixa)</th></tr></thead><tbody>';
+  hgDados.forEach(function(r){
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-comp-box').innerHTML=h;
+}
+
+async function hgRelCarregar(){
+  if(!hgDados.length) await hgCarregarDados();
+  let totalEstoque=0, comPreco=0;
+  hgDados.forEach(function(r){ if(r.valor_unid!=null && r.saldo!=null){ totalEstoque += Number(r.valor_unid)*Number(r.saldo); } if(r.valor_compra!=null&&Number(r.valor_compra)>0) comPreco++; });
+  let h='<div class="hg-kpis">'
+    +'<div class="hg-kpi"><div class="rot">Valor em estoque (higiene)</div><div class="val">'+hgMoeda(totalEstoque)+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Itens com preço</div><div class="val">'+comPreco+' <small style="font-size:12px;color:var(--cinza-4)">/'+hgDados.length+'</small></div></div>'
+    +'</div>';
+  h+='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Valor em estoque</th></tr></thead><tbody>';
+  hgDados.slice().sort(function(a,b){ return (Number(b.valor_unid||0)*Number(b.saldo||0))-(Number(a.valor_unid||0)*Number(a.saldo||0)); }).forEach(function(r){
+    const val = (r.valor_unid!=null&&r.saldo!=null)?Number(r.valor_unid)*Number(r.saldo):null;
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num">'+hgMoeda(val)+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-rel-box').innerHTML=h;
 }
 </script>
 
