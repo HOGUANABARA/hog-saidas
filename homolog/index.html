@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.15 · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.15d · Menu lateral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1533,12 +1533,17 @@ details[open] summary { margin-bottom: 6px; }
 #hogdlg-fundo{position:fixed;inset:0;z-index:100000;background:rgba(20,30,45,.55);
   display:none;align-items:center;justify-content:center;padding:18px;font-family:var(--fonte)}
 #hogdlg-fundo.on{display:flex}
+/* v4.15d — a caixa não tinha altura máxima e o corpo não rolava: com muitos
+   campos (39 peças no orçamento do conserto) ela crescia além da tela e levava
+   o título e os botões junto. Agora o miolo rola e as pontas ficam fixas. */
 #hogdlg{background:#fff;border-radius:14px;max-width:430px;width:100%;
-  box-shadow:0 18px 50px rgba(0,0,0,.32);overflow:hidden;animation:hogdlgIn .13s ease-out}
+  box-shadow:0 18px 50px rgba(0,0,0,.32);overflow:hidden;animation:hogdlgIn .13s ease-out;
+  max-height:92vh;display:flex;flex-direction:column}
+#hogdlg .hd-cab,#hogdlg .hd-sub,#hogdlg .hd-acoes,#hogdlg .hd-erro{flex:none}
 @keyframes hogdlgIn{from{transform:translateY(8px);opacity:.4}to{transform:none;opacity:1}}
 #hogdlg .hd-cab{padding:18px 22px 4px;font-size:17px;font-weight:800;color:var(--azul)}
 #hogdlg .hd-sub{padding:0 22px 4px;font-size:12.5px;color:var(--cinza-5);line-height:1.5}
-#hogdlg .hd-corpo{padding:12px 22px 4px}
+#hogdlg .hd-corpo{padding:12px 22px 4px;overflow-y:auto;flex:1 1 auto;min-height:0}
 #hogdlg .hd-corpo label{display:block;font-size:11.5px;font-weight:700;
   color:var(--cinza-5);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.3px}
 #hogdlg .hd-corpo input,#hogdlg .hd-corpo textarea,#hogdlg .hd-corpo select{
@@ -1546,6 +1551,7 @@ details[open] summary { margin-bottom: 6px; }
   border-radius:9px;font-size:15px;font-family:var(--fonte)}
 #hogdlg .hd-corpo textarea{min-height:74px;resize:vertical}
 #hogdlg .hd-erro{color:var(--vermelho);font-size:12.5px;font-weight:600;padding:6px 22px 0;display:none}
+#hogdlg.hd-largo{max-width:560px}
 #hogdlg .hd-opcoes{padding:8px 16px 4px;display:flex;flex-direction:column;gap:6px}
 #hogdlg .hd-op{display:flex;align-items:center;gap:11px;text-align:left;width:100%;
   padding:12px 14px;border:1.5px solid var(--cinza-2);border-radius:10px;background:#fff;
@@ -3943,8 +3949,14 @@ function ccToggleTriagem(){ ccModoTriagem = !ccModoTriagem; ccRender(); }
 function ccTagClasse(r){
   const atual = r.classe_compra || 'ESPORADICO';
   const alerta = r.classe_confirmada ? '' : ' ⚠';
+  // v4.15 — "inativar item" entra no mesmo seletor da classe: é ali que a
+  // pessoa está olhando quando percebe que o item não deveria estar na lista.
+  // Inativar é diferente de 🚫 tirar da lista: 🚫 só cala o alerta, inativar
+  // some do sistema inteiro (ficha de saída, compras, dashboard).
   return `<select class="cc-selclasse" title="mudar a classe deste item" onchange="ccReclassSel(${r.material_id}, this.value)">
     ${CC_ORDEM.map(c=>`<option value="${c}" ${c===atual?'selected':''}>${CC_INFO[c].emoji} ${CC_INFO[c].nome.toLowerCase()}${c===atual?alerta:''}</option>`).join('')}
+    <option disabled>──────────</option>
+    <option value="__INATIVAR__">🗑 inativar item…</option>
   </select>`;
 }
 function ccCob(r){
@@ -4503,6 +4515,7 @@ function ccFiltrar(){
 // reclassificação direta pelo seletor ▾ da linha (funciona em TODAS as classes)
 async function ccReclassSel(materialId, nova){
   const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  if(nova === '__INATIVAR__'){ ccInativarItem(materialId); return; }
   if(!CC_INFO[nova]) return;
   try{
     const patch = { classe_compra: nova, classe_confirmada: true };
@@ -4511,6 +4524,37 @@ async function ccReclassSel(materialId, nova){
     if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); ccRender(); return; }
     r.classe_compra = nova; r.classe_confirmada = true;
     toast(`${r.material} → ${CC_INFO[nova].emoji} ${CC_INFO[nova].nome} ✓`,'sucesso');
+    ccRender();
+  }catch(e){ toast('Erro: '+e.message,'erro'); ccRender(); }
+}
+
+// ── v4.15 · INATIVAR ITEM ──────────────────────────────────────────────────
+// Some do sistema inteiro: ficha de saída, lista de compras, dashboard.
+// NÃO apaga nada — histórico, movimentação e nota continuam existindo.
+// Só inativa com saldo zero: item com saldo sumindo da tela vira buraco na
+// conferência do inventário, e ninguém acha depois.
+async function ccInativarItem(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r){ ccRender(); return; }
+  const saldo = Number(r.saldo)||0;
+  if(saldo !== 0){
+    alert('"'+r.material+'" tem saldo '+saldo+'.\n\n'
+      + 'Item com saldo não pode ser inativado: ele sumiria da tela e das contagens, '
+      + 'mas continuaria valendo dinheiro no estoque.\n\n'
+      + 'Zere pelo inventário ou por saída diversa e inative depois. '
+      + 'Se a intenção é só parar de aparecer na lista de compras, use o 🚫 ao lado do ☑.');
+    ccRender(); return;
+  }
+  if(!exigirSenhaCompras()){ ccRender(); return; }
+  if(!confirm('Inativar "'+r.material+'"?\n\n'
+     + 'Ele sai da ficha de saída, da lista de compras e do dashboard.\n'
+     + 'Nada é apagado: histórico, movimentações e notas continuam no sistema.\n\n'
+     + 'Para reativar, é pelo cadastro.')){ ccRender(); return; }
+  try{
+    const res = await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ ativo:false });
+    if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); ccRender(); return; }
+    ccDados = ccDados.filter(x=>x.material_id!==materialId);
+    ccSel.delete(materialId);
+    toast('"'+r.material+'" inativado ✓','sucesso');
     ccRender();
   }catch(e){ toast('Erro: '+e.message,'erro'); ccRender(); }
 }
@@ -11033,22 +11077,40 @@ function ciRenderFiltros(){
   </div>`;
 }
 
+// v4.15b — o filtro só valia para as CAIXAS: os cards do topo, as faltas, os
+// consertos e as cedidas ignoravam. Buscar "BIPOLAR" e ver 18 caixas / 327
+// peças / 3 faltas fazia o filtro parecer quebrado — ele estava, na prática.
+// Agora existe um conjunto de caixas visíveis e TUDO respeita ele.
+function ciVisiveis(){ return ciCaixas.filter(ciCaixaPassa); }
+function ciIdsVisiveis(){ return new Set(ciVisiveis().map(c => c.id)); }
+function ciFiltrando(){ return ciFiltro !== 'TODAS' || !!ciBusca; }
+function ciPecaVisivel(pid, ids){ const p = ciPeca(pid); return !!p && ids.has(p.caixa_id); }
+
 function ciRenderizar(){
   if(ciSemBanco) return;
   ciRenderFiltros();
 
-  const contadas   = ciPecas.filter(p => p.qtd != null);
+  const vis   = ciVisiveis();
+  const ids   = new Set(vis.map(c => c.id));
+  const pecas = ciPecas.filter(p => ids.has(p.caixa_id));
+
+  const contadas   = pecas.filter(p => p.qtd != null);
   const totalPecas = contadas.reduce((s,p) => s + ciNum(p.qtd), 0);
-  const semContar  = ciPecas.length - contadas.length;
-  const fora       = ciItens.filter(i => !i.desfecho).reduce((s,i) => s + ciNum(i.qtd), 0);
+  const semContar  = pecas.length - contadas.length;
+  const fora       = ciItens.filter(i => !i.desfecho && ciPecaVisivel(i.peca_id, ids))
+                            .reduce((s,i) => s + ciNum(i.qtd), 0);
+  const nTrat      = ciTrat.filter(t => ciPecaVisivel(t.peca_id, ids)).length;
+  const nomesVis   = new Set(vis.map(c => ciNorm(c.nome)));
+  const nEmpr      = ciEmprestadas.filter(e => !ciFiltrando()
+                       || nomesVis.has(ciNorm(e.caixa_origem)) || nomesVis.has(ciNorm(e.caixa_destino))).length;
 
   document.getElementById('ci-tiles').innerHTML = `
-    <div class="rm-tile"><span>Caixas</span><b style="color:var(--azul)">${ciCaixas.length}</b></div>
+    <div class="rm-tile"><span>Caixas</span><b style="color:var(--azul)">${vis.length}${ciFiltrando()&&vis.length!==ciCaixas.length?`<span style="font-size:11px;font-weight:600;color:var(--cinza-4)"> de ${ciCaixas.length}</span>`:''}</b></div>
     <div class="rm-tile"><span>Peças contadas</span><b style="color:var(--verde)">${totalPecas}</b></div>
     <div class="rm-tile"><span>Sem contagem</span><b style="color:${semContar?'#D35400':'var(--cinza-4)'}">${semContar}</b></div>
     <div class="rm-tile"><span>Fora, no conserto</span><b style="color:#6f42c1">${fora}</b></div>
-    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${ciTrat.length?'var(--vermelho)':'var(--cinza-4)'}">${ciTrat.length}</b></div>
-    <div class="rm-tile"><span>Cedidas a outra caixa</span><b style="color:${ciEmprestadas.length?'#6f42c1':'var(--cinza-4)'}">${ciEmprestadas.length}</b></div>`;
+    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${nTrat?'var(--vermelho)':'var(--cinza-4)'}">${nTrat}</b></div>
+    <div class="rm-tile"><span>Cedidas a outra caixa</span><b style="color:${nEmpr?'#6f42c1':'var(--cinza-4)'}">${nEmpr}</b></div>`;
 
   const badge = document.getElementById('badge-ci');
   if(badge){ const n = ciTrat.length; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
@@ -11062,9 +11124,16 @@ function ciRenderizar(){
 // ── as faltas em aberto ──────────────────────────────────────────────
 function ciRenderTratativas(){
   const box = document.getElementById('ci-tratativas'); if(!box) return;
-  if(!ciTrat.length){ box.innerHTML = ''; return; }
+  const ids = ciIdsVisiveis();
+  const lista = ciTrat.filter(t => ciPecaVisivel(t.peca_id, ids));
+  if(!lista.length){
+    box.innerHTML = (ciFiltrando() && ciTrat.length)
+      ? `<div class="rm-card"><div class="rm-empty">Nenhuma falta em tratativa no filtro atual — existem ${ciTrat.length} em outras caixas.</div></div>`
+      : '';
+    return;
+  }
   const hoje = ciHoje();
-  const linhas = ciTrat.map(t => {
+  const linhas = lista.map(t => {
     const p = ciPeca(t.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
     const atrasada = t.data_devolucao_prevista && t.data_devolucao_prevista < hoje;
     return `<div class="ci-p" style="align-items:flex-start;${atrasada?'background:#FDEDEC':''}">
@@ -11086,7 +11155,7 @@ function ciRenderTratativas(){
     </div>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head verm">⚠️ Faltas em tratativa <span class="rm-count">${ciTrat.length}</span></div>
+    <div class="rm-head verm">⚠️ Faltas em tratativa <span class="rm-count">${lista.length}${ciFiltrando()&&lista.length!==ciTrat.length?' de '+ciTrat.length:''}</span></div>
     ${linhas}
     <div style="padding:9px 14px;font-size:11.5px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">
       Perda e quebra geram Saída Diversa — o app faz isso ao fechar o caso.
@@ -11097,8 +11166,14 @@ function ciRenderTratativas(){
 // ── os consertos ─────────────────────────────────────────────────────
 function ciRenderConsertos(){
   const box = document.getElementById('ci-consertos'); if(!box) return;
-  const vivas = ciRemessas.filter(r => (ciItens.filter(i => i.remessa_id === r.id).some(i => !i.desfecho))
-                                     || ['MONTAGEM','ENVIADA','RETORNADA'].includes(r.status));
+  const idsC = ciIdsVisiveis();
+  const vivas = ciRemessas.filter(r => {
+    const itens = ciItens.filter(i => i.remessa_id === r.id);
+    const viva = itens.some(i => !i.desfecho) || ['MONTAGEM','ENVIADA','RETORNADA'].includes(r.status);
+    if(!viva) return false;
+    // v4.15b — com filtro ligado, só a remessa que tem peça de caixa visível
+    return !ciFiltrando() || itens.some(i => ciPecaVisivel(i.peca_id, idsC));
+  });
   if(!vivas.length){ box.innerHTML = ''; return; }
   const cards = vivas.map(r => {
     const itens = ciItens.filter(i => i.remessa_id === r.id);
@@ -11355,8 +11430,13 @@ async function ciRemanejar(pecaDestinoId, tratativaId, qtdSugerida){
 // ── o que é de um e está na caixa de outro ───────────────────────────
 function ciRenderEmprestadas(){
   const box = document.getElementById('ci-emprestadas'); if(!box) return;
-  if(!ciEmprestadas.length){ box.innerHTML = ''; return; }
-  const linhas = ciEmprestadas.map(e => `<div class="ci-p" style="align-items:flex-start">
+  // a view `vw_instrumental_emprestado` devolve o NOME da caixa, não o id —
+  // conferido no próprio render abaixo. Filtrar por nome, então.
+  const nomesVis = new Set(ciVisiveis().map(c => ciNorm(c.nome)));
+  const lista = ciEmprestadas.filter(e => !ciFiltrando()
+                  || nomesVis.has(ciNorm(e.caixa_origem)) || nomesVis.has(ciNorm(e.caixa_destino)));
+  if(!lista.length){ box.innerHTML = ''; return; }
+  const linhas = lista.map(e => `<div class="ci-p" style="align-items:flex-start">
       <div style="flex:1">
         <b>${ciEsc(e.peca)}</b> · ${ciNum(e.qtd)} un
         <div style="font-size:11.5px;color:var(--cinza-4);margin-top:2px">
@@ -13674,6 +13754,9 @@ function hogPergunta({titulo, texto, campos, ok}){
       hogDlgFechar(out);
     };
     window._hogEnviar = enviar;
+    // v4.15d — muitos campos: caixa mais larga, para o rótulo da peça caber
+    const dlg = document.getElementById('hogdlg');
+    if(dlg) dlg.classList.toggle('hd-largo', cps.length > 6);
     _hogAbrir({ titulo, texto, corpoHtml: html,
       acoesHtml:
         '<button class="hd-b hd-b-nao" onclick="hogDlgFechar(null)">Cancelar</button>' +
