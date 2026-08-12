@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.16 · Módulo Higiene</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.16b · Módulo Higiene</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1117,12 +1117,12 @@ details[open] summary { margin-bottom: 6px; }
   #aba-remessas .rm-tag, #aba-instrumentais .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
   #aba-remessas .rm-filtros, #aba-instrumentais .rm-filtros{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px}
   #aba-remessas .rm-flin, #aba-instrumentais .rm-flin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  #aba-remessas .rm-flin, #aba-instrumentais .rm-flin:last-child{margin-bottom:0}
+  #aba-remessas .rm-flin:last-child, #aba-instrumentais .rm-flin:last-child{margin-bottom:0}
   #aba-remessas .rm-flab, #aba-instrumentais .rm-flab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);min-width:78px}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul)}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);transition:background .15s,border-color .15s,color .15s}
+  #aba-remessas .rm-chip:hover, #aba-instrumentais .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul);background:var(--cinza-1)}
+  #aba-remessas .rm-chip.on, #aba-instrumentais .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
+  #aba-remessas .rm-chip.on.laranja, #aba-instrumentais .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22;color:#fff}
   #aba-remessas .rm-fbusca, #aba-instrumentais .rm-fbusca{flex:1;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 11px;font-size:13px;font-family:var(--fonte)}
 </style>
 <!-- ═══ ABA INSTRUMENTAIS DO CME (v4.12) ═══════════════════════════ -->
