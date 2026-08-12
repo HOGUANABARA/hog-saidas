@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.13 · Menu lateral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.15d</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -733,6 +733,7 @@ details[open] summary { margin-bottom: 6px; }
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="ac-filtro" style="flex:1;min-width:180px" placeholder="digite o nome do item… ex: metil, adrenalina, touca" oninput="ccFiltrar()">
       <span id="cc-triagem-chip"></span>
+      <button id="cc-btn-pedir" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px;background:var(--verde)" onclick="fcAbrirEscolha()" title="Manda os marcados para a fila de espera, no orçamento que você escolher. Não abre cotação.">📥 Pedir compra (0)</button>
       <button id="cc-btn-orcar-sel" class="ac-orcar" style="white-space:nowrap;padding:9px 14px;font-size:12px" onclick="ccOrcarSelecionados()">📤 Orçar selecionados (0) 🔒</button>
     </div>
     <div id="cc-prio-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"></div>
@@ -747,6 +748,51 @@ details[open] summary { margin-bottom: 6px; }
     <div class="ac-res" id="ac-res"></div>
   </div>
   <div id="ac-lista"><div class="ac-empty">Carregando…</div></div>
+</div>
+
+<!-- ═══ v4.15 · FILA DE ESPERA + JANELA "PARA QUAL ORÇAMENTO" ═══ -->
+<style>
+  .fc-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px;overflow:hidden;border-left:5px solid #6C3483}
+  .fc-head{background:#6C3483;color:#fff;padding:10px 15px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .fc-grupo{border-bottom:1px solid var(--cinza-2)}
+  .fc-grupo:last-child{border-bottom:none}
+  .fc-ghead{background:#F4ECF7;color:#4A235A;font-weight:800;font-size:11.5px;padding:7px 15px;display:flex;justify-content:space-between}
+  .fc-linha{display:flex;align-items:center;gap:10px;padding:9px 15px;border-bottom:1px solid var(--cinza-1);flex-wrap:wrap}
+  .fc-nome{flex:1;min-width:200px;font-size:13px;font-weight:600}
+  .fc-nome small{display:block;font-weight:400;font-size:11px;color:var(--cinza-4);margin-top:2px}
+  .fc-qtd{font-size:12px;color:var(--cinza-4);white-space:nowrap}
+  .fc-b{border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--cinza-2);color:var(--cinza-5)}
+  .fc-b:hover{opacity:.85}
+  .fc-gfoot{padding:9px 15px;background:var(--cinza-1);display:flex;justify-content:flex-end}
+  .fc-b-pu{border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--fonte);background:#6C3483;color:#fff}
+  .fc-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9000;padding:16px}
+  .fc-modal.on{display:flex}
+  .fc-box{background:#fff;border-radius:12px;max-width:460px;width:100%;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,.3);max-height:92vh;overflow:auto}
+  .fc-opc{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid var(--cinza-2);border-radius:9px;margin-bottom:8px;cursor:pointer;font-size:13.5px}
+  .fc-opc:hover{border-color:var(--azul-medio);background:var(--cinza-1)}
+  .fc-opc.sel{border-color:var(--azul);background:var(--azul-claro);font-weight:700}
+</style>
+<div class="fc-modal" id="fc-modal">
+  <div class="fc-box">
+    <h3 style="margin:0 0 4px;font-size:16px">Para qual orçamento?</h3>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--cinza-4);line-height:1.55">
+      Os <b id="fc-qtd">0</b> itens marcados vão para a fila de espera deste orçamento. Da para trocar depois.</p>
+    <div id="fc-opcoes"></div>
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--cinza-4);display:block;margin-bottom:5px">Observação para quem vai cotar (opcional)</label>
+      <input id="fc-obs" placeholder="ex: acabando no arsenal, pedir com urgência"
+        style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)">
+    </div>
+    <div style="background:var(--cinza-1);border-radius:8px;padding:11px 14px;font-size:11.5px;color:var(--cinza-4);line-height:1.6;margin-top:13px">
+      <b>O que acontece:</b> o item entra na fila com <b>seu nome e a hora</b>, e continua aparecendo na lista de
+      prioridade com a etiqueta 🕐 — sumir da lista seria dizer que a urgência acabou, e ela não acabou.
+      <b>Não vira cotação agora</b>: quem cuida de compras é que envia a fila.
+    </div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:15px">
+      <button class="fc-b" style="padding:9px 14px;font-size:12.5px" onclick="fcFecharModal()">cancelar</button>
+      <button id="fc-ok" class="fc-b-pu" style="background:var(--verde)" onclick="fcConfirmar()">✓ Enviar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ ABA COTAÇÃO (VARIAÇÕES + ORÇAMENTO) ═══ -->
@@ -1266,6 +1312,27 @@ details[open] summary { margin-bottom: 6px; }
     <div id="dml-corpo"><div class="inv-empty">Carregando o livro do DML…</div></div>
   </div>
 
+  <!-- ═══ DE-PARA DE NOMES (v4.14b) ═══
+       A ficha de saída usa nomes curtos ("LUVA 7") e o cadastro usa nomes
+       completos ("LUVA 7.0"). O de-para liga os dois — e o casamento é POR
+       NOME, então toda renomeação de material deixa uma seta morta aqui.
+       Em 08/08 havia 9 setas mortas e 43 unidades de saída invisíveis no
+       Painel. Esta tela existe para isso ser visto no dia, e não seis
+       semanas depois num diagnóstico. -->
+  <div class="inv-card" id="dp-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#117A65;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>🔀 De-para de nomes — o que a ficha chama × o que o cadastro chama</span>
+      <button onclick="dpCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#E8F6F3;border-left:4px solid #117A65;padding:10px 14px;font-size:12px;color:#0B5345;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      O histórico de saídas casa com o cadastro <b>pelo nome</b>. Quando um material é renomeado, a seta
+      do mapa continua apontando para o nome antigo e <b>a saída some do Painel</b> — sem erro, sem aviso.
+      Aqui isso aparece: <b>seta morta</b> é destino que não existe mais, e <b>nome órfão</b> é saída que
+      não achou material nenhum.
+    </div>
+    <div id="dp-corpo"><div class="inv-empty">Carregando o mapa…</div></div>
+  </div>
+
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
   <div class="inv-card" id="rel-card">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1466,12 +1533,17 @@ details[open] summary { margin-bottom: 6px; }
 #hogdlg-fundo{position:fixed;inset:0;z-index:100000;background:rgba(20,30,45,.55);
   display:none;align-items:center;justify-content:center;padding:18px;font-family:var(--fonte)}
 #hogdlg-fundo.on{display:flex}
+/* v4.15d — a caixa não tinha altura máxima e o corpo não rolava: com muitos
+   campos (39 peças no orçamento do conserto) ela crescia além da tela e levava
+   o título e os botões junto. Agora o miolo rola e as pontas ficam fixas. */
 #hogdlg{background:#fff;border-radius:14px;max-width:430px;width:100%;
-  box-shadow:0 18px 50px rgba(0,0,0,.32);overflow:hidden;animation:hogdlgIn .13s ease-out}
+  box-shadow:0 18px 50px rgba(0,0,0,.32);overflow:hidden;animation:hogdlgIn .13s ease-out;
+  max-height:92vh;display:flex;flex-direction:column}
+#hogdlg .hd-cab,#hogdlg .hd-sub,#hogdlg .hd-acoes,#hogdlg .hd-erro{flex:none}
 @keyframes hogdlgIn{from{transform:translateY(8px);opacity:.4}to{transform:none;opacity:1}}
 #hogdlg .hd-cab{padding:18px 22px 4px;font-size:17px;font-weight:800;color:var(--azul)}
 #hogdlg .hd-sub{padding:0 22px 4px;font-size:12.5px;color:var(--cinza-5);line-height:1.5}
-#hogdlg .hd-corpo{padding:12px 22px 4px}
+#hogdlg .hd-corpo{padding:12px 22px 4px;overflow-y:auto;flex:1 1 auto;min-height:0}
 #hogdlg .hd-corpo label{display:block;font-size:11.5px;font-weight:700;
   color:var(--cinza-5);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.3px}
 #hogdlg .hd-corpo input,#hogdlg .hd-corpo textarea,#hogdlg .hd-corpo select{
@@ -1479,6 +1551,7 @@ details[open] summary { margin-bottom: 6px; }
   border-radius:9px;font-size:15px;font-family:var(--fonte)}
 #hogdlg .hd-corpo textarea{min-height:74px;resize:vertical}
 #hogdlg .hd-erro{color:var(--vermelho);font-size:12.5px;font-weight:600;padding:6px 22px 0;display:none}
+#hogdlg.hd-largo{max-width:560px}
 #hogdlg .hd-opcoes{padding:8px 16px 4px;display:flex;flex-direction:column;gap:6px}
 #hogdlg .hd-op{display:flex;align-items:center;gap:11px;text-align:left;width:100%;
   padding:12px 14px;border:1.5px solid var(--cinza-2);border-radius:10px;background:#fff;
@@ -1912,6 +1985,17 @@ async function testarConexao() {
 // Quem define é o ITEM, nunca o fornecedor — a Sterileno também vende
 // descartável (capa protetora), e isso é compra comum, estoque comum.
 let matRemessa = {};
+
+// ── A PONTE DA PEÇA NOVA (v4.14c) ────────────────────────────
+// material_id -> bem_id. Regra dela: "a nova baixa estoque e envia para
+// reprocessado". A peça nova usada NÃO some — ela baixa o estoque de novas e
+// entra suja na fila do bem correspondente, para seguir o ciclo.
+// Sem esta ponte, o saldo do reprocessado só crescia por carga ou contagem e
+// a conta de quantas peças estão em circulação nunca fechava.
+// A ligação é por ID (coluna `vira_sujo_bem_id`), não por nome: hoje aprendemos
+// três vezes que renomear quebra casamento por nome em silêncio.
+let matViraSujo = {};
+
 async function carregarBensRemessa(){
   try{
     const bens = (await sbFetch('remessa_bens?select=id,material_id&material_id=not.is.null&limit=500')) || [];
@@ -1919,6 +2003,42 @@ async function carregarBensRemessa(){
     for(const b of bens) matRemessa[b.material_id] = b.id;
   }catch(e){
     matRemessa = {};   // banco ainda sem as tabelas da v4.6 — app segue normal
+  }
+  try{
+    const nv = (await sbFetch('materiais?select=id,vira_sujo_bem_id&vira_sujo_bem_id=not.is.null&limit=500')) || [];
+    matViraSujo = {};
+    for(const m of nv) matViraSujo[m.id] = m.vira_sujo_bem_id;
+  }catch(e){
+    matViraSujo = {};  // coluna ainda não existe — a saída da nova segue como antes
+  }
+}
+
+// Peça nova usada na cirurgia entra suja na fila do bem.
+// Não mexe em estoque: a baixa da nova já foi gravada em `movimentacoes`.
+// Só soma em `d_sujo` — a peça não vinha de "em casa", está entrando no livro
+// agora, vinda do estoque de novas.
+// Falha aqui NUNCA derruba a saída: a baixa é o que não pode se perder.
+async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
+  const bemId = matViraSujo ? matViraSujo[mat.id] : null;
+  if(!bemId) return false;
+  try{
+    await sbFetch('remessa_sujos','POST',{
+      bem_id: bemId, qtd: qtd, origem: 'SAIDA_NOVA',
+      periodo_cirurgico_id: periodoId || null, registrado_por: quem });
+    const obs = 'Peça nova usada na cirurgia ("'+mat.nome+'") — entrou no ciclo de reprocessamento';
+    try{
+      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'USO_NOVA', d_sujo: qtd,
+        registrado_por: quem, observacao: obs });
+    }catch(e){
+      // `remessa_mov.tipo` pode ser enum e recusar valor novo. O movimento é o
+      // que importa; o rótulo é secundário. Cai para um tipo que já existe.
+      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'AJUSTE', d_sujo: qtd,
+        registrado_por: quem, observacao: obs + ' [entrada de peça nova]' });
+    }
+    return true;
+  }catch(e){
+    console.warn('ponte nova→sujo:', e);
+    return false;
   }
 }
 
@@ -2222,11 +2342,11 @@ const CONSUMO_REAL = {
   'ANGIOGRAFIA': ['AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','FLUORESCEÍNA 10%','SCALPE 23','SCALPE 25','SERINGA 10 ML L. LOCK','SWAB ÁLCOOL ISOPROPÍLICO'],
   'APLICAÇÃO': ['AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVASTIN 0,010','AVASTIN 0,015','AVENTAL CIRÚRGICO ESTÉRIL','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','ESCOVA CLOROHEX','LUVA 7.0','LUVA 7.5','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA'],
   'ESTRABISMO': ['AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO COM BAG FACO 120X100','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO VICRYL 6-0 BI PGA','FIO VICRYL 7-0 BI PGLA90','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LUVA 7.0','LUVA 7.5','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO'],
-  'FACECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVASTIN 0,015','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (REPROCESSADO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON C','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO FENILEFRINA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FIO NYLON 10-0 BI','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LUVA 7.0','LUVA 7.5','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO'],
+  'FACECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVASTIN 0,015','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (REPROCESSADO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON C','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO FENILEFRINA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FIO NYLON 10-0 BI','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LUVA 7.0','LUVA 7.5','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO'],
   'PLÁSTICA': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','COLA BASTÃO','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 7-0 BI PGLA90','JELCO ABOCATH 24','LAMINA 11','LAMINA 15','LENÇOL COM ELASTICO','LUVA 7.0','LUVA 7.5','MÁSCARA DESCARTÁVEL','NAUSEDRON 2 MG/ML','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PROPOFOL 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','XYLESTESIN (XYLO) COM VASO','XYLO GEL','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO'],
   'SONDAGEM': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','CAMPO BINOCULAR 100X120','CAMPO MESA G','CAMPO MESA P','FIO NYLON 6-0 MONO','FIO VICRYL 8-0 BI PGA','LUVA 7.0','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO AMPOLA 10 ML','XYLESTESIN (XYLO) COM VASO'],
   'TREC': ['AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','BISTURI 15','BISTURI CRESCENT','BSS (PLASTICO RÍGIDO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CARBACOL','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO NYLON 10-0 BI','FIO SEDA 6-0 BI','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24 NEO','LAMINA 11','LUVA 7.0','LUVA 7.5','LUVA 8.0','METIL 2%','METIL 4%','MITOMICINA INJETÁVEL','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','XYLESTESIN (XYLO) COM VASO','XYLO PESADA'],
-  'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KIT VITRECTOMIA 25 GAUGE (REPROCESSADO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 15','LUVA 7.0','LUVA 7.5','METIL 2%','METIL 4%','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','PNEU 279','PNEU 287','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','TRANSOFIX','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
+  'VITRECTOMIA': ['ADRENALINA','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CATÉTER O2','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COTONETE ESTÉRIL','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO VICRYL 8-0 BI PGA','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KIT VITRECTOMIA 25 GAUGE (REPROCESSADO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 15','LUVA 7.0','LUVA 7.5','METIL 2%','METIL 4%','NAUSEDRON 2 MG/ML','OLEO 5000','PERFLUOCTANO','PNEU 279','PNEU 287','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','ROPIVACAÍNA 10 MG/ML','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SWAB ÁLCOOL ISOPROPÍLICO','TORNEIRA TRÊS VIAS','TRANSOFIX','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
 };
 
 // Kit base — itens presentes na maioria dos tipos (calculado do consumo real Jun+Jul/26)
@@ -2370,7 +2490,7 @@ const CATEGORIAS_ORDEM = [
   { label: 'AGULHAS / SERINGAS / ACESSOS', itens: ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','CATÉTER O2','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','JELCO ABOCATH 24 NEO','JELCO ABOCATH 24','JELCO ABOCATH 22','SCALPE 23','SCALPE 25','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','TORNEIRA TRÊS VIAS'] },
   { label: 'PLÁSTICA', itens: ['COLA BASTÃO','COLA NOVA'] },
   { label: 'ÓXIDO DE ETILENO', itens: ['CARTUCHO ALCON C','CARTUCHO ALCON __B__','KIT INF/RET ÓLEO','KIT VITRECTOMIA 25 GAUGE (NOVO)','KIT VITRECTOMIA 25 GAUGE (REPROCESSADO)','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','SOFT TIP 25 G ALCON','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA'] },
-  { label: 'FACO / BISTURI / FIOS', itens: ['BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BISTURI 15','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','LAMINA 11','LAMINA 15','MEROCEL','SACO ABERTO','SACO FECHADO'] },
+  { label: 'FACO / BISTURI / FIOS', itens: ['BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BISTURI 15','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','LAMINA 11','LAMINA 15','MEROCEL','SACO ABERTO','SACO FECHADO'] },
   { label: 'COLÍRIOS / CORANTES', itens: ['AZUL DE TRYPAN','CARBACOL','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MITOMICINA','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)'] },
   { label: 'RETINA / VÍTREO', itens: ['AVASTIN 0,010','AVASTIN 0,015','AZUL BRILHANTE','GÁS C3F8','PERFLUOCTANO','PNEU 279','PNEU 287','OLEO 5000'] },
   { label: 'MEDICAMENTOS / ANESTÉSICOS', itens: ['ADRENALINA','CETOPROFENO','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DEXAMETASONA DECADRON 4 MG/ML','DIPIRONA','FENTANILA AMPOLA (FENTANEST)','FLUORESCEÍNA 10%','GENTAMICINA','HYALOZIMA (HIALURONIDASE)','METIL 2%','METIL 4%','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','MITOMICINA INJETÁVEL','NAUSEDRON 2 MG/ML','PROPOFOL 10 MG/ML','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','ROPIVACAÍNA 10 MG/ML','XYLESTESIN (XYLO) COM VASO','XYLO PESADA','XYLO S/VASO'] },
@@ -2679,6 +2799,12 @@ async function enviarSupabase(reg) {
         qtd: -qtd, periodo_cirurgico_id: periodoId,
         aprovado: false, registrado_por: quem,
       });
+      // v4.14c — peça nova usada não some: entra suja na fila do bem.
+      // Só depois da baixa, e sem poder derrubá-la.
+      if (await bridgeNovaParaSujo(mat, qtd, periodoId, quem)) {
+        if (!reg.novasParaSujo) reg.novasParaSujo = [];
+        reg.novasParaSujo.push(`${qtd}x ${mat.nome}`);
+      }
     }
   }
   if (reg.naoEncontrados && reg.naoEncontrados.length) {
@@ -2689,6 +2815,9 @@ async function enviarSupabase(reg) {
   }
   if (reg.foramParaRemessa && reg.foramParaRemessa.length) {
     toast('🔁 ' + reg.foramParaRemessa.length + ' item(ns) foram para a fila de remessa (não baixaram estoque).', '');
+  }
+  if (reg.novasParaSujo && reg.novasParaSujo.length) {
+    toast('♻️ ' + reg.novasParaSujo.length + ' peça(s) nova(s) baixaram o estoque e entraram na fila de sujos.', '');
   }
 }
 
@@ -2890,6 +3019,9 @@ async function aprIncluirItem(i){
       aprovado: false, registrado_por: quem,
       observacao: 'Incluído na aprovação' + (ehDiversa && p.obs ? ' — '+p.obs : ''),
     });
+    // v4.14c — mesma ponte do formulário de saída: peça nova usada entra suja.
+    const foiSujo = await bridgeNovaParaSujo(mat, q, p.periodo ? p.periodo.id : null, quem);
+    if(foiSujo) toast('♻️ "'+mat.nome+'" baixou o estoque e entrou na fila de sujos.','');
     toast('"'+mat.nome+'" incluído — confira e aprove.','sucesso');
     carregarPendentes();
   }catch(e){ toast('Erro ao incluir: '+e.message,'erro'); }
@@ -3505,7 +3637,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); }
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   hsSincronizar();
@@ -3602,6 +3734,7 @@ function acN0(v){ return (v===null||v===undefined||v==='')?'—':Number(v).toLoc
 function ccHoje(){ return new Date().toISOString().split('T')[0]; }
 
 async function acCarregar(){
+  try{ await fcCarregar(); }catch(e){ console.warn('fila de compra:', e); }
   try{
     if(!acFornecedores.length){
       try{ acFornecedores = await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=300'); }catch(e){}
@@ -3816,8 +3949,14 @@ function ccToggleTriagem(){ ccModoTriagem = !ccModoTriagem; ccRender(); }
 function ccTagClasse(r){
   const atual = r.classe_compra || 'ESPORADICO';
   const alerta = r.classe_confirmada ? '' : ' ⚠';
+  // v4.15 — "inativar item" entra no mesmo seletor da classe: é ali que a
+  // pessoa está olhando quando percebe que o item não deveria estar na lista.
+  // Inativar é diferente de 🚫 tirar da lista: 🚫 só cala o alerta, inativar
+  // some do sistema inteiro (ficha de saída, compras, dashboard).
   return `<select class="cc-selclasse" title="mudar a classe deste item" onchange="ccReclassSel(${r.material_id}, this.value)">
     ${CC_ORDEM.map(c=>`<option value="${c}" ${c===atual?'selected':''}>${CC_INFO[c].emoji} ${CC_INFO[c].nome.toLowerCase()}${c===atual?alerta:''}</option>`).join('')}
+    <option disabled>──────────</option>
+    <option value="__INATIVAR__">🗑 inativar item…</option>
   </select>`;
 }
 function ccCob(r){
@@ -3850,7 +3989,7 @@ async function ccSoltarDaCotacao(materialIds){
     if(!cots.length) return 0;
     // v4.11 — tirar da cotação só remove item ABERTO. Item já fechado em
     // pedido é histórico e não se apaga.
-    const r = await sbFetch(`cotacao_itens?cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})&fechado=is.false`,'DELETE');
+    const r = await coApagarItens(`cotacao_id=in.(${cots.map(c=>c.id).join(',')})&material_id=in.(${ids.join(',')})&fechado=is.false`);
     // cotação que ficou vazia se encerra sozinha
     for(const c of cots){
       const restam = (await sbFetch(`cotacao_itens?select=id&cotacao_id=eq.${c.id}&fechado=is.false&limit=1`)) || [];
@@ -3961,7 +4100,10 @@ function ccRender(){
       <div class="cc-bbody">${classe==='POR_PROCEDIMENTO' ? ccPrevBox() : ''}${ccTabela(classe, doGrupo)}</div>
     </div>`;
   }
-  lista.innerHTML = html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>';
+  // v4.15 — a fila de espera vem antes das listas automáticas: é o que alguém
+  // já pediu e está esperando virar orçamento.
+  lista.innerHTML = (typeof fcCardHtml==='function' ? fcCardHtml() : '')
+    + (html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>');
   ccFiltrar();
   ccAtualizaBotaoSel();
 }
@@ -3978,8 +4120,15 @@ function ccSetPrevisao(v){
 
 function ccChk(r){
   const and = ccAndamento[r.material_id];
-  return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${and?'disabled title="já em andamento: '+and+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
-    <button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button></td>`;
+  // v4.15 — item já na fila de espera continua VISÍVEL na lista de prioridade,
+  // com etiqueta. Sumir daria a impressão de que a urgência foi resolvida, e
+  // ela não foi: só foi pedida.
+  const naFila = fcPorMaterial[r.material_id];
+  const trava = and ? 'já em andamento: '+and
+              : naFila ? 'já pedido para '+naFila.grupo+' por '+(naFila.pedido_por||'—') : '';
+  return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${trava?'disabled title="'+trava.replace(/"/g,'&quot;')+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
+    ${naFila?`<span title="${('em espera · '+naFila.grupo).replace(/"/g,'&quot;')}" style="font-size:10px">🕐</span>`:
+    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>`}</td>`;
 }
 
 function ccTabela(classe, rows, mostrarTodos){
@@ -4127,11 +4276,204 @@ async function ccRestaurar(materialId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FILA DE ESPERA PARA ORÇAMENTO (v4.15)
+// Quem lança saída vê a prateleira mas não abre cotação. Antes o pedido dela
+// ia por WhatsApp e se perdia. Agora fica aqui, com nome, hora e motivo, já
+// endereçado a um orçamento — e só quem tem permissão de compras é que manda
+// a fila para a Cotação.
+// A fila NÃO é cotação: nada aqui vira pedido sozinho.
+// ═══════════════════════════════════════════════════════════════════════════
+let fcFila = [];            // linhas em ESPERA
+let fcPorMaterial = {};     // material_id -> linha (para a etiqueta 🕐 na lista)
+let fcSelDestino = null;    // grupo escolhido na janela
+
+function fcQuem(){
+  return (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome
+       : (localStorage.getItem('hog_registrante') || 'Equipe');
+}
+function fcPodeCompras(){
+  return typeof podeAba!=='function' || podeAba('cotacao') || podeAba('decisao');
+}
+function fcEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fcQuando(d){
+  if(!d) return '';
+  const dt=new Date(d), hoje=new Date();
+  const mesmoDia = dt.toDateString()===hoje.toDateString();
+  const hh=dt.toLocaleTimeString('pt-BR').slice(0,5);
+  return mesmoDia ? ('hoje '+hh) : (dt.toLocaleDateString('pt-BR').slice(0,5)+' '+hh);
+}
+
+async function fcCarregar(){
+  try{
+    fcFila = (await sbFetch('fila_compra?select=*&status=eq.ESPERA&order=pedido_em.asc&limit=500')) || [];
+  }catch(e){ fcFila = []; }   // tabela ainda não existe: o resto da tela segue igual
+  fcPorMaterial = {};
+  for(const f of fcFila) fcPorMaterial[f.material_id] = f;
+}
+
+// os grupos que já existem, para a janela de escolha
+function fcGrupos(){
+  const s = new Set(fcFila.map(f=>f.grupo));
+  if(typeof coFornGrupo!=='undefined' && coFornGrupo) Object.keys(coFornGrupo).forEach(g=>s.add(g));
+  if(typeof coItens!=='undefined' && Array.isArray(coItens)) coItens.forEach(it=>s.add(it.grupo||'Orçamento 1'));
+  if(!s.size) s.add('Orçamento 1');
+  return [...s].sort();
+}
+
+// ── janela: para qual orçamento vão os selecionados ──
+function fcAbrirEscolha(){
+  if(!ccSel.size){ toast('Marque primeiro (☑) os itens que quer pedir.',''); return; }
+  const grupos = fcGrupos();
+  fcSelDestino = grupos[0];
+  const linhas = grupos.map(g=>{
+    const n = fcFila.filter(f=>f.grupo===g).length;
+    const forns = (typeof coFornGrupo!=='undefined' && coFornGrupo[g]||[])
+      .map(fid=> typeof coFornNomeById==='function' ? coFornNomeById(fid) : '').filter(Boolean).join(' · ');
+    return `<div class="fc-opc" data-g="${fcEsc(g)}" onclick="fcEscolher(this)">🗂️ <b>${fcEsc(g)}</b>
+      <span style="margin-left:auto;font-size:11px;color:var(--cinza-4);font-weight:400">${n} em espera${forns?' · '+fcEsc(forns):''}</span></div>`;
+  }).join('');
+  const box = document.getElementById('fc-modal');
+  box.querySelector('#fc-qtd').textContent = ccSel.size;
+  box.querySelector('#fc-opcoes').innerHTML = linhas +
+    `<div class="fc-opc" data-g="__novo__" onclick="fcEscolher(this)">➕ <b>Criar orçamento novo</b>
+      <span style="margin-left:auto;font-size:11px;color:var(--cinza-4);font-weight:400">nomear na hora</span></div>`;
+  box.querySelector('.fc-opc').classList.add('sel');
+  box.querySelector('#fc-obs').value = '';
+  fcAtualizaBotaoModal();
+  box.classList.add('on');
+}
+function fcEscolher(el){
+  document.querySelectorAll('#fc-opcoes .fc-opc').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+  fcSelDestino = el.getAttribute('data-g');
+  fcAtualizaBotaoModal();
+}
+function fcAtualizaBotaoModal(){
+  const b=document.getElementById('fc-ok'); if(!b) return;
+  b.textContent = fcSelDestino==='__novo__' ? '✓ Criar e enviar' : ('✓ Enviar para '+fcSelDestino);
+}
+function fcFecharModal(){ document.getElementById('fc-modal').classList.remove('on'); }
+
+async function fcConfirmar(){
+  let grupo = fcSelDestino;
+  if(grupo==='__novo__'){
+    grupo = (prompt('Nome do orçamento novo:','Orçamento '+(fcGrupos().length+1))||'').trim();
+    if(!grupo) return;
+  }
+  const obs = (document.getElementById('fc-obs').value||'').trim();
+  const quem = fcQuem();
+  const linhas = [];
+  for(const mid of ccSel){
+    const r = ccDados.find(x=>x.material_id===mid); if(!r) continue;
+    const gt = (typeof ccGatilho==='function') ? ccGatilho(r) : {};
+    const sug = gt.sugestao || Math.max(0, Math.round((Number(r.estoque_minimo)||0)-(Number(r.saldo)||0)));
+    linhas.push({ material_id: mid, material_nome: r.material, qtd: sug>0?sug:null,
+                  grupo, observacao: obs||null, pedido_por: quem });
+  }
+  if(!linhas.length){ toast('Nada a enviar.',''); return; }
+  try{
+    await sbFetch('fila_compra','POST',linhas);
+    ccSel.clear(); fcFecharModal();
+    await fcCarregar(); ccRender();
+    toast(linhas.length+' item(ns) na fila de '+grupo+' ✓ — quem cuida de compras vai ver.','sucesso');
+  }catch(e){
+    toast('Não consegui gravar a fila: '+e.message+' — rode o 40_fila_compra.sql.','erro');
+  }
+}
+
+// ── ações sobre a fila ──
+async function fcTrocarGrupo(id){
+  const f = fcFila.find(x=>x.id===id); if(!f) return;
+  const grupos = fcGrupos().filter(g=>g!==f.grupo);
+  const escolha = prompt('Mandar "'+f.material_nome+'" para qual orçamento?\n\n'+
+    grupos.map((g,i)=>(i+1)+' · '+g).join('\n')+'\n\nDigite o número, ou o nome de um orçamento novo:', grupos[0]||'');
+  if(!escolha) return;
+  const n = parseInt(escolha);
+  const destino = (!isNaN(n) && grupos[n-1]) ? grupos[n-1] : escolha.trim();
+  if(!destino) return;
+  try{
+    await sbFetch(`fila_compra?id=eq.${id}`,'PATCH',{ grupo: destino });
+    await fcCarregar(); ccRender();
+    toast('Agora em '+destino+' ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+async function fcTirar(id){
+  const f = fcFila.find(x=>x.id===id); if(!f) return;
+  // quem pediu pode tirar o próprio; quem cuida de compras tira qualquer um
+  if(!fcPodeCompras() && (f.pedido_por||'') !== fcQuem()){
+    toast('Só quem pediu (ou quem cuida de compras) pode tirar este item da fila.','erro'); return;
+  }
+  if(!confirm('Tirar "'+f.material_nome+'" da fila?\n\nEle volta a ser pedível na lista de compras. Nada é apagado do histórico.')) return;
+  try{
+    await sbFetch(`fila_compra?id=eq.${id}`,'PATCH',
+      { status:'CANCELADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
+    await fcCarregar(); ccRender();
+    toast('Fora da fila ↩','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ── mandar um orçamento inteiro da fila para a Cotação (só compras) ──
+async function fcMandarParaCotacao(grupo){
+  if(!exigirSenhaCompras()) return;
+  const doGrupo = fcFila.filter(f=>f.grupo===grupo);
+  if(!doGrupo.length) return;
+  const antes = (typeof coGrupoAtual!=='undefined') ? coGrupoAtual : 'Orçamento 1';
+  if(typeof coGrupoAtual!=='undefined') coGrupoAtual = grupo;
+  let n=0;
+  for(const f of doGrupo){
+    if(acEnviarParaCotacao(f.material_id, true)){
+      // respeita a quantidade que quem pediu digitou
+      const it = coItens.find(x=>x.material_id===f.material_id);
+      if(it && f.qtd) it.qtd_desejada = Number(f.qtd);
+      if(it) it.grupo = grupo;
+      n++;
+    }
+  }
+  if(typeof coGrupoAtual!=='undefined') coGrupoAtual = antes;
+  try{
+    await sbFetch(`fila_compra?grupo=eq.${encodeURIComponent('"'+grupo.replace(/"/g,'\\"')+'"')}&status=eq.ESPERA`,'PATCH',
+      { status:'ENVIADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
+  }catch(e){ console.warn('fila->enviado:', e); }
+  if(typeof coSalvar==='function') await coSalvar(true);
+  await fcCarregar();
+  if(typeof coRender==='function') coRender();
+  ccRender();
+  toast(n+' item(ns) de '+grupo+' foram para a Cotação ✓','sucesso');
+}
+
+// ── o card da fila, desenhado no topo da lista ──
+function fcCardHtml(){
+  if(!fcFila.length) return '';
+  const grupos = [...new Set(fcFila.map(f=>f.grupo))].sort();
+  const blocos = grupos.map(g=>{
+    const itens = fcFila.filter(f=>f.grupo===g);
+    const linhas = itens.map(f=>`<div class="fc-linha">
+      <span class="fc-nome">${fcEsc(f.material_nome)}
+        <small>pedido por <b>${fcEsc(f.pedido_por||'—')}</b> · ${fcQuando(f.pedido_em)}${f.observacao?' · “'+fcEsc(f.observacao)+'”':''}</small></span>
+      <span class="fc-qtd">qtd <b>${f.qtd==null?'—':Number(f.qtd)}</b></span>
+      <button class="fc-b" onclick="fcTrocarGrupo(${f.id})">✎ trocar</button>
+      <button class="fc-b" onclick="fcTirar(${f.id})">✕</button>
+    </div>`).join('');
+    const botao = fcPodeCompras()
+      ? `<button class="fc-b-pu" onclick="fcMandarParaCotacao('${g.replace(/'/g,"\\'")}')">🗂️ Mandar ${fcEsc(g)} para Cotação (${itens.length})</button>`
+      : `<span style="font-size:11px;color:var(--cinza-4)">quem cuida de compras é que envia para a cotação</span>`;
+    return `<div class="fc-grupo"><div class="fc-ghead">🗂️ ${fcEsc(g)} <span>${itens.length} ${itens.length===1?'item':'itens'}</span></div>
+      ${linhas}<div class="fc-gfoot">${botao}</div></div>`;
+  }).join('');
+  return `<div class="fc-card">
+    <div class="fc-head"><span>🕐 Em espera para orçamento</span>
+      <span style="font-size:11px;font-weight:600;opacity:.9">pedido à mão · ainda não virou cotação</span></div>
+    ${blocos}</div>`;
+}
+
 // ── seleção ☑ para orçar ──
 function ccToggleSel(mid, on){ if(on) ccSel.add(mid); else ccSel.delete(mid); ccAtualizaBotaoSel(); }
 function ccAtualizaBotaoSel(){
   const b=document.getElementById('cc-btn-orcar-sel');
   if(b){ b.textContent=`📤 Orçar selecionados (${ccSel.size}) 🔒`; b.style.opacity = ccSel.size? '1':'0.55'; }
+  const p=document.getElementById('cc-btn-pedir');
+  if(p){ p.textContent=`📥 Pedir compra (${ccSel.size})`; p.style.opacity = ccSel.size? '1':'0.55'; }
 }
 function ccMarcarClasse(classe){
   for(const r of ccDados){
@@ -4173,6 +4515,7 @@ function ccFiltrar(){
 // reclassificação direta pelo seletor ▾ da linha (funciona em TODAS as classes)
 async function ccReclassSel(materialId, nova){
   const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  if(nova === '__INATIVAR__'){ ccInativarItem(materialId); return; }
   if(!CC_INFO[nova]) return;
   try{
     const patch = { classe_compra: nova, classe_confirmada: true };
@@ -4181,6 +4524,37 @@ async function ccReclassSel(materialId, nova){
     if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); ccRender(); return; }
     r.classe_compra = nova; r.classe_confirmada = true;
     toast(`${r.material} → ${CC_INFO[nova].emoji} ${CC_INFO[nova].nome} ✓`,'sucesso');
+    ccRender();
+  }catch(e){ toast('Erro: '+e.message,'erro'); ccRender(); }
+}
+
+// ── v4.15 · INATIVAR ITEM ──────────────────────────────────────────────────
+// Some do sistema inteiro: ficha de saída, lista de compras, dashboard.
+// NÃO apaga nada — histórico, movimentação e nota continuam existindo.
+// Só inativa com saldo zero: item com saldo sumindo da tela vira buraco na
+// conferência do inventário, e ninguém acha depois.
+async function ccInativarItem(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r){ ccRender(); return; }
+  const saldo = Number(r.saldo)||0;
+  if(saldo !== 0){
+    alert('"'+r.material+'" tem saldo '+saldo+'.\n\n'
+      + 'Item com saldo não pode ser inativado: ele sumiria da tela e das contagens, '
+      + 'mas continuaria valendo dinheiro no estoque.\n\n'
+      + 'Zere pelo inventário ou por saída diversa e inative depois. '
+      + 'Se a intenção é só parar de aparecer na lista de compras, use o 🚫 ao lado do ☑.');
+    ccRender(); return;
+  }
+  if(!exigirSenhaCompras()){ ccRender(); return; }
+  if(!confirm('Inativar "'+r.material+'"?\n\n'
+     + 'Ele sai da ficha de saída, da lista de compras e do dashboard.\n'
+     + 'Nada é apagado: histórico, movimentações e notas continuam no sistema.\n\n'
+     + 'Para reativar, é pelo cadastro.')){ ccRender(); return; }
+  try{
+    const res = await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ ativo:false });
+    if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); ccRender(); return; }
+    ccDados = ccDados.filter(x=>x.material_id!==materialId);
+    ccSel.delete(materialId);
+    toast('"'+r.material+'" inativado ✓','sucesso');
     ccRender();
   }catch(e){ toast('Erro: '+e.message,'erro'); ccRender(); }
 }
@@ -4638,29 +5012,53 @@ function coTextoGrupo(g, fid){
   const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
   return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
 }
-// mostra o texto na tela (conferir/editar antes de enviar) + copiar + abrir WhatsApp
+// ── v4.14g · O TEXTO DO WHATSAPP ACOMPANHA O ORÇAMENTO ──────────────────────
+// Antes todos os textos iam para um `#co-textos` único, no TOPO da página —
+// longe do grupo a que pertencem. Com dois ou três orçamentos abertos virava
+// adivinhação de qual texto era de qual.
+// Agora o texto é desenhado DENTRO do grupo, logo abaixo dos fornecedores.
+// Como `#co-corpo` é reconstruído a cada clique, o texto não pode viver só no
+// DOM: fica guardado aqui e é redesenhado a cada render — inclusive o que você
+// editou à mão.
+let coTextosAbertos = {};   // 'grupofid' -> texto (já editado, se for o caso)
+
+function coTxKey(g, fid){ return g + '' + fid; }
+function coTxId(g, fid){ return 'co-tx-' + g.replace(/[^a-zA-Z0-9]/g,'') + '-' + fid; }
+function coTextoEditado(g, fid, val){ coTextosAbertos[coTxKey(g,fid)] = val; }   // não re-renderiza: perderia o cursor
+function coFecharTexto(g, fid){ delete coTextosAbertos[coTxKey(g,fid)]; coRender(); }
+
 function coWhatsGrupo(g, fid){
   const r = coTextoGrupo(g, fid);
   if(!r){ toast('Nenhum item para este fornecedor neste grupo (todos estão como "não pedir" ou "não tem").',''); return; }
-  const box = document.getElementById('co-textos');
-  if(!box){ if(navigator.clipboard) navigator.clipboard.writeText(r.texto); toast('Texto copiado ✓','sucesso'); return; }
-  const id = 'co-tx-'+g.replace(/[^a-zA-Z0-9]/g,'')+'-'+fid;
-  const bloco = `<div class="co-card" style="margin-bottom:10px" data-tx="${id}">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-      <b style="font-size:13px">💬 ${g} → 🏪 ${r.forn}</b>
-      <span style="display:flex;gap:6px">
-        <button class="co-b1" style="padding:6px 10px;font-size:11px" onclick="coCopiar('${id}')">📋 Copiar</button>
-        <button class="co-b3" style="padding:6px 10px;font-size:11px" onclick="coAbrirWhats('${id}')">💬 Abrir WhatsApp</button>
-        <button class="co-b2" style="padding:6px 10px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="this.closest('[data-tx]').remove()">✕</button>
-      </span>
-    </div>
-    <textarea id="${id}" rows="7" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--fonte);resize:vertical">${r.texto}</textarea>
-    <div style="font-size:10px;color:var(--cinza-4);margin-top:4px">Pode editar o texto aqui antes de copiar/enviar.</div>
-  </div>`;
-  const existente = box.querySelector('[data-tx="'+id+'"]');
-  if(existente) existente.outerHTML = bloco; else box.insertAdjacentHTML('afterbegin', bloco);
-  box.style.display='';
-  document.getElementById(id).scrollIntoView({behavior:'smooth',block:'center'});
+  coTextosAbertos[coTxKey(g,fid)] = r.texto;
+  coRender();
+  const el = document.getElementById(coTxId(g,fid));
+  if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// desenha os textos abertos de um grupo, para entrar no meio do coRender
+function coTextosDoGrupo(g){
+  const ge = g.replace(/'/g,"\\'");
+  return Object.keys(coTextosAbertos)
+    .filter(k => k.split('')[0] === g)
+    .map(k => {
+      const fid = Number(k.split('')[1]);
+      const id = coTxId(g, fid);
+      const txt = coTextosAbertos[k];
+      return `<div class="co-card" style="margin-bottom:10px;border-left:4px solid var(--verde)" data-tx="${id}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <b style="font-size:13px">💬 texto para 🏪 ${coFornNomeById(fid)}</b>
+          <span style="display:flex;gap:6px">
+            <button class="co-b1" style="padding:6px 10px;font-size:11px" onclick="coCopiar('${id}')">📋 Copiar</button>
+            <button class="co-b3" style="padding:6px 10px;font-size:11px" onclick="coAbrirWhats('${id}')">💬 Abrir WhatsApp</button>
+            <button class="co-b2" style="padding:6px 10px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="coFecharTexto('${ge}',${fid})">✕</button>
+          </span>
+        </div>
+        <textarea id="${id}" rows="7" oninput="coTextoEditado('${ge}',${fid},this.value)"
+          style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--fonte);resize:vertical">${txt}</textarea>
+        <div style="font-size:10px;color:var(--cinza-4);margin-top:4px">Pode editar antes de copiar. A edição fica guardada enquanto o orçamento estiver aberto.</div>
+      </div>`;
+    }).join('');
 }
 function coAbrirWhats(id){
   const ta=document.getElementById(id); if(!ta) return;
@@ -4803,6 +5201,7 @@ function coRender(){
       ${chips || '<span style="color:var(--cinza-4);font-size:11px">nenhum fornecedor ainda</span>'}
       ${fids.length<3?`<span style="cursor:pointer;font-size:11px;font-weight:800;color:var(--azul)" onclick="coAddFornGrupo('${g.replace(/'/g,"\\'")}')">+ fornecedor ▾</span>`:''}
     </div>
+    ${coTextosDoGrupo(g)}
     <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px">
       ${idxs.map(i=>coCardItem(i, coItens[i])).join('') || '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
     </div>`;
@@ -4883,6 +5282,26 @@ async function coGravarDescricoes(silencioso){
   if(n && !silencioso) toast('Descrição de NF gravada no cadastro de '+n+' item(ns) ✓','sucesso');
 }
 
+// ── v4.14f · APAGAR ITEM DE COTAÇÃO ─────────────────────────────────────────
+// A FK `cotacao_opcoes_cotacao_item_id_fkey` NÃO está em cascata. Apagar o
+// item com ofertas penduradas devolve 409 / 23503 e o orçamento não salva —
+// que é o erro que apareceu ao fechar grupo com o COLÍRIO FENILEFRINA.
+// O comentário da v4.11 dizia "chave em cascata"; o banco discorda. Aqui a
+// ordem é explícita: primeiro as ofertas, depois o item.
+// Isto conserta o sintoma no app; a raiz é o `on delete cascade`, no
+// 39_cotacao_opcoes_cascade.sql.
+async function coApagarItens(filtro){
+  let ids = [];
+  try{ ids = (await sbFetch(`cotacao_itens?select=id&${filtro}&limit=2000`)) || []; }
+  catch(e){ console.warn('coApagarItens/listar:', e); }
+  if(ids.length){
+    const lista = ids.map(x=>x.id).join(',');
+    try{ await sbFetch(`cotacao_opcoes?cotacao_item_id=in.(${lista})`,'DELETE'); }
+    catch(e){ console.warn('coApagarItens/ofertas:', e); }
+  }
+  return await sbFetch(`cotacao_itens?${filtro}`,'DELETE');
+}
+
 async function coSalvar(silencioso){
   // v4.6d — cotação que ficou SEM itens não podia sair pela porta dos fundos:
   // era aqui que a tag "EM COTAÇÃO" ficava presa. Se todos os itens viraram
@@ -4892,7 +5311,7 @@ async function coSalvar(silencioso){
   if(!coItens.length){
     if(coCotacaoId!==null){
       try{
-        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
+        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
         await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ status:'fechada' });
         coCotacaoId = null;
         if(typeof ccCarregarAndamento==='function'){ await ccCarregarAndamento(); if(typeof ccRender==='function') ccRender(); }
@@ -4912,7 +5331,7 @@ async function coSalvar(silencioso){
       // v4.11 — ⚠️ salvar regrava a cotação apagando e reinserindo. Restringir
       // a `fechado=is.false` é o que impede o histórico de ser apagado aqui —
       // era por onde o problema voltaria pela porta dos fundos.
-      await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&fechado=is.false`,'DELETE');
+      await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
     }
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
@@ -5022,7 +5441,7 @@ async function coFecharGrupo(g){
       }catch(e){
         // banco ainda sem as colunas da v4.11 — mantém o comportamento antigo
         try{
-          await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`,'DELETE');
+          await coApagarItens(`cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`);
           toast('⚠ Rode o SQL v411_cotacao_nao_apaga.sql — sem ele o comparativo desta cotação se perde.','erro');
         }catch(e2){
           toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e2.message+' — use o ✕ da tag na lista de compras.','erro');
@@ -7556,8 +7975,8 @@ async function invCadastrarMaterial(){
 // inventário — só lista o que realmente é contado naquele local.
 const ITENS_POR_LOCAL = {
   'DML': ['ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AVENTAL DESCARTÁVEL SEM MANGA','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CLOREXIDINA 0,2% AQUOSA 100 ML','DESCARPACK 13L','DESCARPACK 3L','ESCOVA CLOROHEX','LENÇOL COM ELASTICO','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA 8.5','PROPE DESCARTÁVEL','RINGER COM LACTATO','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','TOUCA DESCARTÁVEL'],
-  'ARSENAL': ['ADRENALINA','AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 20X55 (ROXA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','AHMED','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AMIODARONA 3 ML','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','AZUL DE TRYPAN','BIOLOGICO','BISTURI 15','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 SEM PROTEÇÃO IMPORT','BISTURI 2.75 VISIONARY','BISTURI CRESCENT','BLOOD STOP','BOBINA RIBBON (CME) TONNER','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO COM BAG VITRE','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (REPROCESSADO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CASSETE FACO','CATÉTER O2','CEDILANID','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO ATROPINA','COLÍRIO CICLOMIDRIN TROPICAMIDA','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COLÍRIO PILOCARPINA PILOCAN','COLÍRIO SOLUCEL METILCELULOSE 2% 10 ML','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','COTONETE NÃO ESTÉRIL','CÂNULA HIDRO 25','CÂNULA HIDRO 27 - CINZA (REPROCESSADO)','DETERGENTE CLOREX 2%','DEXAMETASONA DECADRON 4 MG/ML','DIAMOX ACETAZOLAMIDA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DIPIRONA','DUAL BORE 23 G MEDIONE','DUAL BORE 25 G MEDIONE','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','ETIQUETA DUPLA - INTEGRADOR QUIMICO - ROLO','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO CATGUT 2-0','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 4-0 MONO','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO POLIPROPILENO 10-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO POLIPROPILENO 6-0 MONO','FIO SEDA 4-0 MONO','FIO SEDA 5-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 5-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','FIO VICRYL 8-0 BI PGLA90','FLAT TIP 27G ANGLED','FLEX TIP 25 G MEDONE','FLUORESCEÍNA 10%','FUROSEMIDA 20 MG/2 ML','GAS C3F8','GEL DE CONTATO','GENTAMICINA','GLICOSE 50% AMP','HIDROCORTISONA 500 MG','HYALOZIMA (HIALURONIDASE)','INJETOR ZEISS','INTEGRADOR','JELCO ABOCATH 20','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KEFAZOL (FAZOLON)','KIT COMBINADO','KIT PUNÇÃO','KIT VITRECTOMIA 25 GAUGE (REPROCESSADO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 11','LAMINA 15','LANCETAS','LENTE DE CONTATO -10.00','LENTE DE CONTATO -5.00','LENTE TERAPÊUTICA','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA 8.5','MANITOL','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BEJE','MICROPORE 25 BRANCO','NALOXONA AMPOLA 0.4MG/ML','NAUSEDRON 2 MG/ML','OLEO 5000','OPHTAAC 40','PERFLUOCTANO','PINÇA ALCON','PINÇA MÁCULA','PNEU 279','PNEU 287','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRA FACO 30 GRAUS 20G AMARELA (REPROCESSADO)','PONTEIRA FACO 30 GRAUS 20G AMARELA (NOVA)','PONTEIRA FACO CONST.','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','PROPOFOL 20MG/ML','PROTESE PARA PREENCHIMENTO ESFERA','RETRATOR DE IRIS','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','ROPIVACAÍNA 2 MG/ML','SCALPE 23','SCALPE 25','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SERINGA 60 ML L.LOCK','SOFT TIP 23 G ALCON','SOFT TIP 25 G ALCON','SONDA ASPIRAÇÃO 08','SONDA ASPIRAÇÃO 10','SONDA ASPIRAÇÃO 12','SONDA ASPIRAÇÃO 14','SONDA AVULSA VITRE','SONDA DACRIO','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TESOURA MORRIS','TIRAS REAGENTES TESTE GLICEMIA','TISSEL LYO 4 ML NOVA','TISSEL LYO 4 ML PREPARADA','TORNEIRA DUAS VIAS','TORNEIRA TRÊS VIAS','TRANSOFIX','TRANSPORE 100MMX4,5 MM','TRANSPORE 100MMX4,5MM','TREPANO 7.75','TREPANO 8,0','TREPANO 8,25','TUBO HAMED','VANCOMICINA','VESTIMENTA HOSPITALAR G - NÃO ESTERIL','VESTIMENTA HOSPITALAR GG - NÃO ESTERIL','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO GEL','XYLO PESADA','ÁGUA DESTILADA 250 ML','ÁLCOOL 70 100 ML'],
-  'ARSENAL CC': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X7 (CINZA)','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 COM PROTEÇÃO','BISTURI 2.75 VISIONARY','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CATÉTER O2','COLÍRIO MAXIFLOX-D','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','CÂNULA 22G ANGULAR (REPROCESSADO)','CÂNULA HIDRO 27 - CINZA (REPROCESSADO)','CÂNULA METIL AVULSA - AZUL (REPROCESSADO)','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FACOBA','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO SEDA 4-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 8-0 BI PGLA90','GEL DE CONTATO','INJETOR DE LENTE','LAMINA 11','LAMINA 15','LENTE TERAPÊUTICA','LENÇOL COM ELASTICO','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA IA ROSA','LUVA IA ROXA','LUVA IA VERDE','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BRANCO','MITOMICINA COLÍRIO','MITOMICINA INJETÁVEL','NITROGENIO N50','OXIGÊNIO GASOSO MEDICINAL','POMADA MAXIFLOX-D','PONTEIRA FACO AZUL','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','POVIDINE - IODO','RETRATOR DE IRIS','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','TRANSPORE 100MMX4,5 MM','TUBO ENDOTRAQUEAL 6.0','TUBO ENDOTRAQUEAL 6.5','TUBO ENDOTRAQUEAL 7.5','TUBO ENDOTRAQUEAL 8.5','VIGAMOX','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
+  'ARSENAL': ['ADRENALINA','AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 20X55 (ROXA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','AHMED','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AMIODARONA 3 ML','AVENTAL CIRÚRGICO ESTÉRIL','AZUL BRILHANTE','AZUL DE TRYPAN','BIOLOGICO','BISTURI 15','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','BISTURI CRESCENT','BLOOD STOP','BOBINA RIBBON (CME) TONNER','BSS (PLASTICO RÍGIDO)','BSS VITRE (VIDRO)','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO COM BAG VITRE','CAMPO FENESTRADO 50X50','CAMPO MESA G','CAMPO MESA P','CANETA DE MARCAÇÃO (REPROCESSADO)','CANETA DE MARCAÇÃO (NOVA)','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CASSETE FACO','CATÉTER O2','CEDILANID','CETOPROFENO','CLOREXIDINA 0,2% AQUOSA 100 ML','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','COLÍRIO ANESTÉSICO OXINEST (AMOSTRA GRATIS)','COLÍRIO ATROPINA','COLÍRIO CICLOMIDRIN TROPICAMIDA','COLÍRIO FENILEFRINA','COLÍRIO FLUORESCEÍNA','COLÍRIO IODOPOVIDONA 5%','COLÍRIO MYDRIACYL TROPICAMIDA','COLÍRIO OFTALMOX','COLÍRIO PILOCARPINA PILOCAN','COLÍRIO SOLUCEL METILCELULOSE 2% 10 ML','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','COTONETE NÃO ESTÉRIL','CÂNULA HIDRO 25','CÂNULA HIDRO 27 - CINZA (REPROCESSADO)','DETERGENTE CLOREX 2%','DEXAMETASONA DECADRON 4 MG/ML','DIAMOX ACETAZOLAMIDA','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DIPIRONA','DUAL BORE 23 G MEDIONE','DUAL BORE 25 G MEDIONE','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','ETIQUETA DUPLA - INTEGRADOR QUIMICO - ROLO','FENTANILA AMPOLA (FENTANEST)','FIO ALGODÃO 2-0 SEM AGULHA','FIO CATGUT 2-0','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 4-0 MONO','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO POLIPROPILENO 10-0 MONO','FIO POLIPROPILENO 5-0 MONO','FIO POLIPROPILENO 6-0 MONO','FIO SEDA 4-0 MONO','FIO SEDA 5-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 5-0 MONO','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 7-0 BI PGLA90','FIO VICRYL 8-0 BI PGA','FIO VICRYL 8-0 BI PGLA90','FLAT TIP 27G ANGLED','FLEX TIP 25 G MEDONE','FLUORESCEÍNA 10%','FUROSEMIDA 20 MG/2 ML','GAS C3F8','GEL DE CONTATO','GENTAMICINA','GLICOSE 50% AMP','HIDROCORTISONA 500 MG','HYALOZIMA (HIALURONIDASE)','INJETOR ZEISS','INTEGRADOR','JELCO ABOCATH 20','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','KEFAZOL (FAZOLON)','KIT COMBINADO','KIT PUNÇÃO','KIT VITRECTOMIA 25 GAUGE (REPROCESSADO)','KIT VITRECTOMIA 25 GAUGE (NOVO)','LAMINA 11','LAMINA 15','LANCETAS','LENTE DE CONTATO -10.00','LENTE DE CONTATO -5.00','LENTE TERAPÊUTICA','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA 8.5','MANITOL','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BEJE','MICROPORE 25 BRANCO','NALOXONA AMPOLA 0.4MG/ML','NAUSEDRON 2 MG/ML','OLEO 5000','OPHTAAC 40','PERFLUOCTANO','PINÇA ALCON','PINÇA MÁCULA','PNEU 279','PNEU 287','POMADA REGENCEL POMADA OFTÁLMICA COM 3,5G','PONTEIRA FACO 30 GRAUS 20G AMARELA (REPROCESSADO)','PONTEIRA FACO 30 GRAUS 20G AMARELA (NOVA)','PONTEIRA FACO CONST.','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','PROPOFOL 10 MG/ML','PROPOFOL 20MG/ML','PROTESE PARA PREENCHIMENTO ESFERA','RETRATOR DE IRIS','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','ROPIVACAÍNA 2 MG/ML','SCALPE 23','SCALPE 25','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SERINGA 60 ML L.LOCK','SOFT TIP 23 G ALCON','SOFT TIP 25 G ALCON','SONDA ASPIRAÇÃO 08','SONDA ASPIRAÇÃO 10','SONDA ASPIRAÇÃO 12','SONDA ASPIRAÇÃO 14','SONDA AVULSA VITRE','SONDA DACRIO','SONDA ENDOLASER 23 GA','SONDA ENDOLASER 25 GA','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TESOURA MORRIS','TIRAS REAGENTES TESTE GLICEMIA','TISSEL LYO 4 ML NOVA','TISSEL LYO 4 ML PREPARADA','TORNEIRA DUAS VIAS','TORNEIRA TRÊS VIAS','TRANSOFIX','TRANSPORE 100MMX4,5 MM','TRANSPORE 100MMX4,5MM','TREPANO 7.75','TREPANO 8,0','TREPANO 8,25','TUBO HAMED','VANCOMICINA','VESTIMENTA HOSPITALAR G - NÃO ESTERIL','VESTIMENTA HOSPITALAR GG - NÃO ESTERIL','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO GEL','XYLO PESADA','ÁGUA DESTILADA 250 ML','ÁLCOOL 70 100 ML'],
+  'ARSENAL CC': ['AGULHA 13X3 (AMARELA)','AGULHA 13X4 (INSULINA)','AGULHA 25X6','AGULHA 25X7','AGULHA 30X7 (CINZA)','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','ALGODÃO COMPRESSA GAZE ESTÉRIL 7,5X7,5','AVENTAL CIRÚRGICO ESTÉRIL','AZUL DE TRYPAN','BISTURI 2.75 IMPORT','BISTURI 2.75 NACIONAL','CAL SODADA ATRASORB ABSORVEDORES DE CO2','CAMPO BINOCULAR 100X120','CAMPO COM BAG FACO 120X100','CAMPO FENESTRADO 50X50','CARBACOL','CARTUCHO ALCON B','CARTUCHO ALCON C','CATÉTER O2','COLÍRIO MAXIFLOX-D','COLÍRIO OFTALMOX','COMPRESSA ESTÉRIL G','COMPRESSA ESTÉRIL P','COTONETE ESTÉRIL','CÂNULA 22G ANGULAR (REPROCESSADO)','CÂNULA HIDRO 27 - CINZA (REPROCESSADO)','CÂNULA METIL AVULSA - AZUL (REPROCESSADO)','ELETRODO','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','ESCOVA CLOROHEX','FACOBA','FIO ALGODÃO 2-0 SEM AGULHA','FIO MERSILENE 5-0 BI','FIO NYLON 10-0 BI','FIO NYLON 5-0 MONO','FIO NYLON 6-0 MONO','FIO POLIPROPILENO 10-0 BI','FIO SEDA 4-0 MONO','FIO SEDA 6-0 BI','FIO SEDA 6-0 MONO','FIO VICRYL 5-0 BI','FIO VICRYL 6-0 BI PGA','FIO VICRYL 6-0 MONO PGA','FIO VICRYL 8-0 BI PGLA90','GEL DE CONTATO','INJETOR DE LENTE','LAMINA 11','LAMINA 15','LENTE TERAPÊUTICA','LENÇOL COM ELASTICO','LUVA 6.5','LUVA 7.0','LUVA 7.5','LUVA 8.0','LUVA IA ROSA','LUVA IA ROXA','LUVA IA VERDE','MEROCEL','METIL 2%','METIL 4%','MICROPORE 12,5','MICROPORE 25 BRANCO','MITOMICINA COLÍRIO','MITOMICINA INJETÁVEL','NITROGENIO N50','OXIGÊNIO GASOSO MEDICINAL','POMADA MAXIFLOX-D','PONTEIRA FACO AZUL','PONTEIRAS IA (REPROCESSADO)','PONTEIRAS IA (NOVA)','POVIDINE - IODO','RETRATOR DE IRIS','SACO ABERTO','SACO FECHADO','SERINGA 0,5 ML INSULINA COM AGULHA','SERINGA 1 ML INSULINA COM AGULHA','SERINGA 1 ML SEM AGULHA','SERINGA 10 ML L. LOCK','SERINGA 5 ML L. LOCK','TRANSPORE 100MMX4,5 MM','TUBO ENDOTRAQUEAL 6.0','TUBO ENDOTRAQUEAL 6.5','TUBO ENDOTRAQUEAL 7.5','TUBO ENDOTRAQUEAL 8.5','VIGAMOX','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO','XYLO PESADA','ÁLCOOL 70 100 ML'],
   'CAIXA DE EMERGENCIA': ['ADRENALINA','AGULHA 40X12 (ROSA)','ATROPINA 0,25MG/ML','CAPTROPIL - COMPRIMIDO','CETOPROFENO','DEXAMETASONA DECADRON 4 MG/ML','DIAZEPAN COMPAZ 10 MG. COMPRIMIDO','DIPIRONA','HIDROCORTISONA 500 MG','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','NAUSEDRON 2 MG/ML','SERINGA 10 ML L. LOCK','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO'],
   'CARRINHO': ['ADRENALINA','AEROLIN SPRAY','AGULHA 25X6','AGULHA 30X8 (VERDE)','AGULHA 40X12 (ROSA)','AMBU','AMINOFILINA 240MG/10ML','ANCORON','ATROPINA 0,25MG/ML','BALÃO','Bic Na+8,4%','CEDILANID','CETOPROFENO','CLORIDRATO DE MIDAZOLAM 5 MG (DORMONID)','CONECTOR','DEXAMETASONA DECADRON 4 MG/ML','DIFENIDRAMINA 50 MG','DIPIRONA','EQUIPO POLIFIX 2 VIAS/MULTIVIAS','EQUIPO SIMPLES /COMPLETO','FENTANILA AMPOLA (FENTANEST)','FILTRO','FIO GUIA','FLUMAZENIL','FUROSEMIDA 20MG/ML AMP 2ML','GENTAMICINA','GLICOSE 50% AMP','GUEDEL 4.0','GUEDEL 5.0','HIDROCORTISONA 500 MG','JELCO ABOCATH 20','JELCO ABOCATH 22','JELCO ABOCATH 24','JELCO ABOCATH 24 NEO','LARINGOSCÓPIO','MÁSCARA INALAÇÃO','MÁSCARA LARÍNGEA 4,0','MÁSCARA LARÍNGEA 5,0','NARCAN','NAUSEDRON 2 MG/ML','PILHA MÉDIA','PROPOFOL 10 MG/ML','RESERVATÓRIO','RINGER COM LACTATO','ROPIVACAÍNA 10 MG/ML','SCALPE 23','SCALPE 25','SERINGA 10 ML L. LOCK','SERINGA 20 ML SEM AGULHA','SERINGA 5 ML L. LOCK','SONDA ASPIRAÇÃO 08','SONDA ASPIRAÇÃO 10','SONDA ASPIRAÇÃO 12','SONDA ASPIRAÇÃO 14','SORO FISIOLÓGICO 0,9% 100 ML','SORO FISIOLÓGICO 0,9% 250 ML DUAS ABAS','SORO FISIOLÓGICO AMPOLA 10 ML','SWAB ÁLCOOL ISOPROPÍLICO','TUBO ENDOTRAQUEAL 6.5','TUBO ENDOTRAQUEAL 7.0','TUBO ENDOTRAQUEAL 7.5','TUBO ENDOTRAQUEAL 8.0','TUBO ENDOTRAQUEAL 8.5','UMIDIFICADOR COM EXTENSÃO','XYLESTESIN (XYLO) COM VASO','XYLESTESIN SEM VASO'],
   'ESTOQUE DESCARTAVEIS': ['AVENTAL DESCARTÁVEL SEM MANGA','LENÇOL COM ELASTICO','MÁSCARA DESCARTÁVEL','PROPE DESCARTÁVEL','TOUCA DESCARTÁVEL'],
@@ -8068,6 +8487,8 @@ let pnCirAberto = null;
 
 function pnCirSet(campo, valor){
   pnCirF[campo] = valor;
+  // v4.14d — mexeu na data à mão, nenhum atalho está mais valendo
+  if (campo === 'de' || campo === 'ate') pnCirF.rapido = null;
   if (campo === 'agrupar') pnCirAberto = null;
   pnCirurgias();
 }
@@ -8078,25 +8499,61 @@ function pnCirPeriodoRapido(dias){
     pnCirF.de = d.toISOString().slice(0,10);
     pnCirF.ate = a.toISOString().slice(0,10);
   }
+  pnCirF.rapido = dias;   // guarda qual atalho está aceso
   pnCirurgias();
 }
 function pnCirLimpar(){
-  pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:pnCirF.agrupar };
+  pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:pnCirF.agrupar, rapido:0 };
   pnCirAberto = null; pnCirurgias();
 }
 function pnCirBr(d){ return d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'; }
 
+// v4.14d — junta as duas fontes do consumo por cirurgia num formato só.
+// app      → pnMovs com periodoId, chave 'p<id>'
+// planilha → pnHistPer (junho/julho), chave 'h<key>'
+// `perInfo` guarda data, médico, cirurgia e pacientes de cada chave, para os
+// totais e a lista de períodos não precisarem saber de onde a linha veio.
+function pnCirFonte(){
+  const movs = [], perInfo = {};
+  for (const p of (pnPeriodos||[])){
+    perInfo['p'+p.id] = { data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
+      tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—', pac:Number(p.qtd_pacientes)||0,
+      modalidade:p.modalidade||'', origem:'app' };
+  }
+  for (const m of (pnMovs||[])){
+    if(!m.periodoId) continue;
+    movs.push({ ...m, chave:'p'+m.periodoId });
+  }
+  for (const h of (pnHistPer||[])){
+    perInfo['h'+h.key] = { data:h.data, medico:h.medico||'—', tipo:h.tipo||'—',
+      pac:Number(h.pac)||0, modalidade:'', origem:'planilha' };
+    for (const it of (h.itens||[])){
+      movs.push({ qtd:Number(it.qtd)||0, material_id:it.mid, dia:h.data, mes:h.mes,
+        chave:'h'+h.key, medico:h.medico||'—', tipoCir:h.tipo||'—',
+        custo:Number(it.custo)||0, nomeHist:it.nome, origem:'planilha' });
+    }
+  }
+  return { movs, perInfo };
+}
+
 function pnCirurgias(){
   const el = document.getElementById('pn-sec-cirurgias'); if(!el) return;
 
-  const perMap = {}; for (const p of (pnPeriodos||[])) perMap[p.id] = p;
-  const medicos = [...new Set((pnPeriodos||[]).map(p=>p.medicos&&p.medicos.nome).filter(Boolean))].sort();
-  const tipos   = [...new Set((pnPeriodos||[]).map(p=>p.tipos_cirurgia&&p.tipos_cirurgia.nome).filter(Boolean))].sort();
+  // ── v4.14d · AS DUAS FONTES ──────────────────────────────────────────────
+  // Antes esta seção lia só `pnMovs` — as movimentações do app, que começam em
+  // 21/07. Junho e julho vivem em `staging_saidas_hist`, já carregados em
+  // `pnHistPer` e já usados por Custos. Só o Consumo por cirurgia ignorava,
+  // e o Painel mostrava dois meses a menos do que ele tem.
+  // `chave` unifica: 'p<id>' para período do app, 'h<key>' para o da planilha.
+  const fonte = pnCirFonte();
+  const movsTodos = fonte.movs, perInfo = fonte.perInfo;
+
+  const medicos = [...new Set(Object.values(perInfo).map(p=>p.medico).filter(x=>x&&x!=='—'))].sort();
+  const tipos   = [...new Set(Object.values(perInfo).map(p=>p.tipo ).filter(x=>x&&x!=='—'))].sort();
 
   // ── filtra os movimentos ligados a período cirúrgico ──
   const termo = (pnCirF.material||'').trim().toUpperCase();
-  const movs = (pnMovs||[]).filter(m=>{
-    if (!m.periodoId) return false;
+  const movs = movsTodos.filter(m=>{
     if (pnCirF.medico && m.medico !== pnCirF.medico) return false;
     if (pnCirF.tipo   && m.tipoCir !== pnCirF.tipo) return false;
     if (pnCirF.de  && m.dia < pnCirF.de)  return false;
@@ -8109,9 +8566,9 @@ function pnCirurgias(){
   });
 
   // ── totais ──
-  const periodosSet = new Set(movs.map(m=>m.periodoId));
-  const pacientes = [...periodosSet].reduce((sm,id)=>{
-    const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+  const periodosSet = new Set(movs.map(m=>m.chave));
+  const pacientes = [...periodosSet].reduce((sm,k)=>{
+    const p = perInfo[k]; return sm + (Number(p&&p.pac)||0); }, 0);
   const custoTot = movs.reduce((sm,m)=>sm+m.custo,0);
   const qtdTot   = movs.reduce((sm,m)=>sm+m.qtd,0);
 
@@ -8127,32 +8584,31 @@ function pnCirurgias(){
     for (const m of movs){
       const k = chave(m);
       const g = grupos[k] || (grupos[k] = { k, custo:0, qtd:0, periodos:new Set(), itens:{} });
-      g.custo += m.custo; g.qtd += m.qtd; g.periodos.add(m.periodoId);
-      const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
+      g.custo += m.custo; g.qtd += m.qtd; g.periodos.add(m.chave);
+      const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome) || m.nomeHist || ('#'+m.material_id);
       const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
       it.qtd += m.qtd; it.custo += m.custo;
     }
   }
   const lista = Object.values(grupos).map(g=>{
-    const pac = [...g.periodos].reduce((sm,id)=>{
-      const p = perMap[id]; return sm + (Number(p&&p.qtd_pacientes)||0); }, 0);
+    const pac = [...g.periodos].reduce((sm,k)=>{
+      const p = perInfo[k]; return sm + (Number(p&&p.pac)||0); }, 0);
     return { ...g, nPer:g.periodos.size, pac, porPac: pac>0 ? g.custo/pac : null };
   }).sort((a,b)=>b.custo-a.custo);
 
   // ── lista de períodos (é o que responde "onde este material foi usado") ──
   const porPeriodo = {};
   for (const m of movs){
-    const g = porPeriodo[m.periodoId] || (porPeriodo[m.periodoId] = { id:m.periodoId, custo:0, qtd:0, itens:{} });
+    const g = porPeriodo[m.chave] || (porPeriodo[m.chave] = { chave:m.chave, custo:0, qtd:0, itens:{} });
     g.custo += m.custo; g.qtd += m.qtd;
     const nome = (pnUvp[m.material_id]&&pnUvp[m.material_id].nome)||('#'+m.material_id);
     const it = g.itens[nome] || (g.itens[nome] = { nome, qtd:0, custo:0 });
     it.qtd += m.qtd; it.custo += m.custo;
   }
   const periodos = Object.values(porPeriodo).map(g=>{
-    const p = perMap[g.id] || {};
-    return { ...g, data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
-             tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—',
-             pac:Number(p.qtd_pacientes)||0, modalidade:p.modalidade||'' };
+    const p = perInfo[g.chave] || {};
+    return { ...g, data:p.data||'', medico:p.medico||'—', tipo:p.tipo||'—',
+             pac:Number(p.pac)||0, modalidade:p.modalidade||'', origem:p.origem||'app' };
   }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 
   const opc = (arr, sel) => ['<option value="">todos</option>']
@@ -8185,9 +8641,9 @@ function pnCirurgias(){
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center">
         <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);margin-right:2px">Período</span>
-        ${chip('30 dias', pnCirF.de&&!!pnCirF.ate&&false, "pnCirPeriodoRapido(30)")}
-        ${chip('90 dias', false, "pnCirPeriodoRapido(90)")}
-        ${chip('tudo', !pnCirF.de&&!pnCirF.ate, "pnCirPeriodoRapido(0)")}
+        ${chip('30 dias', pnCirF.rapido===30, "pnCirPeriodoRapido(30)")}
+        ${chip('90 dias', pnCirF.rapido===90, "pnCirPeriodoRapido(90)")}
+        ${chip('tudo',   (!pnCirF.de && !pnCirF.ate), "pnCirPeriodoRapido(0)")}
         <span style="width:14px"></span>
         <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);margin-right:2px">Ver por</span>
         ${chip('Médico',   pnCirF.agrupar==='medico',   "pnCirSet('agrupar','medico')")}
@@ -8244,11 +8700,11 @@ function pnCirurgias(){
         <thead><tr><th>Data</th><th>Médico</th><th>Cirurgia</th><th class="num">Pac.</th>
           <th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
         <tbody>${periodos.map(p=>`
-          <tr class="pn-cl" onclick="pnCirAbrir('P'+${p.id})">
-            <td>${pnCirBr(p.data)}</td><td>${p.medico}</td><td>${p.tipo}</td>
+          <tr class="pn-cl" onclick="pnCirAbrir(${JSON.stringify('P'+p.chave).replace(/"/g,'&quot;')})">
+            <td>${pnCirBr(p.data)}${p.origem==='planilha'?' <span style="font-size:9px;color:var(--cinza-4);font-weight:700">planilha</span>':''}</td><td>${p.medico}</td><td>${p.tipo}</td>
             <td class="num">${p.pac||'—'}</td><td class="num">${p.qtd.toLocaleString('pt-BR')}</td>
             <td class="num" style="font-weight:700">${pnMoney(p.custo)}</td></tr>
-          ${pnCirAberto===('P'+p.id)?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
+          ${pnCirAberto===('P'+p.chave)?`<tr><td colspan="6" style="background:var(--cinza-1);padding:0">
             <table class="pn-tb" style="margin:0">
               <thead><tr><th>Item</th><th class="num">Unid.</th><th class="num">Custo</th></tr></thead>
               <tbody>${Object.values(p.itens).sort((a,b)=>b.custo-a.custo).map(it=>
@@ -8346,12 +8802,29 @@ async function pnCarregar(){
     try{ pnPedidos=(await sbFetch('pedidos?select=*&status=in.(EM_MONTAGEM,AGUARDANDO_APROVACAO,AGUARDANDO_ENTREGA,EM_CONFERENCIA)&order=id.asc&limit=100'))||[]; }catch(e){ pnPedidos=[]; }
     try{ pnNfItens=(await sbFetch('nf_itens?select=id,material_id,valor_unitario,nota_fiscal_id&order=id.asc&limit=3000'))||[]; }catch(e){ pnNfItens=[]; }
     try{ pnSnaps=(await sbFetch('painel_snapshots?select=*&order=mes.asc&limit=36'))||[]; }catch(e){ pnSnaps=[]; }
-    try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }catch(e){ pnHistRows=[]; }
+    // v4.14d — o histórico de junho/julho carregava dentro de um catch mudo:
+    // se falhasse, o Painel simplesmente ficava sem dois meses e ninguém sabia
+    // por quê. Agora o erro (ou a contagem) aparece na linha de status.
+    pnHistErro = null;
+    try{ pnHistRows=(await sbFetch('staging_saidas_hist?select=*&limit=3000'))||[]; }
+    catch(e){ pnHistRows=[]; pnHistErro = e.message || String(e); }
     try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
     try{ pnOcorrencias=(await sbFetch('ocorrencias?select=*&status=eq.aberta&order=id.desc&limit=100'))||[]; }catch(e){ pnOcorrencias=[]; }
     try{ pnInvAberto=((await sbFetch("inventarios?select=id,data_contagem,criado_por,created_at&status=eq.aberto&limit=1"))||[])[0]||null; }catch(e){ pnInvAberto=null; }
     pnMontaHist();
-    document.getElementById('pn-status').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
+    // diagnóstico visível: quantas linhas de planilha entraram e quantos
+    // períodos de junho/julho o Painel montou com elas.
+    let dia = 'atualizado '+new Date().toLocaleTimeString('pt-BR').slice(0,5);
+    if(pnHistErro){
+      dia += ' · ⚠️ planilha jun/jul NÃO carregou: '+pnHistErro;
+    }else if(!pnHistRows.length){
+      dia += ' · ⚠️ planilha jun/jul veio vazia (0 linhas em staging_saidas_hist)';
+    }else{
+      dia += ' · planilha: '+pnHistRows.length+' linhas → '+pnHistPer.length+' período(s)';
+      if(pnHistRows.length>=3000) dia += ' ⚠️ no teto de 3000 — pode estar cortando';
+      if(!pnHistPer.length) dia += ' ⚠️ nenhum período montado: confira a coluna `data`';
+    }
+    document.getElementById('pn-status').textContent = dia;
     pnAlertas(); pnCobertura(); pnCustos(); pnEmprestimos(); pnSimulador(); pnBase();
     pnSaldos(); pnCirurgias();
     pnGravarSnapshot();
@@ -10604,22 +11077,40 @@ function ciRenderFiltros(){
   </div>`;
 }
 
+// v4.15b — o filtro só valia para as CAIXAS: os cards do topo, as faltas, os
+// consertos e as cedidas ignoravam. Buscar "BIPOLAR" e ver 18 caixas / 327
+// peças / 3 faltas fazia o filtro parecer quebrado — ele estava, na prática.
+// Agora existe um conjunto de caixas visíveis e TUDO respeita ele.
+function ciVisiveis(){ return ciCaixas.filter(ciCaixaPassa); }
+function ciIdsVisiveis(){ return new Set(ciVisiveis().map(c => c.id)); }
+function ciFiltrando(){ return ciFiltro !== 'TODAS' || !!ciBusca; }
+function ciPecaVisivel(pid, ids){ const p = ciPeca(pid); return !!p && ids.has(p.caixa_id); }
+
 function ciRenderizar(){
   if(ciSemBanco) return;
   ciRenderFiltros();
 
-  const contadas   = ciPecas.filter(p => p.qtd != null);
+  const vis   = ciVisiveis();
+  const ids   = new Set(vis.map(c => c.id));
+  const pecas = ciPecas.filter(p => ids.has(p.caixa_id));
+
+  const contadas   = pecas.filter(p => p.qtd != null);
   const totalPecas = contadas.reduce((s,p) => s + ciNum(p.qtd), 0);
-  const semContar  = ciPecas.length - contadas.length;
-  const fora       = ciItens.filter(i => !i.desfecho).reduce((s,i) => s + ciNum(i.qtd), 0);
+  const semContar  = pecas.length - contadas.length;
+  const fora       = ciItens.filter(i => !i.desfecho && ciPecaVisivel(i.peca_id, ids))
+                            .reduce((s,i) => s + ciNum(i.qtd), 0);
+  const nTrat      = ciTrat.filter(t => ciPecaVisivel(t.peca_id, ids)).length;
+  const nomesVis   = new Set(vis.map(c => ciNorm(c.nome)));
+  const nEmpr      = ciEmprestadas.filter(e => !ciFiltrando()
+                       || nomesVis.has(ciNorm(e.caixa_origem)) || nomesVis.has(ciNorm(e.caixa_destino))).length;
 
   document.getElementById('ci-tiles').innerHTML = `
-    <div class="rm-tile"><span>Caixas</span><b style="color:var(--azul)">${ciCaixas.length}</b></div>
+    <div class="rm-tile"><span>Caixas</span><b style="color:var(--azul)">${vis.length}${ciFiltrando()&&vis.length!==ciCaixas.length?`<span style="font-size:11px;font-weight:600;color:var(--cinza-4)"> de ${ciCaixas.length}</span>`:''}</b></div>
     <div class="rm-tile"><span>Peças contadas</span><b style="color:var(--verde)">${totalPecas}</b></div>
     <div class="rm-tile"><span>Sem contagem</span><b style="color:${semContar?'#D35400':'var(--cinza-4)'}">${semContar}</b></div>
     <div class="rm-tile"><span>Fora, no conserto</span><b style="color:#6f42c1">${fora}</b></div>
-    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${ciTrat.length?'var(--vermelho)':'var(--cinza-4)'}">${ciTrat.length}</b></div>
-    <div class="rm-tile"><span>Cedidas a outra caixa</span><b style="color:${ciEmprestadas.length?'#6f42c1':'var(--cinza-4)'}">${ciEmprestadas.length}</b></div>`;
+    <div class="rm-tile"><span>Faltas em tratativa</span><b style="color:${nTrat?'var(--vermelho)':'var(--cinza-4)'}">${nTrat}</b></div>
+    <div class="rm-tile"><span>Cedidas a outra caixa</span><b style="color:${nEmpr?'#6f42c1':'var(--cinza-4)'}">${nEmpr}</b></div>`;
 
   const badge = document.getElementById('badge-ci');
   if(badge){ const n = ciTrat.length; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
@@ -10633,9 +11124,16 @@ function ciRenderizar(){
 // ── as faltas em aberto ──────────────────────────────────────────────
 function ciRenderTratativas(){
   const box = document.getElementById('ci-tratativas'); if(!box) return;
-  if(!ciTrat.length){ box.innerHTML = ''; return; }
+  const ids = ciIdsVisiveis();
+  const lista = ciTrat.filter(t => ciPecaVisivel(t.peca_id, ids));
+  if(!lista.length){
+    box.innerHTML = (ciFiltrando() && ciTrat.length)
+      ? `<div class="rm-card"><div class="rm-empty">Nenhuma falta em tratativa no filtro atual — existem ${ciTrat.length} em outras caixas.</div></div>`
+      : '';
+    return;
+  }
   const hoje = ciHoje();
-  const linhas = ciTrat.map(t => {
+  const linhas = lista.map(t => {
     const p = ciPeca(t.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
     const atrasada = t.data_devolucao_prevista && t.data_devolucao_prevista < hoje;
     return `<div class="ci-p" style="align-items:flex-start;${atrasada?'background:#FDEDEC':''}">
@@ -10657,7 +11155,7 @@ function ciRenderTratativas(){
     </div>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
-    <div class="rm-head verm">⚠️ Faltas em tratativa <span class="rm-count">${ciTrat.length}</span></div>
+    <div class="rm-head verm">⚠️ Faltas em tratativa <span class="rm-count">${lista.length}${ciFiltrando()&&lista.length!==ciTrat.length?' de '+ciTrat.length:''}</span></div>
     ${linhas}
     <div style="padding:9px 14px;font-size:11.5px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">
       Perda e quebra geram Saída Diversa — o app faz isso ao fechar o caso.
@@ -10668,8 +11166,14 @@ function ciRenderTratativas(){
 // ── os consertos ─────────────────────────────────────────────────────
 function ciRenderConsertos(){
   const box = document.getElementById('ci-consertos'); if(!box) return;
-  const vivas = ciRemessas.filter(r => (ciItens.filter(i => i.remessa_id === r.id).some(i => !i.desfecho))
-                                     || ['MONTAGEM','ENVIADA','RETORNADA'].includes(r.status));
+  const idsC = ciIdsVisiveis();
+  const vivas = ciRemessas.filter(r => {
+    const itens = ciItens.filter(i => i.remessa_id === r.id);
+    const viva = itens.some(i => !i.desfecho) || ['MONTAGEM','ENVIADA','RETORNADA'].includes(r.status);
+    if(!viva) return false;
+    // v4.15b — com filtro ligado, só a remessa que tem peça de caixa visível
+    return !ciFiltrando() || itens.some(i => ciPecaVisivel(i.peca_id, idsC));
+  });
   if(!vivas.length){ box.innerHTML = ''; return; }
   const cards = vivas.map(r => {
     const itens = ciItens.filter(i => i.remessa_id === r.id);
@@ -10926,8 +11430,13 @@ async function ciRemanejar(pecaDestinoId, tratativaId, qtdSugerida){
 // ── o que é de um e está na caixa de outro ───────────────────────────
 function ciRenderEmprestadas(){
   const box = document.getElementById('ci-emprestadas'); if(!box) return;
-  if(!ciEmprestadas.length){ box.innerHTML = ''; return; }
-  const linhas = ciEmprestadas.map(e => `<div class="ci-p" style="align-items:flex-start">
+  // a view `vw_instrumental_emprestado` devolve o NOME da caixa, não o id —
+  // conferido no próprio render abaixo. Filtrar por nome, então.
+  const nomesVis = new Set(ciVisiveis().map(c => ciNorm(c.nome)));
+  const lista = ciEmprestadas.filter(e => !ciFiltrando()
+                  || nomesVis.has(ciNorm(e.caixa_origem)) || nomesVis.has(ciNorm(e.caixa_destino)));
+  if(!lista.length){ box.innerHTML = ''; return; }
+  const linhas = lista.map(e => `<div class="ci-p" style="align-items:flex-start">
       <div style="flex:1">
         <b>${ciEsc(e.peca)}</b> · ${ciNum(e.qtd)} un
         <div style="font-size:11.5px;color:var(--cinza-4);margin-top:2px">
@@ -12480,6 +12989,159 @@ async function rmLiberarNf(nfId){
 // viviam espalhadas: nome que não casou no cadastro (a saída se perdia),
 // item que saiu na remessa e não voltou, e nota travada para pagamento.
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// DE-PARA DE NOMES (v4.14b)
+// A ficha de saída usa nome curto, o cadastro usa nome completo, e o app casa
+// os dois POR NOME. Consequência: toda renomeação de material deixa uma seta
+// morta no mapa e a saída correspondente some do Painel — calada.
+// Esta tela torna isso visível no dia em que acontece.
+// ═══════════════════════════════════════════════════════════════════════════
+let dpMapa = [], dpOrfas = [];
+
+// valor entre aspas no filtro do PostgREST: nome tem parêntese, vírgula e
+// acento, e sem aspas o filtro quebra.
+function dpEq(v){ return 'eq.' + encodeURIComponent('"' + String(v).replace(/"/g,'\\"') + '"'); }
+function dpEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dpQuem(){ const el=document.getElementById('inv-registrado-por'); return (el&&el.value)||localStorage.getItem('hog_inv_registrante')||'Equipe CC'; }
+function dpData(d){ if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+
+async function dpCarregar(){
+  const box = document.getElementById('dp-corpo'); if(!box) return;
+  if(!sbUrl || !sbKey){ box.innerHTML = '<div class="inv-empty">Conecte ao banco.</div>'; return; }
+  box.innerHTML = '<div class="inv-empty">Carregando o mapa…</div>';
+  try{
+    dpMapa  = (await sbFetch('vw_depara_mapa?select=*&order=de.asc&limit=500')) || [];
+    dpOrfas = (await sbFetch('vw_saidas_orfas?select=*&limit=300')) || [];
+  }catch(e){
+    box.innerHTML = '<div class="inv-empty" style="color:var(--vermelho);line-height:1.6">As views do de-para ainda não existem no banco.<br>'
+      + 'Rode o <b>35_depara_tela.sql</b> e clique em Atualizar. O resto do Inventário funciona normalmente.</div>';
+    return;
+  }
+  if(!catalogoMateriais.length){
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&ativo=eq.true&limit=1000')) || []; }catch(e){}
+  }
+  dpRenderizar();
+}
+
+function dpRenderizar(){
+  const box = document.getElementById('dp-corpo'); if(!box) return;
+  const mortas = dpMapa.filter(m=>!m.destino_existe);
+  const vivas  = dpMapa.filter(m=>m.destino_existe);
+  let html = '';
+
+  // ── resumo ──
+  const unOrfas = dpOrfas.reduce((s,o)=>s+(Number(o.unidades)||0),0);
+  html += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${dpTile('Linhas no mapa', dpMapa.length, 'var(--azul)')}
+    ${dpTile('Setas mortas', mortas.length, mortas.length?'var(--vermelho)':'var(--verde)')}
+    ${dpTile('Nomes órfãos', dpOrfas.length, dpOrfas.length?'var(--laranja)':'var(--verde)')}
+    ${dpTile('Unidades invisíveis', unOrfas, unOrfas?'var(--laranja)':'var(--verde)')}
+  </div>`;
+
+  // ── nomes órfãos: a lista de trabalho ──
+  html += `<div style="font-size:12px;font-weight:800;color:var(--laranja);margin:6px 0 6px">🚩 Nomes órfãos — saída que não achou material</div>`;
+  if(!dpOrfas.length){
+    html += `<div class="inv-empty" style="padding:12px">Nenhum. Todo nome da ficha casa com o cadastro. ✓</div>`;
+  }else{
+    html += `<table><thead><tr><th>Nome na ficha de saída</th><th style="text-align:center">Linhas</th><th style="text-align:center">Un</th><th>Período</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    for(const o of dpOrfas){
+      const de = o.nome_original || o.nome;
+      html += `<tr>
+        <td><b>${dpEsc(o.nome)}</b>${o.nome_original && o.nome_original!==o.nome ? `<br><span style="font-size:10.5px;color:var(--cinza-4)">a ficha trouxe “${dpEsc(o.nome_original)}”</span>` : ''}</td>
+        <td style="text-align:center">${o.linhas}</td>
+        <td style="text-align:center"><b>${Number(o.unidades)||0}</b></td>
+        <td style="font-size:11px;color:var(--cinza-4)">${dpData(o.primeira)} → ${dpData(o.ultima)}</td>
+        <td style="text-align:right"><button class="inv-btn verde" style="padding:5px 10px;font-size:11.5px" onclick="dpApontar('${dpAttr(de)}','${dpAttr(o.nome)}')">🔗 apontar</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table>
+      <div style="font-size:11px;color:var(--cinza-4);margin-top:6px;line-height:1.5">Apontar grava a linha no mapa <b>e</b> religa o histórico na hora — as saídas voltam para o Painel, o consumo e o gatilho de compra.</div>`;
+  }
+
+  // ── setas mortas ──
+  if(mortas.length){
+    html += `<div style="font-size:12px;font-weight:800;color:var(--vermelho);margin:18px 0 6px">✕ Setas mortas — o destino não existe mais no cadastro</div>
+      <table><thead><tr><th>A ficha chama</th><th>Aponta para</th><th style="text-align:center">Linhas</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    for(const m of mortas){
+      html += `<tr>
+        <td>${dpEsc(m.de)}</td>
+        <td style="color:var(--vermelho)"><s>${dpEsc(m.para)}</s></td>
+        <td style="text-align:center">${m.linhas}</td>
+        <td style="text-align:right">
+          <button class="inv-btn" style="padding:5px 10px;font-size:11.5px" onclick="dpApontar('${dpAttr(m.de)}','${dpAttr(m.para)}')">✏️ corrigir destino</button>
+          <button class="inv-btn" style="padding:5px 10px;font-size:11.5px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApagar('${dpAttr(m.de)}')">✕ apagar</button>
+        </td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+
+  // ── o mapa inteiro, recolhido ──
+  html += `<details style="margin-top:18px">
+    <summary style="cursor:pointer;font-size:12px;font-weight:800;color:var(--azul)">📋 O mapa inteiro (${vivas.length} linhas em ordem)</summary>
+    <table><thead><tr><th>A ficha chama</th><th>Aponta para</th><th style="text-align:center">Linhas</th><th>Quando · por quê</th><th style="text-align:right"></th></tr></thead><tbody>`;
+  for(const m of vivas){
+    html += `<tr>
+      <td>${dpEsc(m.de)}</td><td>${dpEsc(m.para)}</td>
+      <td style="text-align:center">${m.linhas}</td>
+      <td style="font-size:11px;color:var(--cinza-4)">${dpData(m.criado_em)}${m.motivo?' · '+dpEsc(m.motivo):''}</td>
+      <td style="text-align:right">
+        <button class="inv-btn" style="padding:4px 9px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApontar('${dpAttr(m.de)}','${dpAttr(m.para)}')">✏️</button>
+        <button class="inv-btn" style="padding:4px 9px;font-size:11px;background:var(--cinza-2);color:var(--cinza-5)" onclick="dpApagar('${dpAttr(m.de)}')">✕</button>
+      </td>
+    </tr>`;
+  }
+  html += `</tbody></table></details>`;
+  box.innerHTML = html;
+}
+
+function dpTile(rot, val, cor){
+  return `<div style="background:var(--cinza-1);border-radius:8px;padding:9px 14px;min-width:120px">
+    <div style="font-size:10.5px;text-transform:uppercase;color:var(--cinza-4);font-weight:700">${rot}</div>
+    <div style="font-size:19px;font-weight:800;color:${cor}">${val}</div></div>`;
+}
+function dpAttr(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+// ── apontar / corrigir destino ───────────────────────────────────────────
+// Grava a linha no mapa E reescreve o histórico, porque as duas coisas juntas
+// são o que faz a saída voltar para o Painel. Separadas, o mapa vira enfeite.
+async function dpApontar(de, nomeAtual){
+  const esc = await pkEscolher({
+    titulo: 'Para qual material aponta “'+de+'”?',
+    subtitulo: 'A ficha de saída chama assim. Escolha o nome do cadastro que corresponde.',
+    itens: (catalogoMateriais||[]).map(m=>({ id:m.id, nome:m.nome })),
+  });
+  if(!esc) return;
+  const linhas = (dpOrfas.find(o=>String(o.nome_original||o.nome)===String(de))||{}).linhas
+              || (dpMapa.find(m=>String(m.de)===String(de))||{}).linhas || 0;
+  if(!confirm(`Apontar “${de}” para “${esc.nome}”?\n\n${linhas} linha(s) do histórico passam a contar nesse material — elas voltam para o Painel, o consumo e o gatilho de compra.\n\nSaldo e movimentação não são tocados.`)) return;
+  try{
+    const jaTem = dpMapa.some(m=>String(m.de)===String(de));
+    if(jaTem){
+      await sbFetch(`depara_saidas?de=${dpEq(de)}`,'PATCH',{ para: esc.nome, motivo: 'Corrigido na tela por '+dpQuem() });
+    }else{
+      await sbFetch('depara_saidas','POST',{ de: de, para: esc.nome, motivo: 'Apontado na tela por '+dpQuem() });
+    }
+    // religa o histórico: o app casa por `nome`, e `nome_original` guarda o que a ficha trouxe
+    await sbFetch(`staging_saidas_hist?nome_original=${dpEq(de)}`,'PATCH',{ nome: esc.nome });
+    toast('“'+de+'” → “'+esc.nome+'” ✓ histórico religado','sucesso');
+    dpCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+async function dpApagar(de){
+  const m = dpMapa.find(x=>String(x.de)===String(de));
+  const av = (m && !m.destino_existe)
+    ? 'Essa seta está morta — apagar não muda nada no histórico, só limpa o mapa.'
+    : 'ATENÇÃO: essa seta está funcionando. Apagar não desfaz o histórico já reescrito, mas uma recarga futura da planilha deixa de traduzir esse nome.';
+  if(!confirm(`Apagar a linha “${de}” → “${m?m.para:''}”?\n\n${av}`)) return;
+  try{
+    await sbFetch(`depara_saidas?de=${dpEq(de)}`,'DELETE');
+    toast('Linha apagada do mapa ✓','sucesso');
+    dpCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
 const AL_SETORES = {
   ESTOQUE:          { nome:'Estoque e cadastro', quem:'quem cuida do cadastro de materiais', cor:'#1B4F72' },
   COMPRAS:          { nome:'Compras',            quem:'quem cota e faz pedido',              cor:'#2E86AB' },
@@ -12488,7 +13150,7 @@ const AL_SETORES = {
 };
 const AL_ORDEM = ['ESTOQUE','COMPRAS','CENTRO_CIRURGICO','ADMINISTRATIVO'];
 
-let alAlertas = [], alPendRem = [], alNfPend = [];
+let alAlertas = [], alPendRem = [], alNfPend = [], alSemSaida = [];
 
 function alQuem(){
   const el = document.getElementById('al-quem');
@@ -12506,6 +13168,10 @@ async function alCarregar(){
   catch(e){ alAlertas = null; }        // null = tabela ainda não existe
   try{ alPendRem = (await sbFetch('remessa_pendencias?select=*&status=eq.ABERTA&order=aberta_em.asc&limit=200')) || []; }catch(e){ alPendRem = []; }
   try{ alNfPend  = (await sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,motivo_tratativa&status_pagamento=eq.PENDENTE_TRATATIVA&order=id.desc&limit=100')) || []; }catch(e){ alNfPend = []; }
+  // v4.14 — item ativo que nunca teve saída enquanto um irmão de nome parecido desce.
+  // A view faz a conta; se ela não existir no banco, o alerta simplesmente não aparece
+  // e o resto da tela segue igual.
+  try{ alSemSaida = (await sbFetch('vw_alerta_sem_saida?select=*&order=saldo.desc&limit=100')) || []; }catch(e){ alSemSaida = []; }
   if(!catalogoMateriais.length){
     try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
   }
@@ -12546,12 +13212,31 @@ function alLinhas(){
       sub: `${alEsc(forn)}${n.valor_total?' · R$ '+Number(n.valor_total).toFixed(2).replace('.',','):''}<br>${alEsc(n.motivo_tratativa||'')}`,
       acoes: `<button class="al-b claro" onclick="trocarAba('remessas')">abrir Remessas →</button>` });
   }
+  // ── v4.14 · ITEM CONGELADO ────────────────────────────────────────────────
+  // Recebe compra e nunca baixa, enquanto o irmão de nome parecido leva todo o
+  // consumo. É a assinatura do bisturi 2.75: em julho ele mandou 13 unidades
+  // para o item vizinho e ninguém percebeu por seis semanas, porque o sintoma
+  // é silêncio — o item certo simplesmente parava de descer.
+  // `conhecido` = SKU de grupo já classificado. Está sob a regra de baixa dela
+  // (saída pelo titular, inventário mensal corrige), então é comportamento
+  // esperado e não vira alerta — vira a linha de acompanhamento lá embaixo.
+  for(const c of (alSemSaida||[]).filter(x=>!x.conhecido)){
+    const saldo = Number(c.saldo)||0;
+    linhas.push({ setor:'ESTOQUE', chave:'c'+c.material_id,
+      titulo: `“${alEsc(c.nome)}” nunca teve saída`,
+      sub: (saldo>0 ? `<b>${saldo}</b> un paradas em estoque` : 'sem saldo')
+         + (c.tem_compra ? ' · com compra registrada'+(c.ultima_compra?' em '+alData(c.ultima_compra):'') : '')
+         + (c.marca ? ' · '+alEsc(c.marca) : '')
+         + `<br>Quem está recebendo a saída: <b>${alEsc(c.irmao_que_desce||'—')}</b>`
+         + `<br><span style="opacity:.8">Item de nome parecido desce e este não. Costuma ser a saída entrando pelo nome errado — confira se ele aparece na ficha de saída.</span>`,
+      acoes: `<button class="al-b claro" onclick="trocarAba('registro')">abrir Saídas →</button>` });
+  }
   return linhas;
 }
 
 function alRenderizar(){
   const corpo = document.getElementById('al-corpo');
-  if(alAlertas === null && !alPendRem.length && !alNfPend.length){
+  if(alAlertas === null && !alPendRem.length && !alNfPend.length && !(alSemSaida||[]).length){
     corpo.innerHTML = `<div class="al-setor"><div class="al-head" style="background:var(--vermelho)">⚠️ A tabela de alertas ainda não existe no banco</div>
       <div style="padding:16px;font-size:13px;line-height:1.6">Rode o <b>v46d_alertas.sql</b> no Supabase e recarregue. O resto do app funciona normalmente.</div></div>`;
     alAtualizarBadge();
@@ -12584,6 +13269,18 @@ function alRenderizar(){
   if(vazios.length){
     html += `<div style="font-size:11.5px;color:var(--cinza-4);padding:4px 2px">Sem alerta em: ${vazios.map(s=>AL_SETORES[s].nome).join(' · ')} ✓</div>`;
   }
+  // v4.14 — acompanhamento, não alerta: SKU de grupo classificado sai pelo
+  // titular e o inventário mensal corrige. Fica visível para ninguém esquecer
+  // que estão esperando a regra de baixa, sem ocupar espaço de alerta.
+  const conhecidos = (alSemSaida||[]).filter(x=>x.conhecido);
+  if(conhecidos.length){
+    const un = conhecidos.reduce((s,c)=>s+(Number(c.saldo)||0),0);
+    html += `<div style="font-size:11.5px;color:var(--cinza-4);padding:8px 2px;line-height:1.6">
+      🔁 <b>${conhecidos.length} SKU(s) de grupo</b> sem saída própria, somando <b>${un}</b> un —
+      comportamento esperado: a saída baixa do titular e o inventário mensal acerta cada marca.
+      <span style="opacity:.85">${conhecidos.map(c=>alEsc(c.nome)+' ('+(Number(c.saldo)||0)+')').join(' · ')}</span>
+    </div>`;
+  }
   corpo.innerHTML = html;
   alAtualizarBadge();
 }
@@ -12591,7 +13288,8 @@ function alRenderizar(){
 function alAtualizarBadge(){
   const b = document.getElementById('badge-alertas');
   if(!b) return;
-  const n = (alAlertas===null?0:(alAlertas||[]).length) + (alPendRem||[]).length + (alNfPend||[]).length;
+  const n = (alAlertas===null?0:(alAlertas||[]).length) + (alPendRem||[]).length + (alNfPend||[]).length
+          + (alSemSaida||[]).filter(x=>!x.conhecido).length;   // conhecido não conta no badge
   b.textContent = n; b.style.display = n ? '' : 'none';
 }
 
@@ -13056,6 +13754,9 @@ function hogPergunta({titulo, texto, campos, ok}){
       hogDlgFechar(out);
     };
     window._hogEnviar = enviar;
+    // v4.15d — muitos campos: caixa mais larga, para o rótulo da peça caber
+    const dlg = document.getElementById('hogdlg');
+    if(dlg) dlg.classList.toggle('hd-largo', cps.length > 6);
     _hogAbrir({ titulo, texto, corpoHtml: html,
       acoesHtml:
         '<button class="hd-b hd-b-nao" onclick="hogDlgFechar(null)">Cancelar</button>' +
