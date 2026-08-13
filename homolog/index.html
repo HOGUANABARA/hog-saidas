@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.17 · Solicitação de Instrumentais</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.18 · Compras de Instrumentais (ciclo completo)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14151,68 +14151,216 @@ var SI_SEL ='border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px
 async function siCarregar(){
   const box = document.getElementById('ci-solic'); if(!box) return;
   try{
-    siDados = (await sbFetch('solicitacao_instrumental?select=*&status=in.(AGUARDANDO_ORCAMENTO,EM_COMPRA,RECEBIDO)&order=solicitado_em.asc')) || [];
+    siDados = (await sbFetch('solicitacao_instrumental?select=*&status=in.(SOLICITADA,AGUARDANDO_APROVACAO,APROVADA,PEDIDO,RECEBIDA)&order=solicitado_em.asc')) || [];
   }catch(e){ siDados = []; box.innerHTML=''; return; }
   siRender();
 }
 
+function siPodeCotar(){ return (typeof podeAba==='function') && podeAba('cotacao'); }
+function siPodeAprovar(){ return (typeof podeAto==='function') && podeAto('aprovar_pedido'); }
+function siPodeNF(){ return (typeof podeAto==='function') && podeAto('entrada_nf'); }
+function siMoeda(v){ return (v==null)?'—':('R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+
+const SI_STAGES = [
+  {k:'SOLICITADA',            rot:'📥 Solicitadas',             cor:'azul'},
+  {k:'AGUARDANDO_APROVACAO',  rot:'💰 Aguardando aprovação',    cor:'roxo'},
+  {k:'APROVADA',              rot:'✅ Aprovadas',               cor:'verde'},
+  {k:'PEDIDO',                rot:'📦 Pedidos emitidos',        cor:'laranja'},
+  {k:'RECEBIDA',              rot:'🆕 Recebidas — dar destino', cor:'laranja'}
+];
+
+function siLinhaInfo(s){
+  let t = '· qtd '+siEsc(s.qtd)+' · por '+siEsc(s.solicitado_por||'—');
+  if(s.fornecedor_id)        t += ' · '+siEsc(ciForn(s.fornecedor_id));
+  if(s.valor_unitario!=null) t += ' · '+siMoeda(s.valor_unitario)+'/un';
+  if(s.aprovado_por)         t += ' · aprov.: '+siEsc(s.aprovado_por);
+  if(s.nf_numero)            t += ' · NF '+siEsc(s.nf_numero);
+  return t;
+}
+
 function siRender(){
   const box = document.getElementById('ci-solic'); if(!box) return;
-  const aguard = siDados.filter(function(s){ return s.status==='AGUARDANDO_ORCAMENTO' || s.status==='EM_COMPRA'; });
-  const receb  = siDados.filter(function(s){ return s.status==='RECEBIDO'; });
-  const podeNF = (typeof podeAto==='function') && podeAto('entrada_nf');
-  let h='';
-
-  // Janela 1 — aguardando orçamento
-  h += '<div class="rm-card">';
-  h += '<div class="rm-head azul"><span>📥 Solicitações — aguardando orçamento ('+aguard.length+')</span>'
-     + '<button class="rm-b claro" onclick="siAbrir()">➕ Abrir solicitação</button></div>';
-  h += '<div style="padding:6px 16px 12px">';
-  if(!aguard.length) h += '<div class="rm-empty">Nenhuma solicitação aberta.</div>';
-  aguard.forEach(function(s){
-    h += '<div style="'+SI_ITEM+'">'
-       + '<div><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">· qtd '+siEsc(s.qtd)+' · por '+siEsc(s.solicitado_por||'—')+(s.status==='EM_COMPRA'?' · em compra':'')+'</span></div>'
-       + (podeNF ? '<button class="rm-b laranja" onclick="siReceber('+s.id+')">📥 Registrar recebimento</button>' : '')
-       + '</div>';
-  });
-  h += '</div></div>';
-
-  // Janela 2 — peças que chegaram, dar destino
-  h += '<div class="rm-card">';
-  h += '<div class="rm-head laranja"><span>🆕 Peças que chegaram — dar destino ('+receb.length+')</span></div>';
-  h += '<div style="padding:6px 16px 12px">';
-  if(!receb.length) h += '<div class="rm-empty">Nenhuma peça aguardando destino.</div>';
   const caixas = (typeof ciCaixas!=='undefined' ? ciCaixas : []).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
-  receb.forEach(function(s){
-    let opts = '<option value="">Escolher caixa / reserva…</option>';
-    caixas.forEach(function(c){ opts += '<option value="'+c.id+'">'+siEsc(c.nome)+'</option>'; });
-    h += '<div style="'+SI_ITEM+'">'
-       + '<div><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">· qtd '+siEsc(s.qtd)+(s.nf_numero?(' · NF '+siEsc(s.nf_numero)):'')+'</span></div>'
-       + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-       + '<select style="'+SI_SEL+'" id="si-dest-'+s.id+'">'+opts+'</select>'
-       + '<button class="rm-b laranja" onclick="siDestino('+s.id+')">Dar destino ✓</button>'
-       + '</div></div>';
+
+  let h = '<div class="rm-card"><div class="rm-head cinza">'
+        + '<span>🔩 Compras de instrumentais · solicitação → orçamento → aprovação → pedido → NF → destino</span>'
+        + '<button class="rm-b claro" onclick="siAbrir()">➕ Abrir solicitação</button></div></div>';
+
+  let algum = false;
+  SI_STAGES.forEach(function(st){
+    const itens = siDados.filter(function(s){ return s.status===st.k; });
+    if(!itens.length) return;
+    algum = true;
+    h += '<div class="rm-card"><div class="rm-head '+st.cor+'">'+st.rot+' ('+itens.length+')</div><div style="padding:6px 16px 12px">';
+    itens.forEach(function(s){
+      let acao='';
+      if(st.k==='SOLICITADA' && siPodeCotar())            acao='<button class="rm-b claro" onclick="siOrcar('+s.id+')">💲 Orçar</button>';
+      if(st.k==='AGUARDANDO_APROVACAO' && siPodeAprovar()) acao='<button class="rm-b verde" onclick="siAprovar('+s.id+')">✅ Aprovar</button> <button class="rm-b perigo" onclick="siReprovar('+s.id+')">✕ Reprovar</button>';
+      if(st.k==='APROVADA' && siPodeCotar())              acao='<button class="rm-b laranja" onclick="siPedido('+s.id+')">📦 Emitir pedido</button>';
+      if(st.k==='PEDIDO' && siPodeNF())                   acao='<button class="rm-b laranja" onclick="siReceberNF('+s.id+')">📥 Receber NF</button>';
+      let destino='';
+      if(st.k==='RECEBIDA'){
+        let opts='<option value="">Escolher caixa / reserva…</option>';
+        caixas.forEach(function(c){ opts+='<option value="'+c.id+'">'+siEsc(c.nome)+'</option>'; });
+        destino='<select style="'+SI_SEL+'" id="si-dest-'+s.id+'">'+opts+'</select> <button class="rm-b laranja" onclick="siDestino('+s.id+')">Dar destino ✓</button>';
+      }
+      h += '<div style="'+SI_ITEM+'">'
+         + '<div style="flex:1;min-width:240px"><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">'+siLinhaInfo(s)+'</span>'
+         + (s.motivo ? ('<div style="'+SI_META+';margin-top:3px">📝 '+siEsc(s.motivo)+'</div>') : '')
+         + '</div>'
+         + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+acao+destino+'</div>'
+         + '</div>';
+    });
+    h += '</div></div>';
   });
-  h += '</div></div>';
+  if(!algum) h += '<div class="rm-card"><div class="rm-empty">Nenhuma solicitação em andamento. Clique em “Abrir solicitação”.</div></div>';
   box.innerHTML = h;
 }
 
+let siModelosCache = [];
+let siResultAtual = [];
+let siSelModelo = null;
+let siSelNovo = false;
+
+async function siCarregarModelos(){
+  let pecas = (typeof ciPecas!=='undefined' && ciPecas && ciPecas.length) ? ciPecas : null;
+  if(!pecas){ try{ pecas = (await sbFetch('instrumental_pecas?select=nome,qtd&ativa=is.true&limit=5000')) || []; }catch(e){ pecas=[]; } }
+  const mapa={};
+  pecas.forEach(function(p){ const n=(p.nome||'').trim(); if(!n) return; if(mapa[n]==null) mapa[n]=0; mapa[n]+= (p.qtd!=null?(parseFloat(p.qtd)||0):0); });
+  siModelosCache = Object.keys(mapa).map(function(n){ return {nome:n, total:mapa[n]}; }).sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+}
+
 async function siAbrir(){
-  const nome = prompt('Qual peça precisa comprar?'); if(!nome || !nome.trim()) return;
-  const q = parseFloat((prompt('Quantas?','1')||'1').replace(',','.'));
+  await siCarregarModelos();
+  siSelModelo=null; siSelNovo=false;
+  let ov=document.getElementById('si-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='si-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>➕ Nova solicitação de instrumental</span><button class="rm-b claro" onclick="siFecharModal()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">1 · Qual peça? (busca no estoque)</label>'
+    +'<input type="text" id="si-busca" placeholder="Digite parte do nome do modelo..." oninput="siBuscar()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin:6px 0 8px">'
+    +'<div id="si-resultados" style="max-height:210px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px"></div>'
+    +'<div id="si-selecionado" style="margin-top:10px;font-size:13px"></div>'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:14px">2 · Quantidade</label>'
+    +'<input type="number" id="si-qtd" value="1" min="1" style="width:120px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:14px">3 · Motivo da solicitação</label>'
+    +'<textarea id="si-motivo" rows="2" placeholder="Ex.: peça quebrou na caixa Catarata — reposição." style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin-top:6px"></textarea>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    +'<button class="rm-b claro" onclick="siFecharModal()">Cancelar</button>'
+    +'<button class="rm-b laranja" onclick="siConfirmar()">Abrir solicitação ✓</button>'
+    +'</div></div></div>';
+  siBuscar();
+}
+
+function siFecharModal(){ const ov=document.getElementById('si-modal'); if(ov) ov.remove(); }
+
+function siBuscar(){
+  const termo=(document.getElementById('si-busca').value||'').trim();
+  const alvo=ciNorm(termo);
+  siResultAtual = termo ? siModelosCache.filter(function(m){ return ciNorm(m.nome).indexOf(alvo)>=0; }) : siModelosCache;
+  let h='';
+  siResultAtual.slice(0,60).forEach(function(m,i){
+    h+='<div onclick="siEscolherIdx('+i+')" style="padding:9px 12px;border-bottom:1px solid var(--cinza-2);cursor:pointer;display:flex;justify-content:space-between;gap:10px">'
+      +'<span style="font-weight:600">'+siEsc(m.nome)+'</span>'
+      +'<span style="font-size:12px;color:var(--cinza-4);white-space:nowrap">'+(m.total||0)+' em estoque</span></div>';
+  });
+  if(!siResultAtual.length) h='<div style="padding:12px;color:var(--cinza-4);font-size:13px">Nenhum modelo com esse nome no estoque.</div>';
+  if(termo && !siModelosCache.some(function(m){ return ciNorm(m.nome)===alvo; })){
+    h+='<div onclick="siEscolherNovo()" style="padding:10px 12px;cursor:pointer;background:var(--verde-claro,#E9F7EF);color:var(--verde);font-weight:700">➕ Cadastrar novo modelo: "'+siEsc(termo)+'"</div>';
+  }
+  document.getElementById('si-resultados').innerHTML=h;
+}
+
+function siEscolherIdx(i){ const m=siResultAtual[i]; if(!m) return; siSelModelo=m.nome; siSelNovo=false; siRenderSel(m.total); }
+function siEscolherNovo(){ const t=(document.getElementById('si-busca').value||'').trim(); if(!t) return; siSelModelo=t; siSelNovo=true; siRenderSel(null); }
+function siRenderSel(total){
+  const box=document.getElementById('si-selecionado'); if(!box) return;
+  box.innerHTML='✅ Selecionado: <b>'+siEsc(siSelModelo)+'</b> '
+    + (siSelNovo ? '<span style="color:var(--verde);font-weight:700">(modelo novo)</span>' : '<span style="color:var(--cinza-4)">('+(total||0)+' em estoque hoje)</span>');
+}
+
+async function siConfirmar(){
+  if(!siSelModelo){ toast('Escolha um modelo (ou cadastre um novo).','erro'); return; }
+  const q=parseFloat((document.getElementById('si-qtd').value||'1').replace(',','.'));
   if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  const motivo=(document.getElementById('si-motivo').value||'').trim();
+  if(!motivo){ toast('Escreva o motivo da solicitação.','erro'); return; }
   try{
-    const r = await sbFetch('solicitacao_instrumental','POST',{ peca_nome:nome.trim(), qtd:q, solicitado_por:siNome() });
+    const r=await sbFetch('solicitacao_instrumental','POST',{ peca_nome:siSelModelo, qtd:q, motivo:motivo, solicitado_por:siNome() });
     if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
-    toast('Solicitação aberta ✓','sucesso'); siCarregar();
+    toast('Solicitação aberta ✓','sucesso'); siFecharModal(); siCarregar();
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
-async function siReceber(id){
-  const nf = prompt('Nº da NF (opcional):','');
+function siOverlay(inner){
+  let ov=document.getElementById('si-modal2'); if(!ov){ ov=document.createElement('div'); ov.id='si-modal2'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'+inner+'</div>';
+}
+function siFecharOverlay(){ const ov=document.getElementById('si-modal2'); if(ov) ov.remove(); }
+function siNum(v){ return parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); }
+
+async function siOrcar(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  let forns = (typeof coFornecedores!=='undefined' && coFornecedores && coFornecedores.length) ? coFornecedores : [];
+  if(!forns.length){ try{ forns=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; coFornecedores=forns; }catch(e){} }
+  let opts='<option value="">Escolher fornecedor…</option>';
+  forns.forEach(function(f){ opts+='<option value="'+f.id+'">'+siEsc(f.nome)+'</option>'; });
+  siOverlay('<div class="rm-head azul"><span>💲 Orçar — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedor</label>'
+    +'<select id="si-forn" style="width:100%;'+SI_SEL+';margin:6px 0 12px">'+opts+'</select>'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Valor unitário (R$)</label>'
+    +'<input type="text" id="si-valor" placeholder="0,00" style="width:160px;display:block;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-top:8px">Quantidade solicitada: <b>'+siEsc(s.qtd)+'</b> · motivo: '+siEsc(s.motivo||'—')+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siOrcarSalvar('+id+')">Enviar p/ aprovação ✓</button></div>'
+    +'</div>');
+}
+async function siOrcarSalvar(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const fid = parseInt(document.getElementById('si-forn').value,10);
+  const val = siNum(document.getElementById('si-valor').value);
+  if(!fid){ toast('Escolha o fornecedor.','erro'); return; }
+  if(!val || val<=0){ toast('Valor inválido.','erro'); return; }
   try{
-    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'RECEBIDO', nf_numero:(nf||'').trim()||null, recebido_por:siNome(), recebido_em:new Date().toISOString() });
-    toast('Recebida — foi para "dar destino" ✓','sucesso'); siCarregar();
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ fornecedor_id:fid, valor_unitario:val, valor_total: val*parseFloat(s.qtd), cotado_por:siNome(), cotado_em:new Date().toISOString(), status:'AGUARDANDO_APROVACAO' });
+    toast('Orçado — foi para aprovação ✓','sucesso'); siFecharOverlay(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siAprovar(id){
+  if(!confirm('Aprovar esta compra?')) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'APROVADA', aprovado_por:siNome(), aprovado_em:new Date().toISOString() }); toast('Aprovada ✓','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siReprovar(id){
+  const m = prompt('Motivo da reprovação:'); if(m===null) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'REPROVADA', reprovado_motivo:(m||'').trim()||null, aprovado_por:siNome(), aprovado_em:new Date().toISOString() }); toast('Reprovada.','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siPedido(id){
+  if(!confirm('Confirmar emissão do pedido ao fornecedor?')) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'PEDIDO', pedido_por:siNome(), pedido_em:new Date().toISOString() }); toast('Pedido emitido ✓','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siReceberNF(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  siOverlay('<div class="rm-head laranja"><span>📥 Receber NF — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Nº da nota fiscal</label>'
+    +'<input type="text" id="si-nfnum" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin:6px 0 12px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Valor total da NF (R$, opcional)</label>'
+    +'<input type="text" id="si-nfval" placeholder="0,00" style="width:160px;display:block;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siReceberNFSalvar('+id+')">Registrar recebimento ✓</button></div>'
+    +'</div>');
+}
+async function siReceberNFSalvar(id){
+  const nf=(document.getElementById('si-nfnum').value||'').trim();
+  const val=siNum(document.getElementById('si-nfval').value);
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'RECEBIDA', nf_numero:nf||null, nf_valor:(val&&val>0)?val:null, recebido_por:siNome(), recebido_em:new Date().toISOString() });
+    toast('NF recebida — foi para "dar destino" ✓','sucesso'); siFecharOverlay(); siCarregar();
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
@@ -14229,7 +14377,7 @@ async function siDestino(id){
     } else {
       await sbFetch('instrumental_pecas','POST',{ caixa_id:caixaId, nome:s.peca_nome, qtd:parseFloat(s.qtd) });
     }
-    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'DESTINADO', caixa_destino_id:caixaId, destinado_por:siNome(), destinado_em:new Date().toISOString() });
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'DESTINADA', caixa_destino_id:caixaId, destinado_por:siNome(), destinado_em:new Date().toISOString() });
     toast('Destino dado — peça entrou na caixa ✓','sucesso');
     if(typeof ciCarregar==='function') ciCarregar();
     siCarregar();
