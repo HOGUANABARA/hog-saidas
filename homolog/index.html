@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.20c · Orçamentos por janela + comparativo p/ aprovação (últ. pago × cotado)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.21b · Menu CME + Remessas por tipo + cadastro de produto de higiene</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -392,10 +392,19 @@ details[open] summary { margin-bottom: 6px; }
     </div>
 
     <div class="hs-grupo">
-      <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Remessas</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
+      <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Controle de Remessa</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
       <div class="hs-lista" id="hs-l-rem">
-        <div class="hs-item" id="aba-btn-remessas" onclick="trocarAba('remessas')">Fora de casa <span id="badge-rem" style="background:#E67E22;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-instrumentais" onclick="trocarAba('instrumentais')">🔩 Instrumentais do CME <span id="badge-ci" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item" id="aba-btn-remessas" onclick="rmIrTipo('LAVANDERIA')">🧺 Lavanderia <span id="badge-rem" style="background:#E67E22;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item" id="aba-btn-rem-oxido" onclick="rmIrTipo('ESTERILIZACAO')">☣️ Óxido de etileno</div>
+      </div>
+    </div>
+
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('cme')"><span><span class="hs-ico">🔩</span> CME</span><span class="hs-seta" id="hs-s-cme">▾</span></div>
+      <div class="hs-lista" id="hs-l-cme">
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-instrumentais" onclick="cmeIr('compras')">Compras <span id="badge-ci" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-inv" onclick="cmeIr('inventario')">Inventário</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-man" onclick="cmeIr('manutencao')">Manutenção</div>
       </div>
     </div>
 
@@ -1157,9 +1166,9 @@ details[open] summary { margin-bottom: 6px; }
     <b>Instrumental de médico é do médico</b>: o hospital não compra nem descarta por conta própria.
   </div>
 
-  <div class="rm-topo">
-    <button class="rm-b laranja" onclick="rmMontarManutencao()">🔧 Mandar peças para conserto</button>
-    <button class="rm-b claro" onclick="ciNovaCaixa()">➕ Nova caixa</button>
+  <div class="rm-topo" id="cme-topo">
+    <button class="rm-b laranja" id="cme-btn-conserto" onclick="rmMontarManutencao()">🔧 Mandar peças para conserto</button>
+    <button class="rm-b claro" id="cme-btn-novacaixa" onclick="ciNovaCaixa()">➕ Nova caixa</button>
     <button class="rm-b claro" onclick="ciCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
 
@@ -1741,6 +1750,11 @@ function aplicarPermissoes(){
   }
   const relEst = document.getElementById('hs-rel-estoque');
   if (relEst) relEst.style.display = podeAba('inventario') ? '' : 'none';
+  // v4.21 — os três itens do grupo CME abrem a mesma aba 'instrumentais'
+  ['aba-btn-cme-inv','aba-btn-cme-man'].forEach(function(id){
+    const b = document.getElementById(id);
+    if (b) b.style.display = podeAba('instrumentais') ? '' : 'none';
+  });
   const cad = document.getElementById('aba-btn-cadeado');
   if (cad && SESSAO) {
     cad.innerHTML = '<span class="hs-ico">👤</span> ' + SESSAO.nome +
@@ -3639,7 +3653,7 @@ function trocarAba(aba) {
   document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
   { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
   { const p=document.getElementById('aba-instrumentais'); if(p) p.style.display = aba==='instrumentais' ? '' : 'none'; }
-  if (aba==='instrumentais') { ciCarregar(); if(typeof siCarregar==='function') siCarregar(); }
+  if (aba==='instrumentais') { ciCarregar(); if(typeof siCarregar==='function') siCarregar(); if(typeof cmeAplicarModo==='function') cmeAplicarModo(); }
   if (aba==='usuarios') { usCarregar(); }
   if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
   if (aba==='inventario') { setTimeout(()=>{ if(!dmlMats.length) dmlCarregar(); }, 120); }
@@ -13607,6 +13621,7 @@ async function alIgnorar(id){
       <input type="text" id="hg-inv-busca" placeholder="🔍 Buscar por código ou produto..." oninput="hgInvRender()">
       <select id="hg-inv-forn" onchange="hgInvRender()"><option value="">Fornecedor: todos</option></select>
       <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="hg-inv-sempreco" onchange="hgInvRender()"> só sem preço</label>
+      <button onclick="hgNovoProduto()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">➕ Novo produto</button>
     </div>
     <div id="hg-inv-tabela"></div>
   </div>
@@ -14274,6 +14289,75 @@ async function hgRelCarregar(){
   });
   h+='</tbody></table>';
   document.getElementById('hg-rel-box').innerHTML=h;
+}
+
+// ═══ v4.21b — NOVO PRODUTO DE HIGIENE (cadastro pela tela, sem SQL) ═══
+// Modelo de unidade (regra de 12/08): o cadastro conta na unidade de CONSUMO
+// (rolo/pacote/frasco); qtd_kit = unidades por caixa de compra; o preço da
+// CAIXA vai em ultimo_valor_pago; o código da NF vai com histórico na
+// material_codigo (código muda quando muda a embalagem).
+async function hgNovoProduto(){
+  if(!exigirSenhaCompras()) return;
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
+  let fo='';
+  coFornecedores.forEach(function(f){ fo+='<option value="'+f.id+'"'+(f.nome==='HYGIBRAS'?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
+  const CAMPO='width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin-top:5px';
+  const ROT='font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:13px';
+  let ov=document.getElementById('hg-np-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='hg-np-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--verde);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>➕ Novo produto de higiene</span><button onclick="hgNovoFechar()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="'+ROT+';margin-top:0">Nome do produto</label>'
+    +'<input type="text" id="hg-np-nome" placeholder="ex: PAPEL TOALHA INTERFOLHA CX 18X250" style="'+CAMPO+';text-transform:uppercase">'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Unidade de CONSUMO</label>'
+    +'<select id="hg-np-unid" style="'+CAMPO+'"><option>PACOTE</option><option>ROLO</option><option>UNIDADE</option><option>FRASCO</option><option>GALAO</option><option>LITRO</option><option>PAR</option></select></div>'
+    +'<div style="width:130px"><label style="'+ROT+'" title="quantas unidades de consumo vêm na caixa de compra">Un. por caixa</label>'
+    +'<input type="number" id="hg-np-kit" value="1" min="1" style="'+CAMPO+'"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Código na NF (opcional)</label><input type="text" id="hg-np-cod" style="'+CAMPO+'"></div>'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Marca (opcional)</label><input type="text" id="hg-np-marca" style="'+CAMPO+';text-transform:uppercase"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:180px"><label style="'+ROT+'">Fornecedor</label><select id="hg-np-forn" style="'+CAMPO+'">'+fo+'</select></div>'
+    +'<div style="width:150px"><label style="'+ROT+'">Preço da CAIXA (R$)</label><input type="text" id="hg-np-preco" placeholder="opcional" style="'+CAMPO+';text-align:right"></div>'
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:12px;line-height:1.5">O saldo conta na unidade de consumo; a compra é por caixa e o sistema converte sozinho na entrada da NF. Sem preço, o item aparece como "sem preço" até a primeira nota.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    +'<button onclick="hgNovoFechar()" style="border:1px solid var(--cinza-3);background:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--cinza-4)">Cancelar</button>'
+    +'<button onclick="hgNovoSalvar()" style="border:none;background:var(--verde);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cadastrar ✓</button>'
+    +'</div></div></div>';
+}
+function hgNovoFechar(){ const ov=document.getElementById('hg-np-modal'); if(ov) ov.remove(); }
+async function hgNovoSalvar(){
+  const nome=((document.getElementById('hg-np-nome')||{}).value||'').trim().toUpperCase();
+  if(!nome){ toast('Escreva o nome do produto.','erro'); return; }
+  const unid=(document.getElementById('hg-np-unid')||{}).value||'UNIDADE';
+  const kit=parseFloat((document.getElementById('hg-np-kit')||{}).value)||1;
+  const cod=((document.getElementById('hg-np-cod')||{}).value||'').trim()||null;
+  const marca=((document.getElementById('hg-np-marca')||{}).value||'').trim().toUpperCase()||null;
+  const fid=parseInt((document.getElementById('hg-np-forn')||{}).value,10)||null;
+  const preco=hgOrcNum((document.getElementById('hg-np-preco')||{}).value);
+  try{
+    // nome é chave de casamento neste sistema: duplicado não entra
+    const dup=await sbFetch('materiais?select=id,nome,classe_compra,ativo&nome=ilike.'+encodeURIComponent(nome)+'&limit=1');
+    if(dup&&dup.length){ toast('Já existe um material com esse nome exato (id '+dup[0].id+', classe '+(dup[0].classe_compra||'—')+'). Use outro nome ou me chame para reativar/reclassificar.','erro'); return; }
+    const ins=await sbFetch('materiais','POST',{ nome:nome, codigo:cod, marca:marca, unidade_medida:unid, qtd_kit:kit,
+      ultimo_valor_pago:(preco&&preco>0)?preco:null, exibir_dashboard:false, classe_compra:'LIMPEZA',
+      classe_confirmada:true, fornecedor_padrao_id:fid });
+    const mid=ins&&ins[0]&&ins[0].id;
+    if(!mid) throw new Error('o banco não retornou o produto criado (RLS?)');
+    if(cod){
+      try{ await sbFetch('material_codigo','POST',{ material_id:mid, codigo:cod, fornecedor_id:fid, vigente:true }); }
+      catch(e){ toast('Produto criado, mas o histórico de código não gravou: '+(e.message||e),'erro'); }
+    }
+    toast('✅ "'+nome+'" cadastrado na higiene (id '+mid+').','sucesso');
+    hgNovoFechar();
+    hgDados=[]; await hgInvCarregar();
+  }catch(e){ toast('Erro ao cadastrar: '+(e.message||e),'erro'); }
 }
 
 // ═══════════ v4.20 — ORÇAR HIGIENE (grupos próprios, engine única) ═══════════
@@ -15012,6 +15096,43 @@ async function siSoltarDoPedido(pid){
     toast('🔩 '+ids.length+' solicitação(ões) de instrumental voltaram para "Solicitadas".','sucesso');
     return ids.length;
   }catch(e){ return 0; }
+}
+
+// ═══ v4.21 — MENU CME (Compras · Inventário · Manutenção) e Remessas por tipo ═══
+// Os três itens do menu CME abrem a MESMA aba de instrumentais, cada um
+// mostrando só a sua parte. Lavanderia/Óxido abrem as remessas já filtradas.
+let cmeModo = 'compras';
+function cmeIr(m){
+  cmeModo = m;
+  trocarAba('instrumentais');
+  cmeAplicarModo();
+  [['aba-btn-instrumentais','compras'],['aba-btn-cme-inv','inventario'],['aba-btn-cme-man','manutencao']].forEach(function(par){
+    const b=document.getElementById(par[0]); if(b) b.classList.toggle('ativa', cmeModo===par[1]);
+  });
+}
+function cmeAplicarModo(){
+  const mapa = {
+    'ci-solic':       cmeModo==='compras',
+    'ci-filtros':     cmeModo==='inventario',
+    'ci-tiles':       cmeModo==='inventario',
+    'ci-tratativas':  cmeModo==='inventario',
+    'ci-emprestadas': cmeModo==='inventario',
+    'ci-consertos':   cmeModo==='manutencao',
+    'ci-caixas':      cmeModo==='inventario'
+  };
+  Object.keys(mapa).forEach(function(id){
+    const el=document.getElementById(id); if(el) el.style.display = mapa[id] ? '' : 'none';
+  });
+  const bC=document.getElementById('cme-btn-conserto');  if(bC) bC.style.display = (cmeModo==='manutencao') ? '' : 'none';
+  const bN=document.getElementById('cme-btn-novacaixa'); if(bN) bN.style.display = (cmeModo==='inventario') ? '' : 'none';
+  const topo=document.getElementById('cme-topo'); if(topo) topo.style.display = (cmeModo==='compras') ? 'none' : '';
+}
+function rmIrTipo(t){
+  trocarAba('remessas');
+  try{ rmSetFiltro('forn', t); }catch(e){}
+  const lav=document.getElementById('aba-btn-remessas'), oxi=document.getElementById('aba-btn-rem-oxido');
+  if(lav) lav.classList.toggle('ativa', t==='LAVANDERIA');
+  if(oxi) oxi.classList.toggle('ativa', t==='ESTERILIZACAO');
 }
 
 // v4.20b — socorro manual: peça presa numa etapa (pedido cancelado por fora,
