@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.20 · Orçamentos por janela: grupos, seleção em lote e fluxo geral</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.20b · Orçamentos por janela + devolução de pedido cancelado</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5974,6 +5974,9 @@ async function deCancelarPedido(pid){
     // solta a trava do item na lista de compras: sem isto ele fica com a tag
     // "EM COTAÇÃO" mesmo com o pedido cancelado
     await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    // v4.20b — pedido de instrumental cancelado devolve a solicitação para
+    // "Solicitadas" (senão ela fica presa em "Receber NF" na aba do CME)
+    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
     toast('Pedido #'+pid+' cancelado — os itens estão livres na lista de compras.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -7922,6 +7925,7 @@ async function apRejeitarPedido(pid){
     await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
       observacao:(((b&&b.pedido.observacao)||'')+' | Rejeitado: '+motivo.trim()).trim() });
     if(b && b.itens) await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
     toast('Pedido rejeitado — os itens voltaram a ficar livres na lista de compras.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -14392,7 +14396,12 @@ function hgOrcQtd(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.qtd=parse
 function hgOrcPreco(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
 function hgOrcEscolher(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
 function hgOrcForn(k,v){ hgOrcG().forns[k]=v?parseInt(v,10):null; hgOrcRender(); }
-function hgOrcRemover(i){ hgOrcG().itens.splice(i,1); hgOrcRender(); }
+async function hgOrcRemover(i){
+  hgOrcG().itens.splice(i,1);
+  // v4.20b — remover PERSISTE: sem salvar, o item voltava ao recarregar a página
+  if(hgOrcCotId!==null){ try{ await hgOrcSalvar(true); }catch(e){} }
+  hgOrcRender();
+}
 
 async function hgOrcSalvar(sil){
   if(!exigirSenhaCompras()) return false;
@@ -14560,6 +14569,8 @@ function siRender(){
       if(st.k==='AGUARDANDO_APROVACAO' && siPodeAprovar()) acao='<button class="rm-b verde" onclick="siAprovar('+s.id+')">✅ Aprovar</button> <button class="rm-b perigo" onclick="siReprovar('+s.id+')">✕ Reprovar</button>';
       if(st.k==='APROVADA' && siPodeCotar())              acao='<button class="rm-b laranja" onclick="siPedido('+s.id+')">📦 Emitir pedido</button>';
       if(st.k==='PEDIDO' && siPodeNF())                   acao='<button class="rm-b laranja" onclick="siReceberNF('+s.id+')">📥 Receber NF</button>';
+      if((st.k==='AGUARDANDO_APROVACAO'||st.k==='APROVADA'||st.k==='PEDIDO') && siPodeCotar())
+        acao+=' <button class="rm-b perigo" onclick="siVoltarSolicitada('+s.id+')" title="Pedido cancelado ou orçamento a refazer? Devolve para Solicitadas.">↩</button>';
       let destino='';
       if(st.k==='RECEBIDA'){
         let opts='<option value="">Escolher caixa / reserva…</option>';
@@ -14925,7 +14936,36 @@ function siDeskNovoGrupo(){
 function siDeskForn(k,v){ siDeskG().forns[k]=v?parseInt(v,10):null; siRender(); }
 function siDeskPreco(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.precos[k]=siNum(v)||null; siRender(); }
 function siDeskEscolher(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
-function siDeskRemover(i){ siDeskG().itens.splice(i,1); siRender(); }
+async function siDeskRemover(i){
+  siDeskG().itens.splice(i,1);
+  // v4.20b — remover PERSISTE: sem salvar, o item voltava ao recarregar a página
+  if(siDeskCotId!==null){ try{ await siDeskSalvar(true); }catch(e){} }
+  siRender();
+}
+
+// v4.20b — pedido cancelado/rejeitado no fluxo geral devolve as solicitações
+// de instrumental para "Solicitadas" (senão ficam presas em "Receber NF")
+async function siSoltarDoPedido(pid){
+  try{
+    const ords=(await sbFetch('ordens_compra?select=solicitacao_instr_id&pedido_id=eq.'+pid+'&solicitacao_instr_id=not.is.null&limit=100'))||[];
+    const ids=[...new Set(ords.map(function(o){return o.solicitacao_instr_id;}).filter(Boolean))];
+    if(!ids.length) return 0;
+    await sbFetch('solicitacao_instrumental?id=in.('+ids.join(',')+')&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
+      { status:'SOLICITADA', pedido_por:null, pedido_em:null });
+    toast('🔩 '+ids.length+' solicitação(ões) de instrumental voltaram para "Solicitadas".','sucesso');
+    return ids.length;
+  }catch(e){ return 0; }
+}
+
+// v4.20b — socorro manual: peça presa numa etapa (pedido cancelado por fora,
+// orçamento a refazer) volta para o começo sem SQL
+async function siVoltarSolicitada(id){
+  if(!confirm('Devolver esta peça para "Solicitadas"?\n\nUse quando o pedido foi cancelado ou o orçamento precisa ser refeito. Nada é apagado — só o status volta ao começo.')) return;
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'SOLICITADA', pedido_por:null, pedido_em:null });
+    toast('Voltou para "Solicitadas" ✓','sucesso'); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
 
 function siDeskEnviar(){
   const sel=document.getElementById('si-desk-grupo-sel');
