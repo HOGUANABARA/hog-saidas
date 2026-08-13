@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.20b · Orçamentos por janela + devolução de pedido cancelado</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.20c · Orçamentos por janela + comparativo p/ aprovação (últ. pago × cotado)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5793,6 +5793,39 @@ function deNomeMat(id, o){
   const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id);
 }
 
+// ═══ v4.20c — COMPARATIVO PARA APROVAÇÃO: último valor pago por item ═══
+// Quem aprova precisa de referência, não só da escolha do comprador.
+// Material → materiais.ultimo_valor_pago (só compras reais, regra de custo).
+// Peça de instrumental → última solicitação RECEBIDA/DESTINADA da mesma peça.
+let ultPagoCache = {};   // 'm<id>' -> valor | 'n<nome>' -> valor | null = nunca comprado
+async function ultPagoCarregar(ordens){
+  const mids=[...new Set((ordens||[]).map(o=>o.material_id).filter(Boolean))].filter(id=>ultPagoCache['m'+id]===undefined);
+  if(mids.length){
+    try{
+      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago&id=in.('+mids.join(',')+')'))||[];
+      ms.forEach(m=>{ ultPagoCache['m'+m.id]=(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)?Number(m.ultimo_valor_pago):null; });
+      mids.forEach(id=>{ if(ultPagoCache['m'+id]===undefined) ultPagoCache['m'+id]=null; });
+    }catch(e){}
+  }
+  const nomes=[...new Set((ordens||[]).filter(o=>!o.material_id&&o.item_nome).map(o=>o.item_nome))].filter(n=>ultPagoCache['n'+n]===undefined);
+  for(const n of nomes){
+    try{
+      const s=(await sbFetch('solicitacao_instrumental?select=valor_unitario&peca_nome=ilike.'+encodeURIComponent(n)+'&valor_unitario=not.is.null&status=in.(RECEBIDA,DESTINADA)&order=id.desc&limit=1'))||[];
+      ultPagoCache['n'+n]=(s[0]&&s[0].valor_unitario!=null)?Number(s[0].valor_unitario):null;
+    }catch(e){ ultPagoCache['n'+n]=null; }
+  }
+}
+function ultPagoDe(o){ return o.material_id?ultPagoCache['m'+o.material_id]:(o.item_nome?ultPagoCache['n'+o.item_nome]:null); }
+function ultPagoTag(o){
+  const u=ultPagoDe(o), v=Number(o.valor_unitario);
+  if(u==null) return '<span style="font-size:10px;color:var(--cinza-3);display:block;font-weight:400">1ª compra — sem referência</span>';
+  if(!v) return '<span style="font-size:10px;color:var(--cinza-4);display:block;font-weight:400">últ. pago '+deMoney(u)+'</span>';
+  const d=((v-u)/u)*100;
+  const cor=d>0.5?'var(--vermelho)':(d<-0.5?'var(--verde)':'var(--cinza-4)');
+  const seta=d>0.5?'▲':(d<-0.5?'▼':'•');
+  return '<span style="font-size:10px;display:block;font-weight:700;color:'+cor+'">últ. pago '+deMoney(u)+' '+seta+' '+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%</span>';
+}
+
 async function deCarregar(){
   const corpo=document.getElementById('de-corpo');
   document.getElementById('de-status').textContent='Carregando...';
@@ -5807,6 +5840,7 @@ async function deCarregar(){
       const ids=peds.map(p=>p.id).join(',');
       const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&situacao=eq.PENDENTE&order=id.asc`))||[];
       for(const p of peds){ deBoards.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
+      try{ await ultPagoCarregar(ords); }catch(e){}
     }
     document.getElementById('de-status').textContent = deBoards.length
       ? `${deBoards.length} pedido(s) em montagem` : 'Nenhum pedido em montagem';
@@ -5832,7 +5866,7 @@ function deRenderizar(){
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
-      <td style="text-align:right">${deMoney(o.valor_unitario)}</td>
+      <td style="text-align:right">${deMoney(o.valor_unitario)}${ultPagoTag(o)}</td>
       <td style="text-align:right;font-weight:600">${deMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
       <td style="white-space:nowrap;text-align:right">
         <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="ordemEditarQtd(${o.id}, deCarregar)" title="Ajustar quantidade/valor">✎</button>
@@ -7735,6 +7769,7 @@ async function apCarregar(){
       const ids=peds.map(p=>p.id).join(',');
       const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&order=id.asc`))||[];
       for(const p of peds){ apPedidos.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
+      try{ await ultPagoCarregar(ords); }catch(e){}
     }
     apRenderizar();
   }catch(e){
@@ -7755,7 +7790,7 @@ function apRenderizar(){
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
-      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}${ultPagoTag(o)}</td>
       <td style="text-align:right;font-weight:600">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
       <td style="white-space:nowrap;text-align:right"><button class="ap-btn-editar" onclick="ordemEditarQtd(${o.id}, apCarregar)" title="Ajustar quantidade/valor">✎</button></td>
     </tr>`).join('');
@@ -14337,7 +14372,11 @@ function hgOrcRender(){
   if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
   G.itens.forEach(function(it,i){
     let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
-    h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa'):'')+'</span></td>'
+    // v4.20c — referência para comparar: último valor pago (preço da CAIXA, da NF mais recente)
+    const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+    const ult=(ref.valor_compra!=null&&Number(ref.valor_compra)>0)?Number(ref.valor_compra):null;
+    h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa · '):'')
+      +(ult!=null?('últ. pago <b>'+hgMoeda(ult)+'/cx</b>'):'1ª compra — sem referência')+'</span></td>'
       +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="hgOrcQtd('+i+',this.value)" style="width:70px;'+HG_INP+'"></td>';
     for(let k=0;k<3;k++){
       if(k>0 && !G.forns[k]) continue;
@@ -14455,6 +14494,17 @@ async function hgOrcFechar(){
   const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
   if(!prontos.length){ toast('Nenhum item do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
   const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  // v4.20c — escolheu quem NÃO tem o menor preço? Justifica, e a justificativa
+  // acompanha o item até a aprovação (fica na observação da ordem).
+  for(const it of prontos){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<menor)) menor=p; });
+    const vEsc=Number(it.precos[it.escolhido]);
+    if(menor!=null && vEsc>menor+0.004){
+      const j=prompt('"'+it.nome+'": o escolhido ('+hgMoeda(vEsc)+') NÃO é o menor preço ('+hgMoeda(menor)+').\n\nJustifique a escolha — fica gravado para quem aprova:', it.just||'');
+      if(j===null || !j.trim()){ toast('Fechamento cancelado — justificativa obrigatória quando a escolha não é o menor preço.','erro'); return; }
+      it.just=j.trim();
+    } else it.just=null;
+  }
   let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
   if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
   if(!confirm(msg)) return;
@@ -14477,7 +14527,7 @@ async function hgOrcFechar(){
         await sbFetch('ordens_compra','POST',{ material_id:it.material_id, fornecedor_id:fid, fornecedor_compra_id:fid,
           status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
           qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
-          observacao:'Higiene — cotação #'+hgOrcCotId+' — grupo '+gnome+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'') });
+          observacao:'Higiene — cotação #'+hgOrcCotId+' — grupo '+gnome+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'')+(it.just?(' | Justificativa: '+it.just):'') });
         nItens++;
       }
       const ids=porForn[fidStr].map(function(it){return it.material_id;});
@@ -14876,6 +14926,11 @@ async function siDeskCarregar(){
     });
     const nomes=Object.keys(siDeskGrupos);
     if(nomes.length) siDeskAtivo=nomes.indexOf(siDeskAtivo)>=0?siDeskAtivo:nomes[0];
+    // v4.20c — referência de preço: último pago da mesma peça
+    try{
+      const todos=[]; Object.keys(siDeskGrupos).forEach(function(g2){ siDeskGrupos[g2].itens.forEach(function(i){ todos.push({item_nome:i.nome}); }); });
+      await ultPagoCarregar(todos);
+    }catch(e){}
   }catch(e){}
 }
 
@@ -14904,7 +14959,9 @@ function siDeskHtml(){
   if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:16px">Grupo vazio — marque solicitações abaixo e use "Enviar marcadas".</td></tr>';
   G.itens.forEach(function(it,i){
     let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
-    h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')+'</span></td>'
+    const ult=(typeof ultPagoCache!=='undefined')?ultPagoCache['n'+it.nome]:undefined;
+    h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')
+      +' · '+(ult!=null?('últ. pago <b>'+siMoeda(ult)+'/un</b>'):'1ª compra — sem referência')+'</span></td>'
       +'<td class="hg-num">'+siEsc(it.qtd)+'</td>';
     for(let k=0;k<3;k++){
       if(k>0 && !G.forns[k]) continue;
@@ -14967,7 +15024,7 @@ async function siVoltarSolicitada(id){
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
-function siDeskEnviar(){
+async function siDeskEnviar(){
   const sel=document.getElementById('si-desk-grupo-sel');
   let g=sel?sel.value:'Orçamento 1';
   if(g==='__novo__'){
@@ -14986,6 +15043,8 @@ function siDeskEnviar(){
     n++;
   });
   siDeskAtivo=g;
+  // v4.20c — busca o último pago das peças recém-chegadas ao desk
+  try{ await ultPagoCarregar(siDeskGrupos[g].itens.map(function(i){return {item_nome:i.nome};})); }catch(e){}
   toast(n+' solicitação(ões) no grupo "'+g+'" ✓','sucesso');
   siRender();
 }
@@ -15041,6 +15100,17 @@ async function siDeskFechar(){
   const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null; });
   if(!prontos.length){ toast('Nenhuma peça do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
   const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  // v4.20c — escolheu quem NÃO tem o menor preço? Justifica — vai gravado
+  // na ordem e aparece para quem aprova.
+  for(const it of prontos){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<menor)) menor=p; });
+    const vEsc=Number(it.precos[it.escolhido]);
+    if(menor!=null && vEsc>menor+0.004){
+      const j=prompt('"'+it.nome+'": o escolhido ('+siMoeda(vEsc)+') NÃO é o menor preço ('+siMoeda(menor)+').\n\nJustifique a escolha — fica gravado para quem aprova:', it.just||'');
+      if(j===null || !j.trim()){ toast('Fechamento cancelado — justificativa obrigatória quando a escolha não é o menor preço.','erro'); return; }
+      it.just=j.trim();
+    } else it.just=null;
+  }
   let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' peça(s) viram pedido(s) por fornecedor — SÓ de instrumentais — e seguem para Aprovar Pedido → Receber NF (fluxo geral).';
   if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
   if(!confirm(msg)) return;
@@ -15065,7 +15135,7 @@ async function siDeskFechar(){
           fornecedor_id:fid, fornecedor_compra_id:fid,
           status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'INSTRUMENTAL',
           qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:val,
-          observacao:'Instrumental — solicitação #'+it.solic_id+(it.motivo?(' — '+it.motivo):'') });
+          observacao:'Instrumental — solicitação #'+it.solic_id+(it.motivo?(' — '+it.motivo):'')+(it.just?(' | Justificativa: '+it.just):'') });
         try{
           await sbFetch('solicitacao_instrumental?id=eq.'+it.solic_id,'PATCH',{ status:'PEDIDO',
             fornecedor_id:fid, valor_unitario:val, valor_total:val*parseFloat(it.qtd),
