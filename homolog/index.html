@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.19 · Orçamentos por janela (Higiene & Instrumentais)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.20 · Orçamentos por janela: grupos, seleção em lote e fluxo geral</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5788,7 +5788,10 @@ async function deIncluirItem(pid){
 
 function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function deNomeForn(id){ if(!id) return '(sem fornecedor)'; const f=coFornecedores.find(x=>x.id===id); return f?f.nome:('fornecedor #'+id); }
-function deNomeMat(id){ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id); }
+function deNomeMat(id, o){
+  if(!id) return (o && o.item_nome) ? ('🔩 '+o.item_nome) : 'peça de instrumental';
+  const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id);
+}
 
 async function deCarregar(){
   const corpo=document.getElementById('de-corpo');
@@ -5825,7 +5828,7 @@ function deRenderizar(){
   corpo.innerHTML = deBoards.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr${deAvulso(o)?' style="background:#F2FBF5"':''}>
-      <td>${deNomeMat(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
@@ -5949,7 +5952,7 @@ async function deConfirmar(pid){
 async function deRemoverItem(ordemId){
   let ordem=null; for(const b of deBoards){ ordem = b.itens.find(o=>o.id===ordemId) || ordem; }
   if(!ordem){ toast('Item não encontrado.','erro'); return; }
-  if(!confirm(`Tirar "${deNomeMat(ordem.material_id)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
+  if(!confirm(`Tirar "${deNomeMat(ordem.material_id,ordem)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
       pedido_id: null, situacao:'NAO COMPRAR AGORA',
@@ -6745,7 +6748,12 @@ let rcEmFluxo = [];            // ordens de pedido vivo AINDA NÃO APROVADO — 
 let rcPedidos = [];            // pedidos, para abrir a compra por pedido
 let rcNfsRecentes = [];
 
-function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
+// v4.20 — ordem sem material (peça de instrumental no fluxo geral) mostra o
+// item_nome gravado na própria ordem. Chamadas antigas com só o id seguem valendo.
+function rcNomeMaterial(id, o){
+  if(!id) return (o && o.item_nome) ? ('🔩 '+o.item_nome) : 'peça de instrumental';
+  const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id);
+}
 // Fornecedor sem custo (amostra grátis / bonificação / doação / cortesia).
 // Entrada por esse fornecedor NÃO gera custo e NÃO altera o preço de reposição do item.
 function rcSemCusto(fid){
@@ -6880,7 +6888,7 @@ function rcRenderizar(){
       const exigeLote = rcControlaLote.has(o.material_id);
       return `<tr data-ordem="${o.id}">
         <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}" checked onchange="rcAtualizaTotais('${chave}')"></td>
-        <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
+        <td>${rcNomeMaterial(o.material_id,o)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
         <td style="text-align:center;font-weight:700;color:var(--azul)">${o.qtd_a_comprar ?? '—'}</td>
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${chave}')"></td>
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${chave}')"></td>
@@ -7017,7 +7025,7 @@ function rcHtmlOrfas(){
   const linhas = rcOrfas.map(o=>{
     const dd = dias(o.created_at);
     return `<tr>
-      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
       <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
@@ -7064,7 +7072,7 @@ async function rcDescartarOrfa(id){
 function rcHtmlPausados(){
   if(!rcPausados.length) return '';
   const linhas = rcPausados.map(o => `<tr>
-    <td>${rcNomeMaterial(o.material_id)}</td>
+    <td>${rcNomeMaterial(o.material_id,o)}</td>
     <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
     <td style="font-size:11px;color:var(--cinza-4)">${o.observacao||'—'}</td>
     <td><button class="rc-btn-reabrir" onclick="rcReabrirPedido(${o.id})">↻ Reabrir</button></td>
@@ -7123,7 +7131,7 @@ function rcAtualizaTotais(chave){
     if(chk && chk.checked){
       totalItens += tot; marcados++; unidades += qtd;
       const ordem = (typeof rcOrdens!=='undefined') ? rcOrdens.find(o=>o.id===Number(oid)) : null;
-      if(ordem) nomes.push(`${rcNomeMaterial(ordem.material_id)} <b>${qtd.toLocaleString('pt-BR')}</b>`);
+      if(ordem) nomes.push(`${rcNomeMaterial(ordem.material_id,ordem)} <b>${qtd.toLocaleString('pt-BR')}</b>`);
     } else naoMarcados++;
   });
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+chave)||{}).value)||0;
@@ -7294,7 +7302,7 @@ async function rcGravarNF(chave, confirmar){
   const difNota = totalNotaDigitado !== null ? (totalNotaDigitado - valorTotal) : 0;
 
   const listaItens = itensParaGravar
-    .map(x => `• ${rcNomeMaterial(x.ordem.material_id)} — ${x.qtd.toLocaleString('pt-BR')} un`)
+    .map(x => `• ${rcNomeMaterial(x.ordem.material_id,x.ordem)} — ${x.qtd.toLocaleString('pt-BR')} un`)
     .join('\n');
   const cabecalhoTxt =
     `NF ${numeroNf||'(sem número)'} · ${rcNomeFornecedor(Number(fid))}\n` +
@@ -7355,6 +7363,21 @@ async function rcGravarNF(chave, confirmar){
 
     // 2. Item por item: nf_itens -> movimentacao (pendente -> aprovada, sobe estoque) -> atualiza ordem
     for(const {ordem, qtd, val, item, lotes} of itensParaGravar){
+      // ═══ v4.20 — INSTRUMENTAL no fluxo geral: a NF registra a compra, mas a
+      // peça NÃO entra em estoque (instrumental não é consumo). A solicitação
+      // vira RECEBIDA e o destino (caixa CME/RESERVA) é dado na aba 🔩, como sempre.
+      if(ordem.origem==='INSTRUMENTAL'){
+        try{
+          if(ordem.solicitacao_instr_id){
+            await sbFetch('solicitacao_instrumental?id=eq.'+ordem.solicitacao_instr_id,'PATCH',{
+              status:'RECEBIDA', nf_numero:numeroNf||null, nf_valor:item||null,
+              recebido_por:registrante, recebido_em:new Date().toISOString() });
+          }
+        }catch(e){ toast('⚠ A solicitação da peça não foi atualizada: '+(e.message||e),'erro'); }
+        await sbFetch(`ordens_compra?id=eq.${ordem.id}`,'PATCH',{ situacao:'NF EMITIDA', qtd_comprada:qtd, valor_unitario:val, data_pedido: dataEntrega||dataEmissao });
+        toast('🔩 '+qtd+' peça(s) — não entram no estoque: dar destino na aba Instrumentais.','sucesso');
+        continue;
+      }
       const itemArr = await sbFetch('nf_itens','POST',{
         nota_fiscal_id: nfId, material_id: ordem.material_id,
         qtd: qtd, valor_unitario: val, valor_item: item,
@@ -7725,7 +7748,7 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
@@ -7839,7 +7862,7 @@ async function apGerarPDF(pid){
     try{ histHtml=apHistHtml(await apCarregarHist(p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
   }
   const totItens=apTotalItens(b), frete=Number(p.frete)||0;
-  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
+  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id,o)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
   hogImprimir(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px}h2{font-size:13px;margin:16px 0 6px}
   table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}
@@ -14147,14 +14170,53 @@ function hgInvRender(){
 
 async function hgCompCarregar(){
   if(!hgDados.length) await hgCarregarDados();
-  let h='<div class="hg-nota">A sugestão de compra (em caixa/pacote) acende quando houver histórico de consumo. Por ora a lista mostra saldo e valor; o pedido para a fila entra na próxima entrega.</div>';
-  h+='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Sugestão (caixa)</th></tr></thead><tbody>';
+  // v4.20 — seleção em lote: marca todos (ou alguns) e manda para o Orçar,
+  // escolhendo o grupo (contrato tipo HYGIBRAS vai num grupo próprio).
+  let h='<div class="hg-nota">Marque os itens e use <b>Enviar p/ Orçar</b> — eles caem no grupo escolhido da aba 💲 Orçar. A sugestão (em caixa) acende quando houver histórico de consumo.</div>';
+  let gopts=''; const gnomes=Object.keys(hgOrcGrupos);
+  (gnomes.length?gnomes:['Orçamento 1']).forEach(function(g){ gopts+='<option value="'+hgEsc(g)+'">'+hgEsc(g)+'</option>'; });
+  gopts+='<option value="__novo__">➕ novo grupo…</option>';
+  h+='<div class="hg-filtros">'
+    +'<label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px"><input type="checkbox" id="hg-comp-todos" onchange="hgCompTodos()"> marcar todos</label>'
+    +'<span style="flex:1"></span>'
+    +'<select id="hg-comp-grupo" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);background:var(--branco)">'+gopts+'</select>'
+    +'<button style="'+HG_BTN+'" onclick="hgCompEnviar()">📤 Enviar p/ Orçar</button></div>';
+  h+='<table class="hg-tab"><thead><tr><th></th><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Sugestão (caixa)</th></tr></thead><tbody>';
   hgDados.forEach(function(r){
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
-    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td></tr>';
+    const ja = hgOrcTemItem(r.material_id);
+    h+='<tr><td>'+(ja?'<span title="já está no Orçar" style="font-size:11px">🧾</span>':'<input type="checkbox" class="hg-comp-chk" data-mid="'+r.material_id+'">')+'</td>'
+      +'<td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td></tr>';
   });
   h+='</tbody></table>';
   document.getElementById('hg-comp-box').innerHTML=h;
+}
+function hgCompTodos(){
+  const on=document.getElementById('hg-comp-todos').checked;
+  document.querySelectorAll('.hg-comp-chk').forEach(function(c){ c.checked=on; });
+}
+async function hgCompEnviar(){
+  if(!(await origemPronta())){ toast('Rode o SQL 54 no Supabase para liberar o orçamento de higiene.','erro'); return; }
+  const marcados=[...document.querySelectorAll('.hg-comp-chk')].filter(function(c){return c.checked;});
+  if(!marcados.length){ toast('Marque ao menos um item.','erro'); return; }
+  let g=(document.getElementById('hg-comp-grupo')||{}).value||'Orçamento 1';
+  if(g==='__novo__'){
+    g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(hgOrcGrupos).length+1))||'').trim();
+    if(!g) return;
+  }
+  if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
+  let n=0;
+  marcados.forEach(function(c){
+    const mid=parseInt(c.dataset.mid,10);
+    const r=hgDados.find(function(x){return x.material_id===mid;});
+    if(!r || hgOrcTemItem(mid)) return;
+    hgOrcGrupos[g].itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
+      qtd:Number(r.sugestao_caixas)||1, precos:[null,null,null], escolhido:null });
+    n++;
+  });
+  hgOrcAtivo=g;
+  toast(n+' item(ns) enviados para o grupo "'+g+'" — abrindo o Orçar…','sucesso');
+  trocarAba('hig_orc');
 }
 
 async function hgRelCarregar(){
@@ -14175,20 +14237,28 @@ async function hgRelCarregar(){
   document.getElementById('hg-rel-box').innerHTML=h;
 }
 
-// ═══════════ v4.19 — ORÇAR HIGIENE (janela própria, engine única) ═══════════
-// Grupo SÓ de higiene: usa as mesmas tabelas do orçamento (cotacoes/
-// cotacao_itens/cotacao_opcoes → pedidos/ordens_compra), com origem=HIGIENE.
-// Não encosta na tela nem nos dados do orçamento de insumos.
-let hgOrcCotId = null;
-let hgOrcForns = [null,null,null];   // fornecedor de cada coluna (até 3)
-let hgOrcItens = [];                 // {material_id, nome, codigo, qtd_kit, qtd, precos[3], escolhido}
+// ═══════════ v4.20 — ORÇAR HIGIENE (grupos próprios, engine única) ═══════════
+// Vários grupos ("Orçamento 1", "Orçamento 2"…): item de fornecedor de CONTRATO
+// (ex.: HYGIBRAS) vai num grupo próprio, sem comparar preço; o resto compara
+// até 3 fornecedores. Tudo grava na engine com origem=HIGIENE — nada encosta
+// no orçamento de insumos. Salvar NÃO fecha nada: o orçamento fica nesta aba,
+// aberto, até você fechar grupo por grupo (aí sim vira pedido por fornecedor).
+let hgOrcCotId  = null;
+let hgOrcGrupos = {};             // { nome: { forns:[id,id,id], itens:[{material_id,nome,codigo,qtd_kit,qtd,precos[3],escolhido}] } }
+let hgOrcAtivo  = 'Orçamento 1';
 const HG_BTN  = 'border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)';
 const HG_BTNV = HG_BTN+';background:var(--verde)';
 const HG_BTNX = 'border:1px solid var(--vermelho);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--vermelho);background:#FDEDEC';
 const HG_INP  = 'border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)';
+const HG_CHIP = 'border:1px solid var(--cinza-2);border-radius:16px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--branco);color:var(--cinza-4)';
+const HG_CHIP_ON = HG_CHIP+';background:var(--verde);border-color:var(--verde);color:#fff';
 
 function hgOrcNum(v){ const n=parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); return isNaN(n)?null:n; }
 function hgOrcFornNome(fid){ const f=(coFornecedores||[]).find(function(x){return x.id===fid;}); return f?f.nome:'—'; }
+function hgOrcNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function hgOrcG(){ if(!hgOrcGrupos[hgOrcAtivo]) hgOrcGrupos[hgOrcAtivo]={forns:[null,null,null],itens:[]}; return hgOrcGrupos[hgOrcAtivo]; }
+function hgOrcTotalItens(){ return Object.keys(hgOrcGrupos).reduce(function(s,g){ return s+hgOrcGrupos[g].itens.length; },0); }
+function hgOrcTemItem(mid){ return Object.keys(hgOrcGrupos).some(function(g){ return hgOrcGrupos[g].itens.some(function(i){return i.material_id===mid;}); }); }
 
 async function hgOrcCarregar(){
   const box=document.getElementById('hg-orc-box'); if(!box) return;
@@ -14196,26 +14266,33 @@ async function hgOrcCarregar(){
   if(!ok){ box.innerHTML='<div class="hg-nota">Para orçar higiene aqui, o banco precisa do script <b>54_orcamento_por_janela.sql</b>. Rode-o no Supabase e recarregue a página — até lá nada muda no restante do app.</div>'; return; }
   if(!hgDados.length) await hgCarregarDados();
   if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
-  if(hgOrcCotId===null && !hgOrcItens.length){
+  if(hgOrcCotId===null && !hgOrcTotalItens()){
     try{
       const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.HIGIENE&order=id.desc&limit=1'))||[];
       if(ab.length){
         hgOrcCotId=ab[0].id;
-        const fg=(ab[0].fornecedores_grupo&&ab[0].fornecedores_grupo['Higiene'])||[];
-        hgOrcForns=[fg[0]||null,fg[1]||null,fg[2]||null];
+        const fg=ab[0].fornecedores_grupo||{};
+        hgOrcGrupos={};
+        Object.keys(fg).forEach(function(g){
+          hgOrcGrupos[g]={forns:[(fg[g]||[])[0]||null,(fg[g]||[])[1]||null,(fg[g]||[])[2]||null],itens:[]};
+        });
         const its=(await sbFetch('cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false&order=id.asc'))||[];
-        hgOrcItens=its.map(function(it){
+        its.forEach(function(it){
+          const g=it.grupo||'Orçamento 1';
+          if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
           const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
           const linha={ material_id:it.material_id, nome:it.material_nome, codigo:ref.codigo||null,
                         qtd_kit:ref.qtd_kit||null, qtd:Number(it.qtd_desejada)||1, precos:[null,null,null], escolhido:null };
           (it.cotacao_opcoes||[]).forEach(function(o){
             const k=(o.slot||1)-1; if(k<0||k>2) return;
             linha.precos[k]=o.preco_total;
-            if(o.fornecedor_id && !hgOrcForns[k]) hgOrcForns[k]=o.fornecedor_id;
+            if(o.fornecedor_id && !hgOrcGrupos[g].forns[k]) hgOrcGrupos[g].forns[k]=o.fornecedor_id;
             if(o.escolhida) linha.escolhido=k;
           });
-          return linha;
+          hgOrcGrupos[g].itens.push(linha);
         });
+        const nomes=Object.keys(hgOrcGrupos);
+        if(nomes.length) hgOrcAtivo=nomes.indexOf(hgOrcAtivo)>=0?hgOrcAtivo:nomes[0];
       }
     }catch(e){}
   }
@@ -14224,66 +14301,102 @@ async function hgOrcCarregar(){
 
 function hgOrcRender(){
   const box=document.getElementById('hg-orc-box'); if(!box) return;
-  let h='<div class="hg-nota">Grupo <b>só de higiene</b> — não se mistura com o orçamento de insumos. O preço lançado é o da <b>CAIXA</b>; na entrada da NF o sistema converte para a unidade de consumo sozinho (× un/caixa).</div>';
-  let opts='<option value="">Adicionar produto…</option>';
-  hgDados.slice().sort(function(a,b){return String(a.material).localeCompare(String(b.material));}).forEach(function(r){
-    if(hgOrcItens.some(function(i){return i.material_id===r.material_id;})) return;
-    opts+='<option value="'+r.material_id+'">'+hgEsc(r.material)+(r.codigo?(' ['+hgEsc(r.codigo)+']'):'')+'</option>';
+  const G=hgOrcG();
+  let h='<div class="hg-nota"><b>Onde isso vai parar:</b> Salvar guarda o orçamento AQUI (ele continua aberto nesta aba, cotação #'+(hgOrcCotId||'nova')+'). Só o <b>Fechar grupo</b> vira pedido — um por fornecedor, só de higiene, que segue para 📦 Pedidos → Aprovar → Receber NF.</div>';
+  // chips dos grupos
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
+  Object.keys(hgOrcGrupos).forEach(function(g){
+    h+='<button style="'+(g===hgOrcAtivo?HG_CHIP_ON:HG_CHIP)+'" onclick="hgOrcTrocarGrupo(\''+hgEsc(g).replace(/'/g,"\\'")+'\')">'+hgEsc(g)+' ('+hgOrcGrupos[g].itens.length+')</button>';
   });
-  h+='<div class="hg-filtros"><select id="hg-orc-add-sel" style="flex:1;min-width:220px">'+opts+'</select>'
-    +'<input type="number" id="hg-orc-add-qtd" value="1" min="1" title="quantidade de caixas" style="width:90px;'+HG_INP+';padding:8px 10px;font-size:13px">'
-    +'<button style="'+HG_BTN+'" onclick="hgOrcAdd()">➕ Adicionar</button></div>';
-  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">';
+  h+='<button style="'+HG_CHIP+'" onclick="hgOrcNovoGrupo()">➕ novo grupo</button>';
+  if(Object.keys(hgOrcGrupos).length>1 && !G.itens.length)
+    h+='<button style="'+HG_BTNX+'" onclick="hgOrcRemoverGrupo()" title="apagar este grupo vazio">✕ apagar grupo</button>';
+  h+='</div>';
+  // busca inteligente (qualquer parte do nome) — só para itens extras
+  h+='<div style="position:relative;margin-bottom:10px">'
+    +'<input type="text" id="hg-orc-busca" oninput="hgOrcBuscar()" placeholder="🔍 Item extra? Digite qualquer parte do nome (o normal é enviar pela aba Compras)…" style="width:100%;'+HG_INP+';padding:9px 12px;font-size:13px">'
+    +'<div id="hg-orc-busca-res" style="position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--branco);border:1px solid var(--cinza-2);border-radius:0 0 8px 8px;max-height:220px;overflow:auto;box-shadow:var(--sombra)"></div>'
+    +'</div>';
+  // fornecedores do grupo ativo
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center">'
+    +'<span style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedores do grupo "'+hgEsc(hgOrcAtivo)+'":</span>';
   for(let k=0;k<3;k++){
-    let fo='<option value="">Fornecedor '+(k+1)+'…</option>';
-    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(hgOrcForns[k]===f.id?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
+    let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
+    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
     h+='<select onchange="hgOrcForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco)">'+fo+'</select>';
   }
-  h+='</div>';
+  h+='<span style="font-size:11px;color:var(--cinza-4)">contrato (ex.: HYGIBRAS)? use só o Fornecedor 1 — sem comparação</span></div>';
+  // tabela do grupo ativo
   h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Produto</th><th class="hg-num">Caixas</th>';
-  for(let k=0;k<3;k++) h+='<th class="hg-num">'+(hgOrcForns[k]?hgEsc(hgOrcFornNome(hgOrcForns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>';
+  for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?hgEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>'; }
   h+='<th>Escolha</th><th></th></tr></thead><tbody>';
-  if(!hgOrcItens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:18px">Nenhum item — adicione acima.</td></tr>';
-  hgOrcItens.forEach(function(it,i){
-    let menor=null; it.precos.forEach(function(p,k){ if(hgOrcForns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
+  if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
+  G.itens.forEach(function(it,i){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
     h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa'):'')+'</span></td>'
       +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="hgOrcQtd('+i+',this.value)" style="width:70px;'+HG_INP+'"></td>';
     for(let k=0;k<3;k++){
-      if(!hgOrcForns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
+      if(k>0 && !G.forns[k]) continue;
+      if(!G.forns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
       h+='<td class="hg-num"><input type="text" value="'+(it.precos[k]!=null?String(it.precos[k]).replace('.',','):'')+'" placeholder="0,00" onchange="hgOrcPreco('+i+','+k+',this.value)" style="width:90px;text-align:right;'+HG_INP+(menor===k?';border-color:var(--verde);background:var(--verde-claro);font-weight:700':'')+'"></td>';
     }
     let esc='<select onchange="hgOrcEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
-    for(let k=0;k<3;k++){ if(hgOrcForns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+hgEsc(hgOrcFornNome(hgOrcForns[k]))+'</option>'; }
+    for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+hgEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
     esc+='</select>';
     h+='<td>'+esc+'</td><td><button style="'+HG_BTNX+'" onclick="hgOrcRemover('+i+')" title="tirar do orçamento">✕</button></td></tr>';
   });
   h+='</tbody></table></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">'
     +'<button style="'+HG_BTN+'" onclick="hgOrcSalvar(false)">💾 Salvar orçamento</button>'
-    +'<button style="'+HG_BTNV+'" onclick="hgOrcFechar()">🔒 Fechar → pedidos por fornecedor</button>'
-    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de higiene #'+hgOrcCotId+'</span>'):'')
+    +'<button style="'+HG_BTNV+'" onclick="hgOrcFechar()">🔒 Fechar o grupo "'+hgEsc(hgOrcAtivo)+'" → pedidos</button>'
+    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de higiene #'+hgOrcCotId+' · '+hgOrcTotalItens()+' item(ns) em '+Object.keys(hgOrcGrupos).length+' grupo(s)</span>'):'')
     +'</div>';
   box.innerHTML=h;
 }
 
-function hgOrcAdd(){
-  const sel=document.getElementById('hg-orc-add-sel');
-  const mid=parseInt(sel&&sel.value,10); if(!mid){ toast('Escolha o produto.','erro'); return; }
-  const q=parseFloat((document.getElementById('hg-orc-add-qtd')||{}).value||'1')||1;
-  const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r) return;
-  hgOrcItens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
-                    qtd:q, precos:[null,null,null], escolhido:null });
+function hgOrcBuscar(){
+  const inp=document.getElementById('hg-orc-busca'), res=document.getElementById('hg-orc-busca-res');
+  if(!inp||!res) return;
+  const termo=hgOrcNorm(inp.value.trim());
+  if(!termo){ res.innerHTML=''; return; }
+  const m=hgDados.filter(function(r){
+    if(hgOrcTemItem(r.material_id)) return false;
+    return hgOrcNorm(r.material+' '+(r.codigo||'')).indexOf(termo)>=0;
+  }).slice(0,12);
+  res.innerHTML = m.map(function(r){
+    return '<div onclick="hgOrcAddId('+r.material_id+')" style="padding:9px 12px;border-bottom:1px solid var(--cinza-2);cursor:pointer;display:flex;justify-content:space-between;gap:10px">'
+      +'<span style="font-weight:600">'+hgEsc(r.material)+'</span>'
+      +'<span style="font-size:11px;color:var(--cinza-4);white-space:nowrap">'+(r.codigo?hgEsc(r.codigo)+' · ':'')+'saldo '+hgN(r.saldo)+'</span></div>';
+  }).join('') || '<div style="padding:10px 12px;font-size:12px;color:var(--cinza-4)">Nenhum produto de higiene com esse trecho no nome.</div>';
+}
+function hgOrcAddId(mid){
+  const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
+  hgOrcG().itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
+    qtd:Number(r.sugestao_caixas)||1, precos:[null,null,null], escolhido:null });
   hgOrcRender();
 }
-function hgOrcQtd(i,v){ const it=hgOrcItens[i]; if(!it) return; it.qtd=parseFloat(v)||1; }
-function hgOrcPreco(i,k,v){ const it=hgOrcItens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
-function hgOrcEscolher(i,v){ const it=hgOrcItens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
-function hgOrcForn(k,v){ hgOrcForns[k]=v?parseInt(v,10):null; hgOrcRender(); }
-function hgOrcRemover(i){ hgOrcItens.splice(i,1); hgOrcRender(); }
+function hgOrcTrocarGrupo(g){ hgOrcAtivo=g; hgOrcRender(); }
+function hgOrcNovoGrupo(){
+  const g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(hgOrcGrupos).length+1))||'').trim();
+  if(!g) return;
+  if(hgOrcGrupos[g]){ toast('Já existe um grupo com esse nome.','erro'); return; }
+  hgOrcGrupos[g]={forns:[null,null,null],itens:[]}; hgOrcAtivo=g; hgOrcRender();
+}
+function hgOrcRemoverGrupo(){
+  if(hgOrcG().itens.length){ toast('O grupo ainda tem itens.','erro'); return; }
+  delete hgOrcGrupos[hgOrcAtivo];
+  hgOrcAtivo=Object.keys(hgOrcGrupos)[0]||'Orçamento 1';
+  hgOrcRender();
+}
+function hgOrcQtd(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.qtd=parseFloat(v)||1; }
+function hgOrcPreco(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
+function hgOrcEscolher(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
+function hgOrcForn(k,v){ hgOrcG().forns[k]=v?parseInt(v,10):null; hgOrcRender(); }
+function hgOrcRemover(i){ hgOrcG().itens.splice(i,1); hgOrcRender(); }
 
 async function hgOrcSalvar(sil){
   if(!exigirSenhaCompras()) return false;
-  if(!hgOrcItens.length){
+  if(!hgOrcTotalItens()){
     if(hgOrcCotId!==null){
       try{
         await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
@@ -14295,7 +14408,8 @@ async function hgOrcSalvar(sil){
     return true;
   }
   try{
-    const fg={ 'Higiene': hgOrcForns.filter(Boolean) };
+    const fg={};
+    Object.keys(hgOrcGrupos).forEach(function(g){ fg[g]=hgOrcGrupos[g].forns.filter(Boolean); });
     if(hgOrcCotId===null){
       const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:(SESSAO?SESSAO.nome:'')||'',fornecedores_grupo:fg,origem:'HIGIENE'});
       if(!c||!c.length) throw new Error('não retornou a cotação criada');
@@ -14304,66 +14418,70 @@ async function hgOrcSalvar(sil){
       await sbFetch('cotacoes?id=eq.'+hgOrcCotId,'PATCH',{fornecedores_grupo:fg});
       await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
     }
-    for(const it of hgOrcItens){
-      const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:hgOrcCotId, material_id:it.material_id,
-        material_nome:it.nome, qtd_desejada:it.qtd, grupo:'Higiene' });
-      const itemId=ins&&ins[0]&&ins[0].id;
-      const ops=[];
-      for(let k=0;k<3;k++){
-        if(!hgOrcForns[k]||it.precos[k]==null) continue;
-        ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:hgOrcForns[k],
-          qtd_embalagem:it.qtd_kit||null, preco_total:it.precos[k],
-          preco_unitario:(it.qtd_kit&&it.qtd_kit>0)?(it.precos[k]/it.qtd_kit):it.precos[k],
-          escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+    for(const g of Object.keys(hgOrcGrupos)){
+      const forns=hgOrcGrupos[g].forns;
+      for(const it of hgOrcGrupos[g].itens){
+        const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:hgOrcCotId, material_id:it.material_id,
+          material_nome:it.nome, qtd_desejada:it.qtd, grupo:g });
+        const itemId=ins&&ins[0]&&ins[0].id;
+        const ops=[];
+        for(let k=0;k<3;k++){
+          if(!forns[k]||it.precos[k]==null) continue;
+          ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:forns[k],
+            qtd_embalagem:it.qtd_kit||null, preco_total:it.precos[k],
+            preco_unitario:(it.qtd_kit&&it.qtd_kit>0)?(it.precos[k]/it.qtd_kit):it.precos[k],
+            escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+        }
+        if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
       }
-      if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
-    if(!sil){ toast('Orçamento de higiene #'+hgOrcCotId+' salvo ✓','sucesso'); hgOrcRender(); }
+    if(!sil){ toast('💾 Orçamento #'+hgOrcCotId+' salvo — ele fica AQUI, aberto, até você fechar cada grupo.','sucesso'); hgOrcRender(); }
     return true;
   }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
 }
 
 async function hgOrcFechar(){
   if(!exigirSenhaCompras()) return;
-  const prontos=hgOrcItens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && hgOrcForns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
-  if(!prontos.length){ toast('Nenhum item com fornecedor ESCOLHIDO.','erro'); return; }
-  const semEsc=hgOrcItens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
-  let msg='Fechar o orçamento de higiene?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
+  const G=hgOrcG(), gnome=hgOrcAtivo;
+  const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
+  if(!prontos.length){ toast('Nenhum item do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
+  const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
   if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
   if(!confirm(msg)) return;
   try{
     const ok=await hgOrcSalvar(true); if(!ok) return;
     const porForn={};
-    prontos.forEach(function(it){ const fid=hgOrcForns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
+    prontos.forEach(function(it){ const fid=G.forns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
     let nItens=0;
     for(const fidStr of Object.keys(porForn)){
       const fid=Number(fidStr);
-      // pedido é de UMA origem: só reaproveita EM_MONTAGEM de HIGIENE
       let pedidoId=null;
       const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.HIGIENE&limit=1');
       if(exist&&exist.length) pedidoId=exist[0].id;
       else{
         const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:hgOrcCotId,
-          origem:'HIGIENE', observacao:'Orçamento de higiene #'+hgOrcCotId });
+          origem:'HIGIENE', observacao:'Higiene — grupo '+gnome });
         pedidoId=p&&p[0]&&p[0].id;
       }
       for(const it of porForn[fidStr]){
         await sbFetch('ordens_compra','POST',{ material_id:it.material_id, fornecedor_id:fid, fornecedor_compra_id:fid,
           status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
           qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
-          observacao:'Higiene — cotação #'+hgOrcCotId+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'') });
+          observacao:'Higiene — cotação #'+hgOrcCotId+' — grupo '+gnome+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'') });
         nItens++;
       }
       const ids=porForn[fidStr].map(function(it){return it.material_id;});
       try{
-        await sbFetch('cotacao_itens?cotacao_id=eq.'+hgOrcCotId+'&material_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
+        await sbFetch('cotacao_itens?cotacao_id=eq.'+hgOrcCotId+'&grupo=eq.'+encodeURIComponent(gnome)+'&material_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
           {fechado:true,fechado_em:new Date().toISOString(),pedido_id:pedidoId});
       }catch(e){}
     }
-    hgOrcItens=hgOrcItens.filter(function(it){ return prontos.indexOf(it)<0; });
+    G.itens=G.itens.filter(function(it){ return prontos.indexOf(it)<0; });
+    if(!G.itens.length && Object.keys(hgOrcGrupos).length>1){ delete hgOrcGrupos[gnome]; hgOrcAtivo=Object.keys(hgOrcGrupos)[0]; }
     await hgOrcSalvar(true);
     hgOrcRender();
-    toast('Fechado ✓ — '+nItens+' item(ns) de higiene em pedido(s) por fornecedor. Veja em 📦 Pedidos.','sucesso');
+    toast('Grupo "'+gnome+'" fechado ✓ — '+nItens+' item(ns) em pedido(s) por fornecedor. Veja em 📦 Pedidos.','sucesso');
   }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
 }
 </script>
@@ -14382,6 +14500,8 @@ async function siCarregar(){
   try{
     siDados = (await sbFetch('solicitacao_instrumental?select=*&status=in.(SOLICITADA,AGUARDANDO_APROVACAO,APROVADA,PEDIDO,RECEBIDA)&order=solicitado_em.asc')) || [];
   }catch(e){ siDados = []; box.innerHTML=''; return; }
+  // v4.20 — desk de orçamento (grupos, 3 fornecedores) dentro da própria janela
+  try{ await origemPronta(); await siDeskCarregar(); }catch(e){}
   siRender();
 }
 
@@ -14412,18 +14532,31 @@ function siRender(){
   const caixas = (typeof ciCaixas!=='undefined' ? ciCaixas : []).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
 
   let h = '<div class="rm-card"><div class="rm-head cinza">'
-        + '<span>🔩 Compras de instrumentais · solicitação → orçamento → aprovação → pedido → NF → destino</span>'
+        + '<span>🔩 Compras de instrumentais · solicitação → orçamento → aprovação → pedido geral → NF → destino</span>'
         + '<button class="rm-b claro" onclick="siAbrir()">➕ Abrir solicitação</button></div></div>';
+
+  // v4.20 — o desk de orçamento aparece aqui, dentro da janela de instrumentais
+  if(ORIGEM_OK && siPodeCotar() && typeof siDeskHtml==='function') h += siDeskHtml();
 
   let algum = false;
   SI_STAGES.forEach(function(st){
     const itens = siDados.filter(function(s){ return s.status===st.k; });
     if(!itens.length) return;
     algum = true;
-    h += '<div class="rm-card"><div class="rm-head '+st.cor+'">'+st.rot+' ('+itens.length+')</div><div style="padding:6px 16px 12px">';
+    let cab = st.rot+' ('+itens.length+')';
+    if(st.k==='SOLICITADA' && ORIGEM_OK && siPodeCotar()){
+      cab = '<span>'+cab+'</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          + '<select id="si-desk-grupo-sel" style="'+SI_SEL+'">'+siDeskGrupoOpts()+'</select>'
+          + '<button class="rm-b claro" onclick="siDeskEnviar()">📤 Enviar marcadas p/ Orçamento</button></span>';
+    }
+    h += '<div class="rm-card"><div class="rm-head '+st.cor+'">'+cab+'</div><div style="padding:6px 16px 12px">';
     itens.forEach(function(s){
       let acao='';
-      if(st.k==='SOLICITADA' && siPodeCotar())            acao='<button class="rm-b claro" onclick="siOrcar('+s.id+')">💲 Orçar</button>';
+      if(st.k==='SOLICITADA' && siPodeCotar()){
+        if(!ORIGEM_OK) acao='<button class="rm-b claro" onclick="siOrcar('+s.id+')">💲 Orçar</button>';
+        else if(siDeskTem(s.id)) acao='<span class="rm-tag ok">🧾 no orçamento</span>';
+        else acao='<label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="si-chk" data-id="'+s.id+'"> orçar</label>';
+      }
       if(st.k==='AGUARDANDO_APROVACAO' && siPodeAprovar()) acao='<button class="rm-b verde" onclick="siAprovar('+s.id+')">✅ Aprovar</button> <button class="rm-b perigo" onclick="siReprovar('+s.id+')">✕ Reprovar</button>';
       if(st.k==='APROVADA' && siPodeCotar())              acao='<button class="rm-b laranja" onclick="siPedido('+s.id+')">📦 Emitir pedido</button>';
       if(st.k==='PEDIDO' && siPodeNF())                   acao='<button class="rm-b laranja" onclick="siReceberNF('+s.id+')">📥 Receber NF</button>';
@@ -14682,6 +14815,237 @@ async function siDestino(id){
     if(typeof ciCarregar==='function') ciCarregar();
     siCarregar();
   }catch(e){ toast('Erro ao dar destino: '+(e.message||e),'erro'); }
+}
+
+// ═══════════ v4.20 — DESK DE ORÇAMENTO DE INSTRUMENTAIS ═══════════
+// Mesma lógica da higiene: seleciona solicitações, agrupa em "Orçamento 1/2/3"
+// por tipo de fornecedor, compara até 3, fecha o grupo → pedido por fornecedor
+// (origem INSTRUMENTAL) que segue o FLUXO GERAL: Aprovar Pedido → Receber NF.
+// A NF não mexe em estoque: a peça volta para cá como RECEBIDA → dar destino.
+let siDeskCotId  = null;
+let siDeskGrupos = {};            // { nome: { forns:[3], itens:[{solic_id,nome,qtd,motivo,precos[3],escolhido}] } }
+let siDeskAtivo  = 'Orçamento 1';
+
+function siDeskG(){ if(!siDeskGrupos[siDeskAtivo]) siDeskGrupos[siDeskAtivo]={forns:[null,null,null],itens:[]}; return siDeskGrupos[siDeskAtivo]; }
+function siDeskTotal(){ return Object.keys(siDeskGrupos).reduce(function(s,g){ return s+siDeskGrupos[g].itens.length; },0); }
+function siDeskTem(sid){ return Object.keys(siDeskGrupos).some(function(g){ return siDeskGrupos[g].itens.some(function(i){return i.solic_id===sid;}); }); }
+function siDeskGrupoOpts(){
+  let o=''; const nomes=Object.keys(siDeskGrupos);
+  (nomes.length?nomes:['Orçamento 1']).forEach(function(g){ o+='<option value="'+siEsc(g)+'"'+(g===siDeskAtivo?' selected':'')+'>'+siEsc(g)+'</option>'; });
+  o+='<option value="__novo__">➕ novo grupo…</option>';
+  return o;
+}
+
+async function siDeskCarregar(){
+  if(!ORIGEM_OK) return;
+  if(siDeskCotId!==null || siDeskTotal()>0) return;
+  try{
+    const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.INSTRUMENTAL&order=id.desc&limit=1'))||[];
+    if(!ab.length) return;
+    siDeskCotId=ab[0].id;
+    const fg=ab[0].fornecedores_grupo||{};
+    siDeskGrupos={};
+    Object.keys(fg).forEach(function(g){
+      siDeskGrupos[g]={forns:[(fg[g]||[])[0]||null,(fg[g]||[])[1]||null,(fg[g]||[])[2]||null],itens:[]};
+    });
+    const its=(await sbFetch('cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.'+siDeskCotId+'&fechado=is.false&order=id.asc'))||[];
+    its.forEach(function(it){
+      const g=it.grupo||'Orçamento 1';
+      if(!siDeskGrupos[g]) siDeskGrupos[g]={forns:[null,null,null],itens:[]};
+      const s=siDados.find(function(x){return x.id===it.solicitacao_instr_id;})||{};
+      const linha={ solic_id:it.solicitacao_instr_id, nome:it.material_nome, qtd:Number(it.qtd_desejada)||1,
+                    motivo:s.motivo||'', precos:[null,null,null], escolhido:null };
+      (it.cotacao_opcoes||[]).forEach(function(o){
+        const k=(o.slot||1)-1; if(k<0||k>2) return;
+        linha.precos[k]=o.preco_total;
+        if(o.fornecedor_id && !siDeskGrupos[g].forns[k]) siDeskGrupos[g].forns[k]=o.fornecedor_id;
+        if(o.escolhida) linha.escolhido=k;
+      });
+      siDeskGrupos[g].itens.push(linha);
+    });
+    const nomes=Object.keys(siDeskGrupos);
+    if(nomes.length) siDeskAtivo=nomes.indexOf(siDeskAtivo)>=0?siDeskAtivo:nomes[0];
+  }catch(e){}
+}
+
+function siDeskHtml(){
+  if(!siDeskTotal() && siDeskCotId===null) return '';
+  const G=siDeskG();
+  let h='<div class="rm-card"><div class="rm-head verde"><span>🧾 Orçamento de instrumentais'
+    +(siDeskCotId?(' · cotação #'+siDeskCotId):'')+'</span><span style="font-size:11px;font-weight:600">fechar grupo → pedido por fornecedor → fluxo geral</span></div>'
+    +'<div style="padding:12px 16px">';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
+  Object.keys(siDeskGrupos).forEach(function(g){
+    h+='<button style="'+(g===siDeskAtivo?HG_CHIP_ON:HG_CHIP)+'" onclick="siDeskTrocar(\''+siEsc(g).replace(/'/g,"\\'")+'\')">'+siEsc(g)+' ('+siDeskGrupos[g].itens.length+')</button>';
+  });
+  h+='<button style="'+HG_CHIP+'" onclick="siDeskNovoGrupo()">➕ novo grupo</button></div>';
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;align-items:center">'
+    +'<span style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedores de "'+siEsc(siDeskAtivo)+'":</span>';
+  for(let k=0;k<3;k++){
+    let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
+    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+siEsc(f.nome)+'</option>'; });
+    h+='<select onchange="siDeskForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco)">'+fo+'</select>';
+  }
+  h+='</div>';
+  h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Peça (solicitação)</th><th class="hg-num">Qtd</th>';
+  for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?siEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/un)</th>'; }
+  h+='<th>Escolha</th><th></th></tr></thead><tbody>';
+  if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:16px">Grupo vazio — marque solicitações abaixo e use "Enviar marcadas".</td></tr>';
+  G.itens.forEach(function(it,i){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
+    h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')+'</span></td>'
+      +'<td class="hg-num">'+siEsc(it.qtd)+'</td>';
+    for(let k=0;k<3;k++){
+      if(k>0 && !G.forns[k]) continue;
+      if(!G.forns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
+      h+='<td class="hg-num"><input type="text" value="'+(it.precos[k]!=null?String(it.precos[k]).replace('.',','):'')+'" placeholder="0,00" onchange="siDeskPreco('+i+','+k+',this.value)" style="width:90px;text-align:right;'+HG_INP+(menor===k?';border-color:var(--verde);background:var(--verde-claro);font-weight:700':'')+'"></td>';
+    }
+    let esc='<select onchange="siDeskEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
+    for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+siEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
+    esc+='</select>';
+    h+='<td>'+esc+'</td><td><button style="'+HG_BTNX+'" onclick="siDeskRemover('+i+')" title="devolver para Solicitadas">✕</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">'
+    +'<button style="'+HG_BTN+'" onclick="siDeskSalvar(false)">💾 Salvar orçamento</button>'
+    +'<button style="'+HG_BTNV+'" onclick="siDeskFechar()">🔒 Fechar o grupo "'+siEsc(siDeskAtivo)+'" → pedido</button>'
+    +'<span style="font-size:12px;color:var(--cinza-4)">o pedido segue o fluxo geral (Aprovar → NF); a peça volta para cá para o destino</span>'
+    +'</div>';
+  h+='</div></div>';
+  return h;
+}
+
+function siDeskTrocar(g){ siDeskAtivo=g; siRender(); }
+function siDeskNovoGrupo(){
+  const g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(siDeskGrupos).length+1))||'').trim();
+  if(!g) return;
+  if(siDeskGrupos[g]){ toast('Já existe um grupo com esse nome.','erro'); return; }
+  siDeskGrupos[g]={forns:[null,null,null],itens:[]}; siDeskAtivo=g; siRender();
+}
+function siDeskForn(k,v){ siDeskG().forns[k]=v?parseInt(v,10):null; siRender(); }
+function siDeskPreco(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.precos[k]=siNum(v)||null; siRender(); }
+function siDeskEscolher(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
+function siDeskRemover(i){ siDeskG().itens.splice(i,1); siRender(); }
+
+function siDeskEnviar(){
+  const sel=document.getElementById('si-desk-grupo-sel');
+  let g=sel?sel.value:'Orçamento 1';
+  if(g==='__novo__'){
+    g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(siDeskGrupos).length+1))||'').trim();
+    if(!g) return;
+  }
+  const marcadas=[...document.querySelectorAll('.si-chk')].filter(function(c){return c.checked;});
+  if(!marcadas.length){ toast('Marque ao menos uma solicitação (caixinha "orçar").','erro'); return; }
+  if(!siDeskGrupos[g]) siDeskGrupos[g]={forns:[null,null,null],itens:[]};
+  let n=0;
+  marcadas.forEach(function(c){
+    const sid=parseInt(c.dataset.id,10);
+    const s=siDados.find(function(x){return x.id===sid;});
+    if(!s || siDeskTem(sid)) return;
+    siDeskGrupos[g].itens.push({ solic_id:sid, nome:s.peca_nome, qtd:s.qtd, motivo:s.motivo||'', precos:[null,null,null], escolhido:null });
+    n++;
+  });
+  siDeskAtivo=g;
+  toast(n+' solicitação(ões) no grupo "'+g+'" ✓','sucesso');
+  siRender();
+}
+
+async function siDeskSalvar(sil){
+  if(!exigirSenhaCompras()) return false;
+  if(!siDeskTotal()){
+    if(siDeskCotId!==null){
+      try{
+        await coApagarItens('cotacao_id=eq.'+siDeskCotId+'&fechado=is.false');
+        await sbFetch('cotacoes?id=eq.'+siDeskCotId,'PATCH',{status:'fechada'});
+        siDeskCotId=null;
+      }catch(e){ toast('Erro ao encerrar o orçamento vazio: '+e.message,'erro'); return false; }
+    }
+    if(!sil){ toast('Orçamento de instrumentais sem itens — encerrado.',''); siRender(); }
+    return true;
+  }
+  try{
+    const fg={};
+    Object.keys(siDeskGrupos).forEach(function(g){ fg[g]=siDeskGrupos[g].forns.filter(Boolean); });
+    if(siDeskCotId===null){
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:siNome(),fornecedores_grupo:fg,origem:'INSTRUMENTAL'});
+      if(!c||!c.length) throw new Error('não retornou a cotação criada');
+      siDeskCotId=c[0].id;
+    } else {
+      await sbFetch('cotacoes?id=eq.'+siDeskCotId,'PATCH',{fornecedores_grupo:fg});
+      await coApagarItens('cotacao_id=eq.'+siDeskCotId+'&fechado=is.false');
+    }
+    for(const g of Object.keys(siDeskGrupos)){
+      const forns=siDeskGrupos[g].forns;
+      for(const it of siDeskGrupos[g].itens){
+        const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:siDeskCotId, material_id:null, solicitacao_instr_id:it.solic_id,
+          material_nome:it.nome, qtd_desejada:it.qtd, grupo:g });
+        const itemId=ins&&ins[0]&&ins[0].id;
+        const ops=[];
+        for(let k=0;k<3;k++){
+          if(!forns[k]||it.precos[k]==null) continue;
+          ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:forns[k],
+            preco_total:it.precos[k], preco_unitario:it.precos[k],
+            escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+        }
+        if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
+      }
+    }
+    if(!sil){ toast('💾 Orçamento #'+siDeskCotId+' salvo — fica AQUI até você fechar cada grupo.','sucesso'); siRender(); }
+    return true;
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
+}
+
+async function siDeskFechar(){
+  if(!exigirSenhaCompras()) return;
+  const G=siDeskG(), gnome=siDeskAtivo;
+  const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null; });
+  if(!prontos.length){ toast('Nenhuma peça do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
+  const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' peça(s) viram pedido(s) por fornecedor — SÓ de instrumentais — e seguem para Aprovar Pedido → Receber NF (fluxo geral).';
+  if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
+  if(!confirm(msg)) return;
+  try{
+    const ok=await siDeskSalvar(true); if(!ok) return;
+    const porForn={};
+    prontos.forEach(function(it){ const fid=G.forns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
+    let nItens=0;
+    for(const fidStr of Object.keys(porForn)){
+      const fid=Number(fidStr);
+      let pedidoId=null;
+      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.INSTRUMENTAL&limit=1');
+      if(exist&&exist.length) pedidoId=exist[0].id;
+      else{
+        const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:siDeskCotId,
+          origem:'INSTRUMENTAL', observacao:'Instrumentais — grupo '+gnome });
+        pedidoId=p&&p[0]&&p[0].id;
+      }
+      for(const it of porForn[fidStr]){
+        const val=it.precos[it.escolhido];
+        await sbFetch('ordens_compra','POST',{ material_id:null, item_nome:it.nome, solicitacao_instr_id:it.solic_id,
+          fornecedor_id:fid, fornecedor_compra_id:fid,
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'INSTRUMENTAL',
+          qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:val,
+          observacao:'Instrumental — solicitação #'+it.solic_id+(it.motivo?(' — '+it.motivo):'') });
+        try{
+          await sbFetch('solicitacao_instrumental?id=eq.'+it.solic_id,'PATCH',{ status:'PEDIDO',
+            fornecedor_id:fid, valor_unitario:val, valor_total:val*parseFloat(it.qtd),
+            cotado_por:siNome(), cotado_em:new Date().toISOString(),
+            pedido_por:siNome(), pedido_em:new Date().toISOString() });
+        }catch(e){ toast('⚠ Solicitação #'+it.solic_id+' não atualizou: '+(e.message||e),'erro'); }
+        nItens++;
+      }
+      const ids=porForn[fidStr].map(function(it){return it.solic_id;});
+      try{
+        await sbFetch('cotacao_itens?cotacao_id=eq.'+siDeskCotId+'&solicitacao_instr_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
+          {fechado:true,fechado_em:new Date().toISOString(),pedido_id:pedidoId});
+      }catch(e){}
+    }
+    G.itens=G.itens.filter(function(it){ return prontos.indexOf(it)<0; });
+    if(!G.itens.length && Object.keys(siDeskGrupos).length>1){ delete siDeskGrupos[gnome]; siDeskAtivo=Object.keys(siDeskGrupos)[0]; }
+    await siDeskSalvar(true);
+    toast('Grupo "'+gnome+'" fechado ✓ — '+nItens+' peça(s) em pedido(s). Siga em 📦 Pedidos → Aprovar → Receber NF.','sucesso');
+    siCarregar();
+  }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
 }
 </script>
 
