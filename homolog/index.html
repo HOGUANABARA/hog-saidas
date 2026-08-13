@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.18 · Compras de Instrumentais (ciclo completo)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.19 · Orçamentos por janela (Higiene & Instrumentais)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -430,6 +430,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-hig">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_comp" onclick="trocarAba('hig_comp')">Compras</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_orc" onclick="trocarAba('hig_orc')">💲 Orçar</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_rel" onclick="trocarAba('hig_rel')">Relatório</div>
       </div>
     </div>
@@ -1622,7 +1623,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_rel']
+           'hig_inv','hig_comp','hig_orc','hig_rel']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -1731,7 +1732,7 @@ function exigirAssinatura(ato){
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
-                    'hig_inv','hig_comp','hig_rel'];
+                    'hig_inv','hig_comp','hig_orc','hig_rel'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -3654,12 +3655,13 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_rel'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
+  if (aba==='hig_orc')  { hgOrcCarregar(); }
   if (aba==='hig_rel')  { hgRelCarregar(); }
   hsSincronizar();
   if (aba==='ocorrencias'){ ocCarregar(); }
@@ -3812,7 +3814,7 @@ async function ccCarregarAndamento(){
       if(st==='CANCELADO' || st==='CONCLUIDO') continue;
       ccAndamento[o.material_id] = st ? (ROT[st]||st) : 'AGUARDANDO NF';
     }
-    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=20')) || [];
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&limit=20')) || [];
     if(cots.length){
       const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&fechado=is.false&limit=1000`)) || [];
       for(const it of cits) if(!ccAndamento[it.material_id]) ccAndamento[it.material_id] = 'EM COTAÇÃO';
@@ -4006,7 +4008,7 @@ async function ccSoltarDaCotacao(materialIds){
   const ids = [...new Set((materialIds||[]).filter(Boolean))];
   if(!ids.length) return 0;
   try{
-    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=50')) || [];
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&limit=50')) || [];
     if(!cots.length) return 0;
     // v4.11 — tirar da cotação só remove item ABERTO. Item já fechado em
     // pedido é histórico e não se apaga.
@@ -4733,6 +4735,17 @@ let coCotacaoId = null;
 let coJaComprado = {};   // material_id -> {pedido, status, temNf} — itens desta cotação que já viraram compra
 let coItens = [];
 let coFornecedores = [];
+// v4.19 — o banco ganhou a coluna "origem" (SQL 54)? Verificação PREGUIÇOSA:
+// checa na hora do primeiro uso (não no boot — no boot a sbUrl ainda não está
+// montada) e memoriza quando der certo. Sem a coluna, TUDO se comporta
+// exatamente como a v4.18: os filtros não entram e as janelas novas avisam.
+let ORIGEM_OK = false;
+async function origemPronta(){
+  if(ORIGEM_OK) return true;
+  try{ await sbFetch('cotacoes?select=origem&limit=1'); ORIGEM_OK = true; }
+  catch(e){ ORIGEM_OK = false; }
+  return ORIGEM_OK;
+}
 let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
 let coBuscaTimer = null;
 let coBuscaRes = [];
@@ -4771,7 +4784,7 @@ async function coCarregar(){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
     if(coCotacaoId===null && !coItens.length){
-      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta&order=id.desc&limit=1');
+      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=1');
       if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
     }
     coRender();
@@ -5404,7 +5417,9 @@ async function coFecharGrupo(g){
       const fid = Number(fidStr);
       // reutiliza pedido EM_MONTAGEM do mesmo fornecedor (junção automática)
       let pedidoId=null;
-      const exist = await sbFetch(`pedidos?select=id,condicao_pagamento,prazo_previsto&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM&limit=1`);
+      // v4.19 — pedido é de UMA origem só: a junção automática no mesmo
+      // fornecedor não pode puxar um pedido de higiene para dentro dos insumos
+      const exist = await sbFetch(`pedidos?select=id,condicao_pagamento,prazo_previsto&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM${(await origemPronta())?'&origem=eq.INSUMO':''}&limit=1`);
       if(exist&&exist.length){
         pedidoId=exist[0].id;
         // pedido que já existia: preenche o que ainda estiver em branco com o combinado agora
@@ -7373,9 +7388,24 @@ async function rcGravarNF(chave, confirmar){
         continue;
       }
 
+      // ═══ v4.19 — HIGIENE: o pedido é em CAIXA, mas o estoque conta na
+      // unidade de CONSUMO (rolo/pacote/frasco). Na entrada da NF converte:
+      // qtd × qtd_kit e preço ÷ qtd_kit — o valor total não muda.
+      // (ordem.origem só existe depois do SQL 54; sem ele, nada muda aqui.)
+      let qtdMov = qtd, valMov = val;
+      if(ordem.origem === 'HIGIENE'){
+        try{
+          const mk = await sbFetch(`materiais?select=qtd_kit&id=eq.${ordem.material_id}&limit=1`);
+          const kit = mk && mk[0] && Number(mk[0].qtd_kit);
+          if(kit && kit > 1){
+            qtdMov = qtd * kit; valMov = val / kit;
+            toast('🧼 Higiene: '+qtd+' caixa(s) × '+kit+' = '+qtdMov+' unidades no estoque.','');
+          }
+        }catch(e){ toast('⚠ Não li o qtd_kit do item de higiene — a entrada foi em CAIXAS: confira o saldo.','erro'); }
+      }
       let movArr;
       const movBase = { material_id: ordem.material_id, local_id: localId,
-        qtd: qtd, valor_unitario: val, nf_item_id: nfItemId,
+        qtd: qtdMov, valor_unitario: valMov, nf_item_id: nfItemId,
         fornecedor_id: Number(fid) || null,
         aprovado: false, registrado_por: registrante,
         observacao: (semCusto?'🎁 Entrada SEM CUSTO (amostra/bonificação) — ':'Recebimento NF ') + (numeroNf||'—') };
@@ -13527,6 +13557,13 @@ async function alIgnorar(id){
   </div>
 </div>
 
+<div id="aba-hig_orc" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">💲 Orçamento de Higiene — grupo próprio, até 3 fornecedores</div>
+    <div id="hg-orc-box"></div>
+  </div>
+</div>
+
 <div id="aba-hig_rel" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">📊 Relatório de Higiene</div>
@@ -14137,6 +14174,198 @@ async function hgRelCarregar(){
   h+='</tbody></table>';
   document.getElementById('hg-rel-box').innerHTML=h;
 }
+
+// ═══════════ v4.19 — ORÇAR HIGIENE (janela própria, engine única) ═══════════
+// Grupo SÓ de higiene: usa as mesmas tabelas do orçamento (cotacoes/
+// cotacao_itens/cotacao_opcoes → pedidos/ordens_compra), com origem=HIGIENE.
+// Não encosta na tela nem nos dados do orçamento de insumos.
+let hgOrcCotId = null;
+let hgOrcForns = [null,null,null];   // fornecedor de cada coluna (até 3)
+let hgOrcItens = [];                 // {material_id, nome, codigo, qtd_kit, qtd, precos[3], escolhido}
+const HG_BTN  = 'border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)';
+const HG_BTNV = HG_BTN+';background:var(--verde)';
+const HG_BTNX = 'border:1px solid var(--vermelho);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--vermelho);background:#FDEDEC';
+const HG_INP  = 'border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)';
+
+function hgOrcNum(v){ const n=parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); return isNaN(n)?null:n; }
+function hgOrcFornNome(fid){ const f=(coFornecedores||[]).find(function(x){return x.id===fid;}); return f?f.nome:'—'; }
+
+async function hgOrcCarregar(){
+  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  const ok = await origemPronta();
+  if(!ok){ box.innerHTML='<div class="hg-nota">Para orçar higiene aqui, o banco precisa do script <b>54_orcamento_por_janela.sql</b>. Rode-o no Supabase e recarregue a página — até lá nada muda no restante do app.</div>'; return; }
+  if(!hgDados.length) await hgCarregarDados();
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
+  if(hgOrcCotId===null && !hgOrcItens.length){
+    try{
+      const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.HIGIENE&order=id.desc&limit=1'))||[];
+      if(ab.length){
+        hgOrcCotId=ab[0].id;
+        const fg=(ab[0].fornecedores_grupo&&ab[0].fornecedores_grupo['Higiene'])||[];
+        hgOrcForns=[fg[0]||null,fg[1]||null,fg[2]||null];
+        const its=(await sbFetch('cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false&order=id.asc'))||[];
+        hgOrcItens=its.map(function(it){
+          const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+          const linha={ material_id:it.material_id, nome:it.material_nome, codigo:ref.codigo||null,
+                        qtd_kit:ref.qtd_kit||null, qtd:Number(it.qtd_desejada)||1, precos:[null,null,null], escolhido:null };
+          (it.cotacao_opcoes||[]).forEach(function(o){
+            const k=(o.slot||1)-1; if(k<0||k>2) return;
+            linha.precos[k]=o.preco_total;
+            if(o.fornecedor_id && !hgOrcForns[k]) hgOrcForns[k]=o.fornecedor_id;
+            if(o.escolhida) linha.escolhido=k;
+          });
+          return linha;
+        });
+      }
+    }catch(e){}
+  }
+  hgOrcRender();
+}
+
+function hgOrcRender(){
+  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  let h='<div class="hg-nota">Grupo <b>só de higiene</b> — não se mistura com o orçamento de insumos. O preço lançado é o da <b>CAIXA</b>; na entrada da NF o sistema converte para a unidade de consumo sozinho (× un/caixa).</div>';
+  let opts='<option value="">Adicionar produto…</option>';
+  hgDados.slice().sort(function(a,b){return String(a.material).localeCompare(String(b.material));}).forEach(function(r){
+    if(hgOrcItens.some(function(i){return i.material_id===r.material_id;})) return;
+    opts+='<option value="'+r.material_id+'">'+hgEsc(r.material)+(r.codigo?(' ['+hgEsc(r.codigo)+']'):'')+'</option>';
+  });
+  h+='<div class="hg-filtros"><select id="hg-orc-add-sel" style="flex:1;min-width:220px">'+opts+'</select>'
+    +'<input type="number" id="hg-orc-add-qtd" value="1" min="1" title="quantidade de caixas" style="width:90px;'+HG_INP+';padding:8px 10px;font-size:13px">'
+    +'<button style="'+HG_BTN+'" onclick="hgOrcAdd()">➕ Adicionar</button></div>';
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">';
+  for(let k=0;k<3;k++){
+    let fo='<option value="">Fornecedor '+(k+1)+'…</option>';
+    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(hgOrcForns[k]===f.id?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
+    h+='<select onchange="hgOrcForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco)">'+fo+'</select>';
+  }
+  h+='</div>';
+  h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Produto</th><th class="hg-num">Caixas</th>';
+  for(let k=0;k<3;k++) h+='<th class="hg-num">'+(hgOrcForns[k]?hgEsc(hgOrcFornNome(hgOrcForns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>';
+  h+='<th>Escolha</th><th></th></tr></thead><tbody>';
+  if(!hgOrcItens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:18px">Nenhum item — adicione acima.</td></tr>';
+  hgOrcItens.forEach(function(it,i){
+    let menor=null; it.precos.forEach(function(p,k){ if(hgOrcForns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
+    h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa'):'')+'</span></td>'
+      +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="hgOrcQtd('+i+',this.value)" style="width:70px;'+HG_INP+'"></td>';
+    for(let k=0;k<3;k++){
+      if(!hgOrcForns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
+      h+='<td class="hg-num"><input type="text" value="'+(it.precos[k]!=null?String(it.precos[k]).replace('.',','):'')+'" placeholder="0,00" onchange="hgOrcPreco('+i+','+k+',this.value)" style="width:90px;text-align:right;'+HG_INP+(menor===k?';border-color:var(--verde);background:var(--verde-claro);font-weight:700':'')+'"></td>';
+    }
+    let esc='<select onchange="hgOrcEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
+    for(let k=0;k<3;k++){ if(hgOrcForns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+hgEsc(hgOrcFornNome(hgOrcForns[k]))+'</option>'; }
+    esc+='</select>';
+    h+='<td>'+esc+'</td><td><button style="'+HG_BTNX+'" onclick="hgOrcRemover('+i+')" title="tirar do orçamento">✕</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">'
+    +'<button style="'+HG_BTN+'" onclick="hgOrcSalvar(false)">💾 Salvar orçamento</button>'
+    +'<button style="'+HG_BTNV+'" onclick="hgOrcFechar()">🔒 Fechar → pedidos por fornecedor</button>'
+    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de higiene #'+hgOrcCotId+'</span>'):'')
+    +'</div>';
+  box.innerHTML=h;
+}
+
+function hgOrcAdd(){
+  const sel=document.getElementById('hg-orc-add-sel');
+  const mid=parseInt(sel&&sel.value,10); if(!mid){ toast('Escolha o produto.','erro'); return; }
+  const q=parseFloat((document.getElementById('hg-orc-add-qtd')||{}).value||'1')||1;
+  const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r) return;
+  hgOrcItens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
+                    qtd:q, precos:[null,null,null], escolhido:null });
+  hgOrcRender();
+}
+function hgOrcQtd(i,v){ const it=hgOrcItens[i]; if(!it) return; it.qtd=parseFloat(v)||1; }
+function hgOrcPreco(i,k,v){ const it=hgOrcItens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
+function hgOrcEscolher(i,v){ const it=hgOrcItens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); }
+function hgOrcForn(k,v){ hgOrcForns[k]=v?parseInt(v,10):null; hgOrcRender(); }
+function hgOrcRemover(i){ hgOrcItens.splice(i,1); hgOrcRender(); }
+
+async function hgOrcSalvar(sil){
+  if(!exigirSenhaCompras()) return false;
+  if(!hgOrcItens.length){
+    if(hgOrcCotId!==null){
+      try{
+        await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
+        await sbFetch('cotacoes?id=eq.'+hgOrcCotId,'PATCH',{status:'fechada'});
+        hgOrcCotId=null;
+      }catch(e){ toast('Erro ao encerrar o orçamento vazio: '+e.message,'erro'); return false; }
+    }
+    if(!sil){ toast('Orçamento de higiene sem itens — encerrado.',''); hgOrcRender(); }
+    return true;
+  }
+  try{
+    const fg={ 'Higiene': hgOrcForns.filter(Boolean) };
+    if(hgOrcCotId===null){
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:(SESSAO?SESSAO.nome:'')||'',fornecedores_grupo:fg,origem:'HIGIENE'});
+      if(!c||!c.length) throw new Error('não retornou a cotação criada');
+      hgOrcCotId=c[0].id;
+    } else {
+      await sbFetch('cotacoes?id=eq.'+hgOrcCotId,'PATCH',{fornecedores_grupo:fg});
+      await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
+    }
+    for(const it of hgOrcItens){
+      const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:hgOrcCotId, material_id:it.material_id,
+        material_nome:it.nome, qtd_desejada:it.qtd, grupo:'Higiene' });
+      const itemId=ins&&ins[0]&&ins[0].id;
+      const ops=[];
+      for(let k=0;k<3;k++){
+        if(!hgOrcForns[k]||it.precos[k]==null) continue;
+        ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:hgOrcForns[k],
+          qtd_embalagem:it.qtd_kit||null, preco_total:it.precos[k],
+          preco_unitario:(it.qtd_kit&&it.qtd_kit>0)?(it.precos[k]/it.qtd_kit):it.precos[k],
+          escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+      }
+      if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
+    }
+    if(!sil){ toast('Orçamento de higiene #'+hgOrcCotId+' salvo ✓','sucesso'); hgOrcRender(); }
+    return true;
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
+}
+
+async function hgOrcFechar(){
+  if(!exigirSenhaCompras()) return;
+  const prontos=hgOrcItens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && hgOrcForns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
+  if(!prontos.length){ toast('Nenhum item com fornecedor ESCOLHIDO.','erro'); return; }
+  const semEsc=hgOrcItens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  let msg='Fechar o orçamento de higiene?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
+  if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
+  if(!confirm(msg)) return;
+  try{
+    const ok=await hgOrcSalvar(true); if(!ok) return;
+    const porForn={};
+    prontos.forEach(function(it){ const fid=hgOrcForns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
+    let nItens=0;
+    for(const fidStr of Object.keys(porForn)){
+      const fid=Number(fidStr);
+      // pedido é de UMA origem: só reaproveita EM_MONTAGEM de HIGIENE
+      let pedidoId=null;
+      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.HIGIENE&limit=1');
+      if(exist&&exist.length) pedidoId=exist[0].id;
+      else{
+        const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:hgOrcCotId,
+          origem:'HIGIENE', observacao:'Orçamento de higiene #'+hgOrcCotId });
+        pedidoId=p&&p[0]&&p[0].id;
+      }
+      for(const it of porForn[fidStr]){
+        await sbFetch('ordens_compra','POST',{ material_id:it.material_id, fornecedor_id:fid, fornecedor_compra_id:fid,
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
+          qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
+          observacao:'Higiene — cotação #'+hgOrcCotId+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'') });
+        nItens++;
+      }
+      const ids=porForn[fidStr].map(function(it){return it.material_id;});
+      try{
+        await sbFetch('cotacao_itens?cotacao_id=eq.'+hgOrcCotId+'&material_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
+          {fechado:true,fechado_em:new Date().toISOString(),pedido_id:pedidoId});
+      }catch(e){}
+    }
+    hgOrcItens=hgOrcItens.filter(function(it){ return prontos.indexOf(it)<0; });
+    await hgOrcSalvar(true);
+    hgOrcRender();
+    toast('Fechado ✓ — '+nItens+' item(ns) de higiene em pedido(s) por fornecedor. Veja em 📦 Pedidos.','sucesso');
+  }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
+}
 </script>
 
 <script>
@@ -14302,7 +14531,9 @@ function siOverlay(inner){
 function siFecharOverlay(){ const ov=document.getElementById('si-modal2'); if(ov) ov.remove(); }
 function siNum(v){ return parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); }
 
-async function siOrcar(id){
+// v4.18 — orçamento simples de 1 fornecedor. Vira RESERVA: só é usado se o
+// banco ainda não tiver o SQL 54 (senão, o siOrcar novo compara 3 fornecedores).
+async function siOrcarSimples(id){
   const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
   let forns = (typeof coFornecedores!=='undefined' && coFornecedores && coFornecedores.length) ? coFornecedores : [];
   if(!forns.length){ try{ forns=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; coFornecedores=forns; }catch(e){} }
@@ -14329,6 +14560,75 @@ async function siOrcarSalvar(id){
     toast('Orçado — foi para aprovação ✓','sucesso'); siFecharOverlay(); siCarregar();
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
+// ═══ v4.19 — Orçar com COMPARAÇÃO de verdade (até 3 fornecedores) ═══
+// O comparativo fica gravado na engine de cotação (origem INSTRUMENTAL,
+// grupo próprio — nada se mistura com insumos). A solicitação continua
+// dona do processo: quem cotou, valor escolhido e status andam nela.
+async function siOrcar(id){
+  const temOrigem = await origemPronta();
+  if(!temOrigem) return siOrcarSimples(id);
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  let forns = (typeof coFornecedores!=='undefined' && coFornecedores && coFornecedores.length) ? coFornecedores : [];
+  if(!forns.length){ try{ forns=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; coFornecedores=forns; }catch(e){} }
+  let opts='<option value="">Fornecedor…</option>';
+  forns.forEach(function(f){ opts+='<option value="'+f.id+'">'+siEsc(f.nome)+'</option>'; });
+  let linhas='';
+  for(let k=0;k<3;k++){
+    linhas+='<div style="display:flex;gap:8px;align-items:center;margin-top:6px">'
+      +'<select id="si-forn-'+k+'" style="flex:1;'+SI_SEL+'">'+opts+'</select>'
+      +'<input type="text" id="si-valor-'+k+'" placeholder="R$/un" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);text-align:right">'
+      +'<label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer"><input type="radio" name="si-esc" value="'+k+'"> escolhido</label>'
+      +'</div>';
+  }
+  siOverlay('<div class="rm-head azul"><span>💲 Orçar — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4)">Compare até 3 fornecedores (valor unitário da peça) e marque o <b>escolhido</b>. O comparativo fica no histórico de cotações.</div>'
+    +linhas
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-top:10px">Quantidade solicitada: <b>'+siEsc(s.qtd)+'</b> · motivo: '+siEsc(s.motivo||'—')+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siOrcarCompSalvar('+id+')">Enviar p/ aprovação ✓</button></div>'
+    +'</div>');
+}
+async function siOrcarCompSalvar(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const ofertas=[];
+  for(let k=0;k<3;k++){
+    const fid=parseInt((document.getElementById('si-forn-'+k)||{}).value,10);
+    const val=siNum((document.getElementById('si-valor-'+k)||{}).value);
+    if(fid&&val&&val>0) ofertas.push({slot:k+1,idx:k,fornecedor_id:fid,valor:val});
+  }
+  if(!ofertas.length){ toast('Preencha ao menos um fornecedor com valor.','erro'); return; }
+  const escEl=document.querySelector('input[name="si-esc"]:checked');
+  let escolhida=null;
+  if(escEl){ escolhida=ofertas.find(function(o){return o.idx===parseInt(escEl.value,10);})||null; }
+  if(!escolhida){
+    if(ofertas.length===1) escolhida=ofertas[0];
+    else { toast('Marque qual fornecedor foi o ESCOLHIDO.','erro'); return; }
+  }
+  // 1) grava o comparativo na engine — se falhar, avisa mas NÃO trava o fluxo
+  try{
+    let cotId=null;
+    const ab=(await sbFetch('cotacoes?select=id&status=eq.aberta&origem=eq.INSTRUMENTAL&order=id.desc&limit=1'))||[];
+    if(ab.length) cotId=ab[0].id;
+    else{ const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:siNome(),origem:'INSTRUMENTAL'}); cotId=c&&c[0]&&c[0].id; }
+    if(cotId){
+      const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:cotId, material_id:null, solicitacao_instr_id:id,
+        material_nome:s.peca_nome, qtd_desejada:s.qtd, grupo:'Instrumental', fechado:true, fechado_em:new Date().toISOString() });
+      const itemId=ins&&ins[0]&&ins[0].id;
+      if(itemId){
+        await sbFetch('cotacao_opcoes','POST',ofertas.map(function(o){ return { cotacao_item_id:itemId, slot:o.slot,
+          fornecedor_id:o.fornecedor_id, preco_total:o.valor, preco_unitario:o.valor,
+          escolhida:o===escolhida, qtd_escolhida:(o===escolhida)?s.qtd:null }; }));
+      }
+    }
+  }catch(e){ toast('⚠ Comparativo não gravado na cotação ('+(e.message||e)+') — a solicitação segue mesmo assim.','erro'); }
+  // 2) a solicitação anda como sempre andou
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ fornecedor_id:escolhida.fornecedor_id, valor_unitario:escolhida.valor,
+      valor_total: escolhida.valor*parseFloat(s.qtd), cotado_por:siNome(), cotado_em:new Date().toISOString(), status:'AGUARDANDO_APROVACAO' });
+    toast('Orçado com '+ofertas.length+' oferta(s) — foi para aprovação ✓','sucesso'); siFecharOverlay(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
 async function siAprovar(id){
   if(!confirm('Aprovar esta compra?')) return;
   try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'APROVADA', aprovado_por:siNome(), aprovado_em:new Date().toISOString() }); toast('Aprovada ✓','sucesso'); siCarregar(); }
