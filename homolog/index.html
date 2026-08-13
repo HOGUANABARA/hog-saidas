@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.16b · Módulo Higiene</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.17 · Solicitação de Instrumentais</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1161,6 +1161,9 @@ details[open] summary { margin-bottom: 6px; }
     <button class="rm-b claro" onclick="ciNovaCaixa()">➕ Nova caixa</button>
     <button class="rm-b claro" onclick="ciCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
+
+  <!-- Janelas de solicitação de instrumentais (v4.17) -->
+  <div id="ci-solic"></div>
 
   <div id="ci-filtros"></div>
   <div class="rm-tiles" id="ci-tiles"></div>
@@ -3635,7 +3638,7 @@ function trocarAba(aba) {
   document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
   { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
   { const p=document.getElementById('aba-instrumentais'); if(p) p.style.display = aba==='instrumentais' ? '' : 'none'; }
-  if (aba==='instrumentais') { ciCarregar(); }
+  if (aba==='instrumentais') { ciCarregar(); if(typeof siCarregar==='function') siCarregar(); }
   if (aba==='usuarios') { usCarregar(); }
   if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
   if (aba==='inventario') { setTimeout(()=>{ if(!dmlMats.length) dmlCarregar(); }, 120); }
@@ -14133,6 +14136,104 @@ async function hgRelCarregar(){
   });
   h+='</tbody></table>';
   document.getElementById('hg-rel-box').innerHTML=h;
+}
+</script>
+
+<script>
+// ═══ SOLICITAÇÃO DE INSTRUMENTAIS (v4.17) — 2 janelas ═══
+let siDados = [];
+function siEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function siNome(){ return (SESSAO ? SESSAO.nome : '') || 'Equipe'; }
+var SI_ITEM='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--cinza-2);flex-wrap:wrap';
+var SI_META='font-size:12px;color:var(--cinza-4)';
+var SI_SEL ='border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px;font-size:12px;font-family:var(--fonte)';
+
+async function siCarregar(){
+  const box = document.getElementById('ci-solic'); if(!box) return;
+  try{
+    siDados = (await sbFetch('solicitacao_instrumental?select=*&status=in.(AGUARDANDO_ORCAMENTO,EM_COMPRA,RECEBIDO)&order=solicitado_em.asc')) || [];
+  }catch(e){ siDados = []; box.innerHTML=''; return; }
+  siRender();
+}
+
+function siRender(){
+  const box = document.getElementById('ci-solic'); if(!box) return;
+  const aguard = siDados.filter(function(s){ return s.status==='AGUARDANDO_ORCAMENTO' || s.status==='EM_COMPRA'; });
+  const receb  = siDados.filter(function(s){ return s.status==='RECEBIDO'; });
+  const podeNF = (typeof podeAto==='function') && podeAto('entrada_nf');
+  let h='';
+
+  // Janela 1 — aguardando orçamento
+  h += '<div class="rm-card">';
+  h += '<div class="rm-head azul"><span>📥 Solicitações — aguardando orçamento ('+aguard.length+')</span>'
+     + '<button class="rm-b claro" onclick="siAbrir()">➕ Abrir solicitação</button></div>';
+  h += '<div style="padding:6px 16px 12px">';
+  if(!aguard.length) h += '<div class="rm-empty">Nenhuma solicitação aberta.</div>';
+  aguard.forEach(function(s){
+    h += '<div style="'+SI_ITEM+'">'
+       + '<div><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">· qtd '+siEsc(s.qtd)+' · por '+siEsc(s.solicitado_por||'—')+(s.status==='EM_COMPRA'?' · em compra':'')+'</span></div>'
+       + (podeNF ? '<button class="rm-b laranja" onclick="siReceber('+s.id+')">📥 Registrar recebimento</button>' : '')
+       + '</div>';
+  });
+  h += '</div></div>';
+
+  // Janela 2 — peças que chegaram, dar destino
+  h += '<div class="rm-card">';
+  h += '<div class="rm-head laranja"><span>🆕 Peças que chegaram — dar destino ('+receb.length+')</span></div>';
+  h += '<div style="padding:6px 16px 12px">';
+  if(!receb.length) h += '<div class="rm-empty">Nenhuma peça aguardando destino.</div>';
+  const caixas = (typeof ciCaixas!=='undefined' ? ciCaixas : []).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
+  receb.forEach(function(s){
+    let opts = '<option value="">Escolher caixa / reserva…</option>';
+    caixas.forEach(function(c){ opts += '<option value="'+c.id+'">'+siEsc(c.nome)+'</option>'; });
+    h += '<div style="'+SI_ITEM+'">'
+       + '<div><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">· qtd '+siEsc(s.qtd)+(s.nf_numero?(' · NF '+siEsc(s.nf_numero)):'')+'</span></div>'
+       + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+       + '<select style="'+SI_SEL+'" id="si-dest-'+s.id+'">'+opts+'</select>'
+       + '<button class="rm-b laranja" onclick="siDestino('+s.id+')">Dar destino ✓</button>'
+       + '</div></div>';
+  });
+  h += '</div></div>';
+  box.innerHTML = h;
+}
+
+async function siAbrir(){
+  const nome = prompt('Qual peça precisa comprar?'); if(!nome || !nome.trim()) return;
+  const q = parseFloat((prompt('Quantas?','1')||'1').replace(',','.'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  try{
+    const r = await sbFetch('solicitacao_instrumental','POST',{ peca_nome:nome.trim(), qtd:q, solicitado_por:siNome() });
+    if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
+    toast('Solicitação aberta ✓','sucesso'); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function siReceber(id){
+  const nf = prompt('Nº da NF (opcional):','');
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'RECEBIDO', nf_numero:(nf||'').trim()||null, recebido_por:siNome(), recebido_em:new Date().toISOString() });
+    toast('Recebida — foi para "dar destino" ✓','sucesso'); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function siDestino(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const sel = document.getElementById('si-dest-'+id);
+  const caixaId = sel ? parseInt(sel.value,10) : 0;
+  if(!caixaId){ toast('Escolha a caixa (ou a RESERVA).','erro'); return; }
+  try{
+    const iguais = (typeof ciPecas!=='undefined' ? ciPecas : []).filter(function(p){ return p.caixa_id===caixaId && ciNorm(p.nome)===ciNorm(s.peca_nome); });
+    if(iguais.length){
+      const base = (iguais[0].qtd!=null) ? (parseFloat(iguais[0].qtd)||0) : 0;
+      await sbFetch('instrumental_pecas?id=eq.'+iguais[0].id,'PATCH',{ qtd: base + parseFloat(s.qtd) });
+    } else {
+      await sbFetch('instrumental_pecas','POST',{ caixa_id:caixaId, nome:s.peca_nome, qtd:parseFloat(s.qtd) });
+    }
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'DESTINADO', caixa_destino_id:caixaId, destinado_por:siNome(), destinado_em:new Date().toISOString() });
+    toast('Destino dado — peça entrou na caixa ✓','sucesso');
+    if(typeof ciCarregar==='function') ciCarregar();
+    siCarregar();
+  }catch(e){ toast('Erro ao dar destino: '+(e.message||e),'erro'); }
 }
 </script>
 
