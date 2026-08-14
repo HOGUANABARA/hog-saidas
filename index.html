@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.15d</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -392,10 +392,19 @@ details[open] summary { margin-bottom: 6px; }
     </div>
 
     <div class="hs-grupo">
-      <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Remessas</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
+      <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Controle de Remessa</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
       <div class="hs-lista" id="hs-l-rem">
-        <div class="hs-item" id="aba-btn-remessas" onclick="trocarAba('remessas')">Fora de casa <span id="badge-rem" style="background:#E67E22;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-instrumentais" onclick="trocarAba('instrumentais')">🔩 Instrumentais do CME <span id="badge-ci" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item" id="aba-btn-remessas" onclick="rmIrTipo('LAVANDERIA')">🧺 Lavanderia <span id="badge-rem" style="background:#E67E22;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item" id="aba-btn-rem-oxido" onclick="rmIrTipo('ESTERILIZACAO')">☣️ Óxido de etileno</div>
+      </div>
+    </div>
+
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('cme')"><span><span class="hs-ico">🔩</span> CME</span><span class="hs-seta" id="hs-s-cme">▾</span></div>
+      <div class="hs-lista" id="hs-l-cme">
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-instrumentais" onclick="cmeIr('compras')">Compras <span id="badge-ci" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-inv" onclick="cmeIr('inventario')">Inventário</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-man" onclick="cmeIr('manutencao')">Manutenção</div>
       </div>
     </div>
 
@@ -422,6 +431,16 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-rel">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-historico" onclick="trocarAba('historico')">Compras e notas</div>
         <div class="hs-item aba-restrita" style="display:none" id="hs-rel-estoque" onclick="trocarAba('inventario');setTimeout(()=>{var e=document.getElementById('rel-card');if(e)e.scrollIntoView({behavior:'smooth'})},300)">Saldo de estoque</div>
+      </div>
+    </div>
+
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('hig')"><span><span class="hs-ico">🧼</span> Higiene</span><span class="hs-seta" id="hs-s-hig">▾</span></div>
+      <div class="hs-lista" id="hs-l-hig">
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_comp" onclick="trocarAba('hig_comp')">Compras</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_orc" onclick="trocarAba('hig_orc')">💲 Orçar</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_rel" onclick="trocarAba('hig_rel')">Relatório</div>
       </div>
     </div>
 
@@ -1031,6 +1050,7 @@ details[open] summary { margin-bottom: 6px; }
     <button onclick="rcRegistrarExtravio()" style="margin-left:auto;background:#FDEDEC;color:var(--vermelho);border:1.5px solid var(--vermelho);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">⚠️ Registrar extravio/perda</button>
   </div>
   <div id="rc-corpo"><div class="rc-empty">Carregando pedidos pendentes...</div></div>
+  <div id="rc-devolucoes"></div>
   <div class="rc-nfs-recentes">
     <h3>📄 Notas fiscais recentes</h3>
     <div id="rc-nfs-lista"><div class="rc-empty" style="padding:20px">Carregando...</div></div>
@@ -1108,12 +1128,12 @@ details[open] summary { margin-bottom: 6px; }
   #aba-remessas .rm-tag, #aba-instrumentais .rm-tag.dinheiro{background:#FDF2E9;color:#D35400}
   #aba-remessas .rm-filtros, #aba-instrumentais .rm-filtros{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:12px 16px;margin-bottom:16px}
   #aba-remessas .rm-flin, #aba-instrumentais .rm-flin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  #aba-remessas .rm-flin, #aba-instrumentais .rm-flin:last-child{margin-bottom:0}
+  #aba-remessas .rm-flin:last-child, #aba-instrumentais .rm-flin:last-child{margin-bottom:0}
   #aba-remessas .rm-flab, #aba-instrumentais .rm-flab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);min-width:78px}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul)}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
-  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22}
+  #aba-remessas .rm-chip, #aba-instrumentais .rm-chip{border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);transition:background .15s,border-color .15s,color .15s}
+  #aba-remessas .rm-chip:hover, #aba-instrumentais .rm-chip:hover{border-color:var(--azul-medio);color:var(--azul);background:var(--cinza-1)}
+  #aba-remessas .rm-chip.on, #aba-instrumentais .rm-chip.on{background:var(--azul-medio);border-color:var(--azul-medio);color:#fff}
+  #aba-remessas .rm-chip.on.laranja, #aba-instrumentais .rm-chip.on.laranja{background:#E67E22;border-color:#E67E22;color:#fff}
   #aba-remessas .rm-fbusca, #aba-instrumentais .rm-fbusca{flex:1;min-width:170px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 11px;font-size:13px;font-family:var(--fonte)}
 </style>
 <!-- ═══ ABA INSTRUMENTAIS DO CME (v4.12) ═══════════════════════════ -->
@@ -1147,11 +1167,14 @@ details[open] summary { margin-bottom: 6px; }
     <b>Instrumental de médico é do médico</b>: o hospital não compra nem descarta por conta própria.
   </div>
 
-  <div class="rm-topo">
-    <button class="rm-b laranja" onclick="rmMontarManutencao()">🔧 Mandar peças para conserto</button>
-    <button class="rm-b claro" onclick="ciNovaCaixa()">➕ Nova caixa</button>
+  <div class="rm-topo" id="cme-topo">
+    <button class="rm-b laranja" id="cme-btn-conserto" onclick="rmMontarManutencao()">🔧 Mandar peças para conserto</button>
+    <button class="rm-b claro" id="cme-btn-novacaixa" onclick="ciNovaCaixa()">➕ Nova caixa</button>
     <button class="rm-b claro" onclick="ciCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
+
+  <!-- Janelas de solicitação de instrumentais (v4.17) -->
+  <div id="ci-solic"></div>
 
   <div id="ci-filtros"></div>
   <div class="rm-tiles" id="ci-tiles"></div>
@@ -1179,6 +1202,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="rm-b laranja" onclick="rmMontarRemessa()">🧺 Montar remessa do dia</button>
     <button class="rm-b claro" onclick="rmNovoSujo()">➕ Acrescentar item sujo</button>
     <button class="rm-b claro" onclick="rmEntradaBem()">📦 Entrada de peça nova</button>
+    <button class="rm-b claro" onclick="rmEstoqueInicial()">🏁 Estoque inicial</button>
     <button class="rm-b claro" onclick="rmCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
 
@@ -1609,7 +1633,8 @@ const PERFIS = {
   COMPRAS: {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
-           'receber','inventario','historico','ocorrencias','painel']
+           'receber','inventario','historico','ocorrencias','painel',
+           'hig_inv','hig_comp','hig_orc','hig_rel']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -1717,7 +1742,8 @@ function exigirAssinatura(ato){
 // ── ABAS: mostrar só o que o perfil enxerga ─────────────────────
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
-                    'inventario','historico','ocorrencias','usuarios'];
+                    'inventario','historico','ocorrencias','usuarios',
+                    'hig_inv','hig_comp','hig_orc','hig_rel'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -1726,6 +1752,11 @@ function aplicarPermissoes(){
   }
   const relEst = document.getElementById('hs-rel-estoque');
   if (relEst) relEst.style.display = podeAba('inventario') ? '' : 'none';
+  // v4.21 — os três itens do grupo CME abrem a mesma aba 'instrumentais'
+  ['aba-btn-cme-inv','aba-btn-cme-man'].forEach(function(id){
+    const b = document.getElementById(id);
+    if (b) b.style.display = podeAba('instrumentais') ? '' : 'none';
+  });
   const cad = document.getElementById('aba-btn-cadeado');
   if (cad && SESSAO) {
     cad.innerHTML = '<span class="hs-ico">👤</span> ' + SESSAO.nome +
@@ -1965,7 +1996,7 @@ function resolverMaterial(nome) {
 
 async function testarConexao() {
   try {
-    const r = await sbFetch('materiais?select=id,nome&limit=1000');
+    const r = await sbFetch('materiais?select=id,nome&limit=5000');
     catalogoMateriais = r;
     todosOsMateriais = r.map(m => m.nome);
     document.getElementById('status-cx').textContent = `✅ Conectado — ${todosOsMateriais.length} materiais`;
@@ -2979,7 +3010,7 @@ function renderizarPendentes() {
 async function aprIncluirItem(i){
   const p = pendentes[i]; if(!p) return;
   if(!catalogoMateriais.length){
-    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || []; }catch(e){}
   }
   const jaTem = new Set((p.itens||[]).map(x=>x.material_id));
   const esc = await pkEscolher({
@@ -3624,7 +3655,7 @@ function trocarAba(aba) {
   document.getElementById('aba-alertas').style.display = aba==='alertas' ? '' : 'none';
   { const p=document.getElementById('aba-usuarios'); if(p) p.style.display = aba==='usuarios' ? '' : 'none'; }
   { const p=document.getElementById('aba-instrumentais'); if(p) p.style.display = aba==='instrumentais' ? '' : 'none'; }
-  if (aba==='instrumentais') { ciCarregar(); }
+  if (aba==='instrumentais') { ciCarregar(); if(typeof siCarregar==='function') siCarregar(); if(typeof cmeAplicarModo==='function') cmeAplicarModo(); }
   if (aba==='usuarios') { usCarregar(); }
   if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
   if (aba==='inventario') { setTimeout(()=>{ if(!dmlMats.length) dmlCarregar(); }, 120); }
@@ -3640,6 +3671,14 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
+  ['hig_inv','hig_comp','hig_orc','hig_rel'].forEach(function(a){
+    var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
+    var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
+  });
+  if (aba==='hig_inv')  { hgInvCarregar(); }
+  if (aba==='hig_comp') { hgCompCarregar(); }
+  if (aba==='hig_orc')  { hgOrcCarregar(); }
+  if (aba==='hig_rel')  { hgRelCarregar(); }
   hsSincronizar();
   if (aba==='ocorrencias'){ ocCarregar(); }
 }
@@ -3740,7 +3779,7 @@ async function acCarregar(){
       try{ acFornecedores = await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=300'); }catch(e){}
     }
     if(!catalogoMateriais.length){
-      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || [];
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
     ccDados = (await sbFetch('vw_compras_classes?select=*&limit=1000')) || [];
@@ -3791,7 +3830,7 @@ async function ccCarregarAndamento(){
       if(st==='CANCELADO' || st==='CONCLUIDO') continue;
       ccAndamento[o.material_id] = st ? (ROT[st]||st) : 'AGUARDANDO NF';
     }
-    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=20')) || [];
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&limit=20')) || [];
     if(cots.length){
       const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&fechado=is.false&limit=1000`)) || [];
       for(const it of cits) if(!ccAndamento[it.material_id]) ccAndamento[it.material_id] = 'EM COTAÇÃO';
@@ -3985,7 +4024,7 @@ async function ccSoltarDaCotacao(materialIds){
   const ids = [...new Set((materialIds||[]).filter(Boolean))];
   if(!ids.length) return 0;
   try{
-    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta&limit=50')) || [];
+    const cots = (await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&limit=50')) || [];
     if(!cots.length) return 0;
     // v4.11 — tirar da cotação só remove item ABERTO. Item já fechado em
     // pedido é histórico e não se apaga.
@@ -4712,6 +4751,17 @@ let coCotacaoId = null;
 let coJaComprado = {};   // material_id -> {pedido, status, temNf} — itens desta cotação que já viraram compra
 let coItens = [];
 let coFornecedores = [];
+// v4.19 — o banco ganhou a coluna "origem" (SQL 54)? Verificação PREGUIÇOSA:
+// checa na hora do primeiro uso (não no boot — no boot a sbUrl ainda não está
+// montada) e memoriza quando der certo. Sem a coluna, TUDO se comporta
+// exatamente como a v4.18: os filtros não entram e as janelas novas avisam.
+let ORIGEM_OK = false;
+async function origemPronta(){
+  if(ORIGEM_OK) return true;
+  try{ await sbFetch('cotacoes?select=origem&limit=1'); ORIGEM_OK = true; }
+  catch(e){ ORIGEM_OK = false; }
+  return ORIGEM_OK;
+}
 let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
 let coBuscaTimer = null;
 let coBuscaRes = [];
@@ -4750,7 +4800,7 @@ async function coCarregar(){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
     if(coCotacaoId===null && !coItens.length){
-      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta&order=id.desc&limit=1');
+      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=1');
       if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
     }
     coRender();
@@ -5383,7 +5433,9 @@ async function coFecharGrupo(g){
       const fid = Number(fidStr);
       // reutiliza pedido EM_MONTAGEM do mesmo fornecedor (junção automática)
       let pedidoId=null;
-      const exist = await sbFetch(`pedidos?select=id,condicao_pagamento,prazo_previsto&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM&limit=1`);
+      // v4.19 — pedido é de UMA origem só: a junção automática no mesmo
+      // fornecedor não pode puxar um pedido de higiene para dentro dos insumos
+      const exist = await sbFetch(`pedidos?select=id,condicao_pagamento,prazo_previsto&fornecedor_id=eq.${fid}&status=eq.EM_MONTAGEM${(await origemPronta())?'&origem=eq.INSUMO':''}&limit=1`);
       if(exist&&exist.length){
         pedidoId=exist[0].id;
         // pedido que já existia: preenche o que ainda estiver em branco com o combinado agora
@@ -5752,14 +5804,51 @@ async function deIncluirItem(pid){
 
 function deMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
 function deNomeForn(id){ if(!id) return '(sem fornecedor)'; const f=coFornecedores.find(x=>x.id===id); return f?f.nome:('fornecedor #'+id); }
-function deNomeMat(id){ const m=catalogoMateriais.find(x=>x.id===id); return m?m.nome:('material #'+id); }
+function deNomeMat(id, o){
+  if(!id) return (o && o.item_nome) ? ('🔩 '+o.item_nome) : 'peça de instrumental';
+  const m=catalogoMateriais.find(x=>x.id===id);
+  return m ? m.nome : ((o && o.item_nome) ? o.item_nome : ('material #'+id));
+}
+
+// ═══ v4.20c — COMPARATIVO PARA APROVAÇÃO: último valor pago por item ═══
+// Quem aprova precisa de referência, não só da escolha do comprador.
+// Material → materiais.ultimo_valor_pago (só compras reais, regra de custo).
+// Peça de instrumental → última solicitação RECEBIDA/DESTINADA da mesma peça.
+let ultPagoCache = {};   // 'm<id>' -> valor | 'n<nome>' -> valor | null = nunca comprado
+async function ultPagoCarregar(ordens){
+  const mids=[...new Set((ordens||[]).map(o=>o.material_id).filter(Boolean))].filter(id=>ultPagoCache['m'+id]===undefined);
+  if(mids.length){
+    try{
+      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago&id=in.('+mids.join(',')+')'))||[];
+      ms.forEach(m=>{ ultPagoCache['m'+m.id]=(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)?Number(m.ultimo_valor_pago):null; });
+      mids.forEach(id=>{ if(ultPagoCache['m'+id]===undefined) ultPagoCache['m'+id]=null; });
+    }catch(e){}
+  }
+  const nomes=[...new Set((ordens||[]).filter(o=>!o.material_id&&o.item_nome).map(o=>o.item_nome))].filter(n=>ultPagoCache['n'+n]===undefined);
+  for(const n of nomes){
+    try{
+      const s=(await sbFetch('solicitacao_instrumental?select=valor_unitario&peca_nome=ilike.'+encodeURIComponent(n)+'&valor_unitario=not.is.null&status=in.(RECEBIDA,DESTINADA)&order=id.desc&limit=1'))||[];
+      ultPagoCache['n'+n]=(s[0]&&s[0].valor_unitario!=null)?Number(s[0].valor_unitario):null;
+    }catch(e){ ultPagoCache['n'+n]=null; }
+  }
+}
+function ultPagoDe(o){ return o.material_id?ultPagoCache['m'+o.material_id]:(o.item_nome?ultPagoCache['n'+o.item_nome]:null); }
+function ultPagoTag(o){
+  const u=ultPagoDe(o), v=Number(o.valor_unitario);
+  if(u==null) return '<span style="font-size:10px;color:var(--cinza-3);display:block;font-weight:400">1ª compra — sem referência</span>';
+  if(!v) return '<span style="font-size:10px;color:var(--cinza-4);display:block;font-weight:400">últ. pago '+deMoney(u)+'</span>';
+  const d=((v-u)/u)*100;
+  const cor=d>0.5?'var(--vermelho)':(d<-0.5?'var(--verde)':'var(--cinza-4)');
+  const seta=d>0.5?'▲':(d<-0.5?'▼':'•');
+  return '<span style="font-size:10px;display:block;font-weight:700;color:'+cor+'">últ. pago '+deMoney(u)+' '+seta+' '+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%</span>';
+}
 
 async function deCarregar(){
   const corpo=document.getElementById('de-corpo');
   document.getElementById('de-status').textContent='Carregando...';
   corpo.innerHTML='<div class="de-empty">Carregando pedidos...</div>';
   try{
-    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }
     if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
     try{ ocCreditos=(await sbFetch('creditos_fornecedor?select=*&order=id.asc&limit=200'))||[]; }catch(e){ ocCreditos=null; }
     const peds=(await sbFetch("pedidos?select=*&status=eq.EM_MONTAGEM&order=id.asc"))||[];
@@ -5768,6 +5857,7 @@ async function deCarregar(){
       const ids=peds.map(p=>p.id).join(',');
       const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&situacao=eq.PENDENTE&order=id.asc`))||[];
       for(const p of peds){ deBoards.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
+      try{ await ultPagoCarregar(ords); }catch(e){}
     }
     document.getElementById('de-status').textContent = deBoards.length
       ? `${deBoards.length} pedido(s) em montagem` : 'Nenhum pedido em montagem';
@@ -5778,7 +5868,8 @@ async function deCarregar(){
   }
 }
 
-function deTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
+// v4.23 — o subtotal do item respeita o desconto por item (R$)
+function deTotalItens(b){ return b.itens.reduce((s,o)=>s+Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)),0); }
 
 function deRenderizar(){
   const corpo=document.getElementById('de-corpo');
@@ -5789,12 +5880,12 @@ function deRenderizar(){
   corpo.innerHTML = deBoards.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr${deAvulso(o)?' style="background:#F2FBF5"':''}>
-      <td>${deNomeMat(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
-      <td style="text-align:right">${deMoney(o.valor_unitario)}</td>
-      <td style="text-align:right;font-weight:600">${deMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
+      <td style="text-align:right">${deMoney(o.valor_unitario)}${ultPagoTag(o)}</td>
+      <td style="text-align:right;font-weight:600">${deMoney(Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)))}${Number(o.desconto)>0?`<span style="font-size:10px;color:var(--verde);display:block">−${deMoney(o.desconto)} desc.</span>`:''}</td>
       <td style="white-space:nowrap;text-align:right">
         <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="ordemEditarQtd(${o.id}, deCarregar)" title="Ajustar quantidade/valor">✎</button>
         <button style="background:#FDEDEC;color:var(--vermelho);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="deRemoverItem(${o.id})" title="Tirar item deste pedido">🗑</button>
@@ -5807,7 +5898,7 @@ function deRenderizar(){
           <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
           <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
-        <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+        ${(p.origem==='HIGIENE'||p.origem==='INSTRUMENTAL')?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul-medio);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deDevolverOrcamento(${pid})" title="Os itens voltam abertos na janela de orçar para ajustar preço, fornecedor ou incluir itens">↩ Devolver p/ Orçamento</button> `:''}<button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
       </div>
       <div class="de-addbar">
         <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
@@ -5858,9 +5949,15 @@ function deRenderizar(){
             <option value="">— selecione —</option>
             ${EQUIPE.map(n=>`<option ${p.pedido_por===n?'selected':''}>${n}</option>`).join('')}
           </select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">💸 Desconto no total (R$)
+          <input id="de-desc-${pid}" type="number" step="0.01" min="0" value="${p.desconto??0}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px" oninput="deAtualizaTotal(${pid})"></label>
+      </div>
+      <div style="padding:0 14px 10px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2)">
+        <label style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">📨 Observação PARA O FORNECEDOR (sai no pedido/PDF)</label>
+        <textarea id="de-obsf-${pid}" rows="2" placeholder="ex: entregar na recepção do centro cirúrgico · faturar para F2MR · desconto combinado com a Ana" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical">${p.obs_fornecedor||''}</textarea>
       </div>
       <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid var(--cinza-1)">
-        <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(totItens+(Number(p.frete)||0))}</span></div>
+        <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(Math.max(0,totItens+(Number(p.frete)||0)-(Number(p.desconto)||0)))}</span></div>
         <div style="display:flex;gap:8px">
           <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deSalvarPedido(${pid},false)">💾 Salvar dados</button>
           <button class="de-confirmar" onclick="deConfirmar(${pid})">✅ Enviar para Aprovação</button>
@@ -5873,13 +5970,16 @@ function deRenderizar(){
 function deAtualizaTotal(pid){
   const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
   const frete=parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0;
+  const desc=parseFloat((document.getElementById('de-desc-'+pid)||{}).value)||0;
   const el=document.getElementById('de-total-'+pid);
-  if(el) el.textContent=deMoney(deTotalItens(b)+frete);
+  if(el) el.textContent=deMoney(Math.max(0,deTotalItens(b)+frete-desc));
 }
 
 function deLerCampos(pid){
   return {
     frete: parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0,
+    desconto: parseFloat((document.getElementById('de-desc-'+pid)||{}).value)||0,
+    obs_fornecedor: ((document.getElementById('de-obsf-'+pid)||{}).value||'').trim()||null,
     condicao_pagamento: ((document.getElementById('de-pag-'+pid)||{}).value||'').trim()||null,
     prazo_previsto: ((document.getElementById('de-prazo-'+pid)||{}).value||'').trim()||null,
     pedido_por: ((document.getElementById('de-por-'+pid)||{}).value||'').trim()||null,
@@ -5913,7 +6013,7 @@ async function deConfirmar(pid){
 async function deRemoverItem(ordemId){
   let ordem=null; for(const b of deBoards){ ordem = b.itens.find(o=>o.id===ordemId) || ordem; }
   if(!ordem){ toast('Item não encontrado.','erro'); return; }
-  if(!confirm(`Tirar "${deNomeMat(ordem.material_id)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
+  if(!confirm(`Tirar "${deNomeMat(ordem.material_id,ordem)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
       pedido_id: null, situacao:'NAO COMPRAR AGORA',
@@ -5922,6 +6022,31 @@ async function deRemoverItem(ordemId){
     toast('Item removido do pedido ✓','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// v4.22 — pedido de higiene/instrumental volta para o ORÇAMENTO: os itens
+// reabrem na janela de orçar (ajustar preço, fornecedor, incluir itens) e o
+// pedido é cancelado. É o caminho para "faltou coisa" sem refazer do zero.
+async function deDevolverOrcamento(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  const orig=b.pedido.origem;
+  if(orig!=='HIGIENE'&&orig!=='INSTRUMENTAL'){ toast('Só pedidos de higiene/instrumentais voltam para o orçamento por aqui.','erro'); return; }
+  if(!confirm('Devolver o pedido #'+pid+' para o ORÇAMENTO?\n\nOs itens voltam abertos na janela de orçar e este pedido some. Nada é perdido — preços e escolhas continuam lá.')) return;
+  try{
+    const cid=b.pedido.cotacao_id;
+    if(cid){
+      await sbFetch('cotacao_itens?cotacao_id=eq.'+cid+'&pedido_id=eq.'+pid,'PATCH',{fechado:false,pedido_id:null,fechado_em:null});
+      await sbFetch('cotacoes?id=eq.'+cid,'PATCH',{status:'aberta'});
+    }
+    if(orig==='INSTRUMENTAL' && typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
+    await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','DELETE');
+    await sbFetch('pedidos?id=eq.'+pid,'PATCH',{status:'CANCELADO',observacao:((b.pedido.observacao||'')+' | Devolvido ao orçamento').trim()});
+    // zera o estado local da janela para recarregar do banco já com os itens reabertos
+    if(orig==='HIGIENE'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
+    else { if(typeof siDeskCotId!=='undefined'){ siDeskCotId=null; siDeskGrupos={}; } }
+    toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar ('+(orig==='HIGIENE'?'Higiene':'CME → Compras')+') para ajustar.','sucesso');
+    deCarregar();
+  }catch(e){ toast('Erro ao devolver: '+e.message,'erro'); }
 }
 
 async function deCancelarPedido(pid){
@@ -5935,6 +6060,9 @@ async function deCancelarPedido(pid){
     // solta a trava do item na lista de compras: sem isto ele fica com a tag
     // "EM COTAÇÃO" mesmo com o pedido cancelado
     await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    // v4.20b — pedido de instrumental cancelado devolve a solicitação para
+    // "Solicitadas" (senão ela fica presa em "Receber NF" na aba do CME)
+    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
     toast('Pedido #'+pid+' cancelado — os itens estão livres na lista de compras.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -5975,7 +6103,7 @@ function hiNorm(s){ return (s||'').toString().toUpperCase().replace(/\s+/g,' ').
 async function hiCarregarLista(){
   document.getElementById('hi-lista').innerHTML = '<div class="hi-empty">Carregando histórico de compras...</div>';
   try{
-    if(!catalogoMateriais.length) catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000'))||[];
+    if(!catalogoMateriais.length) catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000'))||[];
     if(!coFornecedores.length) coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[];
     // saldo de hoje: é o número que decide se a nota já entrou ou não
     try{ if(!Object.keys(saldosCache||{}).length) await carregarSaldos(); }catch(e){}
@@ -6709,7 +6837,15 @@ let rcEmFluxo = [];            // ordens de pedido vivo AINDA NÃO APROVADO — 
 let rcPedidos = [];            // pedidos, para abrir a compra por pedido
 let rcNfsRecentes = [];
 
-function rcNomeMaterial(id){ const m = catalogoMateriais.find(x=>x.id===id); return m ? m.nome : ('material #'+id); }
+// v4.20 — ordem sem material (peça de instrumental no fluxo geral) mostra o
+// item_nome gravado na própria ordem. Chamadas antigas com só o id seguem valendo.
+function rcNomeMaterial(id, o){
+  if(!id) return (o && o.item_nome) ? ('🔩 '+o.item_nome) : 'peça de instrumental';
+  const m = catalogoMateriais.find(x=>x.id===id);
+  // v4.22 — se o catálogo não tem o id (corte de limit, item novo), a ordem
+  // carrega o próprio nome em item_nome: nunca mais "material #340" na tela
+  return m ? m.nome : ((o && o.item_nome) ? o.item_nome : ('material #'+id));
+}
 // Fornecedor sem custo (amostra grátis / bonificação / doação / cortesia).
 // Entrada por esse fornecedor NÃO gera custo e NÃO altera o preço de reposição do item.
 function rcSemCusto(fid){
@@ -6729,7 +6865,7 @@ async function rcCarregar(){
   document.getElementById('rc-corpo').innerHTML = '<div class="rc-empty">Carregando pedidos pendentes...</div>';
   try{
     if(!catalogoMateriais.length){
-      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || [];
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
     if(!coFornecedores.length){
@@ -6844,7 +6980,7 @@ function rcRenderizar(){
       const exigeLote = rcControlaLote.has(o.material_id);
       return `<tr data-ordem="${o.id}">
         <td><input type="checkbox" class="rc-check" id="rc-chk-${o.id}" checked onchange="rcAtualizaTotais('${chave}')"></td>
-        <td>${rcNomeMaterial(o.material_id)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
+        <td>${rcNomeMaterial(o.material_id,o)}${o.marca_escolhida?`<span style="font-size:10px;color:var(--cinza-4);display:block">🏷️ ${o.marca_escolhida}</span>`:''}</td>
         <td style="text-align:center;font-weight:700;color:var(--azul)">${o.qtd_a_comprar ?? '—'}</td>
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${chave}')"></td>
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${chave}')"></td>
@@ -6981,7 +7117,7 @@ function rcHtmlOrfas(){
   const linhas = rcOrfas.map(o=>{
     const dd = dias(o.created_at);
     return `<tr>
-      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
       <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
@@ -7028,7 +7164,7 @@ async function rcDescartarOrfa(id){
 function rcHtmlPausados(){
   if(!rcPausados.length) return '';
   const linhas = rcPausados.map(o => `<tr>
-    <td>${rcNomeMaterial(o.material_id)}</td>
+    <td>${rcNomeMaterial(o.material_id,o)}</td>
     <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
     <td style="font-size:11px;color:var(--cinza-4)">${o.observacao||'—'}</td>
     <td><button class="rc-btn-reabrir" onclick="rcReabrirPedido(${o.id})">↻ Reabrir</button></td>
@@ -7087,7 +7223,7 @@ function rcAtualizaTotais(chave){
     if(chk && chk.checked){
       totalItens += tot; marcados++; unidades += qtd;
       const ordem = (typeof rcOrdens!=='undefined') ? rcOrdens.find(o=>o.id===Number(oid)) : null;
-      if(ordem) nomes.push(`${rcNomeMaterial(ordem.material_id)} <b>${qtd.toLocaleString('pt-BR')}</b>`);
+      if(ordem) nomes.push(`${rcNomeMaterial(ordem.material_id,ordem)} <b>${qtd.toLocaleString('pt-BR')}</b>`);
     } else naoMarcados++;
   });
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+chave)||{}).value)||0;
@@ -7258,7 +7394,7 @@ async function rcGravarNF(chave, confirmar){
   const difNota = totalNotaDigitado !== null ? (totalNotaDigitado - valorTotal) : 0;
 
   const listaItens = itensParaGravar
-    .map(x => `• ${rcNomeMaterial(x.ordem.material_id)} — ${x.qtd.toLocaleString('pt-BR')} un`)
+    .map(x => `• ${rcNomeMaterial(x.ordem.material_id,x.ordem)} — ${x.qtd.toLocaleString('pt-BR')} un`)
     .join('\n');
   const cabecalhoTxt =
     `NF ${numeroNf||'(sem número)'} · ${rcNomeFornecedor(Number(fid))}\n` +
@@ -7319,6 +7455,21 @@ async function rcGravarNF(chave, confirmar){
 
     // 2. Item por item: nf_itens -> movimentacao (pendente -> aprovada, sobe estoque) -> atualiza ordem
     for(const {ordem, qtd, val, item, lotes} of itensParaGravar){
+      // ═══ v4.20 — INSTRUMENTAL no fluxo geral: a NF registra a compra, mas a
+      // peça NÃO entra em estoque (instrumental não é consumo). A solicitação
+      // vira RECEBIDA e o destino (caixa CME/RESERVA) é dado na aba 🔩, como sempre.
+      if(ordem.origem==='INSTRUMENTAL'){
+        try{
+          if(ordem.solicitacao_instr_id){
+            await sbFetch('solicitacao_instrumental?id=eq.'+ordem.solicitacao_instr_id,'PATCH',{
+              status:'RECEBIDA', nf_numero:numeroNf||null, nf_valor:item||null,
+              recebido_por:registrante, recebido_em:new Date().toISOString() });
+          }
+        }catch(e){ toast('⚠ A solicitação da peça não foi atualizada: '+(e.message||e),'erro'); }
+        await sbFetch(`ordens_compra?id=eq.${ordem.id}`,'PATCH',{ situacao:'NF EMITIDA', qtd_comprada:qtd, valor_unitario:val, data_pedido: dataEntrega||dataEmissao });
+        toast('🔩 '+qtd+' peça(s) — não entram no estoque: dar destino na aba Instrumentais.','sucesso');
+        continue;
+      }
       const itemArr = await sbFetch('nf_itens','POST',{
         nota_fiscal_id: nfId, material_id: ordem.material_id,
         qtd: qtd, valor_unitario: val, valor_item: item,
@@ -7352,9 +7503,24 @@ async function rcGravarNF(chave, confirmar){
         continue;
       }
 
+      // ═══ v4.19 — HIGIENE: o pedido é em CAIXA, mas o estoque conta na
+      // unidade de CONSUMO (rolo/pacote/frasco). Na entrada da NF converte:
+      // qtd × qtd_kit e preço ÷ qtd_kit — o valor total não muda.
+      // (ordem.origem só existe depois do SQL 54; sem ele, nada muda aqui.)
+      let qtdMov = qtd, valMov = val;
+      if(ordem.origem === 'HIGIENE'){
+        try{
+          const mk = await sbFetch(`materiais?select=qtd_kit&id=eq.${ordem.material_id}&limit=1`);
+          const kit = mk && mk[0] && Number(mk[0].qtd_kit);
+          if(kit && kit > 1){
+            qtdMov = qtd * kit; valMov = val / kit;
+            toast('🧼 Higiene: '+qtd+' caixa(s) × '+kit+' = '+qtdMov+' unidades no estoque.','');
+          }
+        }catch(e){ toast('⚠ Não li o qtd_kit do item de higiene — a entrada foi em CAIXAS: confira o saldo.','erro'); }
+      }
       let movArr;
       const movBase = { material_id: ordem.material_id, local_id: localId,
-        qtd: qtd, valor_unitario: val, nf_item_id: nfItemId,
+        qtd: qtdMov, valor_unitario: valMov, nf_item_id: nfItemId,
         fornecedor_id: Number(fid) || null,
         aprovado: false, registrado_por: registrante,
         observacao: (semCusto?'🎁 Entrada SEM CUSTO (amostra/bonificação) — ':'Recebimento NF ') + (numeroNf||'—') };
@@ -7474,6 +7640,7 @@ async function rcApagarNfSalva(nfId){
 let rcNfItensCache = {}; // nf_id -> itens carregados
 
 async function rcCarregarNfsRecentes(){
+  try{ if(typeof rcDevCarregar==='function') rcDevCarregar(); }catch(e){}
   try{
     rcNfsRecentes = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=15')) || [];
     const div = document.getElementById('rc-nfs-lista');
@@ -7490,6 +7657,7 @@ async function rcCarregarNfsRecentes(){
               &nbsp;·&nbsp; <b>${rcMoney(nf.valor_total)}</b>
               &nbsp;·&nbsp; <span class="${nf.status==='ENTREGUE'?'rc-status-entregue':'rc-status-aguardando'}">${nf.status}</span>
             </div>
+            ${(nf.vencimentos_obs||nf.observacao)?`<div class="rc-nf-meta" style="margin-top:2px;color:#7D6608">${nf.vencimentos_obs?('💳 '+nf.vencimentos_obs):''}${nf.vencimentos_obs&&nf.observacao?' · ':''}${nf.observacao?('📝 '+nf.observacao):''}</div>`:''}
           </div>
           <div onclick="event.stopPropagation()">
             ${nf.status!=='DEVOLVIDO' ? `<button class="rc-btn-devolver" onclick="rcAbrirDevolucao(${nf.id})">↩️ Devolução</button>` : '<span style="color:var(--vermelho);font-size:11px">devolvida</span>'}
@@ -7537,7 +7705,183 @@ function rcRenderizarItensNf(nfId){
 }
 
 // ── DEVOLUÇÃO AO FORNECEDOR ────────────────────────────────────
+// ═══ v4.23 — DEVOLUÇÃO COM RASTREIO DE CASO ═══
+// Cada fornecedor tem seu processo (correio, retirada, troca na entrega...).
+// O caso nasce ABERTA e caminha: ENVIADA (aí sim o estoque desce, se for
+// material) → RECEBIDA PELO FORNECEDOR → RESOLVIDA (crédito/estorno/troca/
+// abatimento, com valor). Tudo com linha do tempo gravada.
+let rcDevs = [];
+function rcDevQuem(){ return ((document.getElementById('rc-registrado-por')||{}).value)||(SESSAO?SESSAO.nome:'')||'Equipe'; }
+function rcDevHist(d, linha){ return (((d&&d.historico)||'')+'\n'+new Date().toLocaleString('pt-BR')+' — '+linha+' ('+rcDevQuem()+')').trim(); }
+
 async function rcAbrirDevolucao(nfId){
+  const nf=(rcNfsRecentes||[]).find(function(n){return n.id===nfId;})||{};
+  let itens=[];
+  try{ itens=(await sbFetch('nf_itens?select=id,material_id,qtd,valor_unitario&nota_fiscal_id=eq.'+nfId))||[]; }catch(e){}
+  let opcoes='';
+  itens.forEach(function(it,i){ opcoes+='<option value="'+i+'">'+rcNomeMaterial(it.material_id)+' — recebido: '+it.qtd+'</option>'; });
+  opcoes+='<option value="__livre__">✏️ outro item (digitar — ex.: peça de instrumental)</option>';
+  const CAMPO='width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);margin-top:4px';
+  const ROT='font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:11px';
+  let ov=document.getElementById('rc-dev-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rc-dev-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:#D35400;color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>↩️ Abrir devolução — NF '+(nf.numero_nf||nfId)+'</span><button onclick="rcDevFecharModal()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="'+ROT+';margin-top:0">Item</label>'
+    +'<select id="rc-dev-item" onchange="document.getElementById(\'rc-dev-livre\').style.display=(this.value===\'__livre__\')?\'\':\'none\'" style="'+CAMPO+'">'+opcoes+'</select>'
+    +'<input type="text" id="rc-dev-livre" placeholder="nome do item (ex.: Cabo de cautério)" style="'+CAMPO+';display:'+(itens.length?'none':'')+'">'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="width:110px"><label style="'+ROT+'">Qtd a devolver</label><input type="number" id="rc-dev-qtd" value="1" min="0.01" step="any" style="'+CAMPO+'"></div>'
+    +'<div style="width:130px"><label style="'+ROT+'">Valor unitário (R$)</label><input type="text" id="rc-dev-val" placeholder="0,00" style="'+CAMPO+';text-align:right"></div>'
+    +'<div style="flex:1;min-width:160px"><label style="'+ROT+'">Como volta ao fornecedor?</label>'
+    +'<select id="rc-dev-met" style="'+CAMPO+'"><option value="CORREIO">📮 Correio</option><option value="RETIRADA">🚚 Fornecedor retira</option><option value="TROCA_NA_ENTREGA">🔁 Troca na próxima entrega</option><option value="OUTRO">Outro</option></select></div>'
+    +'</div>'
+    +'<label style="'+ROT+'">Motivo</label>'
+    +'<input type="text" id="rc-dev-motivo" placeholder="ex: vieram 2, era só 1" style="'+CAMPO+'">'
+    +'<label style="'+ROT+'">Rastreio / protocolo (opcional)</label>'
+    +'<input type="text" id="rc-dev-rast" placeholder="código dos correios, nº de protocolo…" style="'+CAMPO+'">'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:12px;line-height:1.5">O caso fica em <b>Devoluções em andamento</b> (nesta aba) até o acerto final. O estoque só desce quando você marcar <b>Enviado</b> — e peça de instrumental não mexe em estoque.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button onclick="rcDevFecharModal()" style="border:1px solid var(--cinza-3);background:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--cinza-4)">Cancelar</button>'
+    +'<button onclick="rcDevCriar('+nfId+')" style="border:none;background:#D35400;color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Abrir caso ✓</button>'
+    +'</div></div></div>';
+  ov.dataset.itens=JSON.stringify(itens);
+}
+function rcDevFecharModal(){ const ov=document.getElementById('rc-dev-modal'); if(ov) ov.remove(); }
+
+async function rcDevCriar(nfId){
+  const ov=document.getElementById('rc-dev-modal'); if(!ov) return;
+  const itens=JSON.parse(ov.dataset.itens||'[]');
+  const sel=(document.getElementById('rc-dev-item')||{}).value;
+  const nf=(rcNfsRecentes||[]).find(function(n){return n.id===nfId;})||{};
+  let material_id=null, item_nome=null, valSug=null;
+  if(sel==='__livre__' || !itens.length){
+    item_nome=((document.getElementById('rc-dev-livre')||{}).value||'').trim();
+    if(!item_nome){ toast('Digite o nome do item.','erro'); return; }
+  } else {
+    const it=itens[parseInt(sel,10)]; if(!it){ toast('Escolha o item.','erro'); return; }
+    material_id=it.material_id; item_nome=rcNomeMaterial(it.material_id); valSug=it.valor_unitario;
+  }
+  const qtd=parseFloat((document.getElementById('rc-dev-qtd')||{}).value)||0;
+  if(qtd<=0){ toast('Quantidade inválida.','erro'); return; }
+  const valStr=((document.getElementById('rc-dev-val')||{}).value||'').trim();
+  const val=valStr?(parseFloat(valStr.replace(/\./g,'').replace(',','.'))||null):valSug;
+  const met=(document.getElementById('rc-dev-met')||{}).value||'OUTRO';
+  const motivo=((document.getElementById('rc-dev-motivo')||{}).value||'').trim();
+  if(!motivo){ toast('Escreva o motivo.','erro'); return; }
+  const rast=((document.getElementById('rc-dev-rast')||{}).value||'').trim()||null;
+  try{
+    await sbFetch('devolucoes','POST',{ nota_fiscal_id:nfId, fornecedor_id:nf.fornecedor_id||null,
+      material_id:material_id, item_nome:item_nome, qtd:qtd, valor_unitario:val,
+      motivo:motivo, metodo:met, rastreio:rast, status:'ABERTA',
+      historico:rcDevHist(null,'Caso aberto — '+motivo), criado_por:rcDevQuem() });
+    toast('↩️ Caso de devolução aberto — acompanhe em "Devoluções em andamento".','sucesso');
+    rcDevFecharModal(); rcDevCarregar();
+  }catch(e){ toast('Erro ao abrir o caso (o banco tem o SQL 58?): '+(e.message||e),'erro'); }
+}
+
+async function rcDevCarregar(){
+  const box=document.getElementById('rc-devolucoes'); if(!box) return;
+  try{ rcDevs=(await sbFetch('devolucoes?select=*&status=in.(ABERTA,ENVIADA,RECEBIDA_FORNECEDOR)&order=id.asc'))||[]; }
+  catch(e){ box.innerHTML=''; return; }
+  if(!rcDevs.length){ box.innerHTML=''; return; }
+  const ROT={ABERTA:'🟡 Aberta — combinar envio',ENVIADA:'📦 Enviada ao fornecedor',RECEBIDA_FORNECEDOR:'🏭 Com o fornecedor — aguardando acerto'};
+  const MET={CORREIO:'📮 Correio',RETIRADA:'🚚 Retirada',TROCA_NA_ENTREGA:'🔁 Troca na entrega',OUTRO:'Outro'};
+  const linhas=rcDevs.map(function(d){
+    let acao='';
+    if(d.status==='ABERTA') acao='<button class="rc-btn-editar" style="padding:5px 10px;font-size:11px" onclick="rcDevAvancar('+d.id+')">📦 Marcar ENVIADO</button>';
+    else if(d.status==='ENVIADA') acao='<button class="rc-btn-editar" style="padding:5px 10px;font-size:11px" onclick="rcDevAvancar('+d.id+')">🏭 Fornecedor recebeu</button>';
+    else acao='<button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    if(d.status==='RECEBIDA_FORNECEDOR') acao='<button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    else acao+=' <button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    return '<tr>'
+      +'<td>'+(d.material_id?rcNomeMaterial(d.material_id):('🔩 '+(d.item_nome||'—')))+'<span style="font-size:10px;color:var(--cinza-4);display:block">NF #'+(d.nota_fiscal_id||'—')+' · '+(d.motivo||'')+'</span></td>'
+      +'<td style="text-align:center">'+(d.qtd||'—')+'</td>'
+      +'<td>'+rcNomeFornecedor(d.fornecedor_id)+'</td>'
+      +'<td>'+(MET[d.metodo]||d.metodo||'—')+(d.rastreio?('<span style="font-size:10px;color:var(--cinza-4);display:block">'+d.rastreio+'</span>'):'')+'</td>'
+      +'<td style="font-size:11.5px;font-weight:700">'+(ROT[d.status]||d.status)+'</td>'
+      +'<td style="white-space:nowrap;text-align:right">'+acao
+      +' <button class="rc-btn-problema" style="padding:5px 8px;font-size:11px" onclick="rcDevHistorico('+d.id+')" title="linha do tempo">🕓</button>'
+      +' <button class="rc-btn-editar" style="padding:5px 8px;font-size:11px;color:var(--vermelho)" onclick="rcDevCancelar('+d.id+')" title="cancelar caso">✕</button></td>'
+      +'</tr>';
+  }).join('');
+  box.innerHTML='<div class="rc-grupo" style="border:2px solid #D35400;margin-bottom:16px">'
+    +'<div class="rc-ghead" style="background:#D35400"><span>↩️ Devoluções em andamento</span><span class="rc-count">'+rcDevs.length+'</span></div>'
+    +'<div style="overflow-x:auto"><table><thead><tr><th>Item</th><th style="text-align:center">Qtd</th><th>Fornecedor</th><th>Como volta</th><th>Situação</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="padding:8px 14px;font-size:11px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">O estoque desce quando o item é marcado como ENVIADO (peça de instrumental não mexe em estoque). Resolver = crédito, estorno, troca ou abatimento — com valor gravado.</div></div>';
+}
+
+async function rcDevAvancar(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  try{
+    if(d.status==='ABERTA'){
+      if(!confirm('Marcar como ENVIADO ao fornecedor?'+(d.material_id?'\n\nO estoque desce '+d.qtd+' unidade(s) agora.':''))) return;
+      if(d.material_id){
+        const localId=await getEstoqueGeralId();
+        const mv=await sbFetch('movimentacoes','POST',{ tipo:'DEVOLUCAO', material_id:d.material_id, local_id:localId,
+          qtd:-(Number(d.qtd)||0), valor_unitario:d.valor_unitario, aprovado:false, registrado_por:rcDevQuem(),
+          observacao:'Devolução #'+d.id+' — NF #'+(d.nota_fiscal_id||'—')+' — '+(d.motivo||'') });
+        const mid=mv&&mv[0]&&mv[0].id;
+        if(mid) await sbFetch('movimentacoes?id=eq.'+mid,'PATCH',{aprovado:true,aprovado_por:rcDevQuem(),aprovado_em:new Date().toISOString()});
+      }
+      const rast=prompt('Rastreio/protocolo do envio (opcional):', d.rastreio||'');
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'ENVIADA', rastreio:(rast||'').trim()||d.rastreio||null,
+        historico:rcDevHist(d,'Enviado ao fornecedor'+(d.material_id?' — estoque ajustado':'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    } else if(d.status==='ENVIADA'){
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RECEBIDA_FORNECEDOR',
+        historico:rcDevHist(d,'Fornecedor confirmou o recebimento'), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    }
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function rcDevResolver(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  const op=prompt('Como o caso foi resolvido?\n\n1 — Crédito para próxima compra\n2 — Estorno do valor\n3 — Troca (item novo chegou)\n4 — Abatimento na nota\n\nDigite o número:');
+  if(op===null) return;
+  const MAP={'1':'CREDITO','2':'ESTORNO','3':'TROCA','4':'ABATIMENTO'};
+  const res=MAP[(op||'').trim()];
+  if(!res){ toast('Opção inválida.','erro'); return; }
+  const valStr=prompt('Valor do acerto (R$):', (Number(d.qtd)||0)*(Number(d.valor_unitario)||0)||'');
+  if(valStr===null) return;
+  const val=parseFloat(String(valStr).replace(/\./g,'').replace(',','.'))||null;
+  try{
+    await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:res, valor_resolvido:val,
+      historico:rcDevHist(d,'RESOLVIDA — '+res+(val?(' de '+rcMoney(val)):'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    if(res==='TROCA') toast('Resolvida como TROCA — quando o item novo chegar, dê a entrada normal (NF ou aba Instrumentais).','');
+    if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor no fluxo de créditos, se for usar na próxima NF.','');
+    toast('Caso #'+id+' resolvido ✓','sucesso');
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function rcDevCancelar(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  const m=prompt('Cancelar o caso #'+id+'? Motivo:'); if(m===null) return;
+  try{
+    if(d.status!=='ABERTA' && d.material_id){
+      toast('⚠ O estoque já tinha descido no envio — devolvi '+d.qtd+' unidade(s) ao saldo.','');
+      const localId=await getEstoqueGeralId();
+      const mv=await sbFetch('movimentacoes','POST',{ tipo:'ENTRADA_COMPRA', material_id:d.material_id, local_id:localId,
+        qtd:(Number(d.qtd)||0), valor_unitario:d.valor_unitario, aprovado:false, registrado_por:rcDevQuem(),
+        observacao:'Estorno do envio — devolução #'+d.id+' cancelada' });
+      const mid=mv&&mv[0]&&mv[0].id;
+      if(mid) await sbFetch('movimentacoes?id=eq.'+mid,'PATCH',{aprovado:true,aprovado_por:rcDevQuem(),aprovado_em:new Date().toISOString()});
+    }
+    await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'CANCELADA',
+      historico:rcDevHist(d,'CANCELADA — '+(m||'sem motivo')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+function rcDevHistorico(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  alert('Linha do tempo — caso #'+id+'\n\n'+(d.historico||'sem registros'));
+}
+
+async function rcAbrirDevolucaoAntiga(nfId){
   try{
     const itens = await sbFetch(`nf_itens?select=id,material_id,qtd,valor_unitario&nota_fiscal_id=eq.${nfId}`);
     if(!itens || !itens.length){ toast('Esta NF não tem itens registrados.','erro'); return; }
@@ -7633,10 +7977,13 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   const valAtual = ordem.valor_unitario ?? '';
   const novoValStr = prompt('Valor unitário (deixe igual se não mudou):', valAtual);
   const novoVal = novoValStr!==null && novoValStr!=='' ? parseFloat(novoValStr) : ordem.valor_unitario;
+  // v4.23 — desconto por item (R$ sobre o subtotal deste item)
+  const descStr = prompt('Desconto NESTE item (R$ sobre o subtotal — vazio ou 0 se não houver):', ordem.desconto ?? '');
+  const novoDesc = (descStr===null) ? (ordem.desconto||null) : ((parseFloat(String(descStr).replace(',','.'))||0)||null);
   const motivo = prompt('Motivo do ajuste (ex: fornecedor só tem 60 em estoque):') || '';
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
-      qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
+      qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal, desconto: novoDesc,
       observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
     });
     toast('Item ajustado ✓','sucesso');
@@ -7644,13 +7991,13 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   }catch(e){ toast('Erro ao ajustar: '+e.message,'erro'); }
 }
 
-function apTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
+function apTotalItens(b){ return b.itens.reduce((s,o)=>s+Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)),0); }
 
 async function apCarregar(){
   const corpo=document.getElementById('ap-corpo');
   corpo.innerHTML = '<div class="ap-empty">Carregando pedidos...</div>';
   try{
-    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }
     if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
     const peds=(await sbFetch("pedidos?select=*&status=eq.AGUARDANDO_APROVACAO&order=id.asc"))||[];
     apPedidos=[];
@@ -7658,6 +8005,7 @@ async function apCarregar(){
       const ids=peds.map(p=>p.id).join(',');
       const ords=(await sbFetch(`ordens_compra?select=*&pedido_id=in.(${ids})&order=id.asc`))||[];
       for(const p of peds){ apPedidos.push({ pedido:p, itens:ords.filter(o=>o.pedido_id===p.id) }); }
+      try{ await ultPagoCarregar(ords); }catch(e){}
     }
     apRenderizar();
   }catch(e){
@@ -7674,11 +8022,11 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
-      <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}${ultPagoTag(o)}</td>
       <td style="text-align:right;font-weight:600">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
       <td style="white-space:nowrap;text-align:right"><button class="ap-btn-editar" onclick="ordemEditarQtd(${o.id}, apCarregar)" title="Ajustar quantidade/valor">✎</button></td>
     </tr>`).join('');
@@ -7693,12 +8041,14 @@ function apRenderizar(){
         <span>💳 ${p.condicao_pagamento||'—'}</span>
         <span>🚚 ${p.prazo_previsto||'—'}</span>
         <span>🚛 Frete: <b>${rcMoney(frete)}</b></span>
+        ${Number(p.desconto)>0?`<span style="color:var(--verde)">💸 Desconto: <b>−${rcMoney(p.desconto)}</b></span>`:''}
       </div>
+      ${p.obs_fornecedor?`<div style="padding:7px 16px;background:#FEF9E7;border-bottom:1px solid var(--cinza-2);font-size:11.5px;color:#7D6608">📨 <b>Obs. p/ fornecedor:</b> ${p.obs_fornecedor}</div>`:''}
       <div style="overflow-x:auto"><table>
         <thead><tr><th>Material</th><th style="text-align:center">Marca</th><th style="text-align:center">Código</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
-        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 10px">Total (itens ${rcMoney(totItens)}${frete?` + frete ${rcMoney(frete)}`:''}):</td>
-          <td style="text-align:right;font-weight:800;color:var(--azul);padding:8px 10px">${rcMoney(totItens+frete)}</td><td></td></tr></tfoot>
+        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 10px">Total (itens ${rcMoney(totItens)}${frete?` + frete ${rcMoney(frete)}`:''}${Number(p.desconto)>0?` − desconto ${rcMoney(p.desconto)}`:''}):</td>
+          <td style="text-align:right;font-weight:800;color:var(--azul);padding:8px 10px">${rcMoney(Math.max(0,totItens+frete-(Number(p.desconto)||0)))}</td><td></td></tr></tfoot>
       </table></div>
       ${p.cotacao_id?`<details style="margin:0 16px 10px" ontoggle="if(this.open) apMostrarHist(${pid},${p.cotacao_id})">
         <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--azul);padding:8px 0">📋 Histórico da cotação (todas as ofertas recebidas) ▾</summary>
@@ -7711,6 +8061,7 @@ function apRenderizar(){
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
         <div style="display:flex;gap:8px">
+          ${(p.origem==='HIGIENE'||p.origem==='INSTRUMENTAL')?`<button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolverOrc(${pid})" title="Os itens voltam abertos na janela de orçar">⏪ Devolver p/ Orçamento</button>`:''}
           <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
           <button class="ap-btn-rejeitar" style="padding:8px 12px" onclick="apRejeitarPedido(${pid})">🚫 Rejeitar</button>
           <button class="ap-btn-aprovar" style="padding:8px 14px" onclick="apAprovarPedido(${pid})">✔ Aprovar pedido</button>
@@ -7788,7 +8139,7 @@ async function apGerarPDF(pid){
     try{ histHtml=apHistHtml(await apCarregarHist(p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
   }
   const totItens=apTotalItens(b), frete=Number(p.frete)||0;
-  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
+  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id,o)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
   hogImprimir(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px}h2{font-size:13px;margin:16px 0 6px}
   table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}
@@ -7826,6 +8177,28 @@ async function apAprovarPedido(pid){
   }catch(e){ toast('Erro ao aprovar: '+e.message,'erro'); }
 }
 
+// v4.23 — na Aprovação também dá para voltar direto ao ORÇAMENTO (higiene/instrumental)
+async function apDevolverOrc(pid){
+  const b=apPedidos.find(x=>x.pedido.id===pid); if(!b) return;
+  const orig=b.pedido.origem;
+  if(orig!=='HIGIENE'&&orig!=='INSTRUMENTAL'){ toast('Só pedidos de higiene/instrumentais voltam para o orçamento por aqui.','erro'); return; }
+  if(!confirm('Devolver o pedido #'+pid+' para o ORÇAMENTO?\n\nOs itens voltam abertos na janela de orçar (preços e escolhas preservados) e este pedido é cancelado.')) return;
+  try{
+    const cid=b.pedido.cotacao_id;
+    if(cid){
+      await sbFetch('cotacao_itens?cotacao_id=eq.'+cid+'&pedido_id=eq.'+pid,'PATCH',{fechado:false,pedido_id:null,fechado_em:null});
+      await sbFetch('cotacoes?id=eq.'+cid,'PATCH',{status:'aberta'});
+    }
+    if(orig==='INSTRUMENTAL' && typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
+    await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','DELETE');
+    await sbFetch('pedidos?id=eq.'+pid,'PATCH',{status:'CANCELADO',observacao:((b.pedido.observacao||'')+' | Devolvido ao orçamento (na aprovação)').trim()});
+    if(orig==='HIGIENE'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
+    else { if(typeof siDeskCotId!=='undefined'){ siDeskCotId=null; siDeskGrupos={}; } }
+    toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar para ajustar.','sucesso');
+    apCarregar();
+  }catch(e){ toast('Erro ao devolver: '+e.message,'erro'); }
+}
+
 async function apDevolver(pid){
   if(!confirm('Devolver o pedido #'+pid+' para a montagem (aba 📦 Pedidos)?')) return;
   const motivo=prompt('O que precisa ser revisto? (vai como observação)')||'';
@@ -7848,6 +8221,7 @@ async function apRejeitarPedido(pid){
     await sbFetch(`pedidos?id=eq.${pid}`,'PATCH',{ status:'CANCELADO',
       observacao:(((b&&b.pedido.observacao)||'')+' | Rejeitado: '+motivo.trim()).trim() });
     if(b && b.itens) await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
+    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
     toast('Pedido rejeitado — os itens voltaram a ficar livres na lista de compras.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -7880,7 +8254,7 @@ async function invCarregar(){
     for(const f of coFornecedores) selForn.innerHTML += `<option value="${f.id}">${f.nome}</option>`;
   }
   if(!catalogoMateriais.length){
-    catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || [];
+    catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || [];
     todosOsMateriais = catalogoMateriais.map(m=>m.nome);
   }
   const selReg = document.getElementById('inv-registrado-por');
@@ -9788,7 +10162,7 @@ function ocData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); 
 
 async function ocCarregar(){
   try{
-    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[]; }
+    if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }
     if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
     const dl=document.getElementById('pn-mat-datalist');
     if(dl && !dl.children.length) dl.innerHTML=catalogoMateriais.map(m=>`<option value="${m.nome}">`).join('');
@@ -9979,7 +10353,7 @@ async function ivCarregar(){
   box.innerHTML='<div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando contagem…</div>';
   try{
     if(!invLocais.length) invLocais=(await sbFetch('locais?select=id,nome,tipo&order=nome.asc'))||[];
-    if(!catalogoMateriais.length) catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=1000'))||[];
+    if(!catalogoMateriais.length) catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[];
     const abertos=(await sbFetch("inventarios?select=*&status=eq.aberto&order=id.desc&limit=1"))||[];
     ivAtual = abertos[0]||null;
     ivItens = [];
@@ -10079,7 +10453,7 @@ let ivAddMat = null;
 
 async function ivAddEscolher(){
   if(!catalogoMateriais.length){
-    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || []; }catch(e){}
   }
   const esc = await pkEscolher({
     titulo: 'Qual material você contou?',
@@ -10823,6 +11197,9 @@ function rmTipo(id){ return RM_TIPOS.find(t=>t.id===id) || { id, rot:id, curto:i
 function rmTipoRot(id){ return rmTipo(id).rot; }
 
 let rmFiltroForn = 'TODOS';   // TODOS | ESTERILIZACAO | LAVANDERIA | MANUTENCAO | f<id>
+// v4.21c — a VISTA vem do menu (Lavanderia ou Óxido de etileno) e trava o
+// tipo: cada janela só mostra as remessas e fornecedores DELA.
+let rmVista = 'LAVANDERIA';   // LAVANDERIA | ESTERILIZACAO
 let rmFiltroSit  = 'TUDO';    // TUDO | FORA | SUJO | NOTA | PENDENCIA
 let rmBusca      = '';
 
@@ -10845,8 +11222,9 @@ function rmTiposDoFornecedor(fid){
   return [...new Set(rmRemessas.filter(r=>String(r.fornecedor_id||'')===String(fid)).map(r=>r.tipo))];
 }
 function rmBemPassa(bemId){
-  if(rmFiltroForn==='TODOS') return true;
   const b = rmBens.find(x=>x.id===Number(bemId));
+  if(rmVista){ if(!b || b.tipo!==rmVista) return false; }   // v4.21c — a vista trava o tipo
+  if(rmFiltroForn==='TODOS') return true;
   if(!b) return false;
   if(rmFiltroForn==='ESTERILIZACAO' || rmFiltroForn==='LAVANDERIA') return b.tipo===rmFiltroForn;
   const tipos = rmTiposDoFornecedor(rmFiltroForn.slice(1));
@@ -10856,6 +11234,7 @@ function rmRemessaPassa(r){
   // v4.12 — conserto de instrumental tem tela própria (Instrumentais do CME).
   // Os "itens" dele são peças, não bens; apareceria aqui como cartão vazio.
   if(r.tipo==='MANUTENCAO') return false;
+  if(rmVista && r.tipo!==rmVista) return false;             // v4.21c — a vista trava o tipo
   if(rmFiltroForn!=='TODOS'){
     if(rmFiltroForn.charAt(0)==='f'){ if(String(r.fornecedor_id||'') !== rmFiltroForn.slice(1)) return false; }
     else if(r.tipo !== rmFiltroForn) return false;
@@ -10869,22 +11248,24 @@ function rmMostra(secao){ return rmFiltroSit==='TUDO' || rmFiltroSit===secao; }
 function rmRenderFiltros(){
   const box = document.getElementById('rm-filtros');
   if(!box) return;
-  const fornsUsados = [...new Set(rmRemessas.map(r=>r.fornecedor_id).filter(Boolean))];
+  // v4.21c — só os fornecedores da vista (Sterileno/Esterimed no óxido; lavanderias na lavanderia)
+  const fornsUsados = [...new Set(rmRemessas.filter(r=>!rmVista||r.tipo===rmVista).map(r=>r.fornecedor_id).filter(Boolean))];
   const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:('#'+id); };
   const chip = (campo, valor, rotulo, ativo, cor) =>
     `<button class="rm-chip ${ativo?'on':''} ${cor||''}" onclick="rmSetFiltro('${campo}','${valor}')">${rotulo}</button>`;
 
-  const nFora = rmRemessas.filter(r=>r.status==='ENVIADA').length;
-  const nSujo = rmSujos.length + rmRemessas.filter(r=>r.status==='MONTAGEM').length;
-  const nNota = rmRemessas.filter(r=>r.status==='RETORNADA').length;
+  const naVista = r => !rmVista || r.tipo===rmVista;
+  const nFora = rmRemessas.filter(r=>naVista(r) && r.status==='ENVIADA').length;
+  const nSujo = rmSujos.filter(s=>rmBemPassa(s.bem_id)).length + rmRemessas.filter(r=>naVista(r) && r.status==='MONTAGEM').length;
+  const nNota = rmRemessas.filter(r=>naVista(r) && r.status==='RETORNADA').length;
   const nPend = rmPend.length + rmNfPend.length;
   const filtrando = rmFiltroForn!=='TODOS' || rmFiltroSit!=='TUDO' || rmBusca;
 
   box.innerHTML = `<div class="rm-filtros">
     <div class="rm-flin">
       <span class="rm-flab">Fornecedor</span>
-      ${chip('forn','TODOS','Todos', rmFiltroForn==='TODOS')}
-      ${RM_TIPOS.filter(t=>t.id!=='MANUTENCAO').map(t=>chip('forn',t.id,t.rot, rmFiltroForn===t.id)).join('')}
+      ${chip('forn','TODOS','Todos'+(rmVista?(' ('+rmTipo(rmVista).curto+')'):''), rmFiltroForn==='TODOS')}
+      ${rmVista?'':RM_TIPOS.filter(t=>t.id!=='MANUTENCAO').map(t=>chip('forn',t.id,t.rot, rmFiltroForn===t.id)).join('')}
       ${fornsUsados.map(id=>chip('forn','f'+id,'🏪 '+rmEsc(nomeForn(id)), rmFiltroForn==='f'+id)).join('')}
     </div>
     <div class="rm-flin">
@@ -11988,7 +12369,8 @@ function rmRenderMontagem(){
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="rm-b claro" onclick="rmAcrescentarItem(${r.id})">➕ Acrescentar item</button>
         <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
-        <button class="rm-b verde" style="margin-left:auto" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
+        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF da remessa</button>
+        <button class="rm-b verde" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
         <button class="rm-b perigo" onclick="rmDesfazerMontagem(${r.id})">🗑 Desfazer</button>
       </div>
     </div>`;
@@ -12021,7 +12403,8 @@ function rmRenderFora(){
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
-        <button class="rm-b verde" style="margin-left:auto" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
+        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF</button>
+        <button class="rm-b verde" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
       </div>
     </div>`;
   }).join('');
@@ -12079,12 +12462,12 @@ function rmRenderPendFisica(){
       <td style="font-size:11px;color:${dias&&dias>15?'var(--vermelho)':'var(--cinza-4)'}">${rmData(p.aberta_em)}${dias!==null?` · ${dias} dia(s)`:''}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmPendVoltou(${p.id})">↩ voltou depois</button>
-        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendPerda(${p.id})">✕ dar como perda</button>
+        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendCusto(${p.id})" title="no fechamento do mês, o que sobrou vira custo do CC">💸 lançar no custo do CC</button>
       </td></tr>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
     <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${pendVis.length}</span></div>
-    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento.</div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento. A diferença fica <b>aqui</b> até o <b>fechamento do mês</b> — quando todas as saídas estiverem computadas, o que sobrou é lançado no <b>custo do CC</b> (💸). Se a peça aparecer antes, "voltou depois" devolve ao saldo.</div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th style="text-align:center">Falta</th><th>Remessa</th><th>Aberta em</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div></div>`;
@@ -12122,7 +12505,7 @@ function rmRenderNotaLavanderia(){
   const box = document.getElementById('rm-nf-lavanderia');
   if(!box) return;
   if(!(rmMostra('NOTA'))){ box.innerHTML=''; return; }
-  if(rmFiltroForn==='ESTERILIZACAO'){ box.innerHTML=''; return; }
+  if(rmVista==='ESTERILIZACAO' || rmFiltroForn==='ESTERILIZACAO'){ box.innerHTML=''; return; }
   const temLavanderia = rmBens.some(b=>b.tipo==='LAVANDERIA');
   if(!temLavanderia && !rmNfLav.length){ box.innerHTML=''; return; }
 
@@ -12527,11 +12910,46 @@ async function rmRegistrarRetorno(remessaId){
     if(dev > rmNum(i.qtd_enviada)){ toast('"'+rmBem(i.bem_id)+'": voltou mais do que saiu. Confira.','erro'); return; }
     dados.push({ item:i, dev, falta: rmNum(i.qtd_enviada)-dev });
   }
+  // ═══ v4.24 — BAIXA DIDÁTICA: antes de gravar, a tela mostra exatamente o
+  // que vai acontecer com cada item e como reverter. Nada de OK às cegas.
   const faltantes = dados.filter(d=>d.falta>0);
-  const aviso = faltantes.length
-    ? `\n\n⚠️ ${faltantes.length} item(ns) não voltaram inteiros:\n` + faltantes.map(d=>`• ${rmBem(d.item.bem_id)}: faltam ${d.falta}`).join('\n') + '\n\nIsso abre pendência de remessa.'
-    : '\n\nTudo que saiu voltou. ✓';
-  if(!confirm('Dar baixa na entrega da remessa '+(r.numero_bloco||'#'+r.id)+'?'+aviso)) return;
+  let linhas='';
+  dados.forEach(function(d){
+    linhas+='<tr><td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmEsc(rmBem(d.item.bem_id))+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmNum(d.item.qtd_enviada)+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);color:var(--verde);font-weight:700">'+d.dev+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);'+(d.falta>0?'color:var(--vermelho);font-weight:800':'color:var(--cinza-3)')+'">'+(d.falta>0?d.falta:'—')+'</td></tr>';
+  });
+  let ov=document.getElementById('rm-ret-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rm-ret-modal'; document.body.appendChild(ov); }
+  window._rmRetPreview={remessaId:remessaId, dados:dados};
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>📥 Conferência da baixa — remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</span><button class="rm-b claro" onclick="rmRetFechar()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr><th style="text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Item</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Saiu</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Voltou</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Vai faltar</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:12px;font-size:12.5px;line-height:1.7;color:var(--cinza-5)">'
+    +'<div>✅ O que voltou <b>entra em EM CASA</b> agora.</div>'
+    +(faltantes.length
+      ?('<div style="color:var(--vermelho)">⚠️ O que faltou <b>NÃO some</b>: vira <b>pendência</b> e fica listado em "Pendências de remessa" <b>até o fechamento do mês</b> — quando todas as saídas estiverem computadas, você lança o que sobrou no <b>custo do CC</b>.</div>'
+        +'<div>↩️ Se a peça aparecer depois, o botão <b>"voltou depois"</b> na pendência devolve ao saldo — dá para reverter a qualquer momento.</div>')
+      :'<div style="color:var(--verde)">✓ Tudo que saiu voltou — nenhuma pendência será aberta.</div>')
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="rm-b claro" onclick="rmRetFechar()">Voltar e corrigir</button>'
+    +'<button class="rm-b verde" onclick="rmRetornoExecutar()">Confirmar a baixa ✓</button>'
+    +'</div></div></div>';
+}
+function rmRetFechar(){ const ov=document.getElementById('rm-ret-modal'); if(ov) ov.remove(); }
+
+async function rmRetornoExecutar(){
+  const pv=window._rmRetPreview; if(!pv) return;
+  rmRetFechar();
+  const remessaId=pv.remessaId, dados=pv.dados;
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const faltantes = dados.filter(d=>d.falta>0);
   const hoje = new Date().toISOString().slice(0,10);
   try{
     for(const {item,dev,falta} of dados){
@@ -12555,6 +12973,47 @@ async function rmRegistrarRetorno(remessaId){
     toast((faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). ` : 'Baixa registrada ✓ — ') + fim,'sucesso');
     rmCarregar();
   }catch(e){ toast('Erro ao dar baixa: '+e.message,'erro'); }
+}
+
+// ═══ v4.24 — PDF/romaneio da remessa (sai junto com o malote) ═══
+function rmRemessaPDF(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const itens=(r.remessa_itens||[]);
+  const forn = r.fornecedor_id ? ((coFornecedores||[]).find(f=>f.id===r.fornecedor_id)||{}).nome : null;
+  const linhas=itens.map((i,ix)=>'<tr><td style="text-align:center">'+(ix+1)+'</td><td>'+rmEsc(rmBem(i.bem_id))+'</td><td style="text-align:center">'+rmNum(i.qtd_enviada)+'</td><td></td></tr>').join('');
+  const tot=itens.reduce((s,i)=>s+rmNum(i.qtd_enviada),0);
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin-bottom:2px}'
+    +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left}'
+    +'.meta{color:#555;font-size:12px}.ass{margin-top:44px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}</style></head><body>'
+    +'<h1>🏥 HOG — Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · '+rmEsc(rmTipo(r.tipo).curto||r.tipo)+'</h1>'
+    +'<div class="meta">'+(forn?('Fornecedor: <b>'+rmEsc(forn)+'</b> · '):'')+'Data: '+rmData(r.data_envio||new Date().toISOString().slice(0,10))+' · Emitido por: '+rmEsc(rmQuem()||'—')+'</div>'
+    +'<table><thead><tr><th style="width:34px">#</th><th>Item</th><th style="width:70px">Qtd</th><th style="width:130px">Conferido</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right;font-weight:bold">Total de peças</td><td style="text-align:center;font-weight:bold">'+tot+'</td><td></td></tr></tfoot></table>'
+    +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte/fornecedor)</div></div>'
+    +'</body></html>');
+}
+
+// ═══ v4.24 — FECHAMENTO DO MÊS: pendência que sobrou vira CUSTO DO CC ═══
+async function rmPendCusto(pendId){
+  const p = rmPend.find(x=>x.id===pendId); if(!p) return;
+  if(!exigirAssinatura('Baixa de perda no livro de remessas')) return;
+  const mes = new Date().toISOString().slice(0,7).split('-').reverse().join('/');
+  const valStr = prompt('Lançar "'+rmBem(p.bem_id)+'" ('+rmNum(p.qtd)+' un) no CUSTO DO CC — fechamento '+mes+'.\n\nValor unitário da peça (R$, para o custo — vazio se não souber):','');
+  if(valStr===null) return;
+  const val = valStr?(parseFloat(String(valStr).replace(/\./g,'').replace(',','.'))||null):null;
+  const motivo = prompt('O que aconteceu? (fica registrado no custo)','Não retornou da remessa — fechamento '+mes);
+  if(motivo===null) return;
+  if(!confirm('Confirmar?\n\n• A peça sai do livro de uma vez ('+rmNum(p.qtd)+' un a menos no total).\n• Fica registrado como PERDA no custo do CC de '+mes+(val?(' — '+rmMoney(val*rmNum(p.qtd))):'')+'.\n• Isso NÃO é reversível pelo botão — se a peça aparecer depois, use "Entrada de peça nova" com observação.')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:p.bem_id, tipo:'PERDA', d_fora:-rmNum(p.qtd), remessa_id:p.remessa_id,
+      valor_unitario:val, registrado_por:rmQuem(),
+      observacao:'CUSTO DO CC — fechamento '+mes+' — '+(motivo||'perda de remessa') });
+    await sbFetch(`remessa_pendencias?id=eq.${pendId}`,'PATCH',{ status:'RESOLVIDA_PERDA', tratada_em:new Date().toISOString().slice(0,10),
+      tratada_por:rmQuem(), desfecho:'Custo do CC '+mes+' — '+(motivo||'perda') });
+    toast('💸 Lançado no custo do CC ('+mes+') — pendência encerrada.','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
 async function rmConferirNf(remessaId){
@@ -13173,7 +13632,7 @@ async function alCarregar(){
   // e o resto da tela segue igual.
   try{ alSemSaida = (await sbFetch('vw_alerta_sem_saida?select=*&order=saldo.desc&limit=100')) || []; }catch(e){ alSemSaida = []; }
   if(!catalogoMateriais.length){
-    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=1000')) || []; }catch(e){}
+    try{ catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000')) || []; }catch(e){}
   }
   if(!(typeof rmBens!=='undefined' && rmBens && rmBens.length)){
     try{ rmBens = (await sbFetch('remessa_bens?select=id,nome,tipo,material_id,ativo&limit=500')) || []; }catch(e){}
@@ -13463,6 +13922,64 @@ async function alIgnorar(id){
     </div>
   </div>
 </div>
+
+<!-- ═══════════ MÓDULO HIGIENE (v4.16) ═══════════ -->
+<style>
+  .hg-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .hg-filtros input[type=text]{flex:1;min-width:180px;border:1.5px solid var(--cinza-2);border-radius:var(--radius);padding:8px 12px;font-size:14px;font-family:var(--fonte);outline:none}
+  .hg-filtros select{border:1.5px solid var(--cinza-2);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:var(--fonte);background:var(--branco)}
+  .hg-tab{width:100%;border-collapse:collapse;font-size:13px}
+  .hg-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700;padding:9px 10px;border-bottom:2px solid var(--cinza-2);white-space:nowrap}
+  .hg-tab td{padding:9px 10px;border-bottom:1px solid var(--cinza-2);vertical-align:middle}
+  .hg-tab tr:hover td{background:var(--cinza-1)}
+  .hg-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .hg-cod{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:var(--azul);background:var(--azul-claro,#EAF2F8);padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .hg-cod.vazio{color:#B9770E;background:#FDEBD0}
+  .hg-prod{font-weight:600;color:var(--cinza-5)}
+  .hg-sub{display:block;font-size:11px;color:var(--cinza-4);font-weight:400}
+  .hg-kpis{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .hg-kpi{flex:1;min-width:150px;background:var(--branco);border:1px solid var(--cinza-2);border-radius:var(--radius);padding:14px 16px}
+  .hg-kpi .rot{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700}
+  .hg-kpi .val{font-size:22px;font-weight:800;color:var(--cinza-5);margin-top:4px}
+  .hg-aguardando{color:var(--cinza-3);font-weight:400}
+  .hg-nota{font-size:12px;color:#7D6608;background:var(--amarelo-claro,#FEF9E7);border-left:3px solid var(--amarelo,#B7950B);padding:10px 14px;border-radius:0 var(--radius) var(--radius) 0;margin-bottom:16px;line-height:1.5}
+</style>
+
+<div id="aba-hig_inv" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🧼 Inventário de Higiene</div>
+    <div class="hg-nota">O <b>saldo</b> é a contagem de consumo (rolo/pacote/frasco). <b>Consumo</b> e <b>sugestão</b> acendem quando existirem duas contagens fechadas — a de <b>31/08</b> é o marco zero.</div>
+    <div class="hg-filtros">
+      <input type="text" id="hg-inv-busca" placeholder="🔍 Buscar por código ou produto..." oninput="hgInvRender()">
+      <select id="hg-inv-forn" onchange="hgInvRender()"><option value="">Fornecedor: todos</option></select>
+      <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="hg-inv-sempreco" onchange="hgInvRender()"> só sem preço</label>
+      <button onclick="hgNovoProduto()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">➕ Novo produto</button>
+    </div>
+    <div id="hg-inv-tabela"></div>
+  </div>
+</div>
+
+<div id="aba-hig_comp" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🛒 Compras de Higiene</div>
+    <div id="hg-comp-box"></div>
+  </div>
+</div>
+
+<div id="aba-hig_orc" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">💲 Orçamento de Higiene — grupo próprio, até 3 fornecedores</div>
+    <div id="hg-orc-box"></div>
+  </div>
+</div>
+
+<div id="aba-hig_rel" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">📊 Relatório de Higiene</div>
+    <div id="hg-rel-box"></div>
+  </div>
+</div>
+<!-- ═══════════ FIM MÓDULO HIGIENE ═══════════ -->
 
 </main>
 </div>
@@ -13968,6 +14485,1285 @@ async function dmlGravar(mid){
     toast(`${dmlNome(mid)} — ${dmlN(q)} ${sentido==='GUARDAR'?'guardado(s) no DML':'retirado(s) do DML'} ✓`,'sucesso');
     dmlCarregar();
   }catch(e){ toast('Erro ao registrar: '+(e.message||e),'erro'); }
+}
+</script>
+
+<script>
+// ═══ MÓDULO HIGIENE (v4.16) — leitura de vw_higiene_inventario ═══
+let hgDados = [];
+function hgMoeda(v){ return (v==null)?'—':('R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+function hgN(v){ return (v==null)?'—':Number(v).toLocaleString('pt-BR'); }
+function hgEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+async function hgCarregarDados(){
+  try{ hgDados = (await sbFetch('vw_higiene_inventario?select=*&order=material.asc')) || []; }
+  catch(e){ hgDados = []; toast('Erro ao carregar higiene: '+(e.message||e),'erro'); }
+}
+
+function hgPreencherFornecedores(){
+  const sel = document.getElementById('hg-inv-forn'); if(!sel) return;
+  const atual = sel.value;
+  const forns = Array.from(new Set(hgDados.map(function(r){return r.fornecedor||'—';}))).sort();
+  sel.innerHTML = '<option value="">Fornecedor: todos</option>' + forns.map(function(f){return '<option value="'+hgEsc(f)+'">'+hgEsc(f)+'</option>';}).join('');
+  sel.value = atual;
+}
+
+async function hgInvCarregar(){ await hgCarregarDados(); hgPreencherFornecedores(); hgInvRender(); }
+
+function hgInvFiltrar(){
+  const busca=(document.getElementById('hg-inv-busca').value||'').toLowerCase();
+  const forn=document.getElementById('hg-inv-forn').value;
+  const semPreco=document.getElementById('hg-inv-sempreco').checked;
+  return hgDados.filter(function(r){
+    if(forn && (r.fornecedor||'—')!==forn) return false;
+    if(semPreco && !(r.valor_compra==null || Number(r.valor_compra)===0)) return false;
+    if(busca){ const alvo=((r.codigo||'')+' '+(r.material||'')).toLowerCase(); if(alvo.indexOf(busca)<0) return false; }
+    return true;
+  });
+}
+
+function hgInvRender(){
+  const dados=hgInvFiltrar();
+  let semPreco=0; hgDados.forEach(function(r){ if(r.valor_compra==null||Number(r.valor_compra)===0) semPreco++; });
+  let h='<div class="hg-kpis">'
+    +'<div class="hg-kpi"><div class="rot">Produtos</div><div class="val">'+hgDados.length+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Sem preço</div><div class="val" style="color:var(--vermelho)">'+semPreco+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Mostrando</div><div class="val">'+dados.length+'</div></div>'
+    +'</div>';
+  h+='<table class="hg-tab"><thead><tr>'
+    +'<th>Código</th><th>Produto</th><th>Fornecedor</th>'
+    +'<th class="hg-num">Valor compra</th><th class="hg-num">Valor/unid</th>'
+    +'<th class="hg-num">Saldo</th><th class="hg-num">Consumo 3m</th><th class="hg-num">Sugestão</th>'
+    +'</tr></thead><tbody>';
+  if(!dados.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
+  dados.forEach(function(r){
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
+    h+='<tr>'
+      +'<td>'+cod+'</td>'
+      +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(r.qtd_kit>1?(' · '+r.qtd_kit+'/caixa'):'')+'</span></td>'
+      +'<td>'+hgEsc(r.fornecedor||'—')+'</td>'
+      +'<td class="hg-num">'+(semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':hgMoeda(r.valor_compra))+'</td>'
+      +'<td class="hg-num">'+(semP?'—':hgMoeda(r.valor_unid))+'</td>'
+      +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
+      +'<td class="hg-num hg-aguardando">'+(r.consumo_3m==null?'—':hgN(r.consumo_3m))+'</td>'
+      +'<td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-inv-tabela').innerHTML=h;
+}
+
+async function hgCompCarregar(){
+  if(!hgDados.length) await hgCarregarDados();
+  // v4.20 — seleção em lote: marca todos (ou alguns) e manda para o Orçar,
+  // escolhendo o grupo (contrato tipo HYGIBRAS vai num grupo próprio).
+  let h='<div class="hg-nota">Marque os itens e use <b>Enviar p/ Orçar</b> — eles caem no grupo escolhido da aba 💲 Orçar. A sugestão (em caixa) acende quando houver histórico de consumo.</div>';
+  let gopts=''; const gnomes=Object.keys(hgOrcGrupos);
+  (gnomes.length?gnomes:['Orçamento 1']).forEach(function(g){ gopts+='<option value="'+hgEsc(g)+'">'+hgEsc(g)+'</option>'; });
+  gopts+='<option value="__novo__">➕ novo grupo…</option>';
+  h+='<div class="hg-filtros">'
+    +'<label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px"><input type="checkbox" id="hg-comp-todos" onchange="hgCompTodos()"> marcar todos</label>'
+    +'<span style="flex:1"></span>'
+    +'<select id="hg-comp-grupo" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);background:var(--branco)">'+gopts+'</select>'
+    +'<button style="'+HG_BTN+'" onclick="hgCompEnviar()">📤 Enviar p/ Orçar</button></div>';
+  h+='<table class="hg-tab"><thead><tr><th></th><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Sugestão (caixa)</th></tr></thead><tbody>';
+  hgDados.forEach(function(r){
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    const ja = hgOrcTemItem(r.material_id);
+    h+='<tr><td>'+(ja?'<span title="já está no Orçar" style="font-size:11px">🧾</span>':'<input type="checkbox" class="hg-comp-chk" data-mid="'+r.material_id+'">')+'</td>'
+      +'<td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-comp-box').innerHTML=h;
+}
+function hgCompTodos(){
+  const on=document.getElementById('hg-comp-todos').checked;
+  document.querySelectorAll('.hg-comp-chk').forEach(function(c){ c.checked=on; });
+}
+async function hgCompEnviar(){
+  if(!(await origemPronta())){ toast('Rode o SQL 54 no Supabase para liberar o orçamento de higiene.','erro'); return; }
+  const marcados=[...document.querySelectorAll('.hg-comp-chk')].filter(function(c){return c.checked;});
+  if(!marcados.length){ toast('Marque ao menos um item.','erro'); return; }
+  let g=(document.getElementById('hg-comp-grupo')||{}).value||'Orçamento 1';
+  if(g==='__novo__'){
+    g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(hgOrcGrupos).length+1))||'').trim();
+    if(!g) return;
+  }
+  if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
+  let n=0;
+  marcados.forEach(function(c){
+    const mid=parseInt(c.dataset.mid,10);
+    const r=hgDados.find(function(x){return x.material_id===mid;});
+    if(!r || hgOrcTemItem(mid)) return;
+    // v4.23 — o cadastro alimenta o orçamento: marca e último preço vêm prontos, só corrige o que mudou
+    const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
+    hgOrcGrupos[g].itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
+      qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
+    n++;
+  });
+  hgOrcAtivo=g;
+  toast(n+' item(ns) enviados para o grupo "'+g+'" — abrindo o Orçar…','sucesso');
+  trocarAba('hig_orc');
+}
+
+async function hgRelCarregar(){
+  if(!hgDados.length) await hgCarregarDados();
+  let totalEstoque=0, comPreco=0;
+  hgDados.forEach(function(r){ if(r.valor_unid!=null && r.saldo!=null){ totalEstoque += Number(r.valor_unid)*Number(r.saldo); } if(r.valor_compra!=null&&Number(r.valor_compra)>0) comPreco++; });
+  let h='<div class="hg-kpis">'
+    +'<div class="hg-kpi"><div class="rot">Valor em estoque (higiene)</div><div class="val">'+hgMoeda(totalEstoque)+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Itens com preço</div><div class="val">'+comPreco+' <small style="font-size:12px;color:var(--cinza-4)">/'+hgDados.length+'</small></div></div>'
+    +'</div>';
+  h+='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Valor em estoque</th></tr></thead><tbody>';
+  hgDados.slice().sort(function(a,b){ return (Number(b.valor_unid||0)*Number(b.saldo||0))-(Number(a.valor_unid||0)*Number(a.saldo||0)); }).forEach(function(r){
+    const val = (r.valor_unid!=null&&r.saldo!=null)?Number(r.valor_unid)*Number(r.saldo):null;
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num">'+hgMoeda(val)+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('hg-rel-box').innerHTML=h;
+}
+
+// ═══ v4.21b — NOVO PRODUTO DE HIGIENE (cadastro pela tela, sem SQL) ═══
+// Modelo de unidade (regra de 12/08): o cadastro conta na unidade de CONSUMO
+// (rolo/pacote/frasco); qtd_kit = unidades por caixa de compra; o preço da
+// CAIXA vai em ultimo_valor_pago; o código da NF vai com histórico na
+// material_codigo (código muda quando muda a embalagem).
+async function hgNovoProduto(){
+  if(!exigirSenhaCompras()) return;
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
+  let fo='';
+  coFornecedores.forEach(function(f){ fo+='<option value="'+f.id+'"'+(f.nome==='HYGIBRAS'?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
+  const CAMPO='width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin-top:5px';
+  const ROT='font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:13px';
+  let ov=document.getElementById('hg-np-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='hg-np-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--verde);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>➕ Novo produto de higiene</span><button onclick="hgNovoFechar()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="'+ROT+';margin-top:0">Nome do produto</label>'
+    +'<input type="text" id="hg-np-nome" placeholder="ex: PAPEL TOALHA INTERFOLHA CX 18X250" style="'+CAMPO+';text-transform:uppercase">'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Unidade de CONSUMO</label>'
+    +'<select id="hg-np-unid" style="'+CAMPO+'"><option>PACOTE</option><option>ROLO</option><option>UNIDADE</option><option>FRASCO</option><option>GALAO</option><option>LITRO</option><option>PAR</option></select></div>'
+    +'<div style="width:130px"><label style="'+ROT+'" title="quantas unidades de consumo vêm na caixa de compra">Un. por caixa</label>'
+    +'<input type="number" id="hg-np-kit" value="1" min="1" style="'+CAMPO+'"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Código na NF (opcional)</label><input type="text" id="hg-np-cod" style="'+CAMPO+'"></div>'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Marca (opcional)</label><input type="text" id="hg-np-marca" style="'+CAMPO+';text-transform:uppercase"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:180px"><label style="'+ROT+'">Fornecedor</label><select id="hg-np-forn" style="'+CAMPO+'">'+fo+'</select></div>'
+    +'<div style="width:150px"><label style="'+ROT+'">Preço da CAIXA (R$)</label><input type="text" id="hg-np-preco" placeholder="opcional" style="'+CAMPO+';text-align:right"></div>'
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:12px;line-height:1.5">O saldo conta na unidade de consumo; a compra é por caixa e o sistema converte sozinho na entrada da NF. Sem preço, o item aparece como "sem preço" até a primeira nota.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    +'<button onclick="hgNovoFechar()" style="border:1px solid var(--cinza-3);background:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--cinza-4)">Cancelar</button>'
+    +'<button onclick="hgNovoSalvar()" style="border:none;background:var(--verde);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cadastrar ✓</button>'
+    +'</div></div></div>';
+}
+function hgNovoFechar(){ const ov=document.getElementById('hg-np-modal'); if(ov) ov.remove(); }
+async function hgNovoSalvar(){
+  const nome=((document.getElementById('hg-np-nome')||{}).value||'').trim().toUpperCase();
+  if(!nome){ toast('Escreva o nome do produto.','erro'); return; }
+  const unid=(document.getElementById('hg-np-unid')||{}).value||'UNIDADE';
+  const kit=parseFloat((document.getElementById('hg-np-kit')||{}).value)||1;
+  const cod=((document.getElementById('hg-np-cod')||{}).value||'').trim()||null;
+  const marca=((document.getElementById('hg-np-marca')||{}).value||'').trim().toUpperCase()||null;
+  const fid=parseInt((document.getElementById('hg-np-forn')||{}).value,10)||null;
+  const preco=hgOrcNum((document.getElementById('hg-np-preco')||{}).value);
+  try{
+    // nome é chave de casamento neste sistema: duplicado não entra
+    const dup=await sbFetch('materiais?select=id,nome,classe_compra,ativo&nome=ilike.'+encodeURIComponent(nome)+'&limit=1');
+    if(dup&&dup.length){ toast('Já existe um material com esse nome exato (id '+dup[0].id+', classe '+(dup[0].classe_compra||'—')+'). Use outro nome ou me chame para reativar/reclassificar.','erro'); return; }
+    const ins=await sbFetch('materiais','POST',{ nome:nome, codigo:cod, marca:marca, unidade_medida:unid, qtd_kit:kit,
+      ultimo_valor_pago:(preco&&preco>0)?preco:null, exibir_dashboard:false, classe_compra:'LIMPEZA',
+      classe_confirmada:true, fornecedor_padrao_id:fid });
+    const mid=ins&&ins[0]&&ins[0].id;
+    if(!mid) throw new Error('o banco não retornou o produto criado (RLS?)');
+    if(cod){
+      try{ await sbFetch('material_codigo','POST',{ material_id:mid, codigo:cod, fornecedor_id:fid, vigente:true }); }
+      catch(e){ toast('Produto criado, mas o histórico de código não gravou: '+(e.message||e),'erro'); }
+    }
+    toast('✅ "'+nome+'" cadastrado na higiene (id '+mid+').','sucesso');
+    hgNovoFechar();
+    hgDados=[]; await hgInvCarregar();
+  }catch(e){ toast('Erro ao cadastrar: '+(e.message||e),'erro'); }
+}
+
+// ═══════════ v4.20 — ORÇAR HIGIENE (grupos próprios, engine única) ═══════════
+// Vários grupos ("Orçamento 1", "Orçamento 2"…): item de fornecedor de CONTRATO
+// (ex.: HYGIBRAS) vai num grupo próprio, sem comparar preço; o resto compara
+// até 3 fornecedores. Tudo grava na engine com origem=HIGIENE — nada encosta
+// no orçamento de insumos. Salvar NÃO fecha nada: o orçamento fica nesta aba,
+// aberto, até você fechar grupo por grupo (aí sim vira pedido por fornecedor).
+let hgOrcCotId  = null;
+let hgOrcGrupos = {};             // { nome: { forns:[id,id,id], itens:[{material_id,nome,codigo,qtd_kit,qtd,precos[3],escolhido}] } }
+let hgOrcAtivo  = 'Orçamento 1';
+const HG_BTN  = 'border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)';
+const HG_BTNV = HG_BTN+';background:var(--verde)';
+const HG_BTNX = 'border:1px solid var(--vermelho);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--vermelho);background:#FDEDEC';
+const HG_INP  = 'border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)';
+const HG_CHIP = 'border:1px solid var(--cinza-2);border-radius:16px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--branco);color:var(--cinza-4)';
+const HG_CHIP_ON = HG_CHIP+';background:var(--verde);border-color:var(--verde);color:#fff';
+
+function hgOrcNum(v){ const n=parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); return isNaN(n)?null:n; }
+function hgOrcFornNome(fid){ const f=(coFornecedores||[]).find(function(x){return x.id===fid;}); return f?f.nome:'—'; }
+
+// v4.22 — criar fornecedor sem sair do orçamento (higiene e instrumentais)
+async function orcNovoFornecedor(){
+  const n=(prompt('Nome do NOVO fornecedor:')||'').trim().toUpperCase();
+  if(!n) return null;
+  const dup=(coFornecedores||[]).find(function(f){return String(f.nome).toUpperCase()===n;});
+  if(dup){ toast('"'+n+'" já existe no cadastro — selecionado.',''); return dup.id; }
+  try{
+    const r=await sbFetch('fornecedores','POST',{nome:n});
+    const id=r&&r[0]&&r[0].id;
+    if(!id) throw new Error('o banco não retornou o fornecedor criado');
+    coFornecedores.push({id:id,nome:n});
+    coFornecedores.sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));});
+    toast('Fornecedor "'+n+'" criado ✓','sucesso');
+    return id;
+  }catch(e){ toast('Erro ao criar fornecedor: '+(e.message||e),'erro'); return null; }
+}
+function hgOrcNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function hgOrcG(){ if(!hgOrcGrupos[hgOrcAtivo]) hgOrcGrupos[hgOrcAtivo]={forns:[null,null,null],itens:[]}; return hgOrcGrupos[hgOrcAtivo]; }
+function hgOrcTotalItens(){ return Object.keys(hgOrcGrupos).reduce(function(s,g){ return s+hgOrcGrupos[g].itens.length; },0); }
+function hgOrcTemItem(mid){ return Object.keys(hgOrcGrupos).some(function(g){ return hgOrcGrupos[g].itens.some(function(i){return i.material_id===mid;}); }); }
+
+async function hgOrcCarregar(){
+  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  const ok = await origemPronta();
+  if(!ok){ box.innerHTML='<div class="hg-nota">Para orçar higiene aqui, o banco precisa do script <b>54_orcamento_por_janela.sql</b>. Rode-o no Supabase e recarregue a página — até lá nada muda no restante do app.</div>'; return; }
+  if(!hgDados.length) await hgCarregarDados();
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
+  if(hgOrcCotId===null && !hgOrcTotalItens()){
+    try{
+      const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.HIGIENE&order=id.desc&limit=1'))||[];
+      if(ab.length){
+        hgOrcCotId=ab[0].id;
+        const fg=ab[0].fornecedores_grupo||{};
+        hgOrcGrupos={};
+        Object.keys(fg).forEach(function(g){
+          hgOrcGrupos[g]={forns:[(fg[g]||[])[0]||null,(fg[g]||[])[1]||null,(fg[g]||[])[2]||null],itens:[]};
+        });
+        const its=(await sbFetch('cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false&order=id.asc'))||[];
+        its.forEach(function(it){
+          const g=it.grupo||'Orçamento 1';
+          if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
+          const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+          const linha={ material_id:it.material_id, nome:it.material_nome, codigo:ref.codigo||null,
+                        qtd_kit:ref.qtd_kit||null, qtd:Number(it.qtd_desejada)||1, precos:[null,null,null], marcas:[null,null,null], escolhido:null };
+          (it.cotacao_opcoes||[]).forEach(function(o){
+            const k=(o.slot||1)-1; if(k<0||k>2) return;
+            linha.precos[k]=o.preco_total;
+            linha.marcas[k]=o.marca||null;
+            if(o.fornecedor_id && !hgOrcGrupos[g].forns[k]) hgOrcGrupos[g].forns[k]=o.fornecedor_id;
+            if(o.escolhida) linha.escolhido=k;
+          });
+          hgOrcGrupos[g].itens.push(linha);
+        });
+        const nomes=Object.keys(hgOrcGrupos);
+        if(nomes.length) hgOrcAtivo=nomes.indexOf(hgOrcAtivo)>=0?hgOrcAtivo:nomes[0];
+      }
+    }catch(e){}
+  }
+  hgOrcRender();
+}
+
+function hgOrcRender(){
+  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  const G=hgOrcG();
+  let h='<div class="hg-nota"><b>Onde isso vai parar:</b> Salvar guarda o orçamento AQUI (cotação #'+(hgOrcCotId||'nova')+'). No Fechar grupo, <b>só os itens marcados no 🛒</b> viram pedido — os outros continuam no orçamento para decidir depois.</div>';
+  // v4.23 — atalhos sempre à mão
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<button style="'+HG_BTN+'" onclick="hgNovoProduto()">➕ Novo produto</button>'
+    +'<button style="'+HG_BTN+'" onclick="hgOrcNovoFornBtn()">➕ Novo fornecedor</button></div>';
+  // chips dos grupos
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
+  Object.keys(hgOrcGrupos).forEach(function(g){
+    h+='<button style="'+(g===hgOrcAtivo?HG_CHIP_ON:HG_CHIP)+'" onclick="hgOrcTrocarGrupo(\''+hgEsc(g).replace(/'/g,"\\'")+'\')">'+hgEsc(g)+' ('+hgOrcGrupos[g].itens.length+')</button>';
+  });
+  h+='<button style="'+HG_CHIP+'" onclick="hgOrcNovoGrupo()">➕ novo grupo</button>';
+  if(Object.keys(hgOrcGrupos).length>1 && !G.itens.length)
+    h+='<button style="'+HG_BTNX+'" onclick="hgOrcRemoverGrupo()" title="apagar este grupo vazio">✕ apagar grupo</button>';
+  h+='</div>';
+  // busca inteligente (qualquer parte do nome) — só para itens extras
+  h+='<div style="position:relative;margin-bottom:10px">'
+    +'<input type="text" id="hg-orc-busca" oninput="hgOrcBuscar()" placeholder="🔍 Item extra? Digite qualquer parte do nome (o normal é enviar pela aba Compras)…" style="width:100%;'+HG_INP+';padding:9px 12px;font-size:13px">'
+    +'<div id="hg-orc-busca-res" style="position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--branco);border:1px solid var(--cinza-2);border-radius:0 0 8px 8px;max-height:220px;overflow:auto;box-shadow:var(--sombra)"></div>'
+    +'</div>';
+  // fornecedores do grupo ativo
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center">'
+    +'<span style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedores do grupo "'+hgEsc(hgOrcAtivo)+'":</span>';
+  for(let k=0;k<3;k++){
+    let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
+    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
+    fo+='<option value="__novo__">➕ novo fornecedor…</option>';
+    h+='<select onchange="hgOrcForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco);max-width:240px">'+fo+'</select>';
+  }
+  h+='<span style="font-size:11px;color:var(--cinza-4)">contrato (ex.: HYGIBRAS)? use só o Fornecedor 1 — sem comparação</span></div>';
+  // tabela do grupo ativo
+  h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Produto</th><th class="hg-num">Caixas</th>';
+  for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?hgEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>'; }
+  h+='<th>Escolha</th><th title="só os marcados viram pedido no Fechar">🛒</th><th></th></tr></thead><tbody>';
+  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
+  G.itens.forEach(function(it,i){
+    it.marcas = it.marcas || [null,null,null];
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
+    // v4.20c — referência para comparar: último valor pago (preço da CAIXA, da NF mais recente)
+    const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+    const ult=(ref.valor_compra!=null&&Number(ref.valor_compra)>0)?Number(ref.valor_compra):null;
+    h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa · '):'')
+      +'saldo <b>'+(ref.saldo!=null?hgN(ref.saldo):'—')+'</b> · '
+      +(ult!=null?('últ. pago <b>'+hgMoeda(ult)+'/cx</b>'):'1ª compra — sem referência')+'</span></td>'
+      +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="hgOrcQtd('+i+',this.value)" style="width:70px;'+HG_INP+'"></td>';
+    for(let k=0;k<3;k++){
+      if(k>0 && !G.forns[k]) continue;
+      if(!G.forns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
+      h+='<td class="hg-num"><input type="text" value="'+(it.precos[k]!=null?String(it.precos[k]).replace('.',','):'')+'" placeholder="0,00" onchange="hgOrcPreco('+i+','+k+',this.value)" style="width:90px;text-align:right;'+HG_INP+(menor===k?';border-color:var(--verde);background:var(--verde-claro);font-weight:700':'')+'">'
+        +'<input type="text" value="'+hgEsc(it.marcas[k]||'')+'" placeholder="marca" onchange="hgOrcMarca('+i+','+k+',this.value)" style="width:90px;display:block;margin-top:3px;font-size:10.5px;'+HG_INP+'"></td>';
+    }
+    let esc='<select onchange="hgOrcEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
+    for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+hgEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
+    esc+='</select>';
+    h+='<td>'+esc+'</td>'
+      +'<td style="text-align:center"><input type="checkbox" '+((it.comprar!==false&&it.escolhido!=null)?'checked':'')+' onchange="hgOrcComprar('+i+',this.checked)" title="entra no pedido ao fechar" style="width:16px;height:16px;cursor:pointer"></td>'
+      +'<td><button style="'+HG_BTNX+'" onclick="hgOrcRemover('+i+')" title="tirar do orçamento">✕</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  // v4.22 — soma dos escolhidos (total do grupo e por fornecedor)
+  let totEsc=0; const porF={};
+  G.itens.forEach(function(it){
+    if(it.comprar!==false && it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
+      const v=(Number(it.qtd)||0)*Number(it.precos[it.escolhido]);
+      totEsc+=v; const fid=G.forns[it.escolhido]; porF[fid]=(porF[fid]||0)+v;
+    }
+  });
+  if(totEsc>0){
+    h+='<div style="margin-top:10px;padding:9px 12px;background:var(--verde-claro);border-radius:8px;font-size:13.5px;font-weight:800;color:var(--verde)">Total dos ESCOLHIDOS deste grupo: '+hgMoeda(totEsc)
+      +' <span style="font-weight:600;font-size:11.5px;color:var(--cinza-5)">· '+Object.keys(porF).map(function(f){return hgEsc(hgOrcFornNome(Number(f)))+' '+hgMoeda(porF[f]);}).join(' · ')+'</span></div>';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">'
+    +'<button style="'+HG_BTN+'" onclick="hgOrcSalvar(false)">💾 Salvar orçamento</button>'
+    +'<button style="'+HG_BTNV+'" onclick="hgOrcFechar()">🔒 Fechar o grupo "'+hgEsc(hgOrcAtivo)+'" → pedidos</button>'
+    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de higiene #'+hgOrcCotId+' · '+hgOrcTotalItens()+' item(ns) em '+Object.keys(hgOrcGrupos).length+' grupo(s)</span>'):'')
+    +'</div>';
+  box.innerHTML=h;
+}
+
+function hgOrcBuscar(){
+  const inp=document.getElementById('hg-orc-busca'), res=document.getElementById('hg-orc-busca-res');
+  if(!inp||!res) return;
+  const termo=hgOrcNorm(inp.value.trim());
+  if(!termo){ res.innerHTML=''; return; }
+  const m=hgDados.filter(function(r){
+    if(hgOrcTemItem(r.material_id)) return false;
+    return hgOrcNorm(r.material+' '+(r.codigo||'')).indexOf(termo)>=0;
+  }).slice(0,12);
+  res.innerHTML = m.map(function(r){
+    return '<div onclick="hgOrcAddId('+r.material_id+')" style="padding:9px 12px;border-bottom:1px solid var(--cinza-2);cursor:pointer;display:flex;justify-content:space-between;gap:10px">'
+      +'<span style="font-weight:600">'+hgEsc(r.material)+'</span>'
+      +'<span style="font-size:11px;color:var(--cinza-4);white-space:nowrap">'+(r.codigo?hgEsc(r.codigo)+' · ':'')+'saldo '+hgN(r.saldo)+'</span></div>';
+  }).join('') || '<div style="padding:10px 12px;font-size:12px;color:var(--cinza-4)">Nenhum produto de higiene com esse trecho no nome.</div>';
+}
+function hgOrcAddId(mid){
+  const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
+  const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
+  hgOrcG().itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
+    qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
+  hgOrcRender();
+}
+function hgOrcTrocarGrupo(g){ hgOrcAtivo=g; hgOrcRender(); }
+function hgOrcNovoGrupo(){
+  const g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(hgOrcGrupos).length+1))||'').trim();
+  if(!g) return;
+  if(hgOrcGrupos[g]){ toast('Já existe um grupo com esse nome.','erro'); return; }
+  hgOrcGrupos[g]={forns:[null,null,null],itens:[]}; hgOrcAtivo=g; hgOrcRender();
+}
+function hgOrcRemoverGrupo(){
+  if(hgOrcG().itens.length){ toast('O grupo ainda tem itens.','erro'); return; }
+  delete hgOrcGrupos[hgOrcAtivo];
+  hgOrcAtivo=Object.keys(hgOrcGrupos)[0]||'Orçamento 1';
+  hgOrcRender();
+}
+function hgOrcQtd(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.qtd=parseFloat(v)||1; hgOrcRender(); }
+function hgOrcPreco(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
+function hgOrcMarca(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.marcas=it.marcas||[null,null,null]; it.marcas[k]=(v||'').trim().toUpperCase()||null; }
+function hgOrcComprar(i,ck){ const it=hgOrcG().itens[i]; if(!it) return; it.comprar=!!ck; hgOrcRender(); }
+function hgOrcEscolher(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); if(it.escolhido!=null && it.comprar===undefined) it.comprar=true; hgOrcRender(); }
+async function hgOrcNovoFornBtn(){
+  const id=await orcNovoFornecedor();
+  if(id){ const G=hgOrcG(); const k=G.forns.findIndex(function(x){return !x;}); if(k>=0 && G.forns.indexOf(id)<0) G.forns[k]=id; }
+  hgOrcRender();
+}
+async function hgOrcForn(k,v){
+  if(v==='__novo__'){ const id=await orcNovoFornecedor(); hgOrcG().forns[k]=id||null; hgOrcRender(); return; }
+  hgOrcG().forns[k]=v?parseInt(v,10):null; hgOrcRender();
+}
+async function hgOrcRemover(i){
+  hgOrcG().itens.splice(i,1);
+  // v4.20b — remover PERSISTE: sem salvar, o item voltava ao recarregar a página
+  if(hgOrcCotId!==null){ try{ await hgOrcSalvar(true); }catch(e){} }
+  hgOrcRender();
+}
+
+async function hgOrcSalvar(sil){
+  if(!exigirSenhaCompras()) return false;
+  if(!hgOrcTotalItens()){
+    if(hgOrcCotId!==null){
+      try{
+        await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
+        await sbFetch('cotacoes?id=eq.'+hgOrcCotId,'PATCH',{status:'fechada'});
+        hgOrcCotId=null;
+      }catch(e){ toast('Erro ao encerrar o orçamento vazio: '+e.message,'erro'); return false; }
+    }
+    if(!sil){ toast('Orçamento de higiene sem itens — encerrado.',''); hgOrcRender(); }
+    return true;
+  }
+  try{
+    const fg={};
+    Object.keys(hgOrcGrupos).forEach(function(g){ fg[g]=hgOrcGrupos[g].forns.filter(Boolean); });
+    if(hgOrcCotId===null){
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:(SESSAO?SESSAO.nome:'')||'',fornecedores_grupo:fg,origem:'HIGIENE'});
+      if(!c||!c.length) throw new Error('não retornou a cotação criada');
+      hgOrcCotId=c[0].id;
+    } else {
+      await sbFetch('cotacoes?id=eq.'+hgOrcCotId,'PATCH',{fornecedores_grupo:fg});
+      await coApagarItens('cotacao_id=eq.'+hgOrcCotId+'&fechado=is.false');
+    }
+    for(const g of Object.keys(hgOrcGrupos)){
+      const forns=hgOrcGrupos[g].forns;
+      for(const it of hgOrcGrupos[g].itens){
+        const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:hgOrcCotId, material_id:it.material_id,
+          material_nome:it.nome, qtd_desejada:it.qtd, grupo:g });
+        const itemId=ins&&ins[0]&&ins[0].id;
+        const ops=[];
+        for(let k=0;k<3;k++){
+          if(!forns[k]||it.precos[k]==null) continue;
+          ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:forns[k],
+            qtd_embalagem:it.qtd_kit||null, preco_total:it.precos[k],
+            preco_unitario:(it.qtd_kit&&it.qtd_kit>0)?(it.precos[k]/it.qtd_kit):it.precos[k],
+            marca:(it.marcas&&it.marcas[k])||null,
+            escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+        }
+        if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
+      }
+    }
+    if(!sil){ toast('💾 Orçamento #'+hgOrcCotId+' salvo — ele fica AQUI, aberto, até você fechar cada grupo.','sucesso'); hgOrcRender(); }
+    return true;
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
+}
+
+async function hgOrcFechar(){
+  if(!exigirSenhaCompras()) return;
+  const G=hgOrcG(), gnome=hgOrcAtivo;
+  const prontos=G.itens.filter(function(it){ return it.comprar!==false && it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
+  if(!prontos.length){ toast('Nenhum item do grupo "'+gnome+'" está marcado no 🛒 com fornecedor escolhido e preço.','erro'); return; }
+  const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  // v4.20c — escolheu quem NÃO tem o menor preço? Justifica, e a justificativa
+  // acompanha o item até a aprovação (fica na observação da ordem).
+  for(const it of prontos){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<menor)) menor=p; });
+    const vEsc=Number(it.precos[it.escolhido]);
+    if(menor!=null && vEsc>menor+0.004){
+      const j=prompt('"'+it.nome+'": o escolhido ('+hgMoeda(vEsc)+') NÃO é o menor preço ('+hgMoeda(menor)+').\n\nJustifique a escolha — fica gravado para quem aprova:', it.just||'');
+      if(j===null || !j.trim()){ toast('Fechamento cancelado — justificativa obrigatória quando a escolha não é o menor preço.','erro'); return; }
+      it.just=j.trim();
+    } else it.just=null;
+  }
+  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
+  if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
+  if(!confirm(msg)) return;
+  try{
+    const ok=await hgOrcSalvar(true); if(!ok) return;
+    const porForn={};
+    prontos.forEach(function(it){ const fid=G.forns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
+    let nItens=0;
+    for(const fidStr of Object.keys(porForn)){
+      const fid=Number(fidStr);
+      let pedidoId=null;
+      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.HIGIENE&limit=1');
+      if(exist&&exist.length) pedidoId=exist[0].id;
+      else{
+        const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:hgOrcCotId,
+          origem:'HIGIENE', observacao:'Higiene — grupo '+gnome });
+        pedidoId=p&&p[0]&&p[0].id;
+      }
+      for(const it of porForn[fidStr]){
+        await sbFetch('ordens_compra','POST',{ material_id:it.material_id, item_nome:it.nome, fornecedor_id:fid, fornecedor_compra_id:fid,
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
+          qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
+          marca_escolhida:(it.marcas&&it.marcas[it.escolhido])||null,
+          observacao:'Higiene — cotação #'+hgOrcCotId+' — grupo '+gnome+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'')+(it.just?(' | Justificativa: '+it.just):'') });
+        nItens++;
+      }
+      const ids=porForn[fidStr].map(function(it){return it.material_id;});
+      try{
+        await sbFetch('cotacao_itens?cotacao_id=eq.'+hgOrcCotId+'&grupo=eq.'+encodeURIComponent(gnome)+'&material_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
+          {fechado:true,fechado_em:new Date().toISOString(),pedido_id:pedidoId});
+      }catch(e){}
+    }
+    G.itens=G.itens.filter(function(it){ return prontos.indexOf(it)<0; });
+    if(!G.itens.length && Object.keys(hgOrcGrupos).length>1){ delete hgOrcGrupos[gnome]; hgOrcAtivo=Object.keys(hgOrcGrupos)[0]; }
+    await hgOrcSalvar(true);
+    hgOrcRender();
+    toast('Grupo "'+gnome+'" fechado ✓ — '+nItens+' item(ns) em pedido(s) por fornecedor. Veja em 📦 Pedidos.','sucesso');
+  }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
+}
+</script>
+
+<script>
+// ═══ SOLICITAÇÃO DE INSTRUMENTAIS (v4.17) — 2 janelas ═══
+let siDados = [];
+function siEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function siNome(){ return (SESSAO ? SESSAO.nome : '') || 'Equipe'; }
+var SI_ITEM='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--cinza-2);flex-wrap:wrap';
+var SI_META='font-size:12px;color:var(--cinza-4)';
+var SI_SEL ='border:1.5px solid var(--cinza-2);border-radius:8px;padding:6px 9px;font-size:12px;font-family:var(--fonte)';
+
+async function siCarregar(){
+  const box = document.getElementById('ci-solic'); if(!box) return;
+  try{
+    siDados = (await sbFetch('solicitacao_instrumental?select=*&status=in.(SOLICITADA,AGUARDANDO_APROVACAO,APROVADA,PEDIDO,RECEBIDA)&order=solicitado_em.asc')) || [];
+  }catch(e){ siDados = []; box.innerHTML=''; return; }
+  // v4.20 — desk de orçamento (grupos, 3 fornecedores) dentro da própria janela
+  try{ await origemPronta(); await siDeskCarregar(); }catch(e){}
+  siRender();
+}
+
+function siPodeCotar(){ return (typeof podeAba==='function') && podeAba('cotacao'); }
+function siPodeAprovar(){ return (typeof podeAto==='function') && podeAto('aprovar_pedido'); }
+function siPodeNF(){ return (typeof podeAto==='function') && podeAto('entrada_nf'); }
+function siMoeda(v){ return (v==null)?'—':('R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+
+const SI_STAGES = [
+  {k:'SOLICITADA',            rot:'📥 Solicitadas',             cor:'azul'},
+  {k:'AGUARDANDO_APROVACAO',  rot:'💰 Aguardando aprovação',    cor:'roxo'},
+  {k:'APROVADA',              rot:'✅ Aprovadas',               cor:'verde'},
+  {k:'PEDIDO',                rot:'📦 Pedidos emitidos',        cor:'laranja'},
+  {k:'RECEBIDA',              rot:'🆕 Recebidas — dar destino', cor:'laranja'}
+];
+
+function siLinhaInfo(s){
+  let t = '· qtd '+siEsc(s.qtd)+' · por '+siEsc(s.solicitado_por||'—');
+  if(s.fornecedor_id)        t += ' · '+siEsc(ciForn(s.fornecedor_id));
+  if(s.valor_unitario!=null) t += ' · '+siMoeda(s.valor_unitario)+'/un';
+  if(s.aprovado_por)         t += ' · aprov.: '+siEsc(s.aprovado_por);
+  if(s.nf_numero)            t += ' · NF '+siEsc(s.nf_numero);
+  return t;
+}
+
+function siRender(){
+  const box = document.getElementById('ci-solic'); if(!box) return;
+  const caixas = (typeof ciCaixas!=='undefined' ? ciCaixas : []).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
+
+  let h = '<div class="rm-card"><div class="rm-head cinza">'
+        + '<span>🔩 Compras de instrumentais · solicitação → orçamento → aprovação → pedido geral → NF → destino</span>'
+        + '<button class="rm-b claro" onclick="siAbrir()">➕ Abrir solicitação</button></div></div>';
+
+  // v4.20 — o desk de orçamento aparece aqui, dentro da janela de instrumentais
+  if(ORIGEM_OK && siPodeCotar() && typeof siDeskHtml==='function') h += siDeskHtml();
+
+  let algum = false;
+  SI_STAGES.forEach(function(st){
+    const itens = siDados.filter(function(s){ return s.status===st.k; });
+    if(!itens.length) return;
+    algum = true;
+    let cab = st.rot+' ('+itens.length+')';
+    if(st.k==='SOLICITADA' && ORIGEM_OK && siPodeCotar()){
+      cab = '<span>'+cab+'</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          + '<select id="si-desk-grupo-sel" style="'+SI_SEL+'">'+siDeskGrupoOpts()+'</select>'
+          + '<button class="rm-b claro" onclick="siDeskEnviar()">📤 Enviar marcadas p/ Orçamento</button></span>';
+    }
+    h += '<div class="rm-card"><div class="rm-head '+st.cor+'">'+cab+'</div><div style="padding:6px 16px 12px">';
+    itens.forEach(function(s){
+      let acao='';
+      if(st.k==='SOLICITADA' && siPodeCotar()){
+        if(!ORIGEM_OK) acao='<button class="rm-b claro" onclick="siOrcar('+s.id+')">💲 Orçar</button>';
+        else if(siDeskTem(s.id)) acao='<span class="rm-tag ok">🧾 no orçamento</span>';
+        else acao='<label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="si-chk" data-id="'+s.id+'"> orçar</label>';
+      }
+      if(st.k==='AGUARDANDO_APROVACAO' && siPodeAprovar()) acao='<button class="rm-b verde" onclick="siAprovar('+s.id+')">✅ Aprovar</button> <button class="rm-b perigo" onclick="siReprovar('+s.id+')">✕ Reprovar</button>';
+      if(st.k==='APROVADA' && siPodeCotar())              acao='<button class="rm-b laranja" onclick="siPedido('+s.id+')">📦 Emitir pedido</button>';
+      if(st.k==='PEDIDO' && siPodeNF())                   acao='<button class="rm-b laranja" onclick="siReceberNF('+s.id+')">📥 Receber NF</button>';
+      if((st.k==='AGUARDANDO_APROVACAO'||st.k==='APROVADA'||st.k==='PEDIDO') && siPodeCotar())
+        acao+=' <button class="rm-b perigo" onclick="siVoltarSolicitada('+s.id+')" title="Pedido cancelado ou orçamento a refazer? Devolve para Solicitadas.">↩</button>';
+      let destino='';
+      if(st.k==='RECEBIDA'){
+        let opts='<option value="">Escolher caixa / reserva…</option>';
+        caixas.forEach(function(c){ opts+='<option value="'+c.id+'">'+siEsc(c.nome)+'</option>'; });
+        destino='<select style="'+SI_SEL+'" id="si-dest-'+s.id+'">'+opts+'</select> <button class="rm-b laranja" onclick="siDestino('+s.id+')">Dar destino ✓</button>';
+      }
+      h += '<div style="'+SI_ITEM+'">'
+         + '<div style="flex:1;min-width:240px"><b>'+siEsc(s.peca_nome)+'</b> <span style="'+SI_META+'">'+siLinhaInfo(s)+'</span>'
+         + (s.motivo ? ('<div style="'+SI_META+';margin-top:3px">📝 '+siEsc(s.motivo)+'</div>') : '')
+         + '</div>'
+         + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+acao+destino+'</div>'
+         + '</div>';
+    });
+    h += '</div></div>';
+  });
+  if(!algum) h += '<div class="rm-card"><div class="rm-empty">Nenhuma solicitação em andamento. Clique em “Abrir solicitação”.</div></div>';
+  box.innerHTML = h;
+}
+
+let siModelosCache = [];
+let siResultAtual = [];
+let siSelModelo = null;
+let siSelNovo = false;
+
+async function siCarregarModelos(){
+  let pecas = (typeof ciPecas!=='undefined' && ciPecas && ciPecas.length) ? ciPecas : null;
+  if(!pecas){ try{ pecas = (await sbFetch('instrumental_pecas?select=nome,qtd&ativa=is.true&limit=5000')) || []; }catch(e){ pecas=[]; } }
+  const mapa={};
+  pecas.forEach(function(p){ const n=(p.nome||'').trim(); if(!n) return; if(mapa[n]==null) mapa[n]=0; mapa[n]+= (p.qtd!=null?(parseFloat(p.qtd)||0):0); });
+  siModelosCache = Object.keys(mapa).map(function(n){ return {nome:n, total:mapa[n]}; }).sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+}
+
+async function siAbrir(){
+  await siCarregarModelos();
+  siSelModelo=null; siSelNovo=false;
+  let ov=document.getElementById('si-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='si-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>➕ Nova solicitação de instrumental</span><button class="rm-b claro" onclick="siFecharModal()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">1 · Qual peça? (busca no estoque)</label>'
+    +'<input type="text" id="si-busca" placeholder="Digite parte do nome do modelo..." oninput="siBuscar()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin:6px 0 8px">'
+    +'<div id="si-resultados" style="max-height:210px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px"></div>'
+    +'<div id="si-selecionado" style="margin-top:10px;font-size:13px"></div>'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:14px">2 · Quantidade</label>'
+    +'<input type="number" id="si-qtd" value="1" min="1" style="width:120px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:14px">3 · Motivo da solicitação</label>'
+    +'<textarea id="si-motivo" rows="2" placeholder="Ex.: peça quebrou na caixa Catarata — reposição." style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin-top:6px"></textarea>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    +'<button class="rm-b claro" onclick="siFecharModal()">Cancelar</button>'
+    +'<button class="rm-b laranja" onclick="siConfirmar()">Abrir solicitação ✓</button>'
+    +'</div></div></div>';
+  siBuscar();
+}
+
+function siFecharModal(){ const ov=document.getElementById('si-modal'); if(ov) ov.remove(); }
+
+function siBuscar(){
+  const termo=(document.getElementById('si-busca').value||'').trim();
+  const alvo=ciNorm(termo);
+  siResultAtual = termo ? siModelosCache.filter(function(m){ return ciNorm(m.nome).indexOf(alvo)>=0; }) : siModelosCache;
+  let h='';
+  siResultAtual.slice(0,60).forEach(function(m,i){
+    h+='<div onclick="siEscolherIdx('+i+')" style="padding:9px 12px;border-bottom:1px solid var(--cinza-2);cursor:pointer;display:flex;justify-content:space-between;gap:10px">'
+      +'<span style="font-weight:600">'+siEsc(m.nome)+'</span>'
+      +'<span style="font-size:12px;color:var(--cinza-4);white-space:nowrap">'+(m.total||0)+' em estoque</span></div>';
+  });
+  if(!siResultAtual.length) h='<div style="padding:12px;color:var(--cinza-4);font-size:13px">Nenhum modelo com esse nome no estoque.</div>';
+  if(termo && !siModelosCache.some(function(m){ return ciNorm(m.nome)===alvo; })){
+    h+='<div onclick="siEscolherNovo()" style="padding:10px 12px;cursor:pointer;background:var(--verde-claro,#E9F7EF);color:var(--verde);font-weight:700">➕ Cadastrar novo modelo: "'+siEsc(termo)+'"</div>';
+  }
+  document.getElementById('si-resultados').innerHTML=h;
+}
+
+function siEscolherIdx(i){ const m=siResultAtual[i]; if(!m) return; siSelModelo=m.nome; siSelNovo=false; siRenderSel(m.total); }
+function siEscolherNovo(){ const t=(document.getElementById('si-busca').value||'').trim(); if(!t) return; siSelModelo=t; siSelNovo=true; siRenderSel(null); }
+function siRenderSel(total){
+  const box=document.getElementById('si-selecionado'); if(!box) return;
+  box.innerHTML='✅ Selecionado: <b>'+siEsc(siSelModelo)+'</b> '
+    + (siSelNovo ? '<span style="color:var(--verde);font-weight:700">(modelo novo)</span>' : '<span style="color:var(--cinza-4)">('+(total||0)+' em estoque hoje)</span>');
+}
+
+async function siConfirmar(){
+  if(!siSelModelo){ toast('Escolha um modelo (ou cadastre um novo).','erro'); return; }
+  const q=parseFloat((document.getElementById('si-qtd').value||'1').replace(',','.'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  const motivo=(document.getElementById('si-motivo').value||'').trim();
+  if(!motivo){ toast('Escreva o motivo da solicitação.','erro'); return; }
+  try{
+    const r=await sbFetch('solicitacao_instrumental','POST',{ peca_nome:siSelModelo, qtd:q, motivo:motivo, solicitado_por:siNome() });
+    if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
+    toast('Solicitação aberta ✓','sucesso'); siFecharModal(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+function siOverlay(inner){
+  let ov=document.getElementById('si-modal2'); if(!ov){ ov=document.createElement('div'); ov.id='si-modal2'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'+inner+'</div>';
+}
+function siFecharOverlay(){ const ov=document.getElementById('si-modal2'); if(ov) ov.remove(); }
+function siNum(v){ return parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.')); }
+
+// v4.18 — orçamento simples de 1 fornecedor. Vira RESERVA: só é usado se o
+// banco ainda não tiver o SQL 54 (senão, o siOrcar novo compara 3 fornecedores).
+async function siOrcarSimples(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  let forns = (typeof coFornecedores!=='undefined' && coFornecedores && coFornecedores.length) ? coFornecedores : [];
+  if(!forns.length){ try{ forns=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; coFornecedores=forns; }catch(e){} }
+  let opts='<option value="">Escolher fornecedor…</option>';
+  forns.forEach(function(f){ opts+='<option value="'+f.id+'">'+siEsc(f.nome)+'</option>'; });
+  siOverlay('<div class="rm-head azul"><span>💲 Orçar — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedor</label>'
+    +'<select id="si-forn" style="width:100%;'+SI_SEL+';margin:6px 0 12px">'+opts+'</select>'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Valor unitário (R$)</label>'
+    +'<input type="text" id="si-valor" placeholder="0,00" style="width:160px;display:block;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-top:8px">Quantidade solicitada: <b>'+siEsc(s.qtd)+'</b> · motivo: '+siEsc(s.motivo||'—')+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siOrcarSalvar('+id+')">Enviar p/ aprovação ✓</button></div>'
+    +'</div>');
+}
+async function siOrcarSalvar(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const fid = parseInt(document.getElementById('si-forn').value,10);
+  const val = siNum(document.getElementById('si-valor').value);
+  if(!fid){ toast('Escolha o fornecedor.','erro'); return; }
+  if(!val || val<=0){ toast('Valor inválido.','erro'); return; }
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ fornecedor_id:fid, valor_unitario:val, valor_total: val*parseFloat(s.qtd), cotado_por:siNome(), cotado_em:new Date().toISOString(), status:'AGUARDANDO_APROVACAO' });
+    toast('Orçado — foi para aprovação ✓','sucesso'); siFecharOverlay(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+// ═══ v4.19 — Orçar com COMPARAÇÃO de verdade (até 3 fornecedores) ═══
+// O comparativo fica gravado na engine de cotação (origem INSTRUMENTAL,
+// grupo próprio — nada se mistura com insumos). A solicitação continua
+// dona do processo: quem cotou, valor escolhido e status andam nela.
+async function siOrcar(id){
+  const temOrigem = await origemPronta();
+  if(!temOrigem) return siOrcarSimples(id);
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  let forns = (typeof coFornecedores!=='undefined' && coFornecedores && coFornecedores.length) ? coFornecedores : [];
+  if(!forns.length){ try{ forns=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; coFornecedores=forns; }catch(e){} }
+  let opts='<option value="">Fornecedor…</option>';
+  forns.forEach(function(f){ opts+='<option value="'+f.id+'">'+siEsc(f.nome)+'</option>'; });
+  let linhas='';
+  for(let k=0;k<3;k++){
+    linhas+='<div style="display:flex;gap:8px;align-items:center;margin-top:6px">'
+      +'<select id="si-forn-'+k+'" style="flex:1;'+SI_SEL+'">'+opts+'</select>'
+      +'<input type="text" id="si-valor-'+k+'" placeholder="R$/un" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);text-align:right">'
+      +'<label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer"><input type="radio" name="si-esc" value="'+k+'"> escolhido</label>'
+      +'</div>';
+  }
+  siOverlay('<div class="rm-head azul"><span>💲 Orçar — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4)">Compare até 3 fornecedores (valor unitário da peça) e marque o <b>escolhido</b>. O comparativo fica no histórico de cotações.</div>'
+    +linhas
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-top:10px">Quantidade solicitada: <b>'+siEsc(s.qtd)+'</b> · motivo: '+siEsc(s.motivo||'—')+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siOrcarCompSalvar('+id+')">Enviar p/ aprovação ✓</button></div>'
+    +'</div>');
+}
+async function siOrcarCompSalvar(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const ofertas=[];
+  for(let k=0;k<3;k++){
+    const fid=parseInt((document.getElementById('si-forn-'+k)||{}).value,10);
+    const val=siNum((document.getElementById('si-valor-'+k)||{}).value);
+    if(fid&&val&&val>0) ofertas.push({slot:k+1,idx:k,fornecedor_id:fid,valor:val});
+  }
+  if(!ofertas.length){ toast('Preencha ao menos um fornecedor com valor.','erro'); return; }
+  const escEl=document.querySelector('input[name="si-esc"]:checked');
+  let escolhida=null;
+  if(escEl){ escolhida=ofertas.find(function(o){return o.idx===parseInt(escEl.value,10);})||null; }
+  if(!escolhida){
+    if(ofertas.length===1) escolhida=ofertas[0];
+    else { toast('Marque qual fornecedor foi o ESCOLHIDO.','erro'); return; }
+  }
+  // 1) grava o comparativo na engine — se falhar, avisa mas NÃO trava o fluxo
+  try{
+    let cotId=null;
+    const ab=(await sbFetch('cotacoes?select=id&status=eq.aberta&origem=eq.INSTRUMENTAL&order=id.desc&limit=1'))||[];
+    if(ab.length) cotId=ab[0].id;
+    else{ const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:siNome(),origem:'INSTRUMENTAL'}); cotId=c&&c[0]&&c[0].id; }
+    if(cotId){
+      const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:cotId, material_id:null, solicitacao_instr_id:id,
+        material_nome:s.peca_nome, qtd_desejada:s.qtd, grupo:'Instrumental', fechado:true, fechado_em:new Date().toISOString() });
+      const itemId=ins&&ins[0]&&ins[0].id;
+      if(itemId){
+        await sbFetch('cotacao_opcoes','POST',ofertas.map(function(o){ return { cotacao_item_id:itemId, slot:o.slot,
+          fornecedor_id:o.fornecedor_id, preco_total:o.valor, preco_unitario:o.valor,
+          escolhida:o===escolhida, qtd_escolhida:(o===escolhida)?s.qtd:null }; }));
+      }
+    }
+  }catch(e){ toast('⚠ Comparativo não gravado na cotação ('+(e.message||e)+') — a solicitação segue mesmo assim.','erro'); }
+  // 2) a solicitação anda como sempre andou
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ fornecedor_id:escolhida.fornecedor_id, valor_unitario:escolhida.valor,
+      valor_total: escolhida.valor*parseFloat(s.qtd), cotado_por:siNome(), cotado_em:new Date().toISOString(), status:'AGUARDANDO_APROVACAO' });
+    toast('Orçado com '+ofertas.length+' oferta(s) — foi para aprovação ✓','sucesso'); siFecharOverlay(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function siAprovar(id){
+  if(!confirm('Aprovar esta compra?')) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'APROVADA', aprovado_por:siNome(), aprovado_em:new Date().toISOString() }); toast('Aprovada ✓','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siReprovar(id){
+  const m = prompt('Motivo da reprovação:'); if(m===null) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'REPROVADA', reprovado_motivo:(m||'').trim()||null, aprovado_por:siNome(), aprovado_em:new Date().toISOString() }); toast('Reprovada.','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siPedido(id){
+  if(!confirm('Confirmar emissão do pedido ao fornecedor?')) return;
+  try{ await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'PEDIDO', pedido_por:siNome(), pedido_em:new Date().toISOString() }); toast('Pedido emitido ✓','sucesso'); siCarregar(); }
+  catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function siReceberNF(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  siOverlay('<div class="rm-head laranja"><span>📥 Receber NF — '+siEsc(s.peca_nome)+'</span><button class="rm-b claro" onclick="siFecharOverlay()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Nº da nota fiscal</label>'
+    +'<input type="text" id="si-nfnum" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin:6px 0 12px">'
+    +'<label style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Valor total da NF (R$, opcional)</label>'
+    +'<input type="text" id="si-nfval" placeholder="0,00" style="width:160px;display:block;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--fonte);margin-top:6px">'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="rm-b claro" onclick="siFecharOverlay()">Cancelar</button><button class="rm-b laranja" onclick="siReceberNFSalvar('+id+')">Registrar recebimento ✓</button></div>'
+    +'</div>');
+}
+async function siReceberNFSalvar(id){
+  const nf=(document.getElementById('si-nfnum').value||'').trim();
+  const val=siNum(document.getElementById('si-nfval').value);
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'RECEBIDA', nf_numero:nf||null, nf_valor:(val&&val>0)?val:null, recebido_por:siNome(), recebido_em:new Date().toISOString() });
+    toast('NF recebida — foi para "dar destino" ✓','sucesso'); siFecharOverlay(); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function siDestino(id){
+  const s = siDados.find(function(x){return x.id===id;}); if(!s) return;
+  const sel = document.getElementById('si-dest-'+id);
+  const caixaId = sel ? parseInt(sel.value,10) : 0;
+  if(!caixaId){ toast('Escolha a caixa (ou a RESERVA).','erro'); return; }
+  try{
+    const iguais = (typeof ciPecas!=='undefined' ? ciPecas : []).filter(function(p){ return p.caixa_id===caixaId && ciNorm(p.nome)===ciNorm(s.peca_nome); });
+    if(iguais.length){
+      const base = (iguais[0].qtd!=null) ? (parseFloat(iguais[0].qtd)||0) : 0;
+      await sbFetch('instrumental_pecas?id=eq.'+iguais[0].id,'PATCH',{ qtd: base + parseFloat(s.qtd) });
+    } else {
+      await sbFetch('instrumental_pecas','POST',{ caixa_id:caixaId, nome:s.peca_nome, qtd:parseFloat(s.qtd) });
+    }
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'DESTINADA', caixa_destino_id:caixaId, destinado_por:siNome(), destinado_em:new Date().toISOString() });
+    toast('Destino dado — peça entrou na caixa ✓','sucesso');
+    if(typeof ciCarregar==='function') ciCarregar();
+    siCarregar();
+  }catch(e){ toast('Erro ao dar destino: '+(e.message||e),'erro'); }
+}
+
+// ═══════════ v4.20 — DESK DE ORÇAMENTO DE INSTRUMENTAIS ═══════════
+// Mesma lógica da higiene: seleciona solicitações, agrupa em "Orçamento 1/2/3"
+// por tipo de fornecedor, compara até 3, fecha o grupo → pedido por fornecedor
+// (origem INSTRUMENTAL) que segue o FLUXO GERAL: Aprovar Pedido → Receber NF.
+// A NF não mexe em estoque: a peça volta para cá como RECEBIDA → dar destino.
+let siDeskCotId  = null;
+let siDeskGrupos = {};            // { nome: { forns:[3], itens:[{solic_id,nome,qtd,motivo,precos[3],escolhido}] } }
+let siDeskAtivo  = 'Orçamento 1';
+
+function siDeskG(){ if(!siDeskGrupos[siDeskAtivo]) siDeskGrupos[siDeskAtivo]={forns:[null,null,null],itens:[]}; return siDeskGrupos[siDeskAtivo]; }
+function siDeskTotal(){ return Object.keys(siDeskGrupos).reduce(function(s,g){ return s+siDeskGrupos[g].itens.length; },0); }
+function siDeskTem(sid){ return Object.keys(siDeskGrupos).some(function(g){ return siDeskGrupos[g].itens.some(function(i){return i.solic_id===sid;}); }); }
+function siDeskGrupoOpts(){
+  let o=''; const nomes=Object.keys(siDeskGrupos);
+  (nomes.length?nomes:['Orçamento 1']).forEach(function(g){ o+='<option value="'+siEsc(g)+'"'+(g===siDeskAtivo?' selected':'')+'>'+siEsc(g)+'</option>'; });
+  o+='<option value="__novo__">➕ novo grupo…</option>';
+  return o;
+}
+
+async function siDeskCarregar(){
+  if(!ORIGEM_OK) return;
+  if(siDeskCotId!==null || siDeskTotal()>0) return;
+  try{
+    const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.INSTRUMENTAL&order=id.desc&limit=1'))||[];
+    if(!ab.length) return;
+    siDeskCotId=ab[0].id;
+    const fg=ab[0].fornecedores_grupo||{};
+    siDeskGrupos={};
+    Object.keys(fg).forEach(function(g){
+      siDeskGrupos[g]={forns:[(fg[g]||[])[0]||null,(fg[g]||[])[1]||null,(fg[g]||[])[2]||null],itens:[]};
+    });
+    const its=(await sbFetch('cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.'+siDeskCotId+'&fechado=is.false&order=id.asc'))||[];
+    its.forEach(function(it){
+      const g=it.grupo||'Orçamento 1';
+      if(!siDeskGrupos[g]) siDeskGrupos[g]={forns:[null,null,null],itens:[]};
+      const s=siDados.find(function(x){return x.id===it.solicitacao_instr_id;})||{};
+      const linha={ solic_id:it.solicitacao_instr_id, nome:it.material_nome, qtd:Number(it.qtd_desejada)||1,
+                    motivo:s.motivo||'', precos:[null,null,null], marcas:[null,null,null], escolhido:null, estoque:null };
+      (it.cotacao_opcoes||[]).forEach(function(o){
+        const k=(o.slot||1)-1; if(k<0||k>2) return;
+        linha.precos[k]=o.preco_total;
+        linha.marcas[k]=o.marca||null;
+        if(o.fornecedor_id && !siDeskGrupos[g].forns[k]) siDeskGrupos[g].forns[k]=o.fornecedor_id;
+        if(o.escolhida) linha.escolhido=k;
+      });
+      siDeskGrupos[g].itens.push(linha);
+    });
+    // v4.22 — quantidade em estoque de cada peça (soma nas caixas do CME)
+    try{
+      if(!siModelosCache.length) await siCarregarModelos();
+      Object.keys(siDeskGrupos).forEach(function(g2){
+        siDeskGrupos[g2].itens.forEach(function(i2){
+          const m=siModelosCache.find(function(x){return ciNorm(x.nome)===ciNorm(i2.nome);});
+          i2.estoque=m?m.total:0;
+        });
+      });
+    }catch(e){}
+    const nomes=Object.keys(siDeskGrupos);
+    if(nomes.length) siDeskAtivo=nomes.indexOf(siDeskAtivo)>=0?siDeskAtivo:nomes[0];
+    // v4.20c — referência de preço: último pago da mesma peça
+    try{
+      const todos=[]; Object.keys(siDeskGrupos).forEach(function(g2){ siDeskGrupos[g2].itens.forEach(function(i){ todos.push({item_nome:i.nome}); }); });
+      await ultPagoCarregar(todos);
+    }catch(e){}
+  }catch(e){}
+}
+
+function siDeskHtml(){
+  if(!siDeskTotal() && siDeskCotId===null) return '';
+  const G=siDeskG();
+  let h='<div class="rm-card"><div class="rm-head verde"><span>🧾 Orçamento de instrumentais'
+    +(siDeskCotId?(' · cotação #'+siDeskCotId):'')+'</span><span style="font-size:11px;font-weight:600">fechar grupo → pedido por fornecedor → fluxo geral</span></div>'
+    +'<div style="padding:12px 16px">';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
+  Object.keys(siDeskGrupos).forEach(function(g){
+    h+='<button style="'+(g===siDeskAtivo?HG_CHIP_ON:HG_CHIP)+'" onclick="siDeskTrocar(\''+siEsc(g).replace(/'/g,"\\'")+'\')">'+siEsc(g)+' ('+siDeskGrupos[g].itens.length+')</button>';
+  });
+  h+='<button style="'+HG_CHIP+'" onclick="siDeskNovoGrupo()">➕ novo grupo</button></div>';
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;align-items:center">'
+    +'<span style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Fornecedores de "'+siEsc(siDeskAtivo)+'":</span>';
+  for(let k=0;k<3;k++){
+    let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
+    (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+siEsc(f.nome)+'</option>'; });
+    fo+='<option value="__novo__">➕ novo fornecedor…</option>';
+    h+='<select onchange="siDeskForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco);max-width:240px">'+fo+'</select>';
+  }
+  h+='<button style="'+HG_CHIP+'" onclick="siDeskNovoFornBtn()">➕ novo fornecedor</button></div>';
+  h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Peça (solicitação)</th><th class="hg-num">Qtd</th>';
+  for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?siEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/un)</th>'; }
+  h+='<th>Escolha</th><th title="só as marcadas viram pedido no Fechar">🛒</th><th></th></tr></thead><tbody>';
+  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:16px">Grupo vazio — marque solicitações abaixo e use "Enviar marcadas".</td></tr>';
+  G.itens.forEach(function(it,i){
+    it.marcas = it.marcas || [null,null,null];
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
+    const ult=(typeof ultPagoCache!=='undefined')?ultPagoCache['n'+it.nome]:undefined;
+    h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')
+      +' · <b>'+(it.estoque!=null?it.estoque:'—')+'</b> em estoque'
+      +' · '+(ult!=null?('últ. pago <b>'+siMoeda(ult)+'/un</b>'):'1ª compra — sem referência')+'</span></td>'
+      +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="siDeskQtd('+i+',this.value)" style="width:64px;'+HG_INP+'" title="ajuste a quantidade a comprar"></td>';
+    for(let k=0;k<3;k++){
+      if(k>0 && !G.forns[k]) continue;
+      if(!G.forns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
+      h+='<td class="hg-num"><input type="text" value="'+(it.precos[k]!=null?String(it.precos[k]).replace('.',','):'')+'" placeholder="0,00" onchange="siDeskPreco('+i+','+k+',this.value)" style="width:90px;text-align:right;'+HG_INP+(menor===k?';border-color:var(--verde);background:var(--verde-claro);font-weight:700':'')+'">'
+        +'<input type="text" value="'+siEsc(it.marcas[k]||'')+'" placeholder="marca" onchange="siDeskMarca('+i+','+k+',this.value)" style="width:90px;display:block;margin-top:3px;font-size:10.5px;'+HG_INP+'"></td>';
+    }
+    let esc='<select onchange="siDeskEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
+    for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+siEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
+    esc+='</select>';
+    h+='<td>'+esc+'</td>'
+      +'<td style="text-align:center"><input type="checkbox" '+((it.comprar!==false&&it.escolhido!=null)?'checked':'')+' onchange="siDeskComprar('+i+',this.checked)" title="entra no pedido ao fechar" style="width:16px;height:16px;cursor:pointer"></td>'
+      +'<td><button style="'+HG_BTNX+'" onclick="siDeskRemover('+i+')" title="devolver para Solicitadas">✕</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  // v4.22 — soma dos escolhidos (total do grupo e por fornecedor)
+  let totEsc=0; const porF={};
+  G.itens.forEach(function(it){
+    if(it.comprar!==false && it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
+      const v=(Number(it.qtd)||0)*Number(it.precos[it.escolhido]);
+      totEsc+=v; const fid=G.forns[it.escolhido]; porF[fid]=(porF[fid]||0)+v;
+    }
+  });
+  if(totEsc>0){
+    h+='<div style="margin:10px 0 0;padding:9px 12px;background:var(--verde-claro);border-radius:8px;font-size:13.5px;font-weight:800;color:var(--verde)">Total dos ESCOLHIDOS deste grupo: '+siMoeda(totEsc)
+      +' <span style="font-weight:600;font-size:11.5px;color:var(--cinza-5)">· '+Object.keys(porF).map(function(f){return siEsc(hgOrcFornNome(Number(f)))+' '+siMoeda(porF[f]);}).join(' · ')+'</span></div>';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">'
+    +'<button style="'+HG_BTN+'" onclick="siDeskSalvar(false)">💾 Salvar orçamento</button>'
+    +'<button style="'+HG_BTNV+'" onclick="siDeskFechar()">🔒 Fechar o grupo "'+siEsc(siDeskAtivo)+'" → pedido</button>'
+    +'<span style="font-size:12px;color:var(--cinza-4)">o pedido segue o fluxo geral (Aprovar → NF); a peça volta para cá para o destino</span>'
+    +'</div>';
+  h+='</div></div>';
+  return h;
+}
+
+function siDeskTrocar(g){ siDeskAtivo=g; siRender(); }
+function siDeskNovoGrupo(){
+  const g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(siDeskGrupos).length+1))||'').trim();
+  if(!g) return;
+  if(siDeskGrupos[g]){ toast('Já existe um grupo com esse nome.','erro'); return; }
+  siDeskGrupos[g]={forns:[null,null,null],itens:[]}; siDeskAtivo=g; siRender();
+}
+async function siDeskForn(k,v){
+  if(v==='__novo__'){ const id=await orcNovoFornecedor(); siDeskG().forns[k]=id||null; siRender(); return; }
+  siDeskG().forns[k]=v?parseInt(v,10):null; siRender();
+}
+function siDeskPreco(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.precos[k]=siNum(v)||null; siRender(); }
+function siDeskMarca(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.marcas=it.marcas||[null,null,null]; it.marcas[k]=(v||'').trim().toUpperCase()||null; }
+function siDeskQtd(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.qtd=parseFloat(v)||1; siRender(); }
+function siDeskComprar(i,ck){ const it=siDeskG().itens[i]; if(!it) return; it.comprar=!!ck; siRender(); }
+function siDeskEscolher(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); if(it.escolhido!=null && it.comprar===undefined) it.comprar=true; siRender(); }
+async function siDeskNovoFornBtn(){
+  const id=await orcNovoFornecedor();
+  if(id){ const G=siDeskG(); const k=G.forns.findIndex(function(x){return !x;}); if(k>=0 && G.forns.indexOf(id)<0) G.forns[k]=id; }
+  siRender();
+}
+async function siDeskRemover(i){
+  siDeskG().itens.splice(i,1);
+  // v4.20b — remover PERSISTE: sem salvar, o item voltava ao recarregar a página
+  if(siDeskCotId!==null){ try{ await siDeskSalvar(true); }catch(e){} }
+  siRender();
+}
+
+// v4.20b — pedido cancelado/rejeitado no fluxo geral devolve as solicitações
+// de instrumental para "Solicitadas" (senão ficam presas em "Receber NF")
+async function siSoltarDoPedido(pid){
+  try{
+    const ords=(await sbFetch('ordens_compra?select=solicitacao_instr_id&pedido_id=eq.'+pid+'&solicitacao_instr_id=not.is.null&limit=100'))||[];
+    const ids=[...new Set(ords.map(function(o){return o.solicitacao_instr_id;}).filter(Boolean))];
+    if(!ids.length) return 0;
+    await sbFetch('solicitacao_instrumental?id=in.('+ids.join(',')+')&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
+      { status:'SOLICITADA', pedido_por:null, pedido_em:null });
+    toast('🔩 '+ids.length+' solicitação(ões) de instrumental voltaram para "Solicitadas".','sucesso');
+    return ids.length;
+  }catch(e){ return 0; }
+}
+
+// ═══ v4.21 — MENU CME (Compras · Inventário · Manutenção) e Remessas por tipo ═══
+// Os três itens do menu CME abrem a MESMA aba de instrumentais, cada um
+// mostrando só a sua parte. Lavanderia/Óxido abrem as remessas já filtradas.
+let cmeModo = 'compras';
+function cmeIr(m){
+  cmeModo = m;
+  trocarAba('instrumentais');
+  cmeAplicarModo();
+  [['aba-btn-instrumentais','compras'],['aba-btn-cme-inv','inventario'],['aba-btn-cme-man','manutencao']].forEach(function(par){
+    const b=document.getElementById(par[0]); if(b) b.classList.toggle('ativa', cmeModo===par[1]);
+  });
+}
+function cmeAplicarModo(){
+  const mapa = {
+    'ci-solic':       cmeModo==='compras',
+    'ci-filtros':     cmeModo==='inventario',
+    'ci-tiles':       cmeModo==='inventario',
+    'ci-tratativas':  cmeModo==='inventario',
+    'ci-emprestadas': cmeModo==='inventario',
+    'ci-consertos':   cmeModo==='manutencao',
+    'ci-caixas':      cmeModo==='inventario'
+  };
+  Object.keys(mapa).forEach(function(id){
+    const el=document.getElementById(id); if(el) el.style.display = mapa[id] ? '' : 'none';
+  });
+  const bC=document.getElementById('cme-btn-conserto');  if(bC) bC.style.display = (cmeModo==='manutencao') ? '' : 'none';
+  const bN=document.getElementById('cme-btn-novacaixa'); if(bN) bN.style.display = (cmeModo==='inventario') ? '' : 'none';
+  const topo=document.getElementById('cme-topo'); if(topo) topo.style.display = (cmeModo==='compras') ? 'none' : '';
+}
+// ═══ v4.23 — ESTOQUE INICIAL das remessas: lança direto na tela, sem planilha.
+// Você digita quanto tem EM CASA hoje; o sistema grava o AJUSTE (a diferença
+// para o saldo atual) com a data anotada na observação.
+function rmEstoqueInicial(){
+  const bens=(rmBens||[]).filter(function(b){ return !rmVista || b.tipo===rmVista; })
+    .slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
+  if(!bens.length){ toast('Nenhum item deste tipo no livro — cadastre com "Entrada de peça nova".','erro'); return; }
+  const casaDe=function(bid){ const s=(rmSaldo||[]).find(function(x){return Number(x.bem_id)===Number(bid);}); return s?(Number(s.em_casa)||0):0; };
+  const hoje=new Date().toISOString().slice(0,10);
+  let linhas='';
+  bens.forEach(function(b){
+    linhas+='<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'+b.nome+'</td>'
+      +'<td style="text-align:center;padding:7px 10px;border-bottom:1px solid var(--cinza-2);color:var(--cinza-4)">'+casaDe(b.id)+'</td>'
+      +'<td style="text-align:center;padding:7px 10px;border-bottom:1px solid var(--cinza-2)"><input type="number" min="0" step="any" class="rm-ei" data-bem="'+b.id+'" placeholder="'+casaDe(b.id)+'" style="width:80px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte);text-align:center"></td></tr>';
+  });
+  let ov=document.getElementById('rm-ei-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rm-ei-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>🏁 Estoque inicial — '+rmTipo(rmVista||'').curto+'</span><button class="rm-b claro" onclick="rmEiFechar()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:10px">Digite quanto tem <b>EM CASA</b> hoje (só preencha o que quer acertar — vazio não mexe). O sistema grava a diferença como ajuste, com a data.</div>'
+    +'<label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Data da contagem</label> '
+    +'<input type="date" id="rm-ei-data" value="'+hoje+'" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px;font-family:var(--fonte);margin:4px 0 10px">'
+    +'<div style="max-height:340px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr><th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Item</th><th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Em casa hoje</th><th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Contagem</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="rm-b claro" onclick="rmEiFechar()">Cancelar</button>'
+    +'<button class="rm-b verde" onclick="rmEiSalvar()">Gravar estoque inicial ✓</button>'
+    +'</div></div></div>';
+}
+function rmEiFechar(){ const ov=document.getElementById('rm-ei-modal'); if(ov) ov.remove(); }
+async function rmEiSalvar(){
+  const data=(document.getElementById('rm-ei-data')||{}).value||new Date().toISOString().slice(0,10);
+  const inputs=[...document.querySelectorAll('.rm-ei')].filter(function(i){ return i.value!==''; });
+  if(!inputs.length){ toast('Nenhuma contagem preenchida.','erro'); return; }
+  const casaDe=function(bid){ const s=(rmSaldo||[]).find(function(x){return Number(x.bem_id)===Number(bid);}); return s?(Number(s.em_casa)||0):0; };
+  const quem=((document.getElementById('rm-registrado-por')||{}).value)||(SESSAO?SESSAO.nome:'')||'Equipe';
+  let n=0;
+  try{
+    for(const i of inputs){
+      const bid=Number(i.dataset.bem), alvo=parseFloat(i.value)||0, atual=casaDe(bid), delta=alvo-atual;
+      if(!delta) continue;
+      await sbFetch('remessa_mov','POST',{ bem_id:bid, tipo:'AJUSTE', d_casa:delta, registrado_por:quem,
+        observacao:'Estoque inicial em '+data.split('-').reverse().join('/')+' — de '+atual+' para '+alvo });
+      n++;
+    }
+    toast('🏁 Estoque inicial gravado — '+n+' item(ns) ajustado(s).','sucesso');
+    rmEiFechar(); rmCarregar();
+  }catch(e){ toast('Erro ao gravar: '+(e.message||e),'erro'); }
+}
+
+function rmIrTipo(t){
+  rmVista = t;                                   // v4.21c — a vista trava o tipo
+  trocarAba('remessas');
+  try{ rmFiltroForn='TODOS'; rmRenderizar(); }catch(e){}
+  const lav=document.getElementById('aba-btn-remessas'), oxi=document.getElementById('aba-btn-rem-oxido');
+  if(lav) lav.classList.toggle('ativa', t==='LAVANDERIA');
+  if(oxi) oxi.classList.toggle('ativa', t==='ESTERILIZACAO');
+}
+
+// v4.20b — socorro manual: peça presa numa etapa (pedido cancelado por fora,
+// orçamento a refazer) volta para o começo sem SQL
+async function siVoltarSolicitada(id){
+  if(!confirm('Devolver esta peça para "Solicitadas"?\n\nUse quando o pedido foi cancelado ou o orçamento precisa ser refeito. Nada é apagado — só o status volta ao começo.')) return;
+  try{
+    await sbFetch('solicitacao_instrumental?id=eq.'+id,'PATCH',{ status:'SOLICITADA', pedido_por:null, pedido_em:null });
+    toast('Voltou para "Solicitadas" ✓','sucesso'); siCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function siDeskEnviar(){
+  const sel=document.getElementById('si-desk-grupo-sel');
+  let g=sel?sel.value:'Orçamento 1';
+  if(g==='__novo__'){
+    g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(siDeskGrupos).length+1))||'').trim();
+    if(!g) return;
+  }
+  const marcadas=[...document.querySelectorAll('.si-chk')].filter(function(c){return c.checked;});
+  if(!marcadas.length){ toast('Marque ao menos uma solicitação (caixinha "orçar").','erro'); return; }
+  if(!siDeskGrupos[g]) siDeskGrupos[g]={forns:[null,null,null],itens:[]};
+  // v4.22 — carrega o estoque das peças (soma nas caixas do CME) para mostrar no desk
+  if(!siModelosCache.length){ try{ await siCarregarModelos(); }catch(e){} }
+  let n=0;
+  marcadas.forEach(function(c){
+    const sid=parseInt(c.dataset.id,10);
+    const s=siDados.find(function(x){return x.id===sid;});
+    if(!s || siDeskTem(sid)) return;
+    const mEst=(siModelosCache||[]).find(function(m){return ciNorm(m.nome)===ciNorm(s.peca_nome);});
+    siDeskGrupos[g].itens.push({ solic_id:sid, nome:s.peca_nome, qtd:s.qtd, motivo:s.motivo||'',
+      precos:[null,null,null], marcas:[null,null,null], escolhido:null, estoque:mEst?mEst.total:0 });
+    n++;
+  });
+  siDeskAtivo=g;
+  // v4.20c — busca o último pago das peças recém-chegadas ao desk
+  try{ await ultPagoCarregar(siDeskGrupos[g].itens.map(function(i){return {item_nome:i.nome};})); }catch(e){}
+  toast(n+' solicitação(ões) no grupo "'+g+'" ✓','sucesso');
+  siRender();
+}
+
+async function siDeskSalvar(sil){
+  if(!exigirSenhaCompras()) return false;
+  if(!siDeskTotal()){
+    if(siDeskCotId!==null){
+      try{
+        await coApagarItens('cotacao_id=eq.'+siDeskCotId+'&fechado=is.false');
+        await sbFetch('cotacoes?id=eq.'+siDeskCotId,'PATCH',{status:'fechada'});
+        siDeskCotId=null;
+      }catch(e){ toast('Erro ao encerrar o orçamento vazio: '+e.message,'erro'); return false; }
+    }
+    if(!sil){ toast('Orçamento de instrumentais sem itens — encerrado.',''); siRender(); }
+    return true;
+  }
+  try{
+    const fg={};
+    Object.keys(siDeskGrupos).forEach(function(g){ fg[g]=siDeskGrupos[g].forns.filter(Boolean); });
+    if(siDeskCotId===null){
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:siNome(),fornecedores_grupo:fg,origem:'INSTRUMENTAL'});
+      if(!c||!c.length) throw new Error('não retornou a cotação criada');
+      siDeskCotId=c[0].id;
+    } else {
+      await sbFetch('cotacoes?id=eq.'+siDeskCotId,'PATCH',{fornecedores_grupo:fg});
+      await coApagarItens('cotacao_id=eq.'+siDeskCotId+'&fechado=is.false');
+    }
+    for(const g of Object.keys(siDeskGrupos)){
+      const forns=siDeskGrupos[g].forns;
+      for(const it of siDeskGrupos[g].itens){
+        const ins=await sbFetch('cotacao_itens','POST',{ cotacao_id:siDeskCotId, material_id:null, solicitacao_instr_id:it.solic_id,
+          material_nome:it.nome, qtd_desejada:it.qtd, grupo:g });
+        const itemId=ins&&ins[0]&&ins[0].id;
+        const ops=[];
+        for(let k=0;k<3;k++){
+          if(!forns[k]||it.precos[k]==null) continue;
+          ops.push({ cotacao_item_id:itemId, slot:k+1, fornecedor_id:forns[k],
+            preco_total:it.precos[k], preco_unitario:it.precos[k],
+            marca:(it.marcas&&it.marcas[k])||null,
+            escolhida: it.escolhido===k, qtd_escolhida: it.escolhido===k?it.qtd:null });
+        }
+        if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
+      }
+    }
+    if(!sil){ toast('💾 Orçamento #'+siDeskCotId+' salvo — fica AQUI até você fechar cada grupo.','sucesso'); siRender(); }
+    return true;
+  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
+}
+
+async function siDeskFechar(){
+  if(!exigirSenhaCompras()) return;
+  const G=siDeskG(), gnome=siDeskAtivo;
+  const prontos=G.itens.filter(function(it){ return it.comprar!==false && it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null; });
+  if(!prontos.length){ toast('Nenhuma peça do grupo "'+gnome+'" está marcada no 🛒 com fornecedor escolhido e preço.','erro'); return; }
+  const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
+  // v4.20c — escolheu quem NÃO tem o menor preço? Justifica — vai gravado
+  // na ordem e aparece para quem aprova.
+  for(const it of prontos){
+    let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<menor)) menor=p; });
+    const vEsc=Number(it.precos[it.escolhido]);
+    if(menor!=null && vEsc>menor+0.004){
+      const j=prompt('"'+it.nome+'": o escolhido ('+siMoeda(vEsc)+') NÃO é o menor preço ('+siMoeda(menor)+').\n\nJustifique a escolha — fica gravado para quem aprova:', it.just||'');
+      if(j===null || !j.trim()){ toast('Fechamento cancelado — justificativa obrigatória quando a escolha não é o menor preço.','erro'); return; }
+      it.just=j.trim();
+    } else it.just=null;
+  }
+  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' peça(s) viram pedido(s) por fornecedor — SÓ de instrumentais — e seguem para Aprovar Pedido → Receber NF (fluxo geral).';
+  if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
+  if(!confirm(msg)) return;
+  try{
+    const ok=await siDeskSalvar(true); if(!ok) return;
+    const porForn={};
+    prontos.forEach(function(it){ const fid=G.forns[it.escolhido]; (porForn[fid]=porForn[fid]||[]).push(it); });
+    let nItens=0;
+    for(const fidStr of Object.keys(porForn)){
+      const fid=Number(fidStr);
+      let pedidoId=null;
+      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.INSTRUMENTAL&limit=1');
+      if(exist&&exist.length) pedidoId=exist[0].id;
+      else{
+        const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:siDeskCotId,
+          origem:'INSTRUMENTAL', observacao:'Instrumentais — grupo '+gnome });
+        pedidoId=p&&p[0]&&p[0].id;
+      }
+      for(const it of porForn[fidStr]){
+        const val=it.precos[it.escolhido];
+        await sbFetch('ordens_compra','POST',{ material_id:null, item_nome:it.nome, solicitacao_instr_id:it.solic_id,
+          fornecedor_id:fid, fornecedor_compra_id:fid,
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'INSTRUMENTAL',
+          qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:val,
+          marca_escolhida:(it.marcas&&it.marcas[it.escolhido])||null,
+          observacao:'Instrumental — solicitação #'+it.solic_id+(it.motivo?(' — '+it.motivo):'')+(it.just?(' | Justificativa: '+it.just):'') });
+        try{
+          await sbFetch('solicitacao_instrumental?id=eq.'+it.solic_id,'PATCH',{ status:'PEDIDO',
+            qtd:it.qtd, fornecedor_id:fid, valor_unitario:val, valor_total:val*parseFloat(it.qtd),
+            cotado_por:siNome(), cotado_em:new Date().toISOString(),
+            pedido_por:siNome(), pedido_em:new Date().toISOString() });
+        }catch(e){ toast('⚠ Solicitação #'+it.solic_id+' não atualizou: '+(e.message||e),'erro'); }
+        nItens++;
+      }
+      const ids=porForn[fidStr].map(function(it){return it.solic_id;});
+      try{
+        await sbFetch('cotacao_itens?cotacao_id=eq.'+siDeskCotId+'&solicitacao_instr_id=in.('+ids.join(',')+')&fechado=is.false','PATCH',
+          {fechado:true,fechado_em:new Date().toISOString(),pedido_id:pedidoId});
+      }catch(e){}
+    }
+    G.itens=G.itens.filter(function(it){ return prontos.indexOf(it)<0; });
+    if(!G.itens.length && Object.keys(siDeskGrupos).length>1){ delete siDeskGrupos[gnome]; siDeskAtivo=Object.keys(siDeskGrupos)[0]; }
+    await siDeskSalvar(true);
+    toast('Grupo "'+gnome+'" fechado ✓ — '+nItens+' peça(s) em pedido(s). Siga em 📦 Pedidos → Aprovar → Receber NF.','sucesso');
+    siCarregar();
+  }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
 }
 </script>
 
