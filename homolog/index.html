@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.22 · Orçamento com marca, saldo, totais, novo fornecedor e devolução de pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.23 · Desconto, obs. p/ fornecedor, devoluções com rastreio e estoque inicial</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1050,6 +1050,7 @@ details[open] summary { margin-bottom: 6px; }
     <button onclick="rcRegistrarExtravio()" style="margin-left:auto;background:#FDEDEC;color:var(--vermelho);border:1.5px solid var(--vermelho);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">⚠️ Registrar extravio/perda</button>
   </div>
   <div id="rc-corpo"><div class="rc-empty">Carregando pedidos pendentes...</div></div>
+  <div id="rc-devolucoes"></div>
   <div class="rc-nfs-recentes">
     <h3>📄 Notas fiscais recentes</h3>
     <div id="rc-nfs-lista"><div class="rc-empty" style="padding:20px">Carregando...</div></div>
@@ -1201,6 +1202,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="rm-b laranja" onclick="rmMontarRemessa()">🧺 Montar remessa do dia</button>
     <button class="rm-b claro" onclick="rmNovoSujo()">➕ Acrescentar item sujo</button>
     <button class="rm-b claro" onclick="rmEntradaBem()">📦 Entrada de peça nova</button>
+    <button class="rm-b claro" onclick="rmEstoqueInicial()">🏁 Estoque inicial</button>
     <button class="rm-b claro" onclick="rmCarregar()" style="margin-left:auto">↻ Atualizar</button>
   </div>
 
@@ -5866,7 +5868,8 @@ async function deCarregar(){
   }
 }
 
-function deTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
+// v4.23 — o subtotal do item respeita o desconto por item (R$)
+function deTotalItens(b){ return b.itens.reduce((s,o)=>s+Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)),0); }
 
 function deRenderizar(){
   const corpo=document.getElementById('de-corpo');
@@ -5882,7 +5885,7 @@ function deRenderizar(){
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
       <td style="text-align:right">${deMoney(o.valor_unitario)}${ultPagoTag(o)}</td>
-      <td style="text-align:right;font-weight:600">${deMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td>
+      <td style="text-align:right;font-weight:600">${deMoney(Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)))}${Number(o.desconto)>0?`<span style="font-size:10px;color:var(--verde);display:block">−${deMoney(o.desconto)} desc.</span>`:''}</td>
       <td style="white-space:nowrap;text-align:right">
         <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="ordemEditarQtd(${o.id}, deCarregar)" title="Ajustar quantidade/valor">✎</button>
         <button style="background:#FDEDEC;color:var(--vermelho);border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--fonte)" onclick="deRemoverItem(${o.id})" title="Tirar item deste pedido">🗑</button>
@@ -5946,9 +5949,15 @@ function deRenderizar(){
             <option value="">— selecione —</option>
             ${EQUIPE.map(n=>`<option ${p.pedido_por===n?'selected':''}>${n}</option>`).join('')}
           </select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">💸 Desconto no total (R$)
+          <input id="de-desc-${pid}" type="number" step="0.01" min="0" value="${p.desconto??0}" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px" oninput="deAtualizaTotal(${pid})"></label>
+      </div>
+      <div style="padding:0 14px 10px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2)">
+        <label style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">📨 Observação PARA O FORNECEDOR (sai no pedido/PDF)</label>
+        <textarea id="de-obsf-${pid}" rows="2" placeholder="ex: entregar na recepção do centro cirúrgico · faturar para F2MR · desconto combinado com a Ana" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical">${p.obs_fornecedor||''}</textarea>
       </div>
       <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid var(--cinza-1)">
-        <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(totItens+(Number(p.frete)||0))}</span></div>
+        <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(Math.max(0,totItens+(Number(p.frete)||0)-(Number(p.desconto)||0)))}</span></div>
         <div style="display:flex;gap:8px">
           <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deSalvarPedido(${pid},false)">💾 Salvar dados</button>
           <button class="de-confirmar" onclick="deConfirmar(${pid})">✅ Enviar para Aprovação</button>
@@ -5961,13 +5970,16 @@ function deRenderizar(){
 function deAtualizaTotal(pid){
   const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
   const frete=parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0;
+  const desc=parseFloat((document.getElementById('de-desc-'+pid)||{}).value)||0;
   const el=document.getElementById('de-total-'+pid);
-  if(el) el.textContent=deMoney(deTotalItens(b)+frete);
+  if(el) el.textContent=deMoney(Math.max(0,deTotalItens(b)+frete-desc));
 }
 
 function deLerCampos(pid){
   return {
     frete: parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||0,
+    desconto: parseFloat((document.getElementById('de-desc-'+pid)||{}).value)||0,
+    obs_fornecedor: ((document.getElementById('de-obsf-'+pid)||{}).value||'').trim()||null,
     condicao_pagamento: ((document.getElementById('de-pag-'+pid)||{}).value||'').trim()||null,
     prazo_previsto: ((document.getElementById('de-prazo-'+pid)||{}).value||'').trim()||null,
     pedido_por: ((document.getElementById('de-por-'+pid)||{}).value||'').trim()||null,
@@ -7628,6 +7640,7 @@ async function rcApagarNfSalva(nfId){
 let rcNfItensCache = {}; // nf_id -> itens carregados
 
 async function rcCarregarNfsRecentes(){
+  try{ if(typeof rcDevCarregar==='function') rcDevCarregar(); }catch(e){}
   try{
     rcNfsRecentes = (await sbFetch('notas_fiscais?select=*&order=id.desc&limit=15')) || [];
     const div = document.getElementById('rc-nfs-lista');
@@ -7644,6 +7657,7 @@ async function rcCarregarNfsRecentes(){
               &nbsp;·&nbsp; <b>${rcMoney(nf.valor_total)}</b>
               &nbsp;·&nbsp; <span class="${nf.status==='ENTREGUE'?'rc-status-entregue':'rc-status-aguardando'}">${nf.status}</span>
             </div>
+            ${(nf.vencimentos_obs||nf.observacao)?`<div class="rc-nf-meta" style="margin-top:2px;color:#7D6608">${nf.vencimentos_obs?('💳 '+nf.vencimentos_obs):''}${nf.vencimentos_obs&&nf.observacao?' · ':''}${nf.observacao?('📝 '+nf.observacao):''}</div>`:''}
           </div>
           <div onclick="event.stopPropagation()">
             ${nf.status!=='DEVOLVIDO' ? `<button class="rc-btn-devolver" onclick="rcAbrirDevolucao(${nf.id})">↩️ Devolução</button>` : '<span style="color:var(--vermelho);font-size:11px">devolvida</span>'}
@@ -7691,7 +7705,183 @@ function rcRenderizarItensNf(nfId){
 }
 
 // ── DEVOLUÇÃO AO FORNECEDOR ────────────────────────────────────
+// ═══ v4.23 — DEVOLUÇÃO COM RASTREIO DE CASO ═══
+// Cada fornecedor tem seu processo (correio, retirada, troca na entrega...).
+// O caso nasce ABERTA e caminha: ENVIADA (aí sim o estoque desce, se for
+// material) → RECEBIDA PELO FORNECEDOR → RESOLVIDA (crédito/estorno/troca/
+// abatimento, com valor). Tudo com linha do tempo gravada.
+let rcDevs = [];
+function rcDevQuem(){ return ((document.getElementById('rc-registrado-por')||{}).value)||(SESSAO?SESSAO.nome:'')||'Equipe'; }
+function rcDevHist(d, linha){ return (((d&&d.historico)||'')+'\n'+new Date().toLocaleString('pt-BR')+' — '+linha+' ('+rcDevQuem()+')').trim(); }
+
 async function rcAbrirDevolucao(nfId){
+  const nf=(rcNfsRecentes||[]).find(function(n){return n.id===nfId;})||{};
+  let itens=[];
+  try{ itens=(await sbFetch('nf_itens?select=id,material_id,qtd,valor_unitario&nota_fiscal_id=eq.'+nfId))||[]; }catch(e){}
+  let opcoes='';
+  itens.forEach(function(it,i){ opcoes+='<option value="'+i+'">'+rcNomeMaterial(it.material_id)+' — recebido: '+it.qtd+'</option>'; });
+  opcoes+='<option value="__livre__">✏️ outro item (digitar — ex.: peça de instrumental)</option>';
+  const CAMPO='width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);margin-top:4px';
+  const ROT='font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:11px';
+  let ov=document.getElementById('rc-dev-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rc-dev-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:#D35400;color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>↩️ Abrir devolução — NF '+(nf.numero_nf||nfId)+'</span><button onclick="rcDevFecharModal()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="'+ROT+';margin-top:0">Item</label>'
+    +'<select id="rc-dev-item" onchange="document.getElementById(\'rc-dev-livre\').style.display=(this.value===\'__livre__\')?\'\':\'none\'" style="'+CAMPO+'">'+opcoes+'</select>'
+    +'<input type="text" id="rc-dev-livre" placeholder="nome do item (ex.: Cabo de cautério)" style="'+CAMPO+';display:'+(itens.length?'none':'')+'">'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="width:110px"><label style="'+ROT+'">Qtd a devolver</label><input type="number" id="rc-dev-qtd" value="1" min="0.01" step="any" style="'+CAMPO+'"></div>'
+    +'<div style="width:130px"><label style="'+ROT+'">Valor unitário (R$)</label><input type="text" id="rc-dev-val" placeholder="0,00" style="'+CAMPO+';text-align:right"></div>'
+    +'<div style="flex:1;min-width:160px"><label style="'+ROT+'">Como volta ao fornecedor?</label>'
+    +'<select id="rc-dev-met" style="'+CAMPO+'"><option value="CORREIO">📮 Correio</option><option value="RETIRADA">🚚 Fornecedor retira</option><option value="TROCA_NA_ENTREGA">🔁 Troca na próxima entrega</option><option value="OUTRO">Outro</option></select></div>'
+    +'</div>'
+    +'<label style="'+ROT+'">Motivo</label>'
+    +'<input type="text" id="rc-dev-motivo" placeholder="ex: vieram 2, era só 1" style="'+CAMPO+'">'
+    +'<label style="'+ROT+'">Rastreio / protocolo (opcional)</label>'
+    +'<input type="text" id="rc-dev-rast" placeholder="código dos correios, nº de protocolo…" style="'+CAMPO+'">'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:12px;line-height:1.5">O caso fica em <b>Devoluções em andamento</b> (nesta aba) até o acerto final. O estoque só desce quando você marcar <b>Enviado</b> — e peça de instrumental não mexe em estoque.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button onclick="rcDevFecharModal()" style="border:1px solid var(--cinza-3);background:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--cinza-4)">Cancelar</button>'
+    +'<button onclick="rcDevCriar('+nfId+')" style="border:none;background:#D35400;color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Abrir caso ✓</button>'
+    +'</div></div></div>';
+  ov.dataset.itens=JSON.stringify(itens);
+}
+function rcDevFecharModal(){ const ov=document.getElementById('rc-dev-modal'); if(ov) ov.remove(); }
+
+async function rcDevCriar(nfId){
+  const ov=document.getElementById('rc-dev-modal'); if(!ov) return;
+  const itens=JSON.parse(ov.dataset.itens||'[]');
+  const sel=(document.getElementById('rc-dev-item')||{}).value;
+  const nf=(rcNfsRecentes||[]).find(function(n){return n.id===nfId;})||{};
+  let material_id=null, item_nome=null, valSug=null;
+  if(sel==='__livre__' || !itens.length){
+    item_nome=((document.getElementById('rc-dev-livre')||{}).value||'').trim();
+    if(!item_nome){ toast('Digite o nome do item.','erro'); return; }
+  } else {
+    const it=itens[parseInt(sel,10)]; if(!it){ toast('Escolha o item.','erro'); return; }
+    material_id=it.material_id; item_nome=rcNomeMaterial(it.material_id); valSug=it.valor_unitario;
+  }
+  const qtd=parseFloat((document.getElementById('rc-dev-qtd')||{}).value)||0;
+  if(qtd<=0){ toast('Quantidade inválida.','erro'); return; }
+  const valStr=((document.getElementById('rc-dev-val')||{}).value||'').trim();
+  const val=valStr?(parseFloat(valStr.replace(/\./g,'').replace(',','.'))||null):valSug;
+  const met=(document.getElementById('rc-dev-met')||{}).value||'OUTRO';
+  const motivo=((document.getElementById('rc-dev-motivo')||{}).value||'').trim();
+  if(!motivo){ toast('Escreva o motivo.','erro'); return; }
+  const rast=((document.getElementById('rc-dev-rast')||{}).value||'').trim()||null;
+  try{
+    await sbFetch('devolucoes','POST',{ nota_fiscal_id:nfId, fornecedor_id:nf.fornecedor_id||null,
+      material_id:material_id, item_nome:item_nome, qtd:qtd, valor_unitario:val,
+      motivo:motivo, metodo:met, rastreio:rast, status:'ABERTA',
+      historico:rcDevHist(null,'Caso aberto — '+motivo), criado_por:rcDevQuem() });
+    toast('↩️ Caso de devolução aberto — acompanhe em "Devoluções em andamento".','sucesso');
+    rcDevFecharModal(); rcDevCarregar();
+  }catch(e){ toast('Erro ao abrir o caso (o banco tem o SQL 58?): '+(e.message||e),'erro'); }
+}
+
+async function rcDevCarregar(){
+  const box=document.getElementById('rc-devolucoes'); if(!box) return;
+  try{ rcDevs=(await sbFetch('devolucoes?select=*&status=in.(ABERTA,ENVIADA,RECEBIDA_FORNECEDOR)&order=id.asc'))||[]; }
+  catch(e){ box.innerHTML=''; return; }
+  if(!rcDevs.length){ box.innerHTML=''; return; }
+  const ROT={ABERTA:'🟡 Aberta — combinar envio',ENVIADA:'📦 Enviada ao fornecedor',RECEBIDA_FORNECEDOR:'🏭 Com o fornecedor — aguardando acerto'};
+  const MET={CORREIO:'📮 Correio',RETIRADA:'🚚 Retirada',TROCA_NA_ENTREGA:'🔁 Troca na entrega',OUTRO:'Outro'};
+  const linhas=rcDevs.map(function(d){
+    let acao='';
+    if(d.status==='ABERTA') acao='<button class="rc-btn-editar" style="padding:5px 10px;font-size:11px" onclick="rcDevAvancar('+d.id+')">📦 Marcar ENVIADO</button>';
+    else if(d.status==='ENVIADA') acao='<button class="rc-btn-editar" style="padding:5px 10px;font-size:11px" onclick="rcDevAvancar('+d.id+')">🏭 Fornecedor recebeu</button>';
+    else acao='<button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    if(d.status==='RECEBIDA_FORNECEDOR') acao='<button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    else acao+=' <button class="rc-confirmar" style="padding:5px 10px;font-size:11px" onclick="rcDevResolver('+d.id+')">🏁 Resolver</button>';
+    return '<tr>'
+      +'<td>'+(d.material_id?rcNomeMaterial(d.material_id):('🔩 '+(d.item_nome||'—')))+'<span style="font-size:10px;color:var(--cinza-4);display:block">NF #'+(d.nota_fiscal_id||'—')+' · '+(d.motivo||'')+'</span></td>'
+      +'<td style="text-align:center">'+(d.qtd||'—')+'</td>'
+      +'<td>'+rcNomeFornecedor(d.fornecedor_id)+'</td>'
+      +'<td>'+(MET[d.metodo]||d.metodo||'—')+(d.rastreio?('<span style="font-size:10px;color:var(--cinza-4);display:block">'+d.rastreio+'</span>'):'')+'</td>'
+      +'<td style="font-size:11.5px;font-weight:700">'+(ROT[d.status]||d.status)+'</td>'
+      +'<td style="white-space:nowrap;text-align:right">'+acao
+      +' <button class="rc-btn-problema" style="padding:5px 8px;font-size:11px" onclick="rcDevHistorico('+d.id+')" title="linha do tempo">🕓</button>'
+      +' <button class="rc-btn-editar" style="padding:5px 8px;font-size:11px;color:var(--vermelho)" onclick="rcDevCancelar('+d.id+')" title="cancelar caso">✕</button></td>'
+      +'</tr>';
+  }).join('');
+  box.innerHTML='<div class="rc-grupo" style="border:2px solid #D35400;margin-bottom:16px">'
+    +'<div class="rc-ghead" style="background:#D35400"><span>↩️ Devoluções em andamento</span><span class="rc-count">'+rcDevs.length+'</span></div>'
+    +'<div style="overflow-x:auto"><table><thead><tr><th>Item</th><th style="text-align:center">Qtd</th><th>Fornecedor</th><th>Como volta</th><th>Situação</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="padding:8px 14px;font-size:11px;color:var(--cinza-4);border-top:1px solid var(--cinza-2)">O estoque desce quando o item é marcado como ENVIADO (peça de instrumental não mexe em estoque). Resolver = crédito, estorno, troca ou abatimento — com valor gravado.</div></div>';
+}
+
+async function rcDevAvancar(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  try{
+    if(d.status==='ABERTA'){
+      if(!confirm('Marcar como ENVIADO ao fornecedor?'+(d.material_id?'\n\nO estoque desce '+d.qtd+' unidade(s) agora.':''))) return;
+      if(d.material_id){
+        const localId=await getEstoqueGeralId();
+        const mv=await sbFetch('movimentacoes','POST',{ tipo:'DEVOLUCAO', material_id:d.material_id, local_id:localId,
+          qtd:-(Number(d.qtd)||0), valor_unitario:d.valor_unitario, aprovado:false, registrado_por:rcDevQuem(),
+          observacao:'Devolução #'+d.id+' — NF #'+(d.nota_fiscal_id||'—')+' — '+(d.motivo||'') });
+        const mid=mv&&mv[0]&&mv[0].id;
+        if(mid) await sbFetch('movimentacoes?id=eq.'+mid,'PATCH',{aprovado:true,aprovado_por:rcDevQuem(),aprovado_em:new Date().toISOString()});
+      }
+      const rast=prompt('Rastreio/protocolo do envio (opcional):', d.rastreio||'');
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'ENVIADA', rastreio:(rast||'').trim()||d.rastreio||null,
+        historico:rcDevHist(d,'Enviado ao fornecedor'+(d.material_id?' — estoque ajustado':'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    } else if(d.status==='ENVIADA'){
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RECEBIDA_FORNECEDOR',
+        historico:rcDevHist(d,'Fornecedor confirmou o recebimento'), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    }
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function rcDevResolver(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  const op=prompt('Como o caso foi resolvido?\n\n1 — Crédito para próxima compra\n2 — Estorno do valor\n3 — Troca (item novo chegou)\n4 — Abatimento na nota\n\nDigite o número:');
+  if(op===null) return;
+  const MAP={'1':'CREDITO','2':'ESTORNO','3':'TROCA','4':'ABATIMENTO'};
+  const res=MAP[(op||'').trim()];
+  if(!res){ toast('Opção inválida.','erro'); return; }
+  const valStr=prompt('Valor do acerto (R$):', (Number(d.qtd)||0)*(Number(d.valor_unitario)||0)||'');
+  if(valStr===null) return;
+  const val=parseFloat(String(valStr).replace(/\./g,'').replace(',','.'))||null;
+  try{
+    await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:res, valor_resolvido:val,
+      historico:rcDevHist(d,'RESOLVIDA — '+res+(val?(' de '+rcMoney(val)):'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    if(res==='TROCA') toast('Resolvida como TROCA — quando o item novo chegar, dê a entrada normal (NF ou aba Instrumentais).','');
+    if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor no fluxo de créditos, se for usar na próxima NF.','');
+    toast('Caso #'+id+' resolvido ✓','sucesso');
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+async function rcDevCancelar(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  const m=prompt('Cancelar o caso #'+id+'? Motivo:'); if(m===null) return;
+  try{
+    if(d.status!=='ABERTA' && d.material_id){
+      toast('⚠ O estoque já tinha descido no envio — devolvi '+d.qtd+' unidade(s) ao saldo.','');
+      const localId=await getEstoqueGeralId();
+      const mv=await sbFetch('movimentacoes','POST',{ tipo:'ENTRADA_COMPRA', material_id:d.material_id, local_id:localId,
+        qtd:(Number(d.qtd)||0), valor_unitario:d.valor_unitario, aprovado:false, registrado_por:rcDevQuem(),
+        observacao:'Estorno do envio — devolução #'+d.id+' cancelada' });
+      const mid=mv&&mv[0]&&mv[0].id;
+      if(mid) await sbFetch('movimentacoes?id=eq.'+mid,'PATCH',{aprovado:true,aprovado_por:rcDevQuem(),aprovado_em:new Date().toISOString()});
+    }
+    await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'CANCELADA',
+      historico:rcDevHist(d,'CANCELADA — '+(m||'sem motivo')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    rcDevCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+
+function rcDevHistorico(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  alert('Linha do tempo — caso #'+id+'\n\n'+(d.historico||'sem registros'));
+}
+
+async function rcAbrirDevolucaoAntiga(nfId){
   try{
     const itens = await sbFetch(`nf_itens?select=id,material_id,qtd,valor_unitario&nota_fiscal_id=eq.${nfId}`);
     if(!itens || !itens.length){ toast('Esta NF não tem itens registrados.','erro'); return; }
@@ -7787,10 +7977,13 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   const valAtual = ordem.valor_unitario ?? '';
   const novoValStr = prompt('Valor unitário (deixe igual se não mudou):', valAtual);
   const novoVal = novoValStr!==null && novoValStr!=='' ? parseFloat(novoValStr) : ordem.valor_unitario;
+  // v4.23 — desconto por item (R$ sobre o subtotal deste item)
+  const descStr = prompt('Desconto NESTE item (R$ sobre o subtotal — vazio ou 0 se não houver):', ordem.desconto ?? '');
+  const novoDesc = (descStr===null) ? (ordem.desconto||null) : ((parseFloat(String(descStr).replace(',','.'))||0)||null);
   const motivo = prompt('Motivo do ajuste (ex: fornecedor só tem 60 em estoque):') || '';
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
-      qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal,
+      qtd_a_comprar: novaQtd, qtd_comprada: novaQtd, valor_unitario: novoVal, desconto: novoDesc,
       observacao: (ordem.observacao?ordem.observacao+' | ':'') + 'Ajustado: ' + motivo,
     });
     toast('Item ajustado ✓','sucesso');
@@ -7798,7 +7991,7 @@ async function ordemEditarQtd(ordemId, recarregarFn){
   }catch(e){ toast('Erro ao ajustar: '+e.message,'erro'); }
 }
 
-function apTotalItens(b){ return b.itens.reduce((s,o)=>s+((o.qtd_a_comprar||0)*(o.valor_unitario||0)),0); }
+function apTotalItens(b){ return b.itens.reduce((s,o)=>s+Math.max(0,((o.qtd_a_comprar||0)*(o.valor_unitario||0))-(Number(o.desconto)||0)),0); }
 
 async function apCarregar(){
   const corpo=document.getElementById('ap-corpo');
@@ -7848,12 +8041,14 @@ function apRenderizar(){
         <span>💳 ${p.condicao_pagamento||'—'}</span>
         <span>🚚 ${p.prazo_previsto||'—'}</span>
         <span>🚛 Frete: <b>${rcMoney(frete)}</b></span>
+        ${Number(p.desconto)>0?`<span style="color:var(--verde)">💸 Desconto: <b>−${rcMoney(p.desconto)}</b></span>`:''}
       </div>
+      ${p.obs_fornecedor?`<div style="padding:7px 16px;background:#FEF9E7;border-bottom:1px solid var(--cinza-2);font-size:11.5px;color:#7D6608">📨 <b>Obs. p/ fornecedor:</b> ${p.obs_fornecedor}</div>`:''}
       <div style="overflow-x:auto"><table>
         <thead><tr><th>Material</th><th style="text-align:center">Marca</th><th style="text-align:center">Código</th><th style="text-align:center">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
-        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 10px">Total (itens ${rcMoney(totItens)}${frete?` + frete ${rcMoney(frete)}`:''}):</td>
-          <td style="text-align:right;font-weight:800;color:var(--azul);padding:8px 10px">${rcMoney(totItens+frete)}</td><td></td></tr></tfoot>
+        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700;padding:8px 10px">Total (itens ${rcMoney(totItens)}${frete?` + frete ${rcMoney(frete)}`:''}${Number(p.desconto)>0?` − desconto ${rcMoney(p.desconto)}`:''}):</td>
+          <td style="text-align:right;font-weight:800;color:var(--azul);padding:8px 10px">${rcMoney(Math.max(0,totItens+frete-(Number(p.desconto)||0)))}</td><td></td></tr></tfoot>
       </table></div>
       ${p.cotacao_id?`<details style="margin:0 16px 10px" ontoggle="if(this.open) apMostrarHist(${pid},${p.cotacao_id})">
         <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--azul);padding:8px 0">📋 Histórico da cotação (todas as ofertas recebidas) ▾</summary>
@@ -7866,6 +8061,7 @@ function apRenderizar(){
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
         <div style="display:flex;gap:8px">
+          ${(p.origem==='HIGIENE'||p.origem==='INSTRUMENTAL')?`<button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolverOrc(${pid})" title="Os itens voltam abertos na janela de orçar">⏪ Devolver p/ Orçamento</button>`:''}
           <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
           <button class="ap-btn-rejeitar" style="padding:8px 12px" onclick="apRejeitarPedido(${pid})">🚫 Rejeitar</button>
           <button class="ap-btn-aprovar" style="padding:8px 14px" onclick="apAprovarPedido(${pid})">✔ Aprovar pedido</button>
@@ -7979,6 +8175,28 @@ async function apAprovarPedido(pid){
     toast('Pedido #'+pid+' aprovado ✓ — aguardando entrega. Entrada pela aba 📥 Receber NF.','sucesso');
     apCarregar();
   }catch(e){ toast('Erro ao aprovar: '+e.message,'erro'); }
+}
+
+// v4.23 — na Aprovação também dá para voltar direto ao ORÇAMENTO (higiene/instrumental)
+async function apDevolverOrc(pid){
+  const b=apPedidos.find(x=>x.pedido.id===pid); if(!b) return;
+  const orig=b.pedido.origem;
+  if(orig!=='HIGIENE'&&orig!=='INSTRUMENTAL'){ toast('Só pedidos de higiene/instrumentais voltam para o orçamento por aqui.','erro'); return; }
+  if(!confirm('Devolver o pedido #'+pid+' para o ORÇAMENTO?\n\nOs itens voltam abertos na janela de orçar (preços e escolhas preservados) e este pedido é cancelado.')) return;
+  try{
+    const cid=b.pedido.cotacao_id;
+    if(cid){
+      await sbFetch('cotacao_itens?cotacao_id=eq.'+cid+'&pedido_id=eq.'+pid,'PATCH',{fechado:false,pedido_id:null,fechado_em:null});
+      await sbFetch('cotacoes?id=eq.'+cid,'PATCH',{status:'aberta'});
+    }
+    if(orig==='INSTRUMENTAL' && typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
+    await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','DELETE');
+    await sbFetch('pedidos?id=eq.'+pid,'PATCH',{status:'CANCELADO',observacao:((b.pedido.observacao||'')+' | Devolvido ao orçamento (na aprovação)').trim()});
+    if(orig==='HIGIENE'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
+    else { if(typeof siDeskCotId!=='undefined'){ siDeskCotId=null; siDeskGrupos={}; } }
+    toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar para ajustar.','sucesso');
+    apCarregar();
+  }catch(e){ toast('Erro ao devolver: '+e.message,'erro'); }
 }
 
 async function apDevolver(pid){
@@ -14300,8 +14518,10 @@ async function hgCompEnviar(){
     const mid=parseInt(c.dataset.mid,10);
     const r=hgDados.find(function(x){return x.material_id===mid;});
     if(!r || hgOrcTemItem(mid)) return;
+    // v4.23 — o cadastro alimenta o orçamento: marca e último preço vêm prontos, só corrige o que mudou
+    const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
     hgOrcGrupos[g].itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
-      qtd:Number(r.sugestao_caixas)||1, precos:[null,null,null], marcas:[null,null,null], escolhido:null });
+      qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
     n++;
   });
   hgOrcAtivo=g;
@@ -14479,7 +14699,11 @@ async function hgOrcCarregar(){
 function hgOrcRender(){
   const box=document.getElementById('hg-orc-box'); if(!box) return;
   const G=hgOrcG();
-  let h='<div class="hg-nota"><b>Onde isso vai parar:</b> Salvar guarda o orçamento AQUI (ele continua aberto nesta aba, cotação #'+(hgOrcCotId||'nova')+'). Só o <b>Fechar grupo</b> vira pedido — um por fornecedor, só de higiene, que segue para 📦 Pedidos → Aprovar → Receber NF.</div>';
+  let h='<div class="hg-nota"><b>Onde isso vai parar:</b> Salvar guarda o orçamento AQUI (cotação #'+(hgOrcCotId||'nova')+'). No Fechar grupo, <b>só os itens marcados no 🛒</b> viram pedido — os outros continuam no orçamento para decidir depois.</div>';
+  // v4.23 — atalhos sempre à mão
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<button style="'+HG_BTN+'" onclick="hgNovoProduto()">➕ Novo produto</button>'
+    +'<button style="'+HG_BTN+'" onclick="hgOrcNovoFornBtn()">➕ Novo fornecedor</button></div>';
   // chips dos grupos
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
   Object.keys(hgOrcGrupos).forEach(function(g){
@@ -14501,14 +14725,14 @@ function hgOrcRender(){
     let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
     (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+hgEsc(f.nome)+'</option>'; });
     fo+='<option value="__novo__">➕ novo fornecedor…</option>';
-    h+='<select onchange="hgOrcForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco)">'+fo+'</select>';
+    h+='<select onchange="hgOrcForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco);max-width:240px">'+fo+'</select>';
   }
   h+='<span style="font-size:11px;color:var(--cinza-4)">contrato (ex.: HYGIBRAS)? use só o Fornecedor 1 — sem comparação</span></div>';
   // tabela do grupo ativo
   h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Produto</th><th class="hg-num">Caixas</th>';
   for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?hgEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>'; }
-  h+='<th>Escolha</th><th></th></tr></thead><tbody>';
-  if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
+  h+='<th>Escolha</th><th title="só os marcados viram pedido no Fechar">🛒</th><th></th></tr></thead><tbody>';
+  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
   G.itens.forEach(function(it,i){
     it.marcas = it.marcas || [null,null,null];
     let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
@@ -14528,13 +14752,15 @@ function hgOrcRender(){
     let esc='<select onchange="hgOrcEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
     for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+hgEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
     esc+='</select>';
-    h+='<td>'+esc+'</td><td><button style="'+HG_BTNX+'" onclick="hgOrcRemover('+i+')" title="tirar do orçamento">✕</button></td></tr>';
+    h+='<td>'+esc+'</td>'
+      +'<td style="text-align:center"><input type="checkbox" '+((it.comprar!==false&&it.escolhido!=null)?'checked':'')+' onchange="hgOrcComprar('+i+',this.checked)" title="entra no pedido ao fechar" style="width:16px;height:16px;cursor:pointer"></td>'
+      +'<td><button style="'+HG_BTNX+'" onclick="hgOrcRemover('+i+')" title="tirar do orçamento">✕</button></td></tr>';
   });
   h+='</tbody></table></div>';
   // v4.22 — soma dos escolhidos (total do grupo e por fornecedor)
   let totEsc=0; const porF={};
   G.itens.forEach(function(it){
-    if(it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
+    if(it.comprar!==false && it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
       const v=(Number(it.qtd)||0)*Number(it.precos[it.escolhido]);
       totEsc+=v; const fid=G.forns[it.escolhido]; porF[fid]=(porF[fid]||0)+v;
     }
@@ -14568,8 +14794,9 @@ function hgOrcBuscar(){
 }
 function hgOrcAddId(mid){
   const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
+  const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
   hgOrcG().itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
-    qtd:Number(r.sugestao_caixas)||1, precos:[null,null,null], marcas:[null,null,null], escolhido:null });
+    qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
   hgOrcRender();
 }
 function hgOrcTrocarGrupo(g){ hgOrcAtivo=g; hgOrcRender(); }
@@ -14588,7 +14815,13 @@ function hgOrcRemoverGrupo(){
 function hgOrcQtd(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.qtd=parseFloat(v)||1; hgOrcRender(); }
 function hgOrcPreco(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.precos[k]=hgOrcNum(v); hgOrcRender(); }
 function hgOrcMarca(i,k,v){ const it=hgOrcG().itens[i]; if(!it) return; it.marcas=it.marcas||[null,null,null]; it.marcas[k]=(v||'').trim().toUpperCase()||null; }
-function hgOrcEscolher(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); hgOrcRender(); }
+function hgOrcComprar(i,ck){ const it=hgOrcG().itens[i]; if(!it) return; it.comprar=!!ck; hgOrcRender(); }
+function hgOrcEscolher(i,v){ const it=hgOrcG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); if(it.escolhido!=null && it.comprar===undefined) it.comprar=true; hgOrcRender(); }
+async function hgOrcNovoFornBtn(){
+  const id=await orcNovoFornecedor();
+  if(id){ const G=hgOrcG(); const k=G.forns.findIndex(function(x){return !x;}); if(k>=0 && G.forns.indexOf(id)<0) G.forns[k]=id; }
+  hgOrcRender();
+}
 async function hgOrcForn(k,v){
   if(v==='__novo__'){ const id=await orcNovoFornecedor(); hgOrcG().forns[k]=id||null; hgOrcRender(); return; }
   hgOrcG().forns[k]=v?parseInt(v,10):null; hgOrcRender();
@@ -14650,8 +14883,8 @@ async function hgOrcSalvar(sil){
 async function hgOrcFechar(){
   if(!exigirSenhaCompras()) return;
   const G=hgOrcG(), gnome=hgOrcAtivo;
-  const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
-  if(!prontos.length){ toast('Nenhum item do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
+  const prontos=G.itens.filter(function(it){ return it.comprar!==false && it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null && it.qtd>0; });
+  if(!prontos.length){ toast('Nenhum item do grupo "'+gnome+'" está marcado no 🛒 com fornecedor escolhido e preço.','erro'); return; }
   const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
   // v4.20c — escolheu quem NÃO tem o menor preço? Justifica, e a justificativa
   // acompanha o item até a aprovação (fica na observação da ordem).
@@ -15122,13 +15355,13 @@ function siDeskHtml(){
     let fo='<option value="">Fornecedor '+(k+1)+(k===0?'':' (opcional)')+'…</option>';
     (coFornecedores||[]).forEach(function(f){ fo+='<option value="'+f.id+'"'+(G.forns[k]===f.id?' selected':'')+'>'+siEsc(f.nome)+'</option>'; });
     fo+='<option value="__novo__">➕ novo fornecedor…</option>';
-    h+='<select onchange="siDeskForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco)">'+fo+'</select>';
+    h+='<select onchange="siDeskForn('+k+',this.value)" style="'+HG_INP+';padding:8px 10px;font-size:13px;background:var(--branco);max-width:240px">'+fo+'</select>';
   }
-  h+='</div>';
+  h+='<button style="'+HG_CHIP+'" onclick="siDeskNovoFornBtn()">➕ novo fornecedor</button></div>';
   h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Peça (solicitação)</th><th class="hg-num">Qtd</th>';
   for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?siEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/un)</th>'; }
-  h+='<th>Escolha</th><th></th></tr></thead><tbody>';
-  if(!G.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:16px">Grupo vazio — marque solicitações abaixo e use "Enviar marcadas".</td></tr>';
+  h+='<th>Escolha</th><th title="só as marcadas viram pedido no Fechar">🛒</th><th></th></tr></thead><tbody>';
+  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:16px">Grupo vazio — marque solicitações abaixo e use "Enviar marcadas".</td></tr>';
   G.itens.forEach(function(it,i){
     it.marcas = it.marcas || [null,null,null];
     let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
@@ -15136,7 +15369,7 @@ function siDeskHtml(){
     h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')
       +' · <b>'+(it.estoque!=null?it.estoque:'—')+'</b> em estoque'
       +' · '+(ult!=null?('últ. pago <b>'+siMoeda(ult)+'/un</b>'):'1ª compra — sem referência')+'</span></td>'
-      +'<td class="hg-num">'+siEsc(it.qtd)+'</td>';
+      +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="siDeskQtd('+i+',this.value)" style="width:64px;'+HG_INP+'" title="ajuste a quantidade a comprar"></td>';
     for(let k=0;k<3;k++){
       if(k>0 && !G.forns[k]) continue;
       if(!G.forns[k]){ h+='<td class="hg-num" style="color:var(--cinza-3)">—</td>'; continue; }
@@ -15146,13 +15379,15 @@ function siDeskHtml(){
     let esc='<select onchange="siDeskEscolher('+i+',this.value)" style="'+HG_INP+';background:var(--branco)"><option value="">—</option>';
     for(let k=0;k<3;k++){ if(G.forns[k]&&it.precos[k]!=null) esc+='<option value="'+k+'"'+(it.escolhido===k?' selected':'')+'>'+siEsc(hgOrcFornNome(G.forns[k]))+'</option>'; }
     esc+='</select>';
-    h+='<td>'+esc+'</td><td><button style="'+HG_BTNX+'" onclick="siDeskRemover('+i+')" title="devolver para Solicitadas">✕</button></td></tr>';
+    h+='<td>'+esc+'</td>'
+      +'<td style="text-align:center"><input type="checkbox" '+((it.comprar!==false&&it.escolhido!=null)?'checked':'')+' onchange="siDeskComprar('+i+',this.checked)" title="entra no pedido ao fechar" style="width:16px;height:16px;cursor:pointer"></td>'
+      +'<td><button style="'+HG_BTNX+'" onclick="siDeskRemover('+i+')" title="devolver para Solicitadas">✕</button></td></tr>';
   });
   h+='</tbody></table></div>';
   // v4.22 — soma dos escolhidos (total do grupo e por fornecedor)
   let totEsc=0; const porF={};
   G.itens.forEach(function(it){
-    if(it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
+    if(it.comprar!==false && it.escolhido!=null && G.forns[it.escolhido] && it.precos[it.escolhido]!=null){
       const v=(Number(it.qtd)||0)*Number(it.precos[it.escolhido]);
       totEsc+=v; const fid=G.forns[it.escolhido]; porF[fid]=(porF[fid]||0)+v;
     }
@@ -15183,7 +15418,14 @@ async function siDeskForn(k,v){
 }
 function siDeskPreco(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.precos[k]=siNum(v)||null; siRender(); }
 function siDeskMarca(i,k,v){ const it=siDeskG().itens[i]; if(!it) return; it.marcas=it.marcas||[null,null,null]; it.marcas[k]=(v||'').trim().toUpperCase()||null; }
-function siDeskEscolher(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); siRender(); }
+function siDeskQtd(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.qtd=parseFloat(v)||1; siRender(); }
+function siDeskComprar(i,ck){ const it=siDeskG().itens[i]; if(!it) return; it.comprar=!!ck; siRender(); }
+function siDeskEscolher(i,v){ const it=siDeskG().itens[i]; if(!it) return; it.escolhido=(v==='')?null:parseInt(v,10); if(it.escolhido!=null && it.comprar===undefined) it.comprar=true; siRender(); }
+async function siDeskNovoFornBtn(){
+  const id=await orcNovoFornecedor();
+  if(id){ const G=siDeskG(); const k=G.forns.findIndex(function(x){return !x;}); if(k>=0 && G.forns.indexOf(id)<0) G.forns[k]=id; }
+  siRender();
+}
 async function siDeskRemover(i){
   siDeskG().itens.splice(i,1);
   // v4.20b — remover PERSISTE: sem salvar, o item voltava ao recarregar a página
@@ -15234,6 +15476,59 @@ function cmeAplicarModo(){
   const bN=document.getElementById('cme-btn-novacaixa'); if(bN) bN.style.display = (cmeModo==='inventario') ? '' : 'none';
   const topo=document.getElementById('cme-topo'); if(topo) topo.style.display = (cmeModo==='compras') ? 'none' : '';
 }
+// ═══ v4.23 — ESTOQUE INICIAL das remessas: lança direto na tela, sem planilha.
+// Você digita quanto tem EM CASA hoje; o sistema grava o AJUSTE (a diferença
+// para o saldo atual) com a data anotada na observação.
+function rmEstoqueInicial(){
+  const bens=(rmBens||[]).filter(function(b){ return !rmVista || b.tipo===rmVista; })
+    .slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome)); });
+  if(!bens.length){ toast('Nenhum item deste tipo no livro — cadastre com "Entrada de peça nova".','erro'); return; }
+  const casaDe=function(bid){ const s=(rmSaldo||[]).find(function(x){return Number(x.bem_id)===Number(bid);}); return s?(Number(s.em_casa)||0):0; };
+  const hoje=new Date().toISOString().slice(0,10);
+  let linhas='';
+  bens.forEach(function(b){
+    linhas+='<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'+b.nome+'</td>'
+      +'<td style="text-align:center;padding:7px 10px;border-bottom:1px solid var(--cinza-2);color:var(--cinza-4)">'+casaDe(b.id)+'</td>'
+      +'<td style="text-align:center;padding:7px 10px;border-bottom:1px solid var(--cinza-2)"><input type="number" min="0" step="any" class="rm-ei" data-bem="'+b.id+'" placeholder="'+casaDe(b.id)+'" style="width:80px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:13px;font-family:var(--fonte);text-align:center"></td></tr>';
+  });
+  let ov=document.getElementById('rm-ei-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rm-ei-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>🏁 Estoque inicial — '+rmTipo(rmVista||'').curto+'</span><button class="rm-b claro" onclick="rmEiFechar()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:10px">Digite quanto tem <b>EM CASA</b> hoje (só preencha o que quer acertar — vazio não mexe). O sistema grava a diferença como ajuste, com a data.</div>'
+    +'<label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Data da contagem</label> '
+    +'<input type="date" id="rm-ei-data" value="'+hoje+'" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:6px 8px;font-size:13px;font-family:var(--fonte);margin:4px 0 10px">'
+    +'<div style="max-height:340px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr><th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Item</th><th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Em casa hoje</th><th style="text-align:center;padding:8px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Contagem</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="rm-b claro" onclick="rmEiFechar()">Cancelar</button>'
+    +'<button class="rm-b verde" onclick="rmEiSalvar()">Gravar estoque inicial ✓</button>'
+    +'</div></div></div>';
+}
+function rmEiFechar(){ const ov=document.getElementById('rm-ei-modal'); if(ov) ov.remove(); }
+async function rmEiSalvar(){
+  const data=(document.getElementById('rm-ei-data')||{}).value||new Date().toISOString().slice(0,10);
+  const inputs=[...document.querySelectorAll('.rm-ei')].filter(function(i){ return i.value!==''; });
+  if(!inputs.length){ toast('Nenhuma contagem preenchida.','erro'); return; }
+  const casaDe=function(bid){ const s=(rmSaldo||[]).find(function(x){return Number(x.bem_id)===Number(bid);}); return s?(Number(s.em_casa)||0):0; };
+  const quem=((document.getElementById('rm-registrado-por')||{}).value)||(SESSAO?SESSAO.nome:'')||'Equipe';
+  let n=0;
+  try{
+    for(const i of inputs){
+      const bid=Number(i.dataset.bem), alvo=parseFloat(i.value)||0, atual=casaDe(bid), delta=alvo-atual;
+      if(!delta) continue;
+      await sbFetch('remessa_mov','POST',{ bem_id:bid, tipo:'AJUSTE', d_casa:delta, registrado_por:quem,
+        observacao:'Estoque inicial em '+data.split('-').reverse().join('/')+' — de '+atual+' para '+alvo });
+      n++;
+    }
+    toast('🏁 Estoque inicial gravado — '+n+' item(ns) ajustado(s).','sucesso');
+    rmEiFechar(); rmCarregar();
+  }catch(e){ toast('Erro ao gravar: '+(e.message||e),'erro'); }
+}
+
 function rmIrTipo(t){
   rmVista = t;                                   // v4.21c — a vista trava o tipo
   trocarAba('remessas');
@@ -15331,8 +15626,8 @@ async function siDeskSalvar(sil){
 async function siDeskFechar(){
   if(!exigirSenhaCompras()) return;
   const G=siDeskG(), gnome=siDeskAtivo;
-  const prontos=G.itens.filter(function(it){ return it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null; });
-  if(!prontos.length){ toast('Nenhuma peça do grupo "'+gnome+'" tem fornecedor ESCOLHIDO com preço.','erro'); return; }
+  const prontos=G.itens.filter(function(it){ return it.comprar!==false && it.escolhido!==null && it.escolhido!==undefined && G.forns[it.escolhido] && it.precos[it.escolhido]!=null; });
+  if(!prontos.length){ toast('Nenhuma peça do grupo "'+gnome+'" está marcada no 🛒 com fornecedor escolhido e preço.','erro'); return; }
   const semEsc=G.itens.filter(function(it){return prontos.indexOf(it)<0;}).map(function(it){return it.nome;});
   // v4.20c — escolheu quem NÃO tem o menor preço? Justifica — vai gravado
   // na ordem e aparece para quem aprova.
@@ -15373,7 +15668,7 @@ async function siDeskFechar(){
           observacao:'Instrumental — solicitação #'+it.solic_id+(it.motivo?(' — '+it.motivo):'')+(it.just?(' | Justificativa: '+it.just):'') });
         try{
           await sbFetch('solicitacao_instrumental?id=eq.'+it.solic_id,'PATCH',{ status:'PEDIDO',
-            fornecedor_id:fid, valor_unitario:val, valor_total:val*parseFloat(it.qtd),
+            qtd:it.qtd, fornecedor_id:fid, valor_unitario:val, valor_total:val*parseFloat(it.qtd),
             cotado_por:siNome(), cotado_em:new Date().toISOString(),
             pedido_por:siNome(), pedido_em:new Date().toISOString() });
         }catch(e){ toast('⚠ Solicitação #'+it.solic_id+' não atualizou: '+(e.message||e),'erro'); }
