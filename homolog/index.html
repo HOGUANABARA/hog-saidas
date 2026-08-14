@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.23 · Desconto, obs. p/ fornecedor, devoluções com rastreio e estoque inicial</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24 · Baixa didática, PDF de remessa e fechamento do mês (custo do CC)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -12369,7 +12369,8 @@ function rmRenderMontagem(){
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="rm-b claro" onclick="rmAcrescentarItem(${r.id})">➕ Acrescentar item</button>
         <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
-        <button class="rm-b verde" style="margin-left:auto" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
+        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF da remessa</button>
+        <button class="rm-b verde" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
         <button class="rm-b perigo" onclick="rmDesfazerMontagem(${r.id})">🗑 Desfazer</button>
       </div>
     </div>`;
@@ -12402,7 +12403,8 @@ function rmRenderFora(){
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
-        <button class="rm-b verde" style="margin-left:auto" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
+        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF</button>
+        <button class="rm-b verde" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
       </div>
     </div>`;
   }).join('');
@@ -12460,12 +12462,12 @@ function rmRenderPendFisica(){
       <td style="font-size:11px;color:${dias&&dias>15?'var(--vermelho)':'var(--cinza-4)'}">${rmData(p.aberta_em)}${dias!==null?` · ${dias} dia(s)`:''}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmPendVoltou(${p.id})">↩ voltou depois</button>
-        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendPerda(${p.id})">✕ dar como perda</button>
+        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendCusto(${p.id})" title="no fechamento do mês, o que sobrou vira custo do CC">💸 lançar no custo do CC</button>
       </td></tr>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
     <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${pendVis.length}</span></div>
-    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento.</div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento. A diferença fica <b>aqui</b> até o <b>fechamento do mês</b> — quando todas as saídas estiverem computadas, o que sobrou é lançado no <b>custo do CC</b> (💸). Se a peça aparecer antes, "voltou depois" devolve ao saldo.</div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th style="text-align:center">Falta</th><th>Remessa</th><th>Aberta em</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div></div>`;
@@ -12908,11 +12910,46 @@ async function rmRegistrarRetorno(remessaId){
     if(dev > rmNum(i.qtd_enviada)){ toast('"'+rmBem(i.bem_id)+'": voltou mais do que saiu. Confira.','erro'); return; }
     dados.push({ item:i, dev, falta: rmNum(i.qtd_enviada)-dev });
   }
+  // ═══ v4.24 — BAIXA DIDÁTICA: antes de gravar, a tela mostra exatamente o
+  // que vai acontecer com cada item e como reverter. Nada de OK às cegas.
   const faltantes = dados.filter(d=>d.falta>0);
-  const aviso = faltantes.length
-    ? `\n\n⚠️ ${faltantes.length} item(ns) não voltaram inteiros:\n` + faltantes.map(d=>`• ${rmBem(d.item.bem_id)}: faltam ${d.falta}`).join('\n') + '\n\nIsso abre pendência de remessa.'
-    : '\n\nTudo que saiu voltou. ✓';
-  if(!confirm('Dar baixa na entrega da remessa '+(r.numero_bloco||'#'+r.id)+'?'+aviso)) return;
+  let linhas='';
+  dados.forEach(function(d){
+    linhas+='<tr><td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmEsc(rmBem(d.item.bem_id))+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmNum(d.item.qtd_enviada)+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);color:var(--verde);font-weight:700">'+d.dev+'</td>'
+      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);'+(d.falta>0?'color:var(--vermelho);font-weight:800':'color:var(--cinza-3)')+'">'+(d.falta>0?d.falta:'—')+'</td></tr>';
+  });
+  let ov=document.getElementById('rm-ret-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rm-ret-modal'; document.body.appendChild(ov); }
+  window._rmRetPreview={remessaId:remessaId, dados:dados};
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>📥 Conferência da baixa — remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</span><button class="rm-b claro" onclick="rmRetFechar()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr><th style="text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Item</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Saiu</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Voltou</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Vai faltar</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:12px;font-size:12.5px;line-height:1.7;color:var(--cinza-5)">'
+    +'<div>✅ O que voltou <b>entra em EM CASA</b> agora.</div>'
+    +(faltantes.length
+      ?('<div style="color:var(--vermelho)">⚠️ O que faltou <b>NÃO some</b>: vira <b>pendência</b> e fica listado em "Pendências de remessa" <b>até o fechamento do mês</b> — quando todas as saídas estiverem computadas, você lança o que sobrou no <b>custo do CC</b>.</div>'
+        +'<div>↩️ Se a peça aparecer depois, o botão <b>"voltou depois"</b> na pendência devolve ao saldo — dá para reverter a qualquer momento.</div>')
+      :'<div style="color:var(--verde)">✓ Tudo que saiu voltou — nenhuma pendência será aberta.</div>')
+    +'</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="rm-b claro" onclick="rmRetFechar()">Voltar e corrigir</button>'
+    +'<button class="rm-b verde" onclick="rmRetornoExecutar()">Confirmar a baixa ✓</button>'
+    +'</div></div></div>';
+}
+function rmRetFechar(){ const ov=document.getElementById('rm-ret-modal'); if(ov) ov.remove(); }
+
+async function rmRetornoExecutar(){
+  const pv=window._rmRetPreview; if(!pv) return;
+  rmRetFechar();
+  const remessaId=pv.remessaId, dados=pv.dados;
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const faltantes = dados.filter(d=>d.falta>0);
   const hoje = new Date().toISOString().slice(0,10);
   try{
     for(const {item,dev,falta} of dados){
@@ -12936,6 +12973,47 @@ async function rmRegistrarRetorno(remessaId){
     toast((faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). ` : 'Baixa registrada ✓ — ') + fim,'sucesso');
     rmCarregar();
   }catch(e){ toast('Erro ao dar baixa: '+e.message,'erro'); }
+}
+
+// ═══ v4.24 — PDF/romaneio da remessa (sai junto com o malote) ═══
+function rmRemessaPDF(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const itens=(r.remessa_itens||[]);
+  const forn = r.fornecedor_id ? ((coFornecedores||[]).find(f=>f.id===r.fornecedor_id)||{}).nome : null;
+  const linhas=itens.map((i,ix)=>'<tr><td style="text-align:center">'+(ix+1)+'</td><td>'+rmEsc(rmBem(i.bem_id))+'</td><td style="text-align:center">'+rmNum(i.qtd_enviada)+'</td><td></td></tr>').join('');
+  const tot=itens.reduce((s,i)=>s+rmNum(i.qtd_enviada),0);
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin-bottom:2px}'
+    +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left}'
+    +'.meta{color:#555;font-size:12px}.ass{margin-top:44px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}</style></head><body>'
+    +'<h1>🏥 HOG — Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · '+rmEsc(rmTipo(r.tipo).curto||r.tipo)+'</h1>'
+    +'<div class="meta">'+(forn?('Fornecedor: <b>'+rmEsc(forn)+'</b> · '):'')+'Data: '+rmData(r.data_envio||new Date().toISOString().slice(0,10))+' · Emitido por: '+rmEsc(rmQuem()||'—')+'</div>'
+    +'<table><thead><tr><th style="width:34px">#</th><th>Item</th><th style="width:70px">Qtd</th><th style="width:130px">Conferido</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right;font-weight:bold">Total de peças</td><td style="text-align:center;font-weight:bold">'+tot+'</td><td></td></tr></tfoot></table>'
+    +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte/fornecedor)</div></div>'
+    +'</body></html>');
+}
+
+// ═══ v4.24 — FECHAMENTO DO MÊS: pendência que sobrou vira CUSTO DO CC ═══
+async function rmPendCusto(pendId){
+  const p = rmPend.find(x=>x.id===pendId); if(!p) return;
+  if(!exigirAssinatura('Baixa de perda no livro de remessas')) return;
+  const mes = new Date().toISOString().slice(0,7).split('-').reverse().join('/');
+  const valStr = prompt('Lançar "'+rmBem(p.bem_id)+'" ('+rmNum(p.qtd)+' un) no CUSTO DO CC — fechamento '+mes+'.\n\nValor unitário da peça (R$, para o custo — vazio se não souber):','');
+  if(valStr===null) return;
+  const val = valStr?(parseFloat(String(valStr).replace(/\./g,'').replace(',','.'))||null):null;
+  const motivo = prompt('O que aconteceu? (fica registrado no custo)','Não retornou da remessa — fechamento '+mes);
+  if(motivo===null) return;
+  if(!confirm('Confirmar?\n\n• A peça sai do livro de uma vez ('+rmNum(p.qtd)+' un a menos no total).\n• Fica registrado como PERDA no custo do CC de '+mes+(val?(' — '+rmMoney(val*rmNum(p.qtd))):'')+'.\n• Isso NÃO é reversível pelo botão — se a peça aparecer depois, use "Entrada de peça nova" com observação.')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:p.bem_id, tipo:'PERDA', d_fora:-rmNum(p.qtd), remessa_id:p.remessa_id,
+      valor_unitario:val, registrado_por:rmQuem(),
+      observacao:'CUSTO DO CC — fechamento '+mes+' — '+(motivo||'perda de remessa') });
+    await sbFetch(`remessa_pendencias?id=eq.${pendId}`,'PATCH',{ status:'RESOLVIDA_PERDA', tratada_em:new Date().toISOString().slice(0,10),
+      tratada_por:rmQuem(), desfecho:'Custo do CC '+mes+' — '+(motivo||'perda') });
+    toast('💸 Lançado no custo do CC ('+mes+') — pendência encerrada.','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
 async function rmConferirNf(remessaId){
