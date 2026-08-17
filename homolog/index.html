@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.24b · NF de instrumental confirma direto (sem entrada de estoque)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24c · Rascunho anti-F5 no orçamento + escolha do grupo no "por fornecedor"</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4766,6 +4766,24 @@ let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
 let coBuscaTimer = null;
 let coBuscaRes = [];
 let coGrupoAtual = 'Orçamento 1';
+
+// ═══ v4.24c — RASCUNHO ANTI-F5: o orçamento em montagem é guardado no
+// navegador a cada mudança; se a página recarregar antes do 💾 Salvar,
+// ele volta sozinho. Some quando a cotação é salva de verdade.
+function coDraftSalvar(){
+  try{
+    if(coItens.length) localStorage.setItem('hog_co_draft', JSON.stringify({ t:Date.now(), cot:coCotacaoId, itens:coItens, forn:coFornGrupo, grupo:coGrupoAtual }));
+    else localStorage.removeItem('hog_co_draft');
+  }catch(e){}
+}
+function coDraftLimpar(){ try{ localStorage.removeItem('hog_co_draft'); }catch(e){} }
+function coDraftLer(){
+  try{
+    const d=JSON.parse(localStorage.getItem('hog_co_draft')||'null');
+    if(d && d.itens && d.itens.length && (Date.now()-(d.t||0)) < 86400000) return d;
+  }catch(e){}
+  return null;
+}
 let coCardArrastado = null;
 
 function coMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
@@ -4800,6 +4818,14 @@ async function coCarregar(){
       coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome.asc')) || [];
     }
     if(coCotacaoId===null && !coItens.length){
+      // v4.24c — rascunho não salvo (F5 no meio da montagem) volta primeiro
+      const draft=coDraftLer();
+      if(draft){
+        coCotacaoId=draft.cot||null; coItens=draft.itens||[]; coFornGrupo=draft.forn||{}; coGrupoAtual=draft.grupo||'Orçamento 1';
+        coRender(); coAtualizaLabelGrupo();
+        toast('📝 Recuperei o orçamento que você estava montando (não estava salvo). Confira e clique em 💾 Salvar cotação.','sucesso');
+        return;
+      }
       const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=1');
       if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
     }
@@ -5225,6 +5251,7 @@ function coCardItem(i, it){
   </div>`;
 }
 function coRender(){
+  coDraftSalvar();   // v4.24c — cada mudança fica guardada no navegador (anti-F5)
   coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
   if(head) head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
@@ -5665,6 +5692,11 @@ function fvRender(){
   corpo.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
       <div style="font-size:13px"><b>🏪 ${fvFornecedor.nome}</b> · ${fvItens.length} item(ns) já comprados deste fornecedor</div>
+      <label style="font-size:11px;font-weight:700;color:var(--cinza-4);display:inline-flex;align-items:center;gap:6px">para:
+        <select id="fv-grupo" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:7px 10px;font-size:12px;font-family:var(--fonte);background:var(--branco)">
+          ${coGruposDistintos().map(g=>`<option ${g===coGrupoAtual?'selected':''}>${g}</option>`).join('')}
+          <option value="__novo__">➕ novo grupo…</option>
+        </select></label>
       <button class="co-b3" style="padding:8px 13px;font-size:12px" onclick="fvEnviar()">📤 Enviar selecionados (<span id="fv-n">0</span>) para o orçamento</button>
     </div>
     <div style="max-height:380px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
@@ -5697,6 +5729,14 @@ function fvAtualizaN(){ const el=document.getElementById('fv-n'); if(el) el.text
 
 function fvEnviar(){
   if(!fvSel.size){ toast('Marque os itens que quer levar para o orçamento.',''); return; }
+  // v4.24c — você escolhe PARA QUAL orçamento os itens vão (antes ia sempre no ativo)
+  let gDestino=((document.getElementById('fv-grupo')||{}).value)||coGrupoAtual;
+  if(gDestino==='__novo__'){
+    gDestino=(prompt('Nome do novo grupo:','Orçamento '+(coGruposDistintos().length+1))||'').trim();
+    if(!gDestino) return;
+  }
+  coGrupoAtual=gDestino; if(!coFornGrupo[gDestino]) coFornGrupo[gDestino]=coFornGrupo[gDestino]||[];
+  coAtualizaLabelGrupo();
   let n=0;
   for(const mid of fvSel){
     const it=fvItens.find(x=>x.material_id===mid); if(!it) continue;
