@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.24</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24b</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7438,12 +7438,17 @@ async function rcGravarNF(chave, confirmar){
       vencimentos_obs: obs || null,
       status: dataEntrega ? 'ENTREGUE' : 'AGUARDANDO ENTREGA',
     };
+    // v4.24b — nota SÓ de instrumental não tem entrada de estoque a confirmar:
+    // nasce confirmada direto (senão fica presa em "aguardando confirmação"
+    // com a lista de itens vazia — peça não gera nf_itens)
+    const soInstr = itensParaGravar.length>0 && itensParaGravar.every(x=>x.ordem.origem==='INSTRUMENTAL');
+    const nfConfirmada = !!confirmar || soInstr;
     let nfArr;
     try{
       nfArr = await sbFetch('notas_fiscais','POST', Object.assign({
-        confirmada: !!confirmar,
-        confirmada_por: confirmar ? registrante : null,
-        confirmada_em: confirmar ? new Date().toISOString() : null,
+        confirmada: nfConfirmada,
+        confirmada_por: nfConfirmada ? registrante : null,
+        confirmada_em: nfConfirmada ? new Date().toISOString() : null,
       }, cabecalho));
     }catch(e){
       // banco ainda sem as colunas da v4.6 — grava do jeito antigo
@@ -7557,6 +7562,12 @@ async function rcGravarNF(chave, confirmar){
         situacao: 'NF EMITIDA', qtd_comprada: qtd, valor_unitario: val, data_pedido: dataEntrega || dataEmissao,
       });
     }
+    if(soInstr){
+      await rcConcluirPedidoSePronto(pedidoDoGrupo, registrante);
+      toast('🔩 NF '+(numeroNf||'')+' registrada ✓ — peça de instrumental NÃO entra em estoque. As peças estão em "Recebidas — dar destino", na janela CME.','sucesso');
+      rcCarregar();
+      return;
+    }
     if(!confirmar){
       // as ordens já saíram de pendente: o pedido não pode ficar pendurado
       await rcConcluirPedidoSePronto(pedidoDoGrupo, registrante);
@@ -7581,7 +7592,19 @@ async function rcConfirmarEntrada(nfId){
   const registrante = document.getElementById('rc-registrado-por').value;
   if(!registrante){ toast('Selecione quem está registrando.','erro'); return; }
   const itens = nf.nf_itens||[];
-  if(!itens.length){ toast('Esta nota não tem itens — nada a dar entrada.','erro'); return; }
+  if(!itens.length){
+    // v4.24b — nota sem itens de ESTOQUE (ex.: compra de instrumental, que não
+    // gera entrada de saldo): confirma a nota sem mexer em saldo nenhum.
+    if(!confirm('Esta nota não tem itens de ESTOQUE (ex.: compra de instrumental — a peça vai para a caixa do CME, não para o saldo).\n\nConfirmar a nota SEM mexer em estoque?\n\n• Nenhum saldo muda.\n• A nota sai desta lista e vai para o histórico normal.')) return;
+    try{
+      await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',{
+        confirmada:true, confirmada_por:registrante, confirmada_em:new Date().toISOString(),
+        status:'ENTREGUE', data_entrega: nf.data_entrega || new Date().toISOString().slice(0,10) });
+      toast('Nota confirmada sem entrada de estoque ✓','sucesso');
+      rcCarregar();
+    }catch(e){ toast('Erro: '+e.message,'erro'); }
+    return;
+  }
   if(!confirm(`🖊 CONFIRMAR ENTRADA NO ESTOQUE\n\nNF ${nf.numero_nf||'(sem número)'} — ${itens.length} item(ns) — ${rcMoney(nf.valor_total)}\n\nIsto move o saldo real e fica registrado no seu nome.`)) return;
   if(!exigirAssinatura('Entrada de nota fiscal no estoque')) return;
   try{
