@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.24c · Rascunho anti-F5 no orçamento + escolha do grupo no "por fornecedor"</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24d · Anti-F5, grupo no "por fornecedor" e saldo sempre visível no orçamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5142,9 +5142,16 @@ function coAbrirWhats(id){
 }
 
 // ── campos do item/opção ──
+// v4.24d — DIGITAR também salva o rascunho (com pausa de meio segundo para
+// não pesar): antes, só mexidas estruturais salvavam — preço/qtd/descrição
+// digitados depois da última renderização ficavam de fora da recuperação.
+let _coDraftTimer=null;
+function coDraftAgendar(){ clearTimeout(_coDraftTimer); _coDraftTimer=setTimeout(coDraftSalvar, 500); }
+
 function coSetItem(i, campo, val){
   if(campo==='qtd_desejada') coItens[i].qtd_desejada = coNum(val);
   else coItens[i][campo] = val;
+  coDraftAgendar();
 }
 function coOpDoFornecedor(it, fid){
   let o = it.opcoes.find(x=>x.fornecedor_id===fid);
@@ -5162,6 +5169,7 @@ function coSetOp(i, fid, campo, val){
   else if(campo==='nao_pedir') o.nao_pedir = !!val;
   else o[campo]=val;
   if(campo==='qtd_embalagem'||campo==='preco_total') coAtualizaUnit(i);
+  coDraftAgendar();   // v4.24d — preço/marca/condição digitados entram no rascunho
 }
 function coEscolher(i, fid){
   const it = coItens[i];
@@ -5220,6 +5228,26 @@ function coCardOpcao(i, it, fid){
     ${esc?`<div style="margin-top:4px;font-size:11px">qtd deste fornecedor: <input class="co-nn" type="number" style="width:70px" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)"> <span style="color:var(--cinza-4)">(quebra: escolha 2 fornecedores e divida)</span></div>`:''}`}
   </div>`;
 }
+// v4.24d — item que entrou no orçamento sem o saldo (busca do catálogo, fila,
+// rascunho antigo) busca o número no estoque sozinho. O cartão nunca mais
+// aparece sem a quantidade em estoque.
+let _coSaldosBuscando=false;
+async function coPreencherSaldos(){
+  if(_coSaldosBuscando) return;
+  const faltam=coItens.filter(function(it){ return it.saldo==null && it.material_id; });
+  if(!faltam.length) return;
+  _coSaldosBuscando=true;
+  try{
+    const lid=await getEstoqueGeralId();
+    const ids=[...new Set(faltam.map(function(it){return it.material_id;}))];
+    const rows=(await sbFetch('estoque?select=material_id,saldo&local_id=eq.'+lid+'&material_id=in.('+ids.join(',')+')'))||[];
+    const mapa={}; rows.forEach(function(r){ mapa[r.material_id]=Number(r.saldo)||0; });
+    faltam.forEach(function(it){ it.saldo=(mapa[it.material_id]!=null)?mapa[it.material_id]:0; });
+    coRender();
+  }catch(e){}
+  _coSaldosBuscando=false;
+}
+
 function coCardItem(i, it){
   const g = it.grupo||'Orçamento 1';
   const fids = coFornGrupo[g]||[];
@@ -5252,6 +5280,7 @@ function coCardItem(i, it){
 }
 function coRender(){
   coDraftSalvar();   // v4.24c — cada mudança fica guardada no navegador (anti-F5)
+  if(coItens.some(function(it){ return it.saldo==null && it.material_id; })) setTimeout(coPreencherSaldos, 60);   // v4.24d
   coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
   if(head) head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
