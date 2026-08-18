@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.25b · Menu reorganizado + comparativo de aprovação completo (só o pedido, com obs e desconto)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.25c · NF da empresa inteira nos relatórios + grupos vazios saem sozinhos</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5535,6 +5535,12 @@ async function coFecharGrupo(g){
     for(const {it} of prontos) coJaComprado[it.material_id]={pedido:'novo',status:'EM_MONTAGEM',temNf:false};
     const idsFechados = new Set(prontos.map(p=>p.it.material_id));
     coItens = coItens.filter(it=>!((it.grupo||'Orçamento 1')===g && idsFechados.has(it.material_id)));
+    // v4.25c — grupo que esvaziou no fechamento SAI da tela (não fica o título preso)
+    if(!coItens.some(it=>(it.grupo||'Orçamento 1')===g)){
+      delete coFornGrupo[g];
+      if(coGrupoAtual===g) coGrupoAtual = coGruposDistintos()[0]||'Orçamento 1';
+      coAtualizaLabelGrupo();
+    }
     // v4.6e — a virada de "em cotação" para "pedido" acontece AGORA, por comando
     // direto no banco. Antes dependia da regravação da cotação inteira: se ela
     // não acontecesse, o pedido existia e o item continuava preso na cotação,
@@ -6199,6 +6205,12 @@ async function hiCarregarLista(){
         const its = (await sbFetch(`nf_itens?select=*&nota_fiscal_id=in.(${lote.join(',')})&limit=3000`))||[];
         for(const it of its) (hiItensPorNf[it.nota_fiscal_id]=hiItensPorNf[it.nota_fiscal_id]||[]).push(it);
       }
+      // v4.25c — a NF é da EMPRESA: notas sem itens de estoque (instrumental)
+      // ganham as peças da solicitação para não aparecerem vazias no relatório
+      const semItens = hiNfs.filter(n=>!(hiItensPorNf[n.id]||[]).length && n.numero_nf && (n.natureza||'')!=='SERVICO_REPROCESSAMENTO').slice(0,60);
+      for(const n of semItens){
+        try{ const fb = await nfItensFallback(n); if(fb.length) hiItensPorNf[n.id]=fb; }catch(e){}
+      }
     }
     try{ hiPedidos = (await sbFetch('pedidos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ hiPedidos=[]; }
     try{ hiOrdens = (await sbFetch('ordens_compra?select=id,pedido_id,material_id,situacao,qtd_a_comprar,qtd_comprada&pedido_id=not.is.null&limit=2000'))||[]; }catch(e){ hiOrdens=[]; }
@@ -6217,7 +6229,7 @@ async function hiCarregarLista(){
     try{
       const movs=(await sbFetch('movimentacoes?select=nf_item_id&nf_item_id=not.is.null&limit=5000'))||[];
       const itemNf={};
-      for(const nfid of Object.keys(hiItensPorNf)) for(const it of hiItensPorNf[nfid]) itemNf[it.id]=Number(nfid);
+      for(const nfid of Object.keys(hiItensPorNf)) for(const it of hiItensPorNf[nfid]) if(it.id!=null) itemNf[it.id]=Number(nfid);
       for(const mv of movs){ const n=itemNf[mv.nf_item_id]; if(n) hiComEntrada.add(n); }
     }catch(e){}
     hiRenderizarLista();
@@ -6277,7 +6289,9 @@ function hiLoteTxt(itemId){
 }
 // situação real da nota: o que decide o que aparece e o que pode ser feito
 function hiSituacao(nf){
-  const its = hiItensPorNf[nf.id]||[];
+  // v4.25c — peça de instrumental não gera entrada de estoque: a nota dela
+  // não pode aparecer como "sem entrada" (é o comportamento correto)
+  const its = (hiItensPorNf[nf.id]||[]).filter(i=>!i.sem_estoque);
   const st = (nf.status||'ENTREGUE').toUpperCase();
   if(st==='DEVOLVIDO') return 'DEVOLVIDO';
   if(nf.entrada_dispensada) return 'DISPENSADA';
@@ -7784,6 +7798,10 @@ async function rcToggleNf(nfId){
     try{
       const itens = await sbFetch(`nf_itens?select=*&nota_fiscal_id=eq.${nfId}&order=id.asc`);
       rcNfItensCache[nfId] = itens || [];
+      if(!rcNfItensCache[nfId].length){
+        const nf=(rcNfsRecentes||[]).find(x=>x.id===nfId);
+        rcNfItensCache[nfId] = await nfItensFallback(nf);   // v4.25c — peças de instrumental
+      }
       rcRenderizarItensNf(nfId);
     }catch(e){
       corpo.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--vermelho)">Erro ao carregar itens: '+e.message+'</div>';
@@ -7791,14 +7809,30 @@ async function rcToggleNf(nfId){
   }
 }
 
+// ═══ v4.25c — A NF É DA EMPRESA: nota sem itens de ESTOQUE (ex.: compra de
+// instrumental, que vai para a caixa do CME) mostra as peças da solicitação
+// em vez de aparecer vazia nos relatórios.
+async function nfItensFallback(nf){
+  if(!nf || !nf.numero_nf) return [];
+  try{
+    const sols=(await sbFetch('solicitacao_instrumental?select=peca_nome,qtd,valor_unitario,nf_valor&nf_numero=eq.'+encodeURIComponent(nf.numero_nf)+'&limit=50'))||[];
+    return sols.map(function(s){
+      return { id:null, material_id:null, item_nome:s.peca_nome, sem_estoque:true, qtd:s.qtd,
+        valor_unitario:s.valor_unitario,
+        valor_item:(s.nf_valor!=null?Number(s.nf_valor):(Number(s.qtd)||0)*(Number(s.valor_unitario)||0)) };
+    });
+  }catch(e){ return []; }
+}
+
 function rcRenderizarItensNf(nfId){
   const corpo = document.getElementById('rc-nf-corpo-'+nfId);
   const itens = rcNfItensCache[nfId] || [];
   if(!itens.length){ corpo.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--cinza-4)">Nenhum item registrado nesta NF.</div>'; return; }
-  corpo.innerHTML = `<div style="overflow-x:auto;padding:0 16px 12px"><table>
+  const aviso = itens.some(it=>it.sem_estoque) ? '<div style="padding:6px 16px;font-size:11px;color:#7D6608;background:#FEF9E7">🔩 Compra de instrumental — as peças vão para a caixa do CME, não para o estoque.</div>' : '';
+  corpo.innerHTML = aviso + `<div style="overflow-x:auto;padding:0 16px 12px"><table>
     <thead><tr><th>Material</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unit.</th><th style="text-align:right">Subtotal</th></tr></thead>
     <tbody>${itens.map(it => `<tr>
-      <td>${rcNomeMaterial(it.material_id)}</td>
+      <td>${rcNomeMaterial(it.material_id, it)}</td>
       <td style="text-align:right">${it.qtd}</td>
       <td style="text-align:right">${rcMoney(it.valor_unitario)}</td>
       <td style="text-align:right;font-weight:600">${rcMoney(it.valor_item)}</td>
