@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.25c · NF da empresa inteira nos relatórios + grupos vazios saem sozinhos</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.26 · Reprocessados no custo das cirurgias + Custos gerais no Dashboard</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9304,7 +9304,7 @@ async function pnCarregar(){
   st.textContent='carregando…';
   try{
     if(!ccDados.length){ await acCarregar(); }
-    const mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo&limit=1000'))||[];
+    const mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo&limit=5000'))||[];
     pnUvp={}; pnNomeId={}; pnMatFull={};
     for(const m of mats){
       pnUvp[m.id]={nome:m.nome,uvp:Number(m.ultimo_valor_pago)||0,ativo:m.ativo!==false};
@@ -9326,6 +9326,25 @@ async function pnCarregar(){
         tipoCir:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
         custo:pnCusto(mv.material_id,mv.qtd) });
     }
+    // ═══ v4.26 — REPROCESSADOS entram no CUSTO: a saída deles vive no livro
+    // (remessa_sujos guarda o período cirúrgico), não nas movimentações de
+    // estoque. O valor vem do último valor pago — retroativo por consulta.
+    try{
+      const bensCk=(await sbFetch('remessa_bens?select=id,material_id&limit=100'))||[];
+      const bemMat={}; bensCk.forEach(b=>{ if(b.material_id) bemMat[b.id]=b.material_id; });
+      const sujosCk=(await sbFetch('remessa_sujos?select=bem_id,qtd,periodo_cirurgico_id,created_at,origem&limit=5000'))||[];
+      for(const s of sujosCk){
+        const mid=bemMat[s.bem_id]; if(!mid) continue;
+        const per=s.periodo_cirurgico_id?perMap[s.periodo_cirurgico_id]:null;
+        const dia=(per&&per.data?per.data:(s.created_at||'').slice(0,10))||'';
+        pnMovs.push({ qtd:Number(s.qtd)||0, material_id:mid, dia, mes:dia.slice(0,7),
+          periodoId:s.periodo_cirurgico_id||null,
+          medico:per&&per.medicos?per.medicos.nome:null,
+          tipoCir:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:null,
+          reprocessado:true,
+          custo:pnCusto(mid, s.qtd) });
+      }
+    }catch(e){}
     pnNfs=(await sbFetch('notas_fiscais?select=id,valor_total,data_entrega,data_emissao,status,fornecedor_id&order=id.desc&limit=300'))||[];
     try{ pnLotes=(await sbFetch('lotes?select=material_id,lote,validade,qtd,status&status=eq.ativo&limit=1000'))||[]; }catch(e){ pnLotes=[]; }
     try{ pnEmp=(await sbFetch('emprestimos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ pnEmp=null; }
@@ -9820,7 +9839,124 @@ function pnCustos(){
         return `<tr><td style="font-weight:600">${pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid)}</td><td class="num">${pnMoney(s.ant)}</td><td class="num">${pnMoney(s.ult)}</td>
         <td class="num var-up">▲ +${s.pct}%</td><td style="font-size:11px;color:var(--cinza-4)">${f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—'}</td></tr>`;
       }).join('')}</tbody></table>`:'<div class="pn-empty">Nenhuma alta acima de 10% entre as duas últimas compras registradas. ✓<br><span style="font-size:11px">A lista cresce conforme as NFs entram pelo app.</span></div>'}
-    </div>`;
+    </div>
+    <div class="pn-card" id="pn-cg"><div style="font-size:12px;color:var(--cinza-4)">Carregando custos gerais…</div></div>`;
+  pnCG_Render();
+}
+
+// ═══ v4.26 — CUSTOS GERAIS DA EMPRESA (pedido da Evelise, 18/08) ═══
+// Tudo num card só, com dropdowns: saídas do CC+CME (já com reprocessados),
+// consultórios, lavanderia, esterilização, manutenção e as compras das 3
+// origens — com filtros, impressão e exportação p/ Excel.
+let pnCGdados=null;
+let pnCGf={mes:null, med:'', mat:'', forn:''};
+async function pnCG_Carregar(){
+  if(pnCGdados) return pnCGdados;
+  const nfs=(await sbFetch('notas_fiscais?select=id,numero_nf,valor_total,natureza,data_entrega,data_emissao,mes_referencia,fornecedor_id,status&order=id.desc&limit=800'))||[];
+  let sols=[]; try{ sols=(await sbFetch('solicitacao_instrumental?select=peca_nome,qtd,nf_valor,valor_total,recebido_em&status=in.(RECEBIDA,DESTINADA)&limit=500'))||[]; }catch(e){}
+  pnCGdados={nfs:nfs, sols:sols, itensNfMes:{}};
+  return pnCGdados;
+}
+async function pnCG_ItensCompraDoMes(mes, nfsCompra){
+  if(pnCGdados.itensNfMes[mes]) return pnCGdados.itensNfMes[mes];
+  const ids=nfsCompra.map(n=>n.id);
+  let its=[];
+  for(let i=0;i<ids.length;i+=80){
+    try{ its=its.concat((await sbFetch('nf_itens?select=nota_fiscal_id,material_id,qtd,valor_item,valor_unitario&nota_fiscal_id=in.('+ids.slice(i,i+80).join(',')+')&limit=2000'))||[]); }catch(e){}
+  }
+  pnCGdados.itensNfMes[mes]=its;
+  return its;
+}
+function pnCG_MesNf(n){ return (n.mes_referencia&&/^\d{4}-\d{2}/.test(n.mes_referencia))?n.mes_referencia.slice(0,7):(((n.data_entrega||n.data_emissao||'')+'').slice(0,7)); }
+function pnCG_Csv(linhas){
+  const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='custos-hog-'+(pnCGf.mes||pnHojeMes())+'.csv'; a.click();
+}
+let pnCGultimoCsv=[];
+function pnCG_Excel(){ if(pnCGultimoCsv.length) pnCG_Csv(pnCGultimoCsv); }
+function pnCG_Print(){ const el=document.getElementById('pn-cg'); if(!el) return;
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custos HOG</title><style>body{font-family:Arial;font-size:12px;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 7px;font-size:11px}summary{font-weight:bold;margin:8px 0}details{margin:6px 0}button,select,input{display:none}</style></head><body><h2>HOG — Custos · '+(pnCGf.mes||pnHojeMes())+'</h2>'+el.innerHTML.replace(/<details/g,'<details open')+'</body></html>');
+}
+function pnCG_SetF(campo,v){ pnCGf[campo]=v; pnCG_Render(); }
+async function pnCG_Render(){
+  const box=document.getElementById('pn-cg'); if(!box) return;
+  try{ await pnCG_Carregar(); }catch(e){ box.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Erro nos custos gerais: '+e.message+'</div>'; return; }
+  const mes=pnCGf.mes||pnCustosMes||pnHojeMes();
+  const money=v=>pnMoney(v||0);
+  // ── saídas do mês (movimentações + reprocessados), com filtros
+  const okMed=m=>!pnCGf.med||((m.medico||'')===pnCGf.med);
+  const okMat=m=>!pnCGf.mat||pnN((pnUvp[m.material_id]||{}).nome||'').includes(pnN(pnCGf.mat));
+  const movs=pnMovs.filter(m=>m.mes===mes&&okMed(m)&&okMat(m));
+  const cirur=movs.filter(m=>m.tipoCir!=='(diversas)');
+  const consult=movs.filter(m=>m.tipoCir==='(diversas)');
+  const soma=a=>a.reduce((s,m)=>s+m.custo,0);
+  const agrupa=(arr,chave)=>{ const g={}; for(const m of arr){ const k=chave(m)||'—'; (g[k]=g[k]||{c:0,q:0}); g[k].c+=m.custo; g[k].q+=m.qtd; } return Object.entries(g).sort((a,b)=>b[1].c-a[1].c); };
+  const tabela=(pares,c1)=>'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">'+c1+'</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Unid.</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Custo</th></tr></thead><tbody>'
+    +pares.map(([k,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+k+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(v.q).toLocaleString('pt-BR')+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.c)+'</td></tr>').join('')+'</tbody></table>';
+  // por paciente por tipo
+  const perMes=pnPeriodosDoMes(mes);
+  const porTipoPac={}; for(const p of perMes){ if(!p.tipo||p.tipo==='—') continue; (porTipoPac[p.tipo]=porTipoPac[p.tipo]||{c:0,p:0}); porTipoPac[p.tipo].c+=p.custo; porTipoPac[p.tipo].p+=p.pac; }
+  // ── serviços e compras (NFs)
+  const nfsMes=pnCGdados.nfs.filter(n=>pnCG_MesNf(n)===mes&&(n.status||'')!=='DEVOLVIDO');
+  const okForn=n=>!pnCGf.forn||String(n.fornecedor_id)===String(pnCGf.forn);
+  const lav=nfsMes.filter(n=>n.natureza==='SERVICO_LAVANDERIA'&&okForn(n));
+  const ester=nfsMes.filter(n=>n.natureza==='SERVICO_REPROCESSAMENTO'&&okForn(n));
+  const manut=nfsMes.filter(n=>n.natureza==='SERVICO_MANUTENCAO'&&okForn(n));
+  const compras=nfsMes.filter(n=>!n.natureza&&okForn(n));
+  const somaNf=a=>a.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
+  const listaNf=a=>'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+a.map(n=>'<tr><td style="padding:3px 8px;border-bottom:1px solid var(--cinza-2)">NF '+(n.numero_nf||'—')+' · '+rcNomeFornecedor(n.fornecedor_id)+'</td><td style="text-align:right;padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+money(n.valor_total)+'</td></tr>').join('')+'</tbody></table>';
+  // compras CC × higiene (pela classe dos itens da NF)
+  const itensCompra=await pnCG_ItensCompraDoMes(mes, compras);
+  let compHig=0, compCC=0;
+  const valNf={}; compras.forEach(n=>valNf[n.id]=0);
+  for(const it of itensCompra){ if(!(it.nota_fiscal_id in valNf)) continue; const v=Number(it.valor_item)||((Number(it.qtd)||0)*(Number(it.valor_unitario)||0)); valNf[it.nota_fiscal_id]+=0; const cls=(pnMatFull[it.material_id]||{}).classe_compra; if(cls==='LIMPEZA') compHig+=v; else compCC+=v; }
+  const semItens=compras.filter(n=>!itensCompra.some(i=>i.nota_fiscal_id===n.id));
+  compCC+=0; // NFs de compra sem itens (ex.: instrumental antigo) ficam fora do split — aparecem no CME abaixo
+  // compras CME (peças recebidas no mês)
+  const solsMes=pnCGdados.sols.filter(s=>((s.recebido_em||'')+'').slice(0,7)===mes);
+  const compCME=solsMes.reduce((s,x)=>s+(Number(x.nf_valor)||Number(x.valor_total)||0),0);
+  // ── filtros (opções)
+  const meses=pnMesesDisponiveis();
+  const medicos=[...new Set(pnMovs.map(m=>m.medico).filter(Boolean))].sort();
+  const fornsUsados=[...new Set(nfsMes.map(n=>n.fornecedor_id).filter(Boolean))];
+  const D=(t,tot,corpo)=>'<details style="border:1px solid var(--cinza-2);border-radius:8px;padding:8px 12px;margin-top:8px"><summary style="cursor:pointer;font-size:13px;font-weight:800;display:flex;justify-content:space-between"><span>'+t+'</span><span>'+money(tot)+'</span></summary>'+corpo+'</details>';
+  // ── CSV p/ Excel
+  pnCGultimoCsv=[['Bloco','Detalhe','Unid.','Valor']];
+  agrupa(cirur,m=>m.tipoCir).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por tipo',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(cirur,m=>m.medico).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por médico',k,Math.round(v.q),v.c.toFixed(2)]));
+  Object.entries(porTipoPac).forEach(([t,v])=>pnCGultimoCsv.push(['R$/paciente — '+t,(v.p+' pacientes'),'',(v.p?(v.c/v.p):0).toFixed(2)]));
+  agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Consultórios — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  lav.forEach(n=>pnCGultimoCsv.push(['Lavanderia','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
+  ester.forEach(n=>pnCGultimoCsv.push(['Esterilização','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
+  manut.forEach(n=>pnCGultimoCsv.push(['Manutenção','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
+  pnCGultimoCsv.push(['Compras CC','','',compCC.toFixed(2)],['Compras Higiene','','',compHig.toFixed(2)],['Compras CME','','',compCME.toFixed(2)]);
+  // ── monta o card
+  box.innerHTML=
+    '<div class="pn-ct"><span>💼 Custos gerais da empresa — '+mes.split('-').reverse().join('/')+'</span><span class="pn-funcao">tudo num lugar só · clique nos blocos para abrir</span></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;font-size:12px">'
+    +'<select onchange="pnCG_SetF(\'mes\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)">'+meses.map(m=>'<option value="'+m+'"'+(m===mes?' selected':'')+'>'+m.split('-').reverse().join('/')+'</option>').join('')+'</select>'
+    +'<select onchange="pnCG_SetF(\'med\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)"><option value="">médico: todos</option>'+medicos.map(x=>'<option'+(pnCGf.med===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'
+    +'<input placeholder="filtrar material…" value="'+(pnCGf.mat||'')+'" onchange="pnCG_SetF(\'mat\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte);width:150px">'
+    +'<select onchange="pnCG_SetF(\'forn\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)"><option value="">fornecedor: todos</option>'+fornsUsados.map(f=>'<option value="'+f+'"'+(String(pnCGf.forn)===String(f)?' selected':'')+'>'+rcNomeFornecedor(f)+'</option>').join('')+'</select>'
+    +'<span style="flex:1"></span>'
+    +'<button onclick="pnCG_Excel()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">📊 Excel</button>'
+    +'<button onclick="pnCG_Print()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir</button>'
+    +'</div>'
+    +D('🏥 Saídas cirúrgicas (CC + CME) — inclui reprocessados', soma(cirur),
+      '<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por tipo de cirurgia:</div>'+tabela(agrupa(cirur,m=>m.tipoCir),'Tipo')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Por médico:</div>'+tabela(agrupa(cirur,m=>m.medico),'Médico')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">R$ por paciente, por tipo:</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+Object.entries(porTipoPac).map(([t,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+t+' ('+v.p+' pac.)</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.p?v.c/v.p:0)+'/pac</td></tr>').join('')+'</tbody></table>'
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens que mais custaram:</div>'+tabela(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).slice(0,20),'Item'))
+    +D('🚪 Materiais para os consultórios (saídas diversas)', soma(consult), tabela(agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item'))
+    +D('🧺 Lavanderia (serviço do mês)', somaNf(lav), lav.length?listaNf(lav):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de lavanderia neste mês.</div>')
+    +D('☣️ Esterilização (serviço cobrado)', somaNf(ester), (ester.length?listaNf(ester):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de esterilização neste mês.</div>')+'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:6px">⚠️ Os itens reprocessados também valorizam as cirurgias no bloco de cima — este é o valor do SERVIÇO cobrado pela esterilizadora. Não some os dois.</div>')
+    +D('🔧 Manutenção de instrumental', somaNf(manut), manut.length?listaNf(manut):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de manutenção neste mês.</div>')
+    +D('🛒 Compras CC (entradas do mês)', compCC, '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Soma dos itens de NF de compra do mês, fora higiene.</div>')
+    +D('🧼 Compras Higiene', compHig, '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Soma dos itens classe LIMPEZA nas NFs do mês.</div>')
+    +D('🔩 Compras CME (peças recebidas)', compCME, solsMes.length?('<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+solsMes.map(s=>'<tr><td style="padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+s.peca_nome+' ×'+s.qtd+'</td><td style="text-align:right;padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+money(Number(s.nf_valor)||Number(s.valor_total)||0)+'</td></tr>').join('')+'</tbody></table>'):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma peça recebida neste mês.</div>');
 }
 
 async function pnPerDrill(id, origem){
@@ -13224,6 +13360,13 @@ async function rmConferirNf(remessaId){
     const nfId = nfArr && nfArr[0] && nfArr[0].id;
     for(const {item,fat,val,situacao} of linhas){
       await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_faturada:fat, valor_unitario:val, situacao });
+      // v4.26 — o valor cobrado na volta ATUALIZA o valor de referência da
+      // peça: é ele que valoriza as cirurgias (retroativo, pois o painel
+      // consulta o valor vigente na hora de calcular)
+      if(val!=null && val>0){
+        const bemV=(rmBens||[]).find(b=>b.id===item.bem_id);
+        if(bemV && bemV.material_id){ try{ await sbFetch('materiais?id=eq.'+bemV.material_id,'PATCH',{ ultimo_valor_pago: val }); }catch(e){} }
+      }
       if(val!=null && fat>0){
         await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'CUSTO_SERVICO', remessa_id:remessaId, nota_fiscal_id:nfId,
           valor_unitario:val, registrado_por:rmQuem(),
