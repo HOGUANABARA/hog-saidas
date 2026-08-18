@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.25</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.25b · Menu reorganizado + comparativo de aprovação completo (só o pedido, com obs e desconto)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8204,9 +8204,17 @@ function apHistHtml(its){
   }).join('');
 }
 
+// v4.25b — o comparativo mostra SÓ os itens DESTE pedido (a cotação pode ter
+// vários grupos/pedidos — misturar orçamentos no PDF confundia a aprovação).
+// Cotações antigas sem pedido_id gravado caem no comportamento antigo.
+async function apHistDoPedido(pid, cid){
+  const its = await apCarregarHist(cid);
+  const doPedido = (its||[]).filter(it=>Number(it.pedido_id)===Number(pid));
+  return doPedido.length ? doPedido : its;
+}
 async function apMostrarHist(pid, cid){
   const div=document.getElementById('ap-hist-'+pid); if(!div||div.dataset.ok) return;
-  try{ div.innerHTML=apHistHtml(await apCarregarHist(cid)); div.dataset.ok='1'; }
+  try{ div.innerHTML=apHistHtml(await apHistDoPedido(pid, cid)); div.dataset.ok='1'; }
   catch(e){ div.innerHTML='Erro ao carregar histórico: '+e.message; }
 }
 
@@ -8238,10 +8246,23 @@ async function apGerarPDF(pid){
   const just=((document.getElementById('ap-just-'+pid)||{}).value||'').trim();
   let histHtml='';
   if(p.cotacao_id){
-    try{ histHtml=apHistHtml(await apCarregarHist(p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
+    try{ histHtml=apHistHtml(await apHistDoPedido(pid, p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
   }
-  const totItens=apTotalItens(b), frete=Number(p.frete)||0;
-  const linhas=b.itens.map(o=>`<tr><td>${rcNomeMaterial(o.material_id,o)}</td><td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td><td style="text-align:right">${rcMoney(o.valor_unitario)}</td><td style="text-align:right">${rcMoney((o.qtd_a_comprar||0)*(o.valor_unitario||0))}</td></tr>`).join('');
+  const totItens=apTotalItens(b), frete=Number(p.frete)||0, descPed=Number(p.desconto)||0;
+  // v4.25b — o PDF traz TUDO que a aprovação precisa: últ. pago × cotado,
+  // observação/justificativa de cada item, desconto por item e no total
+  const linhas=b.itens.map(o=>{
+    const u=(typeof ultPagoDe==='function')?ultPagoDe(o):null;
+    const v=Number(o.valor_unitario)||0;
+    let ref='1ª compra';
+    if(u!=null && v){ const d=((v-u)/u)*100; ref='últ. pago '+rcMoney(u)+' ('+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%)'; }
+    else if(u!=null){ ref='últ. pago '+rcMoney(u); }
+    const sub=Math.max(0,((o.qtd_a_comprar||0)*v)-(Number(o.desconto)||0));
+    return `<tr><td>${rcNomeMaterial(o.material_id,o)}${o.observacao?`<div style="font-size:9.5px;color:#777">${o.observacao}</div>`:''}</td>
+      <td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td>
+      <td style="text-align:right">${rcMoney(o.valor_unitario)}<div style="font-size:9.5px;color:#777">${ref}</div></td>
+      <td style="text-align:right">${rcMoney(sub)}${Number(o.desconto)>0?`<div style="font-size:9.5px;color:#1E8449">−${rcMoney(o.desconto)} desc.</div>`:''}</td></tr>`;
+  }).join('');
   hogImprimir(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo Pedido #${pid}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px}h2{font-size:13px;margin:16px 0 6px}
   table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}
@@ -8253,8 +8274,9 @@ async function apGerarPDF(pid){
   <b>Pagamento:</b> ${p.condicao_pagamento||'—'} &nbsp;·&nbsp; <b>Prazo:</b> ${p.prazo_previsto||'—'} &nbsp;·&nbsp; <b>Data:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
   <h2>Itens do pedido</h2>
   <table><thead><tr><th>Material</th><th>Marca</th><th>Código</th><th>Qtd</th><th>Unit.</th><th>Subtotal</th></tr></thead><tbody>${linhas}</tbody></table>
-  <p class="tot">Itens: ${rcMoney(totItens)} &nbsp; Frete: ${rcMoney(frete)} &nbsp; <u>Total: ${rcMoney(totItens+frete)}</u></p>
-  ${histHtml?`<h2>Histórico da cotação (ofertas recebidas)</h2>${histHtml}`:''}
+  <p class="tot">Itens: ${rcMoney(totItens)} &nbsp; Frete: ${rcMoney(frete)}${descPed?` &nbsp; Desconto: −${rcMoney(descPed)}`:''} &nbsp; <u>Total: ${rcMoney(Math.max(0,totItens+frete-descPed))}</u></p>
+  ${p.obs_fornecedor?`<h2>Observação para o fornecedor</h2><div class="just">${p.obs_fornecedor}</div>`:''}
+  ${histHtml?`<h2>Comparativo deste pedido (ofertas recebidas)</h2>${histHtml}`:''}
   <h2>Justificativa da escolha</h2><div class="just">${just||'(não informada)'}</div>
   <p class="meta" style="margin-top:20px">Aprovação: ______________________________ &nbsp;&nbsp; Data: ____/____/______</p>
   <button onclick="window.print()" style="margin-top:14px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>
