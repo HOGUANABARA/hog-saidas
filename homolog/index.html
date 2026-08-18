@@ -369,7 +369,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.24d · Anti-F5, grupo no "por fornecedor" e saldo sempre visível no orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.24e · Anti-F5 por digitação, saldo sempre visível e busca de fornecedor recolhível</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5727,6 +5727,7 @@ function fvRender(){
           <option value="__novo__">➕ novo grupo…</option>
         </select></label>
       <button class="co-b3" style="padding:8px 13px;font-size:12px" onclick="fvEnviar()">📤 Enviar selecionados (<span id="fv-n">0</span>) para o orçamento</button>
+      <button class="co-b3" style="padding:8px 13px;font-size:12px;background:#FDEDEC;color:var(--vermelho)" onclick="fvFechar()">✕ fechar busca</button>
     </div>
     <div style="max-height:380px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
       <thead><tr>
@@ -5786,8 +5787,16 @@ function fvEnviar(){
     if(!lista.includes(fvFornecedor.id) && lista.length<3) coFornGrupo[g]=[...lista, fvFornecedor.id];
   }
   fvSel.clear();
+  fvFechar();   // v4.24e — a busca se recolhe sozinha depois de enviar
   coRender();
   toast(`${n} item(ns) de ${fvFornecedor.nome} no orçamento ✓ — o fornecedor já entrou no grupo.`,'sucesso');
+}
+
+// v4.24e — a busca por fornecedor não fica mais presa na tela
+function fvFechar(){
+  const c=document.getElementById('fv-corpo'); if(c) c.innerHTML='';
+  const b=document.getElementById('fv-busca'); if(b) b.value='';
+  if(typeof fvSel!=='undefined') fvSel.clear();
 }
 
 function coCopiar(id){ const ta=document.getElementById(id); if(!ta) return; ta.select();
