@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.26b</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.27b</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -394,6 +394,7 @@ details[open] summary { margin-bottom: 6px; }
       </div>
     </div>
     <div class="hs-item hs-solo" id="aba-btn-alertas" onclick="trocarAba('alertas')"><span class="hs-ico">🔔</span> Alertas <span id="badge-alertas" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+    <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-painel" onclick="trocarAba('painel')"><span class="hs-ico">📊</span> Dashboard</div>
     <div class="hs-grupo">
       <div class="hs-cab" onclick="hsToggle('rem')"><span><span class="hs-ico">🔁</span> Remessas</span><span class="hs-seta" id="hs-s-rem">▾</span></div>
       <div class="hs-lista" id="hs-l-rem">
@@ -433,7 +434,6 @@ details[open] summary { margin-bottom: 6px; }
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário Higiene</div>
       </div>
     </div>
-    <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-painel" onclick="trocarAba('painel')"><span class="hs-ico">📊</span> Dashboard</div>
     <div class="hs-grupo">
       <div class="hs-cab" onclick="hsToggle('rel')"><span><span class="hs-ico">📚</span> Relatórios</span><span class="hs-seta" id="hs-s-rel">▾</span></div>
       <div class="hs-lista" id="hs-l-rel">
@@ -1646,6 +1646,14 @@ const PERFIS = {
   ADMINISTRATIVO: {
     rot: 'Administrativo', cor: '#27AE60',
     abas: '*'   // acesso total, inclusive o cadastro de usuários
+  },
+  // v4.27 — perfil SÓ-LEITURA: enxerga o sistema todo, não mexe em nada.
+  // A trava é central: o sbFetch bloqueia qualquer escrita deste perfil.
+  VISUALIZACAO: {
+    rot: 'Visualização', cor: '#7F8C8D',
+    abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
+           'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
+           'hig_inv','hig_comp','hig_orc','hig_rel']
   }
 };
 
@@ -1657,9 +1665,9 @@ const PERFIS = {
 const PAINEL_SECOES = {
   alertas:     ['COMPRAS','ADMINISTRATIVO'],
   saldos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
-  cirurgias:   ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
+  cirurgias:   ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO','VISUALIZACAO'],
   cobertura:   ['COMPRAS','ADMINISTRATIVO'],
-  custos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
+  custos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO','VISUALIZACAO'],
   emprestimos: ['COMPRAS','ADMINISTRATIVO'],
   simulador:   ['COMPRAS','ADMINISTRATIVO'],
   base:        ['COMPRAS','ADMINISTRATIVO']
@@ -2088,6 +2096,11 @@ async function getEstoqueGeralId(){
 }
 
 async function sbFetch(ep, method='GET', body=null) {
+  // v4.27 — perfil Visualização é SÓ-LEITURA de verdade: a trava é aqui,
+  // na porta do banco — nenhum botão esquecido consegue escrever.
+  if (method !== 'GET' && typeof SESSAO !== 'undefined' && SESSAO && SESSAO.perfil === 'VISUALIZACAO') {
+    throw new Error('perfil de Visualização não altera dados — apenas consulta');
+  }
   const baseUrl = sbUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
   const isNewKey = sbKey.startsWith('sb_');
 
@@ -7584,6 +7597,10 @@ async function rcGravarNF(chave, confirmar){
           });
         }catch(e){ toast('⚠ Lote não gravado ('+(l.lote||'—')+'): '+e.message,'erro'); }
       }
+      // v4.27 — chegou compra com validade: a suspensão do alerta cai sozinha
+      if((lotes||[]).some(l=>l.validade)){
+        try{ await sbFetch('materiais?id=eq.'+ordem.material_id,'PATCH',{ validade_suspensa:false }); }catch(e){}
+      }
 
       // ═══ v4.12 — peça de remessa entra no LIVRO, nunca no estoque ═══
       // O app já fazia essa checagem na saída, em dois pontos. Na entrada da
@@ -8944,7 +8961,9 @@ async function invAplicarAjustesImportados(){
 
 <script>
 // ═══ PAINEL v2 — cada indicador com função · explosão de detalhes · comparativos mensais ═══
-let pnUvp = {};        // material_id -> {nome, uvp, ativo}
+let pnUvp = {};        // material_id -> {nome, uvp, ativo, tratativa, precoAnterior}
+let pnEntradas = [];   // v4.27 — histórico de entradas (economias + detecção de amostra)
+let pnAmostraOnly = new Set();   // materiais que só entraram como amostra grátis
 let pnNomeId = {};     // NOME normalizado -> material_id
 let pnPeriodos = [];   // periodos_cirurgicos com medico/tipo
 let pnMovs = [];       // TODAS as saídas aprovadas vivas, com dia/mes/periodo resolvidos
@@ -8971,7 +8990,106 @@ function pnHojeMes(){ return pnHojeStr().slice(0,7); }
 function pnData(d){ if(!d) return '—'; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
 function pnMesLabel(m){ const n=['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']; return n[parseInt((m||'').slice(5,7))]||m; }
 function pnDiasDesde(d){ if(!d) return null; return Math.round((new Date(pnHojeStr()) - new Date((''+d).slice(0,10)))/86400000); }
-function pnCusto(materialId, qtd){ const m=pnUvp[materialId]; return Math.abs(qtd)*(m&&m.uvp?m.uvp:0); }
+// v4.27 — PREÇO EM TRATATIVA: compra pontual/emergencial cara não retroage.
+// Enquanto a negociação não fecha, meses PASSADOS usam o preço anterior;
+// só o mês atual mostra o preço novo (evita leitura errada da gestão).
+function pnCusto(materialId, qtd, mes){
+  const m=pnUvp[materialId]; if(!m) return 0;
+  let v=m.uvp||0;
+  if(m.tratativa && m.precoAnterior>0 && mes && mes!==pnHojeMes()) v=m.precoAnterior;
+  return Math.abs(qtd)*v;
+}
+
+// ═══ v4.26c — UNIFICAÇÃO dos nomes de cirurgia (aprovada pela Evelise 18/08):
+// a mesma cirurgia tinha até 3 grafias (planilha × app × maiúsculas) e a
+// tabela R$/paciente comparava cada uma consigo mesma. Uma grafia só, em
+// exibição — retroativo e sem mexer em nenhum dado. FACO e FACECTOMIA
+// avulsas contam como FACO NACIONAL (decisão dela).
+function pnTipoCanon(t, medico, data){
+  if(!t || t==='(diversas)') return t;
+  const n=String(t).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+  // v4.27b — FACO "solto" é CONTEXTUAL (regra da Evelise, 18/08):
+  // Dr Nilson = IMPORT · Dr Lucas = IMPORT, exceto SEXTA = NACIONAL · Dr Pietro = NACIONAL
+  if(n==='FACO' || n==='FACECTOMIA'){
+    const med=String(medico||'').toUpperCase();
+    let dow=null;
+    if(data){ const d=new Date(String(data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dow=d.getDay(); }
+    if(med.indexOf('PIETRO')>=0) return 'FACO NACIONAL';
+    if(med.indexOf('LUCAS')>=0)  return dow===5 ? 'FACO NACIONAL' : 'FACO IMPORT';
+    if(med.indexOf('NILSON')>=0) return 'FACO IMPORT';
+    return 'FACO NACIONAL';
+  }
+  const M={ 'VITRE':'VITRECTOMIA','VITRECTOMIA':'VITRECTOMIA',
+    'ESTRABISMO':'ESTRABISMO','TREC':'TREC',
+    'FACO NACIONAL':'FACO NACIONAL',
+    'FACO IMPORT':'FACO IMPORT','FACECTOMIA IMPORT':'FACO IMPORT','FACECTOMIA_IMPORT':'FACO IMPORT',
+    'ANGIO':'ANGIOGRAFIA','ANGIOGRAFIA':'ANGIOGRAFIA',
+    'PLASTICA':'PLÁSTICA','APLICACAO':'APLICAÇÃO','SONDAGEM':'SONDAGEM',
+    'LAVAGEM DE CAMARA':'LAVAGEM DE CÂMARA','CICLOFOTO':'CICLOFOTO','RETIRADA DE OLEO':'RETIRADA DE ÓLEO' };
+  return M[n] || String(t).trim().toUpperCase();
+}
+
+// v4.27b — pauta de renegociação calculada num lugar só (o card mora nos ALERTAS)
+function pnCalcSubindo(){
+  const porMatNf={};
+  for(const it of (typeof pnNfItens!=='undefined'?pnNfItens:[])){ if(it.valor_unitario==null) continue; (porMatNf[it.material_id]=porMatNf[it.material_id]||[]).push(Number(it.valor_unitario)); }
+  const lista=[];
+  for(const [mid,vals] of Object.entries(porMatNf)){
+    if(vals.length<2) continue;
+    const ult=vals[vals.length-1], ant=vals[vals.length-2];
+    if(ant>0&&ult>ant*1.1) lista.push({mid:Number(mid),ant,ult,pct:Math.round((ult-ant)/ant*100)});
+  }
+  return lista.sort((a,b)=>b.pct-a.pct);
+}
+function pnSubindoModal(){
+  const lista=pnCalcSubindo();
+  let ov=document.getElementById('pn-sub-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='pn-sub-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  const linhas=lista.slice(0,25).map(function(s){
+    const f=(typeof ccFontes!=='undefined')?ccFontes[pnN(pnUvp[s.mid]?pnUvp[s.mid].nome:'')]:null;
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2);font-weight:600">'+(pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid))+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+pnMoney(s.ant)+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+pnMoney(s.ult)+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2);color:var(--vermelho);font-weight:800">▲ +'+s.pct+'%</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">'+(f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—')+'</td></tr>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--laranja);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>📈 Preços subindo — pauta de renegociação ('+lista.length+')</span><button onclick="document.getElementById(\'pn-sub-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:14px 16px;max-height:420px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr><th style="text-align:left;padding:5px 10px;background:var(--cinza-1)">Material</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Compra anterior</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Última compra</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Variação</th><th style="text-align:left;padding:5px 10px;background:var(--cinza-1)">Marcas/fornecedores</th></tr></thead><tbody>'
+    +(linhas||'<tr><td colspan="5" style="padding:14px;color:var(--cinza-4)">Nenhuma alta acima de 10% entre as duas últimas compras. ✓</td></tr>')+'</tbody></table></div></div>';
+}
+
+// ═══ v4.27 — LOTE/VALIDADE: tratar item a item, com suspensão até a compra ═══
+function pnValidadeModal(){
+  const lista=window.pnSemLoteLista||[];
+  let ov=document.getElementById('pn-val-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='pn-val-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  const linhas=lista.map(function(it){
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'+it.nome+'</td>'
+      +'<td style="text-align:right;white-space:nowrap;padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'
+      +'<button onclick="document.getElementById(\'pn-val-modal\').remove();trocarAba(\'inventario\')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-claro);color:var(--azul)">📐 Registrar agora</button> '
+      +'<button onclick="pnValidadeSuspender('+it.id+',\''+String(it.nome).replace(/'/g,"\\'")+'\')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:#FEF9E7;color:#7D6608">⏸ Não controla validade</button></td></tr>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--azul);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>🔒 Itens de segurança sem lote/validade ('+lista.length+')</span><button onclick="document.getElementById(\'pn-val-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:14px 16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:8px">"⏸ Não controla validade" tira o item do alerta <b>por enquanto</b>: a suspensão cai sozinha na <b>próxima compra</b> com lote/validade — aí o controle volta e o cadastro se atualiza pela NF.</div>'
+    +'<div style="max-height:380px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+(linhas||'<tr><td style="padding:12px;color:var(--cinza-4)">Nenhum item pendente. ✓</td></tr>')+'</tbody></table></div>'
+    +'</div></div>';
+}
+async function pnValidadeSuspender(mid, nome){
+  if(!confirm('"'+nome+'" — marcar como NÃO CONTROLA VALIDADE por enquanto?\n\n• Sai do alerta agora.\n• A suspensão CAI SOZINHA na próxima compra com lote/validade (o controle volta e o cadastro atualiza pela NF).\n• Nenhum saldo muda.')) return;
+  try{
+    await sbFetch('materiais?id=eq.'+mid,'PATCH',{ validade_suspensa:true });
+    if(pnMatFull[mid]) pnMatFull[mid].validade_suspensa=true;
+    toast('⏸ "'+nome+'" suspenso até a próxima compra.','sucesso');
+    const ov=document.getElementById('pn-val-modal'); if(ov) ov.remove();
+    if(typeof pnAlertas==='function') pnAlertas();
+    pnValidadeModal();
+  }catch(e){ toast('Erro (o banco tem o SQL 60?): '+(e.message||e),'erro'); }
+}
 
 // perfis: operação (compras/gestão) · indicadores (indicadores/gestão)
 function pnTemOp(){ return podeAba('cotacao') || podeAba('decisao'); }
@@ -9304,11 +9422,29 @@ async function pnCarregar(){
   st.textContent='carregando…';
   try{
     if(!ccDados.length){ await acCarregar(); }
-    const mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo&limit=5000'))||[];
+    let mats=[];
+    try{ mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo,preco_tratativa,preco_anterior,validade_suspensa,somente_amostra&limit=5000'))||[]; }
+    catch(e){ mats=(await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,ultimo_valor_pago,estoque_minimo,classe_compra,controla_lote,exibir_dashboard,ocultar_compra,fornecedor_padrao_id,ativo&limit=5000'))||[]; }  // banco sem o SQL 60 ainda
     pnUvp={}; pnNomeId={}; pnMatFull={};
     for(const m of mats){
-      pnUvp[m.id]={nome:m.nome,uvp:Number(m.ultimo_valor_pago)||0,ativo:m.ativo!==false};
+      pnUvp[m.id]={nome:m.nome,uvp:Number(m.ultimo_valor_pago)||0,ativo:m.ativo!==false,
+        tratativa:!!m.preco_tratativa, precoAnterior:Number(m.preco_anterior)||0};
       pnNomeId[pnN(m.nome)]=m.id; pnMatFull[m.id]=m;
+    }
+    // v4.27 — entradas: amostras (saem do alerta de preço) + histórico de
+    // preços de compra (alimenta o bloco de ECONOMIAS)
+    pnEntradas=[]; pnAmostraOnly=new Set();
+    try{ pnEntradas=(await sbFetch('movimentacoes?select=material_id,qtd,valor_unitario,tipo,created_at&tipo=eq.ENTRADA_COMPRA&order=id.asc&limit=4000'))||[]; }catch(e){}
+    try{ pnEntradas=pnEntradas.concat((await sbFetch('movimentacoes?select=material_id,qtd,valor_unitario,tipo,created_at&tipo=eq.ENTRADA_AMOSTRA&order=id.asc&limit=1000'))||[]); }catch(e){ /* enum sem ENTRADA_AMOSTRA: amostra entrou como compra R$0 */ }
+    {
+      const temReal=new Set(), temAmostra=new Set();
+      for(const e of pnEntradas){
+        if(e.tipo==='ENTRADA_COMPRA' && Number(e.valor_unitario)>0) temReal.add(e.material_id);
+        else temAmostra.add(e.material_id);   // tipo AMOSTRA ou compra sem valor = origem amostra
+      }
+      for(const id of temAmostra) if(!temReal.has(id)) pnAmostraOnly.add(id);
+      // declarados no cadastro (ex.: entraram por inventário, sem NF)
+      for(const m of mats) if(m.somente_amostra) pnAmostraOnly.add(m.id);
     }
     document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
     pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
@@ -9323,8 +9459,8 @@ async function pnCarregar(){
       pnMovs.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
         periodoId:mv.periodo_cirurgico_id||null,
         medico:per&&per.medicos?per.medicos.nome:null,
-        tipoCir:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
-        custo:pnCusto(mv.material_id,mv.qtd) });
+        tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
+        custo:pnCusto(mv.material_id,mv.qtd,dia.slice(0,7)) });
     }
     // ═══ v4.26 — REPROCESSADOS entram no CUSTO: a saída deles vive no livro
     // (remessa_sujos guarda o período cirúrgico), não nas movimentações de
@@ -9340,9 +9476,9 @@ async function pnCarregar(){
         pnMovs.push({ qtd:Number(s.qtd)||0, material_id:mid, dia, mes:dia.slice(0,7),
           periodoId:s.periodo_cirurgico_id||null,
           medico:per&&per.medicos?per.medicos.nome:null,
-          tipoCir:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:null,
+          tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):null,
           reprocessado:true,
-          custo:pnCusto(mid, s.qtd) });
+          custo:pnCusto(mid, s.qtd, dia.slice(0,7)) });
       }
     }catch(e){}
     pnNfs=(await sbFetch('notas_fiscais?select=id,valor_total,data_entrega,data_emissao,status,fornecedor_id&order=id.desc&limit=300'))||[];
@@ -9503,7 +9639,8 @@ function pnAlertas(){
   // ── itens sem preço de referência (subestimam o custo) ──
   {
     const comSaida=new Set(pnMovs.map(m=>m.material_id));
-    const semPreco=[...comSaida].filter(mid=>!(pnUvp[mid]&&pnUvp[mid].uvp>0));
+    // v4.27 — amostra grátis fica de fora: custo zero é a REGRA dela, não erro
+    const semPreco=[...comSaida].filter(mid=>!(pnUvp[mid]&&pnUvp[mid].uvp>0) && !pnAmostraOnly.has(mid));
     if(semPreco.length) cards.push({cor:'azul',n:semPreco.length,t:'💰 ITENS COM SAÍDA E SEM PREÇO — custo subestimado',
       d:semPreco.slice(0,4).map(mid=>pnUvp[mid]?pnUvp[mid].nome:('#'+mid)).join(' · ')+(semPreco.length>4?` · +${semPreco.length-4}`:'')+' — enquanto não tiverem valor, entram como R$ 0 nos indicadores',
       a:'🔧 Corrigir na Base',fn:`pnIr('base',document.querySelector('#aba-painel .pn-pill[data-sec=base]'))`});
@@ -9511,12 +9648,21 @@ function pnAlertas(){
   // ── itens que controlam lote e estão sem lote registrado ──
   {
     const semLote=ccDados.filter(r=>{
-      const cad=(typeof ccCadastro!=='undefined'&&ccCadastro[r.material_id])||{};
-      return r.classe_compra==='CRITICO' && (Number(r.saldo)||0)>0 && !r.proxima_validade;
+      // v4.27 — item com validade SUSPENSA (até a próxima compra) não cobra
+      const susp=(pnMatFull[r.material_id]||{}).validade_suspensa;
+      return r.classe_compra==='CRITICO' && (Number(r.saldo)||0)>0 && !r.proxima_validade && !susp;
     });
+    window.pnSemLoteLista = semLote.map(r=>({id:r.material_id, nome:r.material}));
+  }
+  // ── v4.27b — preços subindo mora AQUI (saiu da seção de custos)
+  {
+    const sub=pnCalcSubindo();
+    if(sub.length) cards.push({cor:'ama',n:sub.length,t:'📈 PREÇOS SUBINDO — pauta de renegociação',
+      d:sub.slice(0,4).map(s=>(pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid))+' +'+s.pct+'%').join(' · ')+(sub.length>4?` · +${sub.length-4}`:'')+' — chegue na conversa com o histórico na mão',
+      a:'🗂 Ver a pauta completa',fn:`pnSubindoModal()`});
     if(semLote.length) cards.push({cor:'ama',n:semLote.length,t:'🔒 ITEM DE SEGURANÇA SEM LOTE/VALIDADE REGISTRADO',
       d:semLote.slice(0,4).map(r=>r.material).join(' · ')+(semLote.length>4?` · +${semLote.length-4}`:'')+' — sem validade no sistema, o alerta de vencimento não funciona para eles',
-      a:'📐 Registrar no inventário',fn:`trocarAba('inventario')`});
+      a:'🗂 Tratar item a item',fn:`pnValidadeModal()`});
   }
   // ── amostra grátis que zerou (agora precisa comprar de verdade) ──
   {
@@ -9656,6 +9802,7 @@ function pnStatOk(mid){ const m=pnMatFull[mid]; return !m || m.exibir_dashboard!
 let pnHistRows = [];   // staging_saidas_hist cru
 let pnHistPer = [];    // períodos históricos montados [{key,data,mes,medico,tipo,pac,custo,itens:[]}]
 let pnCustosMes = null; // mês selecionado na tabela de períodos
+let pnPerAberto = false; // v4.27b — o card "Custo por período" agora é dropdown
 
 function pnMontaHist(){
   const APP_VIVO_DESDE = '2026-07-21'; // planilha vale ATÉ 20/07; do dia 21 em diante, só o app
@@ -9686,13 +9833,13 @@ function pnMesesDisponiveis(){
 // períodos unificados (histórico + vivos) de um mês: [{origem, key/pid, data, medico, tipo, pac, custo}]
 function pnPeriodosDoMes(mes){
   const out = [];
-  for(const h of pnHistPer){ if(h.mes===mes) out.push({ origem:'planilha', id:h.key, data:h.data, medico:h.medico, tipo:h.tipo, pac:h.pac, custo:h.custo }); }
+  for(const h of pnHistPer){ if(h.mes===mes) out.push({ origem:'planilha', id:h.key, data:h.data, medico:h.medico, tipo:pnTipoCanon(h.tipo, h.medico, h.data), pac:h.pac, custo:h.custo }); }
   const porPer = {};
   for(const m of pnMovs){ if(m.mes!==mes || !m.periodoId) continue; (porPer[m.periodoId]=porPer[m.periodoId]||[]).push(m); }
   for(const [pid,ms] of Object.entries(porPer)){
     const per = pnPeriodos.find(p=>p.id===Number(pid));
     out.push({ origem:'app', id:Number(pid), data:per?per.data:'', medico:per&&per.medicos?per.medicos.nome:'—',
-      tipo:per&&per.tipos_cirurgia?per.tipos_cirurgia.nome:'—', pac:per?Number(per.qtd_pacientes)||0:0,
+      tipo:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):'—', pac:per?Number(per.qtd_pacientes)||0:0,
       custo:ms.reduce((s,x)=>s+x.custo,0) });
   }
   return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
@@ -9710,7 +9857,8 @@ function pnCustos(){
   const meses = pnMesesDisponiveis();
   const movMes = pnMovs.filter(m=>m.mes===mes);
   // qualidade da base
-  const semPreco = new Set(movMes.filter(m=>!(pnUvp[m.material_id]&&pnUvp[m.material_id].uvp>0)).map(m=>m.material_id));
+  // v4.27 — amostra grátis tem custo zero POR REGRA: não entra no alerta
+  const semPreco = new Set(movMes.filter(m=>!(pnUvp[m.material_id]&&pnUvp[m.material_id].uvp>0) && !pnAmostraOnly.has(m.material_id)).map(m=>m.material_id));
   const negativos = ccDados.filter(r=>(Number(r.saldo)||0)<0).length;
   const triagem = ccDados.filter(r=>!r.classe_confirmada).length;
   // custo por mês (planilha + vivo)
@@ -9743,8 +9891,11 @@ function pnCustos(){
     }
     return agg;
   }
-  function htmlCpp(agg, titulo, funcao, nota){
-    const chaves = Object.keys(agg).sort((a,b)=>{
+  function htmlCpp(agg, titulo, funcao, nota, ordemNome){
+    // v4.27b — a tabela de TIPOS é ordenada pelo NOME da cirurgia (pedido dela)
+    const chaves = ordemNome
+      ? Object.keys(agg).sort((a,b)=>a.localeCompare(b,'pt-BR'))
+      : Object.keys(agg).sort((a,b)=>{
       const ult = ms => { for(let i=meses.length-1;i>=0;i--){ const v=agg[ms][meses[i]]; if(v&&v.p>0) return v.c/v.p; } return 0; };
       return ult(b)-ult(a); });
     if(!chaves.length) return `<div class="pn-card"><div class="pn-ct"><span>${titulo}</span></div><div class="pn-empty">sem períodos registrados</div></div>`;
@@ -9765,16 +9916,8 @@ function pnCustos(){
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th>${ths}<th class="num">Δ</th></tr></thead><tbody>${linhas}</tbody></table></div>
       <div class="pn-nota">${nota}</div></div>`;
   }
-  // preços subindo
-  const porMatNf = {};
-  for(const it of pnNfItens){ if(it.valor_unitario==null) continue; (porMatNf[it.material_id]=porMatNf[it.material_id]||[]).push(Number(it.valor_unitario)); }
-  const subindo = [];
-  for(const [mid,vals] of Object.entries(porMatNf)){
-    if(vals.length<2) continue;
-    const ult=vals[vals.length-1], ant=vals[vals.length-2];
-    if(ant>0&&ult>ant*1.1) subindo.push({mid:Number(mid), ant, ult, pct:Math.round((ult-ant)/ant*100)});
-  }
-  subindo.sort((a,b)=>b.pct-a.pct);
+  // preços subindo — v4.27b: o card completo mora nos ALERTAS; aqui só o KPI
+  const subindo = pnCalcSubindo();
   // compra vs consumo
   const nfsMes = pnNfs.filter(n=>((n.data_entrega||n.data_emissao||'')+'').slice(0,7)===mes&&n.status!=='DEVOLVIDO');
   const compraMes = nfsMes.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
@@ -9803,14 +9946,14 @@ function pnCustos(){
       <div class="pn-kpi ama"><div class="pn-kl">Preços subindo</div><div class="pn-kv" style="color:var(--amarelo)">${subindo.length}</div><div class="pn-ks">itens c/ última compra +10% mais cara</div><div class="pn-kq">"O que renegociar este mês?"</div></div>
       <div class="pn-kpi verd"><div class="pn-kl">Compra vs consumo — ${pnMesLabel(mes)}</div><div class="pn-kv" style="color:var(--verde)">${razao===null?'—':razao.toFixed(2)+'×'}</div><div class="pn-ks">comprou ${pnMoney0(compraMes)} · consumiu ${pnMoney0(consumoMes)}</div><div class="pn-kq">"Estou inflando ou queimando estoque?"</div></div>
     </div>
-    <div class="pn-card">
-      <div class="pn-ct"><span>Custo por PERÍODO — o número-mãe</span>
-        <span style="display:flex;gap:8px;align-items:center">
+    <details class="pn-card" ${pnPerAberto?'open':''} ontoggle="pnPerAberto=this.open">
+      <summary class="pn-ct" style="cursor:pointer;list-style:none"><span>▸ Custo por PERÍODO — o número-mãe</span>
+        <span style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           <select onchange="pnCustosMes=this.value;pnCustos()" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">
             ${meses.map(m=>`<option value="${m}" ${m===pnCustosMes?'selected':''}>${pnMesLabel(m)}/26</option>`).join('')}
           </select>
-          <span class="pn-funcao">clique ▸ explode os materiais</span>
-        </span></div>
+          <span class="pn-funcao">abra e clique ▸ explode os materiais</span>
+        </span></summary>
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th><th>Fonte</th></tr></thead><tbody>
       ${perRows.length?perRows.map(r=>{
         const cpp = r.pac>0?r.custo/r.pac:null;
@@ -9826,19 +9969,10 @@ function pnCustos(){
           ${aberto?`<tr><td></td><td colspan="8" style="background:#F8FBFE;padding:10px 14px" id="pn-per-det">carregando materiais…</td></tr>`:''}`;
       }).join(''):'<tr><td colspan="9" class="pn-empty">nenhum período neste mês</td></tr>'}
       </tbody></table></div>
-    </div>
+    </details>
     <div class="pn-duo">
-      ${htmlCpp(aggCpp('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o último mês com a média dos anteriores. Junho vem da planilha.')}
+      ${htmlCpp(aggCpp('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o último mês com a média dos anteriores. Junho vem da planilha.', true)}
       ${htmlCpp(aggCpp('medico'),'R$/paciente por MÉDICO × mês','função: comparar o médico com ele mesmo','Cada médico comparado com ELE MESMO — nunca médicos de tipos diferentes entre si.')}
-    </div>
-    <div class="pn-card">
-      <div class="pn-ct"><span>📈 Preços subindo — pauta de renegociação</span><span class="pn-funcao">função: chegar na conversa com o histórico na mão</span></div>
-      ${subindo.length?`<table class="pn-tb"><thead><tr><th>Material</th><th class="num">Compra anterior</th><th class="num">Última compra</th><th class="num">Variação</th><th>Marcas/fornecedores já usados</th></tr></thead><tbody>
-      ${subindo.slice(0,10).map(s=>{
-        const f=ccFontes[pnN(pnUvp[s.mid]?pnUvp[s.mid].nome:'')];
-        return `<tr><td style="font-weight:600">${pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid)}</td><td class="num">${pnMoney(s.ant)}</td><td class="num">${pnMoney(s.ult)}</td>
-        <td class="num var-up">▲ +${s.pct}%</td><td style="font-size:11px;color:var(--cinza-4)">${f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—'}</td></tr>`;
-      }).join('')}</tbody></table>`:'<div class="pn-empty">Nenhuma alta acima de 10% entre as duas últimas compras registradas. ✓<br><span style="font-size:11px">A lista cresce conforme as NFs entram pelo app.</span></div>'}
     </div>
     <div class="pn-card" id="pn-cg"><div style="font-size:12px;color:var(--cinza-4)">Carregando custos gerais…</div></div>`;
   pnCG_Render();
@@ -9880,6 +10014,42 @@ function pnCG_Print(){ const el=document.getElementById('pn-cg'); if(!el) return
   hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custos HOG</title><style>body{font-family:Arial;font-size:12px;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 7px;font-size:11px}summary{font-weight:bold;margin:8px 0}details{margin:6px 0}button,select,input{display:none}</style></head><body><h2>HOG — Custos · '+(pnCGf.mes||pnHojeMes())+'</h2>'+el.innerHTML.replace(/<details/g,'<details open')+'</body></html>');
 }
 function pnCG_SetF(campo,v){ pnCGf[campo]=v; pnCG_Render(); }
+
+// v4.27 — FICHA DE CUSTO por tipo de cirurgia: itens usados, qtd por
+// paciente/período, valor unitário e o total — por paciente quando é 1,
+// por período quando passa de 3 pacientes (regra da Evelise).
+function pnCG_Ficha(excel){
+  const tipo=(document.getElementById('pn-cg-ficha-tipo')||{}).value;
+  if(!tipo){ toast('Escolha o tipo de cirurgia.','erro'); return; }
+  const mes=pnCGf.mes||pnCustosMes||pnHojeMes();
+  const movs=pnMovs.filter(m=>m.mes===mes&&m.tipoCir===tipo);
+  if(!movs.length){ toast('Sem saídas de '+tipo+' neste mês (dados vivos).','erro'); return; }
+  const pers=pnPeriodosDoMes(mes).filter(p=>p.tipo===tipo);
+  const pac=pers.reduce((s,p)=>s+(Number(p.pac)||0),0);
+  const ag={};
+  movs.forEach(m=>{ const k=(pnUvp[m.material_id]||{}).nome||('#'+m.material_id);
+    (ag[k]=ag[k]||{q:0,c:0,unit:(pnUvp[m.material_id]||{}).uvp||0}); ag[k].q+=m.qtd; ag[k].c+=m.custo; });
+  const rows=Object.entries(ag).sort((a,b)=>b[1].c-a[1].c);
+  const tot=rows.reduce((s,[,v])=>s+v.c,0);
+  if(excel){
+    const csv=[['Ficha de custo — '+tipo+' — '+mes.split('-').reverse().join('/')],
+      ['Item','Qtd no mês','Qtd por paciente','Valor unitário (R$)','Custo total (R$)']];
+    rows.forEach(([k,v])=>csv.push([k,Math.round(v.q),(pac?(v.q/pac).toFixed(2):'—'),v.unit.toFixed(4),v.c.toFixed(2)]));
+    csv.push(['TOTAL','','','',tot.toFixed(2)],['Pacientes no mês',pac,'','',''],
+      ['Custo por paciente','','','',(pac?tot/pac:0).toFixed(2)]);
+    pnCG_Csv(csv); return;
+  }
+  const perLinhas=pers.map(p=>'<tr><td>'+(p.data||'').split('-').reverse().join('/')+'</td><td>'+(p.medico||'—')+'</td><td style="text-align:center">'+(p.pac||'—')+'</td><td style="text-align:right">'+pnMoney(p.custo)+'</td><td style="text-align:right;font-weight:bold">'+((Number(p.pac)||0)<=1?pnMoney(p.custo)+' (por paciente)':((Number(p.pac)||0)>3?pnMoney(p.custo)+' (por período)':pnMoney(p.pac?p.custo/p.pac:0)+'/pac'))+'</td></tr>').join('');
+  const itLinhas=rows.map(([k,v])=>'<tr><td>'+k+'</td><td style="text-align:right">'+Math.round(v.q)+'</td><td style="text-align:right">'+(pac?(v.q/pac).toFixed(2):'—')+'</td><td style="text-align:right">'+pnMoney(v.unit)+'</td><td style="text-align:right;font-weight:bold">'+pnMoney(v.c)+'</td></tr>').join('');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ficha de custo — '+tipo+'</title>'
+    +'<style>body{font-family:Arial;font-size:12px;color:#222;margin:24px}h1{font-size:16px}h2{font-size:13px;margin:14px 0 6px}table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f0f3f7;text-transform:uppercase;font-size:10px}.tot{text-align:right;font-weight:bold;font-size:13px}@media print{button{display:none}}</style></head><body>'
+    +'<h1>🏥 HOG — Ficha de custo · '+tipo+' · '+mes.split('-').reverse().join('/')+'</h1>'
+    +'<h2>Períodos do mês</h2><table><thead><tr><th>Data</th><th>Médico</th><th>Pacientes</th><th>Custo</th><th>Referência</th></tr></thead><tbody>'+(perLinhas||'<tr><td colspan="5">—</td></tr>')+'</tbody></table>'
+    +'<h2>Itens usados (dados vivos do app)</h2><table><thead><tr><th>Item</th><th>Qtd no mês</th><th>Qtd/paciente</th><th>Valor unit.</th><th>Custo total</th></tr></thead><tbody>'+itLinhas+'</tbody></table>'
+    +'<p class="tot">Total do tipo no mês: '+pnMoney(tot)+' · Pacientes: '+pac+' · Custo médio por paciente: '+pnMoney(pac?tot/pac:0)+'</p>'
+    +'<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
+    +'</body></html>');
+}
 async function pnCG_Render(){
   const box=document.getElementById('pn-cg'); if(!box) return;
   try{ await pnCG_Carregar(); }catch(e){ box.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Erro nos custos gerais: '+e.message+'</div>'; return; }
@@ -9888,10 +10058,20 @@ async function pnCG_Render(){
   // ── saídas do mês (movimentações + reprocessados), com filtros
   const okMed=m=>!pnCGf.med||((m.medico||'')===pnCGf.med);
   const okMat=m=>!pnCGf.mat||pnN((pnUvp[m.material_id]||{}).nome||'').includes(pnN(pnCGf.mat));
-  const movs=pnMovs.filter(m=>m.mes===mes&&okMed(m)&&okMat(m));
+  const okPer=m=>!pnCGf.per||String(m.periodoId)===String(pnCGf.per);   // v4.27 — filtro por PERÍODO cirúrgico
+  const movs=pnMovs.filter(m=>m.mes===mes&&okMed(m)&&okMat(m)&&okPer(m));
   const cirur=movs.filter(m=>m.tipoCir!=='(diversas)');
   const consult=movs.filter(m=>m.tipoCir==='(diversas)');
   const soma=a=>a.reduce((s,m)=>s+m.custo,0);
+  // v4.26c — jun/jul vêm da PLANILHA (pnHistPer): entram no bloco cirúrgico
+  // junto com os dados vivos (o filtro de material só alcança os vivos)
+  const histMes=((pnCGf.mat||pnCGf.per)?[]:pnHistPer.filter(h=>h.mes===mes&&(!pnCGf.med||((h.medico||'')===pnCGf.med))));
+  const histTot=histMes.reduce((s,h)=>s+(Number(h.custo)||0),0);
+  const mergeHist=(pares,chave)=>{
+    const m={}; pares.forEach(([k,v])=>m[k]={c:v.c,q:v.q});
+    for(const h of histMes){ const k=(chave==='tipo'?pnTipoCanon(h.tipo,h.medico,h.data):h.medico)||'—'; (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(h.custo)||0; }
+    return Object.entries(m).sort((a,b)=>b[1].c-a[1].c);
+  };
   const agrupa=(arr,chave)=>{ const g={}; for(const m of arr){ const k=chave(m)||'—'; (g[k]=g[k]||{c:0,q:0}); g[k].c+=m.custo; g[k].q+=m.qtd; } return Object.entries(g).sort((a,b)=>b[1].c-a[1].c); };
   const tabela=(pares,c1)=>'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">'+c1+'</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Unid.</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Custo</th></tr></thead><tbody>'
     +pares.map(([k,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+k+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(v.q).toLocaleString('pt-BR')+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.c)+'</td></tr>').join('')+'</tbody></table>';
@@ -9918,26 +10098,53 @@ async function pnCG_Render(){
   // compras CME (peças recebidas no mês)
   const solsMes=pnCGdados.sols.filter(s=>((s.recebido_em||'')+'').slice(0,7)===mes);
   const compCME=solsMes.reduce((s,x)=>s+(Number(x.nf_valor)||Number(x.valor_total)||0),0);
+  // ── v4.27 — ECONOMIAS do mês: preço anterior × preço pago agora
+  const econLinhas=[]; let econTotal=0, aumentos=0;
+  {
+    const porMat={};
+    for(const e of pnEntradas){
+      if(e.tipo!=='ENTRADA_COMPRA'||!(Number(e.valor_unitario)>0)) continue;
+      (porMat[e.material_id]=porMat[e.material_id]||[]).push({m:((e.created_at||'')+'').slice(0,7), v:Number(e.valor_unitario), q:Math.abs(Number(e.qtd)||0)});
+    }
+    for(const [mid,list] of Object.entries(porMat)){
+      const doMes=list.filter(x=>x.m===mes); if(!doMes.length) continue;
+      const antes=list.filter(x=>x.m<mes); if(!antes.length) continue;
+      const prev=antes[antes.length-1].v;
+      for(const c of doMes){
+        const dif=(prev-c.v)*c.q;
+        if(dif>0.005){ econTotal+=dif; econLinhas.push({nome:(pnUvp[mid]||{}).nome||('#'+mid), de:prev, para:c.v, q:c.q, econ:dif}); }
+        else if(dif<-0.005) aumentos++;
+      }
+    }
+    econLinhas.sort((a,b)=>b.econ-a.econ);
+  }
+  // ── R$/paciente por MÉDICO (planilha + app)
+  const porMedPac={}; for(const p of perMes){ if(!p.medico||p.medico==='—'||!(p.pac>0)) continue; (porMedPac[p.medico]=porMedPac[p.medico]||{c:0,p:0}); porMedPac[p.medico].c+=p.custo; porMedPac[p.medico].p+=p.pac; }
   // ── filtros (opções)
   const meses=pnMesesDisponiveis();
+  const persApp=perMes.filter(p=>p.origem==='app');
   const medicos=[...new Set(pnMovs.map(m=>m.medico).filter(Boolean))].sort();
   const fornsUsados=[...new Set(nfsMes.map(n=>n.fornecedor_id).filter(Boolean))];
   const D=(t,tot,corpo)=>'<details style="border:1px solid var(--cinza-2);border-radius:8px;padding:8px 12px;margin-top:8px"><summary style="cursor:pointer;font-size:13px;font-weight:800;display:flex;justify-content:space-between"><span>'+t+'</span><span>'+money(tot)+'</span></summary>'+corpo+'</details>';
   // ── CSV p/ Excel
   pnCGultimoCsv=[['Bloco','Detalhe','Unid.','Valor']];
-  agrupa(cirur,m=>m.tipoCir).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por tipo',k,Math.round(v.q),v.c.toFixed(2)]));
-  agrupa(cirur,m=>m.medico).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por médico',k,Math.round(v.q),v.c.toFixed(2)]));
+  mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por tipo',k,Math.round(v.q),v.c.toFixed(2)]));
+  mergeHist(agrupa(cirur,m=>m.medico),'medico').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por médico',k,Math.round(v.q),v.c.toFixed(2)]));
   Object.entries(porTipoPac).forEach(([t,v])=>pnCGultimoCsv.push(['R$/paciente — '+t,(v.p+' pacientes'),'',(v.p?(v.c/v.p):0).toFixed(2)]));
   agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Consultórios — itens',k,Math.round(v.q),v.c.toFixed(2)]));
   lav.forEach(n=>pnCGultimoCsv.push(['Lavanderia','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   ester.forEach(n=>pnCGultimoCsv.push(['Esterilização','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   manut.forEach(n=>pnCGultimoCsv.push(['Manutenção','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   pnCGultimoCsv.push(['Compras CC','','',compCC.toFixed(2)],['Compras Higiene','','',compHig.toFixed(2)],['Compras CME','','',compCME.toFixed(2)]);
+  Object.entries(porMedPac).forEach(([md,v])=>pnCGultimoCsv.push(['R$/paciente — médico',md+' ('+v.p+' pac.)','',(v.p?v.c/v.p:0).toFixed(2)]));
+  econLinhas.forEach(e=>pnCGultimoCsv.push(['Economia',e.nome+' ('+money(e.de)+'→'+money(e.para)+')',Math.round(e.q),e.econ.toFixed(2)]));
+  pnCGultimoCsv.push(['ECONOMIA TOTAL DO MÊS','','',econTotal.toFixed(2)]);
   // ── monta o card
   box.innerHTML=
     '<div class="pn-ct"><span>💼 Custos gerais da empresa — '+mes.split('-').reverse().join('/')+'</span><span class="pn-funcao">tudo num lugar só · clique nos blocos para abrir</span></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;font-size:12px">'
     +'<select onchange="pnCG_SetF(\'mes\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)">'+meses.map(m=>'<option value="'+m+'"'+(m===mes?' selected':'')+'>'+m.split('-').reverse().join('/')+'</option>').join('')+'</select>'
+    +'<select onchange="pnCG_SetF(\'per\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte);max-width:230px"><option value="">período: todos</option>'+persApp.map(p=>'<option value="'+p.id+'"'+(String(pnCGf.per)===String(p.id)?' selected':'')+'>'+(p.data||'').slice(5).split('-').reverse().join('/')+' · '+(p.medico||'—')+' · '+(p.tipo||'—')+'</option>').join('')+'</select>'
     +'<select onchange="pnCG_SetF(\'med\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)"><option value="">médico: todos</option>'+medicos.map(x=>'<option'+(pnCGf.med===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'
     +'<input placeholder="filtrar material…" value="'+(pnCGf.mat||'')+'" onchange="pnCG_SetF(\'mat\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte);width:150px">'
     +'<select onchange="pnCG_SetF(\'forn\',this.value)" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-family:var(--fonte)"><option value="">fornecedor: todos</option>'+fornsUsados.map(f=>'<option value="'+f+'"'+(String(pnCGf.forn)===String(f)?' selected':'')+'>'+rcNomeFornecedor(f)+'</option>').join('')+'</select>'
@@ -9945,12 +10152,26 @@ async function pnCG_Render(){
     +'<button onclick="pnCG_Excel()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">📊 Excel</button>'
     +'<button onclick="pnCG_Print()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir</button>'
     +'</div>'
-    +D('🏥 Saídas cirúrgicas (CC + CME) — inclui reprocessados', soma(cirur),
-      '<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por tipo de cirurgia:</div>'+tabela(agrupa(cirur,m=>m.tipoCir),'Tipo')
-      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Por médico:</div>'+tabela(agrupa(cirur,m=>m.medico),'Médico')
+    +D('💚 Economias geradas no mês — 🚧 EM CONSTRUÇÃO'+(aumentos?' · '+aumentos+' aumento(s) à parte':''), econTotal,
+      '<div style="font-size:11.5px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:4px">🚧 Número em calibração — ainda NÃO usar para decisão ou apresentação. Precisamos validar juntas a régua de comparação.</div>'+
+      (econLinhas.length?('<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">Item</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">De → Por</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Qtd</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Economia</th></tr></thead><tbody>'
+        +econLinhas.slice(0,25).map(e=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+e.nome+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+money(e.de)+' → <b style="color:var(--verde)">'+money(e.para)+'</b></td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(e.q)+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:800;color:var(--verde)">'+money(e.econ)+'</td></tr>').join('')+'</tbody></table>')
+        :'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma compra deste mês saiu mais barata que a anterior (ou ainda não houve recompra de itens).</div>')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:6px">Comparação: preço da compra anterior × preço pago neste mês, item a item. Itens marcados "em tratativa" não distorcem os meses passados.</div>')
+    +D('🏥 Saídas cirúrgicas (CC + CME) — inclui reprocessados'+(histTot?' e a planilha jun/jul':''), soma(cirur)+histTot,
+      (histTot?'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:5px 8px;border-radius:6px;margin-top:4px">📅 Este mês inclui '+money(histTot)+' da planilha histórica (antes de 21/07). Unidades listadas referem-se só aos dados vivos do app.</div>':'')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por tipo de cirurgia:</div>'+tabela(mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo'),'Tipo')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Por médico:</div>'+tabela(mergeHist(agrupa(cirur,m=>m.medico),'medico'),'Médico')
       +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">R$ por paciente, por tipo:</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+Object.entries(porTipoPac).map(([t,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+t+' ('+v.p+' pac.)</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.p?v.c/v.p:0)+'/pac</td></tr>').join('')+'</tbody></table>'
-      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens que mais custaram:</div>'+tabela(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).slice(0,20),'Item'))
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">R$ por paciente, por MÉDICO:</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+Object.entries(porMedPac).sort((a,b)=>b[1].c-a[1].c).map(([md,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+md+' ('+v.p+' pac.)</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.p?v.c/v.p:0)+'/pac</td></tr>').join('')+'</tbody></table>'
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens que mais custaram:</div>'+tabela(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).slice(0,20),'Item')
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:8px;border-top:1px dashed var(--cinza-2)">'
+      +'<b style="font-size:11px;text-transform:uppercase;color:var(--cinza-4)">📄 Ficha de custo por cirurgia:</b>'
+      +'<select id="pn-cg-ficha-tipo" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">'+[...new Set(cirur.map(m=>m.tipoCir).filter(Boolean))].sort().map(t=>'<option>'+t+'</option>').join('')+'</select>'
+      +'<button onclick="pnCG_Ficha(false)" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir ficha</button>'
+      +'<button onclick="pnCG_Ficha(true)" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">⬇ Baixar (Excel)</button></div>')
     +D('🚪 Materiais para os consultórios (saídas diversas)', soma(consult), tabela(agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item'))
     +D('🧺 Lavanderia (serviço do mês)', somaNf(lav), lav.length?listaNf(lav):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de lavanderia neste mês.</div>')
     +D('☣️ Esterilização (serviço cobrado)', somaNf(ester), (ester.length?listaNf(ester):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de esterilização neste mês.</div>')+'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:6px">⚠️ Os itens reprocessados também valorizam as cirurgias no bloco de cima — este é o valor do SERVIÇO cobrado pela esterilizadora. Não some os dois.</div>')
@@ -10050,6 +10271,9 @@ function pnFichaHtml(){
       ${campo('Unidade de medida', inp('pf-unid',m.unidade_medida))}
       ${campo('Qtd por pacote/kit', inp('pf-kit',m.qtd_kit,'number','step="any" min="0"'))}
       ${campo('Último valor pago (R$/un)', inp('pf-uvp',m.ultimo_valor_pago,'number','step="0.01" min="0"'))}
+      ${campo('⚠️ Preço em tratativa', `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center;padding:8px 0"><input type="checkbox" id="pf-trat" ${m.preco_tratativa?'checked':''}> compra pontual/emergencial — o preço novo vale só no mês atual</label>`)}
+      ${campo('🎁 Amostra grátis', `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center;padding:8px 0"><input type="checkbox" id="pf-amostra" ${m.somente_amostra?'checked':''}> só entrou como amostra — custo zero é regra, sai do alerta de preço</label>`)}
+      ${campo('Preço anterior (usado nos meses passados)', inp('pf-precoant',m.preco_anterior,'number','step="0.01" min="0"'))}
       ${campo('Estoque mínimo', inp('pf-min',m.estoque_minimo,'number','step="any" min="0"'))}
       ${campo('Classe de compra', `<select id="pf-classe" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">
         ${CC_ORDEM.map(c=>`<option value="${c}" ${c===(m.classe_compra||'ESPORADICO')?'selected':''}>${CC_INFO[c].emoji} ${CC_INFO[c].nome}</option>`).join('')}</select>`)}
@@ -10083,6 +10307,9 @@ async function pnFichaSalvar(){
   if(renomeou&&!confirm(`Renomear "${m.nome}" para "${novoNome}"?\n\nOs vínculos com as planilhas de consumo/histórico usam o nome antigo — os números históricos deste item podem deixar de aparecer até a próxima carga.`)) return;
   const body={ nome:novoNome, descricao_nf:v('pf-descnf')||null, marca:v('pf-marca')||null,
     unidade_medida:v('pf-unid')||null, qtd_kit:num('pf-kit'), ultimo_valor_pago:num('pf-uvp'),
+    preco_tratativa: !!(document.getElementById('pf-trat')&&document.getElementById('pf-trat').checked),
+    preco_anterior: num('pf-precoant'),
+    somente_amostra: !!(document.getElementById('pf-amostra')&&document.getElementById('pf-amostra').checked),
     estoque_minimo:num('pf-min'), classe_compra:v('pf-classe')||m.classe_compra, classe_confirmada:true,
     fornecedor_padrao_id:v('pf-fornpad')?Number(v('pf-fornpad')):null,
     exibir_dashboard:chk('pf-stat'), controla_lote:chk('pf-lote'),
