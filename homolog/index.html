@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.29 · alertas com tratativa na tela, contagem do livro nas remessas, ficha no inventário</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.30 · busca lista tudo (acha duplicata), ficha com fundo, FACO Lucas segunda=nacional</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1318,9 +1318,10 @@ details[open] summary { margin-bottom: 6px; }
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="inv-ficha-busca" placeholder="digite parte do nome… ex: equipo, luva, campo" onkeydown="if(event.key==='Enter')invFichaAbrir()"
         style="flex:1;min-width:230px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:13px;font-family:var(--fonte)">
-      <button class="inv-btn" onclick="invFichaAbrir()">🔎 Abrir ficha do item</button>
+      <button class="inv-btn" onclick="invFichaAbrir()">🔎 Buscar</button>
     </div>
-    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">Nome do sistema × descrição da NF divergindo? É aqui que se conserta — a ficha edita nome, descrição de NF, marca, unidade, mínimo, classe e mais.</div>
+    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">A busca lista TODOS os que batem — é assim que a duplicata aparece (ex.: "campo" mostra a família inteira). Cada linha abre a ficha completa: nome, descrição de NF, marca, unidade, mínimo, classe e mais.</div>
+    <div id="inv-ficha-res"></div>
   </div>
 
   <div class="inv-card">
@@ -9022,9 +9023,9 @@ async function invAplicarAjustesImportados(){
   #aba-painel .pn-pill.ativa{background:var(--azul);color:#fff;border-color:var(--azul)}
   #aba-painel .pn-pill .pb{font-size:8px;background:var(--cinza-1);border-radius:10px;padding:1px 6px;margin-left:4px;color:var(--cinza-4)}
   #aba-painel .pn-pill.ativa .pb{background:rgba(255,255,255,.25);color:#fff}
-  #aba-painel .pn-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:18px 20px;margin-bottom:16px}
-  #aba-painel .pn-ct{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-  #aba-painel .pn-funcao{font-size:10px;font-weight:600;color:var(--cinza-4);text-transform:none;letter-spacing:0;background:var(--cinza-1);border-radius:6px;padding:3px 9px}
+  #aba-painel .pn-card,#inv-ficha-modal .pn-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:18px 20px;margin-bottom:16px}
+  #aba-painel .pn-ct,#inv-ficha-modal .pn-ct{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  #aba-painel .pn-funcao,#inv-ficha-modal .pn-funcao{font-size:10px;font-weight:600;color:var(--cinza-4);text-transform:none;letter-spacing:0;background:var(--cinza-1);border-radius:6px;padding:3px 9px}
   #aba-painel .pn-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
   #aba-painel .pn-kpi{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:14px 16px;border-top:3px solid var(--azul-medio)}
   #aba-painel .pn-kpi.verm{border-top-color:var(--vermelho)}#aba-painel .pn-kpi.lar{border-top-color:#D35400}#aba-painel .pn-kpi.ama{border-top-color:var(--amarelo)}#aba-painel .pn-kpi.verd{border-top-color:var(--verde)}
@@ -9070,8 +9071,8 @@ async function invAplicarAjustesImportados(){
   #aba-painel .pn-sc{display:flex;flex-direction:column;gap:4px}
   #aba-painel .pn-sc label{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)}
   #aba-painel .pn-sc select,#aba-painel .pn-sc input{border:1.5px solid var(--cinza-2);border-radius:6px;padding:7px 9px;font-size:13px;font-family:var(--fonte);background:#fff}
-  #aba-painel .pn-btn{padding:10px 18px;border-radius:8px;border:none;font-size:13px;font-family:var(--fonte);font-weight:700;cursor:pointer}
-  #aba-painel .pn-btn-azul{background:var(--azul);color:#fff}
+  #aba-painel .pn-btn,#inv-ficha-modal .pn-btn{padding:10px 18px;border-radius:8px;border:none;font-size:13px;font-family:var(--fonte);font-weight:700;cursor:pointer}
+  #aba-painel .pn-btn-azul,#inv-ficha-modal .pn-btn-azul{background:var(--azul);color:#fff}
   #aba-painel .pn-sim-linha{border:1.5px solid var(--cinza-2);border-radius:8px;background:var(--cinza-1);padding:12px 14px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
   #aba-painel .pn-emp-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:var(--cinza-1);border-radius:8px;padding:12px 14px;margin-bottom:14px}
 </style>
@@ -9164,14 +9165,14 @@ function pnCusto(materialId, qtd, mes){
 function pnTipoCanon(t, medico, data){
   if(!t || t==='(diversas)') return t;
   const n=String(t).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
-  // v4.27b — FACO "solto" é CONTEXTUAL (regra da Evelise, 18/08):
-  // Dr Nilson = IMPORT · Dr Lucas = IMPORT, exceto SEXTA = NACIONAL · Dr Pietro = NACIONAL
+  // v4.27b/v4.30 — FACO "solto" é CONTEXTUAL (regra da Evelise, 18-19/08):
+  // Dr Nilson = IMPORT · Dr Lucas = IMPORT, exceto SEGUNDA (fellow) e SEXTA = NACIONAL · Dr Pietro = NACIONAL
   if(n==='FACO' || n==='FACECTOMIA'){
     const med=String(medico||'').toUpperCase();
     let dow=null;
     if(data){ const d=new Date(String(data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dow=d.getDay(); }
     if(med.indexOf('PIETRO')>=0) return 'FACO NACIONAL';
-    if(med.indexOf('LUCAS')>=0)  return dow===5 ? 'FACO NACIONAL' : 'FACO IMPORT';
+    if(med.indexOf('LUCAS')>=0)  return (dow===1 || dow===5) ? 'FACO NACIONAL' : 'FACO IMPORT';
     if(med.indexOf('NILSON')>=0) return 'FACO IMPORT';
     return 'FACO NACIONAL';
   }
@@ -14408,22 +14409,47 @@ async function dpApagar(de){
 // Reusa a ficha completa da Base do Painel (pnFichaHtml/pnFichaSalvar), num
 // modal — sem obrigar ninguém a ir ao Dashboard para arrumar um cadastro.
 async function invFichaAbrir(){
+  // v4.30 — a busca LISTA todos os que batem (é assim que a duplicata aparece:
+  // "CAMPO MESA G" e "CAMPO MESA G K2MED" lado a lado). Cada linha abre a ficha.
   const el=document.getElementById('inv-ficha-busca');
   const termo=((el&&el.value)||'').trim();
+  const res=document.getElementById('inv-ficha-res');
   if(termo.length<2){ toast('Digite ao menos 2 letras do nome do material.','erro'); return; }
   if(!catalogoMateriais.length){ try{ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }catch(e){} }
   const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
-  const cands=catalogoMateriais.filter(m=>norm(m.nome).includes(norm(termo)));
-  if(!cands.length){ toast('Nenhum material com esse nome no catálogo.','erro'); return; }
-  let alvo=cands[0];
-  if(cands.length>1){
-    const esc=await pkEscolher({ titulo:'Qual material?', subtitulo:cands.length+' materiais batem com "'+termo+'".',
-      itens:cands.map(m=>({id:m.id, nome:m.nome})) });
-    if(!esc) return; alvo=esc;
-  }
+  const cands=catalogoMateriais.filter(m=>norm(m.nome).includes(norm(termo))).slice(0,60);
+  if(!cands.length){ if(res) res.innerHTML='<div style="padding:10px;color:var(--cinza-4);font-size:12px">Nenhum material com esse nome no catálogo.</div>'; return; }
+  if(res) res.innerHTML='<div style="padding:10px;color:var(--cinza-4);font-size:12px">Buscando '+cands.length+' cadastro(s)…</div>';
   try{
-    const rows=await sbFetch('materiais?select=*&id=eq.'+alvo.id);
+    const ids=cands.map(m=>m.id);
+    const mats=(await sbFetch('materiais?select=id,nome,marca,descricao_nf,ativo,classe_compra&id=in.('+ids.join(',')+')'))||[];
+    let saldos={};
+    try{
+      const lid=await getEstoqueGeralId();
+      const est=(await sbFetch('estoque?select=material_id,saldo&local_id=eq.'+lid+'&material_id=in.('+ids.join(',')+')'))||[];
+      est.forEach(x=>{ saldos[x.material_id]=Number(x.saldo)||0; });
+    }catch(e){}
+    mats.sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
+    if(res) res.innerHTML='<div style="overflow-x:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+      +'<thead><tr>'+['Material','Marca','Descrição NF','Saldo','Situação',''].map(h=>'<th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);border-bottom:2px solid var(--cinza-2)">'+h+'</th>').join('')+'</tr></thead><tbody>'
+      +mats.map(m=>'<tr>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)"><b>'+m.nome+'</b></td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:11px">'+(m.marca||'—')+'</td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">'+(m.descricao_nf||'—')+'</td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:700">'+(saldos[m.id]!=null?saldos[m.id].toLocaleString('pt-BR'):'—')+'</td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:11px">'+(m.ativo===false?'<span style="color:var(--vermelho);font-weight:700">inativo</span>':'ativo')+'</td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="inv-btn" style="padding:5px 10px;font-size:11px" onclick="invFichaAbrirId('+m.id+')">📇 abrir ficha</button></td>'
+        +'</tr>').join('')
+      +'</tbody></table>'
+      +(cands.length>=60?'<div style="font-size:11px;color:var(--cinza-4);padding:6px 8px">Mostrando os 60 primeiros — refine o nome para ver menos.</div>':'')
+      +'</div>';
+  }catch(e){ if(res) res.innerHTML='<div style="padding:10px;color:var(--vermelho);font-size:12px">Erro na busca: '+(e.message||e)+'</div>'; }
+}
+async function invFichaAbrirId(mid){
+  try{
+    const rows=await sbFetch('materiais?select=*&id=eq.'+mid);
     if(!rows||!rows[0]){ toast('Não achei o cadastro completo.','erro'); return; }
+    const alvo={id:mid};
     pnMatFull[alvo.id]=rows[0];
     if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }catch(e){} }
     if(!Object.keys(ccFontes||{}).length){
