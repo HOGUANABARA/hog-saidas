@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.30 · busca lista tudo (acha duplicata), ficha com fundo, FACO Lucas segunda=nacional</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.31 · ficha de custo cobre o mês inteiro (app + planilha jun/jul)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -10286,12 +10286,20 @@ function pnCG_Ficha(excel){
   if(!tipo){ toast('Escolha o tipo de cirurgia.','erro'); return; }
   const mes=pnCGf.mes||pnCustosMes||pnHojeMes();
   const movs=pnMovs.filter(m=>m.mes===mes&&m.tipoCir===tipo);
-  if(!movs.length){ toast('Sem saídas de '+tipo+' neste mês (dados vivos).','erro'); return; }
+  // v4.31 — a ficha soma TAMBÉM os itens da planilha (jun/jul): antes os
+  // pacientes vinham do mês inteiro mas os itens só do app → custo por
+  // paciente saía subestimado em julho, e junho nem abria.
+  const histIt=[];
+  pnHistPer.filter(h=>h.mes===mes&&pnTipoCanon(h.tipo,h.medico,h.data)===tipo)
+    .forEach(h=>{ (h.itens||[]).forEach(it=>histIt.push(it)); });
+  if(!movs.length && !histIt.length){ toast('Sem saídas de '+tipo+' neste mês.','erro'); return; }
   const pers=pnPeriodosDoMes(mes).filter(p=>p.tipo===tipo);
   const pac=pers.reduce((s,p)=>s+(Number(p.pac)||0),0);
   const ag={};
   movs.forEach(m=>{ const k=(pnUvp[m.material_id]||{}).nome||('#'+m.material_id);
     (ag[k]=ag[k]||{q:0,c:0,unit:(pnUvp[m.material_id]||{}).uvp||0}); ag[k].q+=m.qtd; ag[k].c+=m.custo; });
+  histIt.forEach(it=>{ const k=(it.mid&&pnUvp[it.mid]?pnUvp[it.mid].nome:it.nome)||'—';
+    (ag[k]=ag[k]||{q:0,c:0,unit:(it.mid&&pnUvp[it.mid]?pnUvp[it.mid].uvp:0)||Number(it.vu)||0}); ag[k].q+=Number(it.qtd)||0; ag[k].c+=Number(it.custo)||0; });
   const rows=Object.entries(ag).sort((a,b)=>b[1].c-a[1].c);
   const tot=rows.reduce((s,[,v])=>s+v.c,0);
   if(excel){
@@ -10308,7 +10316,7 @@ function pnCG_Ficha(excel){
     +'<style>body{font-family:Arial;font-size:12px;color:#222;margin:24px}h1{font-size:16px}h2{font-size:13px;margin:14px 0 6px}table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f0f3f7;text-transform:uppercase;font-size:10px}.tot{text-align:right;font-weight:bold;font-size:13px}@media print{button{display:none}}</style></head><body>'
     +'<h1>🏥 HOG — Ficha de custo · '+tipo+' · '+mes.split('-').reverse().join('/')+'</h1>'
     +'<h2>Períodos do mês</h2><table><thead><tr><th>Data</th><th>Médico</th><th>Pacientes</th><th>Custo</th><th>Referência</th></tr></thead><tbody>'+(perLinhas||'<tr><td colspan="5">—</td></tr>')+'</tbody></table>'
-    +'<h2>Itens usados (dados vivos do app)</h2><table><thead><tr><th>Item</th><th>Qtd no mês</th><th>Qtd/paciente</th><th>Valor unit.</th><th>Custo total</th></tr></thead><tbody>'+itLinhas+'</tbody></table>'
+    +'<h2>Itens usados (app + planilha jun/jul, quando houver)</h2><table><thead><tr><th>Item</th><th>Qtd no mês</th><th>Qtd/paciente</th><th>Valor unit.</th><th>Custo total</th></tr></thead><tbody>'+itLinhas+'</tbody></table>'
     +'<p class="tot">Total do tipo no mês: '+pnMoney(tot)+' · Pacientes: '+pac+' · Custo médio por paciente: '+pnMoney(pac?tot/pac:0)+'</p>'
     +'<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
     +'</body></html>');
