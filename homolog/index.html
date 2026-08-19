@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.27b · FACO contextual, pauta nos alertas, período em dropdown</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.28 · histórico do produto (últ. compra + fornecedor) dentro do orçamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5269,7 +5269,11 @@ function coCardItem(i, it){
   if(it.consumo) info.push('consumo/mês '+Math.round(it.consumo));
   if(it.qtd_kit) info.push('embalagem '+it.qtd_kit+(it.unidade?' '+it.unidade:''));
   const ctx=[];
-  if(it.uc_valor!=null) ctx.push('🧾 última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):''));
+  // v4.28 — histórico completo (data · valor · último FORNECEDOR) das NFs reais;
+  // cai para o dado antigo do cadastro enquanto o hpCache ainda não respondeu
+  const hp = it.material_id ? hpCache['m'+it.material_id] : undefined;
+  if(hp!==undefined) ctx.push(hpLinha('m'+it.material_id));
+  else if(it.uc_valor!=null) ctx.push('🧾 última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):''));
   if(it.forn_conhecidos) ctx.push('🏪 '+it.forn_conhecidos);
   if(it.marcas_conhecidas) ctx.push('🏷️ '+it.marcas_conhecidas);
   const ops = fids.length
@@ -5295,6 +5299,10 @@ function coCardItem(i, it){
 function coRender(){
   coDraftSalvar();   // v4.24c — cada mudança fica guardada no navegador (anti-F5)
   if(coItens.some(function(it){ return it.saldo==null && it.material_id; })) setTimeout(coPreencherSaldos, 60);   // v4.24d
+  { // v4.28 — busca o histórico (últ. compra + fornecedor) dos itens novos e re-renderiza
+    const hpF=coItens.filter(it=>it.material_id && hpCache['m'+it.material_id]===undefined).map(it=>it.material_id);
+    if(hpF.length) setTimeout(()=>hpPreencher(hpF, [], coRender), 80);
+  }
   coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
   if(head) head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
@@ -5939,6 +5947,85 @@ function ultPagoTag(o){
   const cor=d>0.5?'var(--vermelho)':(d<-0.5?'var(--verde)':'var(--cinza-4)');
   const seta=d>0.5?'▲':(d<-0.5?'▼':'•');
   return '<span style="font-size:10px;display:block;font-weight:700;color:'+cor+'">últ. pago '+deMoney(u)+' '+seta+' '+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%</span>';
+}
+
+// ═══ v4.28 — HISTÓRICO DO PRODUTO dentro do orçamento ═══
+// A referência que a busca "Comprar por fornecedor" já mostra, agora na linha
+// de CADA item dos três orçamentos: última compra (data · valor) e DE QUEM foi
+// comprada — para comparar com os valores apurados ANTES de virar pedido.
+// Fontes na ordem: NF real → pedido emitido → planilha. Cache da sessão.
+let hpCache = {};   // 'm<id>' | 'n<NOME>' -> {data,valor,forn,...} | null = nunca comprado
+let _hpBuscando = false;
+async function hpCarregar(mids, nomes){
+  mids =[...new Set((mids ||[]).filter(Boolean))].filter(id=>hpCache['m'+id]===undefined);
+  nomes=[...new Set((nomes||[]).filter(Boolean))].filter(n =>hpCache['n'+n ]===undefined);
+  if(!mids.length && !nomes.length) return false;
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }catch(e){} }
+  const fNome=id=>{ const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:null; };
+  if(mids.length){
+    const melhor={};
+    try{ // 1) NFs reais — valor pago de verdade, com fornecedor e data
+      const its=(await sbFetch(`nf_itens?select=material_id,valor_unitario,nota_fiscal_id&material_id=in.(${mids.join(',')})&order=id.desc&limit=1500`))||[];
+      const nids=[...new Set(its.map(i=>i.nota_fiscal_id).filter(Boolean))];
+      const nfs=nids.length?((await sbFetch(`notas_fiscais?select=id,fornecedor_id,data_entrega,data_emissao&id=in.(${nids.join(',')})&limit=600`))||[]):[];
+      const mapa={}; nfs.forEach(n=>{ mapa[n.id]={f:n.fornecedor_id, d:(n.data_entrega||n.data_emissao||'').slice(0,10)}; });
+      its.forEach(i=>{ const n=mapa[i.nota_fiscal_id]; if(!n) return;
+        const c=melhor[i.material_id];
+        if(!c || n.d>(c.data||'')) melhor[i.material_id]={data:n.d, valor:(i.valor_unitario!=null?Number(i.valor_unitario):null), forn:fNome(n.f)}; });
+    }catch(e){}
+    try{ // 2) pedido emitido (item comprado mas NF ainda não entrou)
+      const faltam=mids.filter(id=>!melhor[id]);
+      if(faltam.length){
+        const ords=(await sbFetch(`ordens_compra?select=material_id,valor_unitario,fornecedor_compra_id,fornecedor_id,data_pedido,created_at&material_id=in.(${faltam.join(',')})&order=id.desc&limit=800`))||[];
+        ords.forEach(o=>{ const d=((o.data_pedido||o.created_at||'')+'').slice(0,10);
+          const c=melhor[o.material_id];
+          if(!c || d>(c.data||'')) melhor[o.material_id]={data:d, valor:(o.valor_unitario!=null?Number(o.valor_unitario):null), forn:fNome(o.fornecedor_compra_id||o.fornecedor_id), pedido:true}; });
+      }
+    }catch(e){}
+    mids.forEach(id=>{ // 3) planilha/histórico (uc_* da vista + fornecedores conhecidos)
+      if(!melhor[id]){
+        const r=(ccDados||[]).find(x=>x.material_id===id);
+        if(r && (r.uc_data || r.uc_valor_unitario!=null)){
+          const src=(typeof ccFontes!=='undefined' && typeof fvNorm==='function') ? ccFontes[fvNorm(r.material)] : null;
+          melhor[id]={data:(r.uc_data||'').slice(0,10), valor:(r.uc_valor_unitario!=null?Number(r.uc_valor_unitario):null), forn:(src&&src.fornecedores)||null, planilha:true};
+        }
+      }
+      hpCache['m'+id]=melhor[id]||null;
+    });
+  }
+  for(const n of nomes){ // peças de CME: última ordem de compra pelo NOME
+    try{
+      const ords=(await sbFetch(`ordens_compra?select=valor_unitario,fornecedor_compra_id,fornecedor_id,data_pedido,created_at&item_nome=ilike.${encodeURIComponent(n)}&order=id.desc&limit=1`))||[];
+      const o=ords[0];
+      hpCache['n'+n]=o?{data:((o.data_pedido||o.created_at||'')+'').slice(0,10), valor:(o.valor_unitario!=null?Number(o.valor_unitario):null), forn:fNome(o.fornecedor_compra_id||o.fornecedor_id)}:null;
+    }catch(e){ hpCache['n'+n]=null; }
+  }
+  return true;
+}
+function hpData(d){ return d?String(d).slice(0,10).split('-').reverse().join('/'):''; }
+function hpMoney(v){ return 'R$ '+Number(v).toFixed(2).replace('.',','); }
+// linha completa (desk de insumos): últ. compra data · valor · fornecedor
+function hpLinha(chave, un){
+  const c=hpCache[chave];
+  if(c===undefined) return '<span style="color:var(--cinza-3)">buscando histórico…</span>';
+  if(c===null) return '<span style="color:var(--cinza-3)">🧾 1ª compra — sem histórico</span>';
+  const p=['🧾 últ. compra'+(c.data?' '+hpData(c.data):'')+(c.valor!=null?' · <b style="color:var(--verde)">'+hpMoney(c.valor)+(un||'/un')+'</b>':'')];
+  if(c.forn) p.push('🏪 do fornecedor <b>'+String(c.forn)+'</b>');
+  if(c.pedido) p.push('<i>(do último pedido — NF ainda não entrou)</i>');
+  if(c.planilha) p.push('<i>(da planilha)</i>');
+  return p.join(' · ');
+}
+// só o fornecedor+data (higiene e CME já mostram o últ. pago do jeito deles)
+function hpForn(chave){
+  const c=hpCache[chave];
+  if(!c || (!c.forn && !c.data)) return '';
+  return '🏪 <b>'+(c.forn||'?')+'</b>'+(c.data?' em '+hpData(c.data):'');
+}
+async function hpPreencher(mids, nomes, rerender){
+  if(_hpBuscando) return;
+  _hpBuscando=true;
+  try{ const mudou=await hpCarregar(mids,nomes); if(mudou && typeof rerender==='function') rerender(); }catch(e){}
+  _hpBuscando=false;
 }
 
 async function deCarregar(){
@@ -9653,6 +9740,9 @@ function pnAlertas(){
       return r.classe_compra==='CRITICO' && (Number(r.saldo)||0)>0 && !r.proxima_validade && !susp;
     });
     window.pnSemLoteLista = semLote.map(r=>({id:r.material_id, nome:r.material}));
+    if(semLote.length) cards.push({cor:'ama',n:semLote.length,t:'🔒 ITEM DE SEGURANÇA SEM LOTE/VALIDADE REGISTRADO',
+      d:semLote.slice(0,4).map(r=>r.material).join(' · ')+(semLote.length>4?` · +${semLote.length-4}`:'')+' — sem validade no sistema, o alerta de vencimento não funciona para eles',
+      a:'🗂 Tratar item a item',fn:`pnValidadeModal()`});
   }
   // ── v4.27b — preços subindo mora AQUI (saiu da seção de custos)
   {
@@ -9660,9 +9750,6 @@ function pnAlertas(){
     if(sub.length) cards.push({cor:'ama',n:sub.length,t:'📈 PREÇOS SUBINDO — pauta de renegociação',
       d:sub.slice(0,4).map(s=>(pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid))+' +'+s.pct+'%').join(' · ')+(sub.length>4?` · +${sub.length-4}`:'')+' — chegue na conversa com o histórico na mão',
       a:'🗂 Ver a pauta completa',fn:`pnSubindoModal()`});
-    if(semLote.length) cards.push({cor:'ama',n:semLote.length,t:'🔒 ITEM DE SEGURANÇA SEM LOTE/VALIDADE REGISTRADO',
-      d:semLote.slice(0,4).map(r=>r.material).join(' · ')+(semLote.length>4?` · +${semLote.length-4}`:'')+' — sem validade no sistema, o alerta de vencimento não funciona para eles',
-      a:'🗂 Tratar item a item',fn:`pnValidadeModal()`});
   }
   // ── amostra grátis que zerou (agora precisa comprar de verdade) ──
   {
@@ -15306,6 +15393,10 @@ async function hgOrcCarregar(){
 function hgOrcRender(){
   const box=document.getElementById('hg-orc-box'); if(!box) return;
   const G=hgOrcG();
+  { // v4.28 — histórico (último fornecedor + data) dos itens do orçamento
+    const hpF=[]; Object.keys(hgOrcGrupos).forEach(function(g2){ hgOrcGrupos[g2].itens.forEach(function(it){ if(it.material_id && hpCache['m'+it.material_id]===undefined) hpF.push(it.material_id); }); });
+    if(hpF.length) setTimeout(function(){ hpPreencher(hpF, [], hgOrcRender); }, 80);
+  }
   let h='<div class="hg-nota"><b>Onde isso vai parar:</b> Salvar guarda o orçamento AQUI (cotação #'+(hgOrcCotId||'nova')+'). No Fechar grupo, <b>só os itens marcados no 🛒</b> viram pedido — os outros continuam no orçamento para decidir depois.</div>';
   // v4.23 — atalhos sempre à mão
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
@@ -15348,7 +15439,8 @@ function hgOrcRender(){
     const ult=(ref.valor_compra!=null&&Number(ref.valor_compra)>0)?Number(ref.valor_compra):null;
     h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa · '):'')
       +'saldo <b>'+(ref.saldo!=null?hgN(ref.saldo):'—')+'</b> · '
-      +(ult!=null?('últ. pago <b>'+hgMoeda(ult)+'/cx</b>'):'1ª compra — sem referência')+'</span></td>'
+      +(ult!=null?('últ. pago <b>'+hgMoeda(ult)+'/cx</b>'):'1ª compra — sem referência')
+      +(function(){ var s=(typeof hpForn==='function')?hpForn('m'+it.material_id):''; return s?(' · '+s):''; })()+'</span></td>'
       +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="hgOrcQtd('+i+',this.value)" style="width:70px;'+HG_INP+'"></td>';
     for(let k=0;k<3;k++){
       if(k>0 && !G.forns[k]) continue;
@@ -15945,6 +16037,8 @@ async function siDeskCarregar(){
     try{
       const todos=[]; Object.keys(siDeskGrupos).forEach(function(g2){ siDeskGrupos[g2].itens.forEach(function(i){ todos.push({item_nome:i.nome}); }); });
       await ultPagoCarregar(todos);
+      // v4.28 — de quem foi a última compra desta peça (última ordem pelo nome)
+      try{ await hpCarregar([], todos.map(function(t){ return t.item_nome; })); }catch(e){}
     }catch(e){}
   }catch(e){}
 }
@@ -15952,6 +16046,10 @@ async function siDeskCarregar(){
 function siDeskHtml(){
   if(!siDeskTotal() && siDeskCotId===null) return '';
   const G=siDeskG();
+  { // v4.28 — peça que entrou depois da carga busca o histórico sozinha
+    const hpF=[]; Object.keys(siDeskGrupos).forEach(function(g2){ siDeskGrupos[g2].itens.forEach(function(it){ if(it.nome && hpCache['n'+it.nome]===undefined) hpF.push(it.nome); }); });
+    if(hpF.length) setTimeout(function(){ hpPreencher([], hpF, siRender); }, 80);
+  }
   let h='<div class="rm-card"><div class="rm-head verde"><span>🧾 Orçamento de instrumentais'
     +(siDeskCotId?(' · cotação #'+siDeskCotId):'')+'</span><span style="font-size:11px;font-weight:600">fechar grupo → pedido por fornecedor → fluxo geral</span></div>'
     +'<div style="padding:12px 16px">';
@@ -15979,7 +16077,8 @@ function siDeskHtml(){
     const ult=(typeof ultPagoCache!=='undefined')?ultPagoCache['n'+it.nome]:undefined;
     h+='<tr><td class="hg-prod">'+siEsc(it.nome)+'<span class="hg-sub">#'+it.solic_id+(it.motivo?(' · '+siEsc(it.motivo)):'')
       +' · <b>'+(it.estoque!=null?it.estoque:'—')+'</b> em estoque'
-      +' · '+(ult!=null?('últ. pago <b>'+siMoeda(ult)+'/un</b>'):'1ª compra — sem referência')+'</span></td>'
+      +' · '+(ult!=null?('últ. pago <b>'+siMoeda(ult)+'/un</b>'):'1ª compra — sem referência')
+      +(function(){ var s=(typeof hpForn==='function')?hpForn('n'+it.nome):''; return s?(' · '+s):''; })()+'</span></td>'
       +'<td class="hg-num"><input type="number" min="1" value="'+(it.qtd||1)+'" onchange="siDeskQtd('+i+',this.value)" style="width:64px;'+HG_INP+'" title="ajuste a quantidade a comprar"></td>';
     for(let k=0;k<3;k++){
       if(k>0 && !G.forns[k]) continue;
