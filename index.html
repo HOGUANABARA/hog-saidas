@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.28 · histórico do produto (últ. compra + fornecedor) dentro do orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.29</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1217,6 +1217,21 @@ details[open] summary { margin-bottom: 6px; }
   <div id="rm-nf-lavanderia"></div>
   <div id="rm-saldo"></div>
 
+  <!-- ═══ CONTAGEM DO LIVRO DE REMESSAS (v4.29 — mudou do Inventário para cá) ═══
+       A contagem é do LIVRO, não do estoque: mora com as remessas e respeita a
+       vista — Lavanderia conta pijamas/roupas, Óxido conta os reprocessados. -->
+  <div class="inv-card" id="rmc-card" style="background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6f42c1;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span id="rmc-titulo">📚 Contagem do livro de remessas</span>
+      <button onclick="rmcCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#F4ECF7;border-left:4px solid #6f42c1;padding:10px 14px;font-size:12px;color:#4A235A;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      Conte só o que está <b>em casa</b> — limpo, na prateleira, pronto para usar. O que está sujo esperando remessa e o que está fora
+      já têm conta própria e não entram aqui. A <b>cor não divide o saldo</b>: se precisar registrar, escreva na observação da linha.
+    </div>
+    <div id="rmc-corpo"><div class="inv-empty">Carregando o livro…</div></div>
+  </div>
+
 </div>
 
 <!-- ═══ ABA APROVAR PEDIDO (SEGUNDA CAMADA, ANTES DE ENTRAR NO ESTOQUE) ═══ -->
@@ -1295,27 +1310,25 @@ details[open] summary { margin-bottom: 6px; }
       <option value="">Selecione...</option>
     </select>
 
+  <!-- ═══ v4.29 — FICHA DO ITEM NO INVENTÁRIO ═══
+       O mesmo editor completo da Base do Painel, aberto por busca aqui —
+       para arrumar nome, descrição de NF e o resto sem trocar de tela. -->
+  <div class="inv-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul-medio);margin-bottom:10px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2)">📇 Arrumar cadastro de material — pesquisar e corrigir</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="inv-ficha-busca" placeholder="digite parte do nome… ex: equipo, luva, campo" onkeydown="if(event.key==='Enter')invFichaAbrir()"
+        style="flex:1;min-width:230px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:13px;font-family:var(--fonte)">
+      <button class="inv-btn" onclick="invFichaAbrir()">🔎 Abrir ficha do item</button>
+    </div>
+    <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">Nome do sistema × descrição da NF divergindo? É aqui que se conserta — a ficha edita nome, descrição de NF, marca, unidade, mínimo, classe e mais.</div>
+  </div>
+
   <div class="inv-card">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span>📋 Contagem do mês — por local, com fechamento</span>
       <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
     </div>
     <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
-  </div>
-
-  <!-- ═══ CONTAGEM DO LIVRO DE REMESSAS (v4.6c) ═══
-       O livro tem saldo próprio e não aparece no inventário de estoque.
-       Esta é a contagem dele: o que está em casa, limpo, pronto para usar. -->
-  <div class="inv-card" id="rmc-card">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6f42c1;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span>📚 Contagem do livro de remessas — pijamas e itens que circulam</span>
-      <button onclick="rmcCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
-    </div>
-    <div style="background:#F4ECF7;border-left:4px solid #6f42c1;padding:10px 14px;font-size:12px;color:#4A235A;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
-      Conte só o que está <b>em casa</b> — limpo, na prateleira, pronto para usar. O que está sujo esperando remessa e o que está fora
-      já têm conta própria e não entram aqui. A <b>cor não divide o saldo</b>: se precisar registrar, escreva na observação da linha.
-    </div>
-    <div id="rmc-corpo"><div class="inv-empty">Carregando o livro…</div></div>
   </div>
 
   <!-- ═══ LIVRO DO DML (v4.10) ═══
@@ -3671,7 +3684,7 @@ function trocarAba(aba) {
   if (aba==='usuarios') { usCarregar(); }
   if (aba==='painel') { setTimeout(pnAplicarSecoes, 60); }
   if (aba==='inventario') { setTimeout(()=>{ if(!dmlMats.length) dmlCarregar(); }, 120); }
-  if (aba==='remessas') { rmCarregar(); }
+  if (aba==='remessas') { rmCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); }
   if (aba==='alertas')  { alCarregar(); }
   if (aba==='aprovacao') { carregarPendentes(); carregarAprovadas(); }
   if (aba==='comprar')   { acCarregar(); }
@@ -3680,7 +3693,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof rmcCarregar==='function') rmcCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   ['hig_inv','hig_comp','hig_orc','hig_rel'].forEach(function(a){
@@ -3994,7 +4007,15 @@ function ccResumo(){
     ? `<span class="cc-chip ${ccModoTriagem?'cc-azul':'cc-cz'}" style="cursor:pointer" onclick="ccToggleTriagem()">🏷️ ${triagem} aguardando classificação — ${ccModoTriagem?'voltar à lista':'revisar'}</span>`
     : `<span class="cc-chip cc-verd">🏷️ classificação em dia ✓</span>`;
 }
-function ccSetFiltroClasse(c){ ccFiltroClasse = (ccFiltroClasse===c ? '' : c); ccRender(); }
+function ccSetFiltroClasse(c){
+  ccFiltroClasse = (ccFiltroClasse===c ? '' : c);
+  ccRender();
+  // v4.29 — a lista mora abaixo da dobra: quem clica no cartão precisa VER o resultado
+  if(ccFiltroClasse){
+    setTimeout(()=>{ const b=document.getElementById('cc-filtro-banner')||document.getElementById('ac-lista');
+      if(b) b.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+  }
+}
 function ccToggleTriagem(){ ccModoTriagem = !ccModoTriagem; ccRender(); }
 
 function ccTagClasse(r){
@@ -4107,6 +4128,15 @@ function ccRender(){
   const manuais = ccDados.filter(r=>ccIncluidoManual[r.material_id]);
   dados = dados.filter(r=>!ccIncluidoManual[r.material_id]);
   let html = '';
+  // v4.29 — o clique no cartão de classe filtrava em silêncio, com a lista fora
+  // da tela: agora o filtro se anuncia e tem saída visível.
+  if(ccFiltroClasse){
+    const fi = CC_INFO[ccFiltroClasse];
+    html += `<div id="cc-filtro-banner" style="background:${fi.cor};color:#fff;border-radius:10px;padding:11px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:700">
+      <span>${fi.emoji} Mostrando só <u>${fi.nome}</u> — ${dados.length} item(ns)</span>
+      <button style="background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--fonte)" onclick="ccSetFiltroClasse('${ccFiltroClasse}')">✕ ver todas as classes</button>
+    </div>`;
+  }
   if(manuais.length){
     // v4.6e — usa a mesma tabela das outras classes, para trazer cobertura,
     // sugerido, marcas/fornecedores e última compra. Antes esta faixa tinha
@@ -4449,6 +4479,17 @@ async function fcTrocarGrupo(id){
     toast('Agora em '+destino+' ✓','sucesso');
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
+// v4.29 — item que já virou orçamento/pedido sai da espera com um clique (por id, sem filtro de nome)
+async function fcLimparEnviado(id){
+  const f = fcFila.find(x=>x.id===id); if(!f) return;
+  try{
+    await sbFetch(`fila_compra?id=eq.${id}&status=eq.ESPERA`,'PATCH',
+      { status:'ENVIADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
+    await fcCarregar(); ccRender();
+    toast('"'+f.material_nome+'" saiu da espera — ele já estava andando no funil ✓','sucesso');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
 async function fcTirar(id){
   const f = fcFila.find(x=>x.id===id); if(!f) return;
   // quem pediu pode tirar o próprio; quem cuida de compras tira qualquer um
@@ -4483,7 +4524,8 @@ async function fcMandarParaCotacao(grupo){
   }
   if(typeof coGrupoAtual!=='undefined') coGrupoAtual = antes;
   try{
-    await sbFetch(`fila_compra?grupo=eq.${encodeURIComponent('"'+grupo.replace(/"/g,'\\"')+'"')}&status=eq.ESPERA`,'PATCH',
+    // v4.29 — sem aspas no eq. (com aspas o filtro casava 0 linhas e a fila nunca limpava)
+    await sbFetch(`fila_compra?grupo=eq.${encodeURIComponent(grupo)}&status=eq.ESPERA`,'PATCH',
       { status:'ENVIADO', enviado_por:fcQuem(), enviado_em:new Date().toISOString() });
   }catch(e){ console.warn('fila->enviado:', e); }
   if(typeof coSalvar==='function') await coSalvar(true);
@@ -4499,13 +4541,20 @@ function fcCardHtml(){
   const grupos = [...new Set(fcFila.map(f=>f.grupo))].sort();
   const blocos = grupos.map(g=>{
     const itens = fcFila.filter(f=>f.grupo===g);
-    const linhas = itens.map(f=>`<div class="fc-linha">
+    const linhas = itens.map(f=>{
+      // v4.29 — se o item já anda no funil (orçamento/pedido/NF), a espera está vencida:
+      // avisa e oferece limpar, em vez de parecer pendência nova para sempre.
+      const and = (typeof ccAndamento!=='undefined' && ccAndamento[f.material_id]) || '';
+      const aviso = and ? `<span style="background:#EBDEF0;color:#6C3483;border-radius:10px;padding:2px 9px;font-size:10px;font-weight:700;white-space:nowrap">✓ já em andamento: ${fcEsc(and)}</span>
+        <button class="fc-b" style="background:var(--verde-claro);color:var(--verde)" onclick="fcLimparEnviado(${f.id})" title="este item já seguiu — tirar da espera sem mexer em nada">✓ limpar da espera</button>` : '';
+      return `<div class="fc-linha">
       <span class="fc-nome">${fcEsc(f.material_nome)}
         <small>pedido por <b>${fcEsc(f.pedido_por||'—')}</b> · ${fcQuando(f.pedido_em)}${f.observacao?' · “'+fcEsc(f.observacao)+'”':''}</small></span>
+      ${aviso}
       <span class="fc-qtd">qtd <b>${f.qtd==null?'—':Number(f.qtd)}</b></span>
       <button class="fc-b" onclick="fcTrocarGrupo(${f.id})">✎ trocar</button>
       <button class="fc-b" onclick="fcTirar(${f.id})">✕</button>
-    </div>`).join('');
+    </div>`;}).join('');
     const botao = fcPodeCompras()
       ? `<button class="fc-b-pu" onclick="fcMandarParaCotacao('${g.replace(/'/g,"\\'")}')">🗂️ Mandar ${fcEsc(g)} para Cotação (${itens.length})</button>`
       : `<span style="font-size:11px;color:var(--cinza-4)">quem cuida de compras é que envia para a cotação</span>`;
@@ -7179,7 +7228,8 @@ function rcRenderizar(){
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${chave}')"></td>
         <td style="text-align:right;font-weight:700;white-space:nowrap" id="rc-tot-${o.id}">—</td>
         <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
-        <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button></td>
+        <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button>
+        <button class="rc-btn-editar" onclick="rcTrocarMaterial(${o.id})" title="Veio outro produto (nome parecido)? Apontar o material certo ANTES de dar entrada">↔</button></td>
       </tr>
       <tr><td></td><td colspan="6" style="padding:4px 10px 10px">
         <div id="rc-lotes-${o.id}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -7251,6 +7301,25 @@ function rcRenderizar(){
   }).join('') + rcHtmlPausados();
   corpo.innerHTML = rcHtmlACaminho() + rcHtmlOrfas() + rcHtmlSalvas() + corpo.innerHTML;
   Object.keys(grupos).forEach(k=>rcAtualizaTotais(k));
+}
+
+// v4.29 — "veio outro produto": o caso do EQUIPO (pedido no POLIFIX, chegou o
+// SIMPLES). Trocar o material AQUI, antes de confirmar, faz estoque, preço e
+// histórico caírem no material verdadeiro.
+async function rcTrocarMaterial(oid){
+  const o=rcOrdens.find(x=>x.id===oid); if(!o) return;
+  if(!catalogoMateriais.length){ try{ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }catch(e){} }
+  const esc=await pkEscolher({ titulo:'Apontar o material CERTO deste item',
+    subtitulo:'Hoje: "'+rcNomeMaterial(o.material_id,o)+'". Use quando o pedido saiu num nome parecido errado.',
+    itens: catalogoMateriais.map(m=>({id:m.id, nome:m.nome})) });
+  if(!esc || esc.id===o.material_id) return;
+  if(!confirm('Trocar o material deste item do pedido?\n\nDE: '+rcNomeMaterial(o.material_id,o)+'\nPARA: '+esc.nome+'\n\n• A entrada da NF vai contar estoque, preço e histórico no material novo.\n• Quantidade e valores do pedido não mudam.\n• Errou? É só trocar de novo aqui — nada foi para o estoque ainda.')) return;
+  try{
+    await sbFetch('ordens_compra?id=eq.'+oid,'PATCH',{ material_id:esc.id,
+      observacao:((o.observacao||'')+' — material corrigido no recebimento → "'+esc.nome+'"').trim() });
+    toast('Item apontado para "'+esc.nome+'" ✓ — agora pode dar a entrada.','sucesso');
+    rcCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
 // ═══ v4.9f — PEDIDOS QUE AINDA NÃO PODEM RECEBER NOTA ════════════
@@ -9149,22 +9218,128 @@ function pnSubindoModal(){
 
 // ═══ v4.27 — LOTE/VALIDADE: tratar item a item, com suspensão até a compra ═══
 function pnValidadeModal(){
+  // v4.29 — registro DIRETO no card: lote+validade+qtd aqui mesmo (antes o botão
+  // mandava para o Inventário, onde não havia campo nenhum). Aceita MAIS DE UM
+  // lote por item — cada lote com a sua validade.
   const lista=window.pnSemLoteLista||[];
   let ov=document.getElementById('pn-val-modal');
   if(!ov){ ov=document.createElement('div'); ov.id='pn-val-modal'; document.body.appendChild(ov); }
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
   const linhas=lista.map(function(it){
-    return '<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'+it.nome+'</td>'
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)"><b>'+it.nome+'</b></td>'
       +'<td style="text-align:right;white-space:nowrap;padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'
-      +'<button onclick="document.getElementById(\'pn-val-modal\').remove();trocarAba(\'inventario\')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-claro);color:var(--azul)">📐 Registrar agora</button> '
-      +'<button onclick="pnValidadeSuspender('+it.id+',\''+String(it.nome).replace(/'/g,"\\'")+'\')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:#FEF9E7;color:#7D6608">⏸ Não controla validade</button></td></tr>';
+      +'<button onclick="pnValAbrirReg('+it.id+')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-claro);color:var(--azul)">📅 Registrar lote/validade</button> '
+      +'<button onclick="pnValidadeSuspender('+it.id+',\''+String(it.nome).replace(/'/g,"\\'")+'\')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:#FEF9E7;color:#7D6608">⏸ Não controla validade</button></td></tr>'
+      +'<tr id="pn-val-reg-'+it.id+'" style="display:none"><td colspan="2" style="padding:8px 10px;border-bottom:1px solid var(--cinza-2);background:var(--cinza-1)">'
+      +'<div id="pn-val-lts-'+it.id+'"></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+      +'<button onclick="pnValAddLinha('+it.id+')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--cinza-2);color:var(--cinza-5)">➕ mais um lote</button>'
+      +'<button onclick="pnValGravar('+it.id+',\''+String(it.nome).replace(/'/g,"\\'")+'\')" style="border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">💾 Gravar lote(s) deste item</button>'
+      +'</div></td></tr>';
   }).join('');
-  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:700px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
     +'<div style="background:var(--azul);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>🔒 Itens de segurança sem lote/validade ('+lista.length+')</span><button onclick="document.getElementById(\'pn-val-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
     +'<div style="padding:14px 16px">'
-    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:8px">"⏸ Não controla validade" tira o item do alerta <b>por enquanto</b>: a suspensão cai sozinha na <b>próxima compra</b> com lote/validade — aí o controle volta e o cadastro se atualiza pela NF.</div>'
-    +'<div style="max-height:380px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+(linhas||'<tr><td style="padding:12px;color:var(--cinza-4)">Nenhum item pendente. ✓</td></tr>')+'</tbody></table></div>'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:8px">📅 registra o lote AQUI mesmo (pode mais de um, cada um com sua validade e quantidade). "⏸ Não controla validade" tira o item do alerta <b>por enquanto</b>: a suspensão cai sozinha na <b>próxima compra</b> com lote/validade.</div>'
+    +'<div style="max-height:420px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+(linhas||'<tr><td style="padding:12px;color:var(--cinza-4)">Nenhum item pendente. ✓</td></tr>')+'</tbody></table></div>'
     +'</div></div>';
+}
+function pnValLinhaHtml(){
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px" class="pn-val-linha">'
+    +'<input class="pn-val-lote" placeholder="lote" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)">'
+    +'<input class="pn-val-data" type="date" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)">'
+    +'<input class="pn-val-qtd" type="number" min="1" step="any" placeholder="qtd" style="width:70px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)">'
+    +'<span style="cursor:pointer;color:var(--vermelho);font-weight:700;font-size:12px" onclick="this.parentElement.remove()">✕</span></div>';
+}
+function pnValAbrirReg(mid){
+  const tr=document.getElementById('pn-val-reg-'+mid); if(!tr) return;
+  const aberto=tr.style.display!=='none';
+  tr.style.display=aberto?'none':'';
+  const box=document.getElementById('pn-val-lts-'+mid);
+  if(!aberto && box && !box.children.length) box.insertAdjacentHTML('beforeend', pnValLinhaHtml());
+}
+function pnValAddLinha(mid){
+  const box=document.getElementById('pn-val-lts-'+mid);
+  if(box) box.insertAdjacentHTML('beforeend', pnValLinhaHtml());
+}
+async function pnValGravar(mid, nome){
+  const box=document.getElementById('pn-val-lts-'+mid); if(!box) return;
+  const lts=[];
+  box.querySelectorAll('.pn-val-linha').forEach(function(l){
+    const lote=(l.querySelector('.pn-val-lote').value||'').trim();
+    const val=l.querySelector('.pn-val-data').value;
+    const qtd=parseFloat(l.querySelector('.pn-val-qtd').value);
+    if(val && !isNaN(qtd) && qtd>0) lts.push({ material_id:mid, lote:lote||'—', validade:val, qtd:qtd, status:'ativo' });
+  });
+  if(!lts.length){ toast('Preencha ao menos validade e quantidade de um lote.','erro'); return; }
+  const resumo=lts.map(function(x){ return 'lote '+x.lote+' · vence '+pnData(x.validade)+' · '+x.qtd+' un'; }).join('\n');
+  if(!confirm('Gravar no cadastro de "'+nome+'":\n\n'+resumo+'\n\n• O item sai do alerta e entra no controle de vencimento (FEFO).\n• Nenhum saldo de estoque muda — isto só registra lote/validade.\n• Errou? Dá para corrigir depois no card de lote vencido/vencendo.')) return;
+  try{
+    for(const x of lts) await sbFetch('lotes','POST', x);
+    try{ await sbFetch('materiais?id=eq.'+mid,'PATCH',{ validade_suspensa:false }); }catch(e){}
+    lts.forEach(function(x){ pnLotes.push(x); });
+    window.pnSemLoteLista=(window.pnSemLoteLista||[]).filter(function(i){ return i.id!==mid; });
+    toast('📅 "'+nome+'": '+lts.length+' lote(s) registrados ✓','sucesso');
+    if(typeof pnAlertas==='function') pnAlertas();
+    pnValidadeModal();
+  }catch(e){ toast('Erro ao gravar lote: '+(e.message||e),'erro'); }
+}
+
+// v4.29 — tratativa do LOTE VENCIDO sem sair da tela: encerrar (já saiu / não
+// vamos repor) ou corrigir a validade digitada errada.
+function pnLoteVencidoModal(){
+  const hoje=pnHojeStr();
+  const vencidos=pnLotes.filter(function(l){ return l.validade&&l.validade<hoje&&Number(l.qtd)>0; });
+  let ov=document.getElementById('pn-lv-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='pn-lv-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  const linhas=vencidos.map(function(l,i){
+    const nome=pnUvp[l.material_id]?pnUvp[l.material_id].nome:('#'+l.material_id);
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)"><b>'+nome+'</b><br>'
+      +'<span style="font-size:11px;color:var(--cinza-4)">lote '+(l.lote||'—')+' · venceu <b style="color:var(--vermelho)">'+pnData(l.validade)+'</b> · '+l.qtd+' un no registro</span></td>'
+      +'<td style="text-align:right;white-space:nowrap;padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'
+      +'<input type="date" id="pn-lv-d-'+i+'" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:11px;font-family:var(--fonte)">'
+      +'<button onclick="pnLoteCorrigir('+i+')" style="border:none;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-claro);color:var(--azul);margin-left:4px" title="a validade estava digitada errada">✎ corrigir validade</button> '
+      +'<button onclick="pnLoteEncerrar('+i+')" style="border:none;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde-claro);color:var(--verde)" title="já demos saída e não vamos repor">✔ tratado — encerrar lote</button></td></tr>';
+  }).join('');
+  window._pnLvLista=vencidos;
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:720px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--vermelho);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>⏰ Lotes vencidos — tratar aqui ('+vencidos.length+')</span><button onclick="document.getElementById(\'pn-lv-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:14px 16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:8px">"✔ tratado" é para o caso real: <b>já demos a saída e não vamos repor</b> — o lote sai do alerta e do controle, sem mexer em nenhum saldo. Se a data é que estava errada, escolha a data certa e use "✎ corrigir validade".</div>'
+    +'<div style="max-height:420px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+(linhas||'<tr><td style="padding:12px;color:var(--cinza-4)">Nenhum lote vencido. ✓</td></tr>')+'</tbody></table></div>'
+    +'</div></div>';
+}
+function pnLvFiltro(l){
+  // lotes não têm id no select do painel: o alvo é (material, lote, validade)
+  return 'lotes?material_id=eq.'+l.material_id+'&lote=eq.'+encodeURIComponent(l.lote||'—')+'&validade=eq.'+l.validade+'&status=eq.ativo';
+}
+async function pnLoteEncerrar(i){
+  const l=(window._pnLvLista||[])[i]; if(!l) return;
+  const nome=pnUvp[l.material_id]?pnUvp[l.material_id].nome:('#'+l.material_id);
+  if(!confirm('Encerrar o lote '+(l.lote||'—')+' de "'+nome+'" (venceu '+pnData(l.validade)+')?\n\n• Ele sai do alerta e do controle de vencimento.\n• NENHUM saldo de estoque muda — a saída física já foi registrada por vocês.\n• Para reverter, é só registrar o lote de novo (📅) ou pela próxima NF.')) return;
+  try{
+    await sbFetch(pnLvFiltro(l),'PATCH',{ status:'encerrado' });
+    pnLotes=pnLotes.filter(function(x){ return !(x.material_id===l.material_id&&x.lote===l.lote&&x.validade===l.validade); });
+    toast('✔ Lote encerrado — tratado sem repor.','sucesso');
+    if(typeof pnAlertas==='function') pnAlertas();
+    pnLoteVencidoModal();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+}
+async function pnLoteCorrigir(i){
+  const l=(window._pnLvLista||[])[i]; if(!l) return;
+  const nova=(document.getElementById('pn-lv-d-'+i)||{}).value;
+  if(!nova){ toast('Escolha a data certa no campo ao lado antes de corrigir.','erro'); return; }
+  const nome=pnUvp[l.material_id]?pnUvp[l.material_id].nome:('#'+l.material_id);
+  if(!confirm('Corrigir a validade do lote '+(l.lote||'—')+' de "'+nome+'"?\n\nDe '+pnData(l.validade)+' → para '+pnData(nova)+'.\n\nSó a data muda — quantidade e saldo ficam como estão.')) return;
+  try{
+    await sbFetch(pnLvFiltro(l),'PATCH',{ validade:nova });
+    const x=pnLotes.find(function(y){ return y.material_id===l.material_id&&y.lote===l.lote&&y.validade===l.validade; });
+    if(x) x.validade=nova;
+    toast('✎ Validade corrigida para '+pnData(nova)+' ✓','sucesso');
+    if(typeof pnAlertas==='function') pnAlertas();
+    pnLoteVencidoModal();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 async function pnValidadeSuspender(mid, nome){
   if(!confirm('"'+nome+'" — marcar como NÃO CONTROLA VALIDADE por enquanto?\n\n• Sai do alerta agora.\n• A suspensão CAI SOZINHA na próxima compra com lote/validade (o controle volta e o cadastro atualiza pela NF).\n• Nenhum saldo muda.')) return;
@@ -9649,7 +9824,7 @@ function pnAlertas(){
   const vencendo=pnLotes.filter(l=>l.validade&&l.validade>=hoje&&pnDiasDesde(l.validade)>=-60&&Number(l.qtd)>0);
   if(vencidos.length) cards.push({cor:'verm',n:vencidos.length,t:'⏰ LOTE VENCIDO em item de segurança',
     d:vencidos.slice(0,3).map(l=>`${pnUvp[l.material_id]?pnUvp[l.material_id].nome:'#'+l.material_id} — lote ${l.lote}, venceu ${pnData(l.validade)} (${l.qtd} un)`).join(' · '),
-    a:'🛒 Ver críticos',fn:`pnAcaoCompras('','CRITICO')`});
+    a:'🗂 Tratar aqui (encerrar ou corrigir)',fn:`pnLoteVencidoModal()`});
   if(vencendo.length) cards.push({cor:'ama',n:vencendo.length,t:'⏳ LOTES VENCENDO EM 60 DIAS',
     d:vencendo.slice(0,3).map(l=>`${pnUvp[l.material_id]?pnUvp[l.material_id].nome:'#'+l.material_id} — ${l.qtd} un vencem ${pnData(l.validade)}`).join(' · ')+' — usar primeiro (FEFO) ou trocar com o fornecedor',
     a:'🛒 Ver críticos',fn:`pnAcaoCompras('','CRITICO')`});
@@ -10350,7 +10525,7 @@ function pnFichaHtml(){
   const campo=(label,inner)=>`<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">${label}</label>${inner}</div>`;
   const inp=(id,val,tipo,extra)=>`<input id="${id}" type="${tipo||'text'}" value="${val==null?'':String(val).replace(/"/g,'&quot;')}" ${extra||''} style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--fonte)">`;
   return `<div class="pn-card" id="pn-ficha-card" style="border:2px solid var(--azul-medio)">
-    <div class="pn-ct"><span>📇 Ficha do item — ${m.nome}</span><span class="pn-funcao" style="cursor:pointer" onclick="pnFichaMid=null;pnBase()">✕ fechar</span></div>
+    <div class="pn-ct"><span>📇 Ficha do item — ${m.nome}</span><span class="pn-funcao" style="cursor:pointer" onclick="pnFichaFechar()">✕ fechar</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
       ${campo('Nome (cuidado: renomear afeta os vínculos com a planilha)', inp('pf-nome',m.nome))}
       ${campo('Descrição NF', inp('pf-descnf',m.descricao_nf))}
@@ -10424,6 +10599,9 @@ async function pnFichaSalvar(){
     toast('Ficha de "'+novoNome+'" salva ✓','sucesso');
     pnBase(); pnCustos(); pnCobertura(); pnAlertas();
     if(typeof ccRender==='function') ccRender();
+    // v4.29 — ficha aberta pelo modal do Inventário: re-renderiza no lugar
+    const mv=document.getElementById('inv-ficha-modal');
+    if(mv){ const h=mv.querySelector('.inv-ficha-holder'); if(h) h.innerHTML=pnFichaHtml(); }
   }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
 }
 
@@ -13734,9 +13912,9 @@ async function rmPendPerda(pendId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
-// ═══ CONTAGEM DO LIVRO (v4.6c) ═══════════════════════════════════════════
-// Fica na aba Inventário porque é a mesma cabeça: contar o que existe e
-// acertar o sistema com a prateleira. Mas mexe no livro, não no estoque.
+// ═══ CONTAGEM DO LIVRO (v4.6c · v4.29 mora na aba Remessas) ═══════════════
+// Mexe no livro, não no estoque — por isso vive com as remessas e respeita
+// a vista (rmVista): Lavanderia conta as roupas, Óxido conta os reprocessados.
 let rmcSaldo = [], rmcBens = [];
 
 async function rmcCarregar(){
@@ -13758,7 +13936,14 @@ function rmcOrdemTam(t){ return ({PP:1,P:2,M:3,G:4,GG:5,XG:6})[(t||'').toUpperCa
 
 function rmcRenderizar(){
   const corpo = document.getElementById('rmc-corpo');
-  const ativos = rmcBens.filter(b=>b.ativo!==false);
+  if(!corpo) return;
+  // v4.29 — a contagem respeita a vista: Lavanderia conta as roupas, Óxido os reprocessados
+  const vista = (typeof rmVista!=='undefined') ? rmVista : 'LAVANDERIA';
+  const tit = document.getElementById('rmc-titulo');
+  if(tit) tit.textContent = vista==='ESTERILIZACAO'
+    ? '📚 Contagem do livro — reprocessados (óxido de etileno)'
+    : '📚 Contagem do livro — pijamas e roupas que circulam (lavanderia)';
+  const ativos = rmcBens.filter(b=>b.ativo!==false && (b.tipo||'LAVANDERIA')===vista);
   if(!ativos.length){ corpo.innerHTML = '<div class="inv-empty">Nenhum bem cadastrado no livro ainda.</div>'; return; }
 
   const saldoDe = id => rmcSaldo.find(s=>Number(s.bem_id)===Number(id)) || {em_casa:0,sujo:0,fora:0};
@@ -14073,9 +14258,11 @@ async function rmLiberarNf(nfId){
 // ═══════════════════════════════════════════════════════════════════════════
 let dpMapa = [], dpOrfas = [];
 
-// valor entre aspas no filtro do PostgREST: nome tem parêntese, vírgula e
-// acento, e sem aspas o filtro quebra.
-function dpEq(v){ return 'eq.' + encodeURIComponent('"' + String(v).replace(/"/g,'\\"') + '"'); }
+// v4.29 — SEM aspas: num filtro eq. direto o PostgREST trata aspas como parte
+// do texto → 0 linhas casavam e o religamento rodava no vazio, sem erro (era o
+// bug dos nomes que "não saíam da lista"). Aspas só são necessárias DENTRO de
+// listas in.() e grupos or=() — aqui, percent-encoding basta.
+function dpEq(v){ return 'eq.' + encodeURIComponent(String(v)); }
 function dpEsc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function dpQuem(){ const el=document.getElementById('inv-registrado-por'); return (el&&el.value)||localStorage.getItem('hog_inv_registrante')||'Equipe CC'; }
 function dpData(d){ if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
@@ -14215,6 +14402,46 @@ async function dpApagar(de){
     toast('Linha apagada do mapa ✓','sucesso');
     dpCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ═══ v4.29 — FICHA DO ITEM aberta pelo Inventário ═══════════════════════
+// Reusa a ficha completa da Base do Painel (pnFichaHtml/pnFichaSalvar), num
+// modal — sem obrigar ninguém a ir ao Dashboard para arrumar um cadastro.
+async function invFichaAbrir(){
+  const el=document.getElementById('inv-ficha-busca');
+  const termo=((el&&el.value)||'').trim();
+  if(termo.length<2){ toast('Digite ao menos 2 letras do nome do material.','erro'); return; }
+  if(!catalogoMateriais.length){ try{ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }catch(e){} }
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
+  const cands=catalogoMateriais.filter(m=>norm(m.nome).includes(norm(termo)));
+  if(!cands.length){ toast('Nenhum material com esse nome no catálogo.','erro'); return; }
+  let alvo=cands[0];
+  if(cands.length>1){
+    const esc=await pkEscolher({ titulo:'Qual material?', subtitulo:cands.length+' materiais batem com "'+termo+'".',
+      itens:cands.map(m=>({id:m.id, nome:m.nome})) });
+    if(!esc) return; alvo=esc;
+  }
+  try{
+    const rows=await sbFetch('materiais?select=*&id=eq.'+alvo.id);
+    if(!rows||!rows[0]){ toast('Não achei o cadastro completo.','erro'); return; }
+    pnMatFull[alvo.id]=rows[0];
+    if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }catch(e){} }
+    if(!Object.keys(ccFontes||{}).length){
+      try{ const f=(await sbFetch('staging_fontes_compra?select=*&limit=500'))||[]; ccFontes={}; f.forEach(x=>{ ccFontes[pnN(x.nome)]=x; }); }catch(e){}
+    }
+    pnFichaMid=alvo.id;
+    let ov=document.getElementById('inv-ficha-modal');
+    if(!ov){ ov=document.createElement('div'); ov.id='inv-ficha-modal'; document.body.appendChild(ov); }
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto';
+    ov.innerHTML='<div class="inv-ficha-holder" style="max-width:920px;width:100%">'+pnFichaHtml()+'</div>';
+  }catch(e){ toast('Erro ao abrir a ficha: '+(e.message||e),'erro'); }
+}
+// fecha a ficha no contexto certo: modal do Inventário ou seção Base do Painel
+function pnFichaFechar(){
+  pnFichaMid=null;
+  const ov=document.getElementById('inv-ficha-modal');
+  if(ov){ ov.remove(); return; }
+  if(typeof pnBase==='function') pnBase();
 }
 
 const AL_SETORES = {
@@ -15033,8 +15260,8 @@ function dmlRender(){
         + '</td></tr>'}</tbody>
     </table></div>
 
-    ${dmlHist.length?`<div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:6px">🕘 Últimas movimentações</div>
+    ${dmlHist.length?`<details style="margin-top:16px" ${window.dmlHistAberto?'open':''} ontoggle="window.dmlHistAberto=this.open">
+      <summary style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:6px;cursor:pointer;user-select:none">▸ 🕘 Últimas movimentações (${dmlHist.length}) — clique para abrir</summary>
       <div style="overflow-x:auto"><table>
         <thead><tr><th>Quando</th><th>Item</th><th class="num">Qtd</th><th>Sentido</th><th>Quem</th><th>Observação</th></tr></thead>
         <tbody>${dmlHist.map(h=>`<tr>
@@ -15044,7 +15271,7 @@ function dmlRender(){
           <td><span class="dml-chip ${h.sentido==='GUARDAR'?'g':'r'}">${h.sentido==='GUARDAR'?'↓ guardado no DML':'↑ retirado para o Arsenal'}</span></td>
           <td style="font-size:12px">${h.registrado_por||'—'}</td>
           <td style="font-size:11px;color:var(--cinza-4)">${h.observacao||'—'}</td></tr>`).join('')}</tbody>
-      </table></div></div>`:''}`;
+      </table></div></details>`:''}`;
 
   if(dmlAberto) dmlPrever(dmlAberto.mid);
 }
@@ -16243,6 +16470,7 @@ function rmIrTipo(t){
   rmVista = t;                                   // v4.21c — a vista trava o tipo
   trocarAba('remessas');
   try{ rmFiltroForn='TODOS'; rmRenderizar(); }catch(e){}
+  try{ if(typeof rmcRenderizar==='function' && rmcBens.length) rmcRenderizar(); }catch(e){}   // v4.29 — contagem acompanha a vista
   const lav=document.getElementById('aba-btn-remessas'), oxi=document.getElementById('aba-btn-rem-oxido');
   if(lav) lav.classList.toggle('ativa', t==='LAVANDERIA');
   if(oxi) oxi.classList.toggle('ativa', t==='ESTERILIZACAO');
