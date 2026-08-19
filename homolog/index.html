@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.27</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.27b · FACO contextual, pauta nos alertas, período em dropdown</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9005,17 +9005,59 @@ function pnCusto(materialId, qtd, mes){
 // tabela R$/paciente comparava cada uma consigo mesma. Uma grafia só, em
 // exibição — retroativo e sem mexer em nenhum dado. FACO e FACECTOMIA
 // avulsas contam como FACO NACIONAL (decisão dela).
-function pnTipoCanon(t){
+function pnTipoCanon(t, medico, data){
   if(!t || t==='(diversas)') return t;
   const n=String(t).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+  // v4.27b — FACO "solto" é CONTEXTUAL (regra da Evelise, 18/08):
+  // Dr Nilson = IMPORT · Dr Lucas = IMPORT, exceto SEXTA = NACIONAL · Dr Pietro = NACIONAL
+  if(n==='FACO' || n==='FACECTOMIA'){
+    const med=String(medico||'').toUpperCase();
+    let dow=null;
+    if(data){ const d=new Date(String(data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dow=d.getDay(); }
+    if(med.indexOf('PIETRO')>=0) return 'FACO NACIONAL';
+    if(med.indexOf('LUCAS')>=0)  return dow===5 ? 'FACO NACIONAL' : 'FACO IMPORT';
+    if(med.indexOf('NILSON')>=0) return 'FACO IMPORT';
+    return 'FACO NACIONAL';
+  }
   const M={ 'VITRE':'VITRECTOMIA','VITRECTOMIA':'VITRECTOMIA',
     'ESTRABISMO':'ESTRABISMO','TREC':'TREC',
-    'FACO':'FACO NACIONAL','FACO NACIONAL':'FACO NACIONAL','FACECTOMIA':'FACO NACIONAL',
+    'FACO NACIONAL':'FACO NACIONAL',
     'FACO IMPORT':'FACO IMPORT','FACECTOMIA IMPORT':'FACO IMPORT','FACECTOMIA_IMPORT':'FACO IMPORT',
     'ANGIO':'ANGIOGRAFIA','ANGIOGRAFIA':'ANGIOGRAFIA',
     'PLASTICA':'PLÁSTICA','APLICACAO':'APLICAÇÃO','SONDAGEM':'SONDAGEM',
     'LAVAGEM DE CAMARA':'LAVAGEM DE CÂMARA','CICLOFOTO':'CICLOFOTO','RETIRADA DE OLEO':'RETIRADA DE ÓLEO' };
   return M[n] || String(t).trim().toUpperCase();
+}
+
+// v4.27b — pauta de renegociação calculada num lugar só (o card mora nos ALERTAS)
+function pnCalcSubindo(){
+  const porMatNf={};
+  for(const it of (typeof pnNfItens!=='undefined'?pnNfItens:[])){ if(it.valor_unitario==null) continue; (porMatNf[it.material_id]=porMatNf[it.material_id]||[]).push(Number(it.valor_unitario)); }
+  const lista=[];
+  for(const [mid,vals] of Object.entries(porMatNf)){
+    if(vals.length<2) continue;
+    const ult=vals[vals.length-1], ant=vals[vals.length-2];
+    if(ant>0&&ult>ant*1.1) lista.push({mid:Number(mid),ant,ult,pct:Math.round((ult-ant)/ant*100)});
+  }
+  return lista.sort((a,b)=>b.pct-a.pct);
+}
+function pnSubindoModal(){
+  const lista=pnCalcSubindo();
+  let ov=document.getElementById('pn-sub-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='pn-sub-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  const linhas=lista.slice(0,25).map(function(s){
+    const f=(typeof ccFontes!=='undefined')?ccFontes[pnN(pnUvp[s.mid]?pnUvp[s.mid].nome:'')]:null;
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2);font-weight:600">'+(pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid))+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+pnMoney(s.ant)+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+pnMoney(s.ult)+'</td>'
+      +'<td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--cinza-2);color:var(--vermelho);font-weight:800">▲ +'+s.pct+'%</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">'+(f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—')+'</td></tr>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--laranja);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>📈 Preços subindo — pauta de renegociação ('+lista.length+')</span><button onclick="document.getElementById(\'pn-sub-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:14px 16px;max-height:420px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr><th style="text-align:left;padding:5px 10px;background:var(--cinza-1)">Material</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Compra anterior</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Última compra</th><th style="text-align:right;padding:5px 10px;background:var(--cinza-1)">Variação</th><th style="text-align:left;padding:5px 10px;background:var(--cinza-1)">Marcas/fornecedores</th></tr></thead><tbody>'
+    +(linhas||'<tr><td colspan="5" style="padding:14px;color:var(--cinza-4)">Nenhuma alta acima de 10% entre as duas últimas compras. ✓</td></tr>')+'</tbody></table></div></div>';
 }
 
 // ═══ v4.27 — LOTE/VALIDADE: tratar item a item, com suspensão até a compra ═══
@@ -9417,7 +9459,7 @@ async function pnCarregar(){
       pnMovs.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
         periodoId:mv.periodo_cirurgico_id||null,
         medico:per&&per.medicos?per.medicos.nome:null,
-        tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
+        tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
         custo:pnCusto(mv.material_id,mv.qtd,dia.slice(0,7)) });
     }
     // ═══ v4.26 — REPROCESSADOS entram no CUSTO: a saída deles vive no livro
@@ -9434,7 +9476,7 @@ async function pnCarregar(){
         pnMovs.push({ qtd:Number(s.qtd)||0, material_id:mid, dia, mes:dia.slice(0,7),
           periodoId:s.periodo_cirurgico_id||null,
           medico:per&&per.medicos?per.medicos.nome:null,
-          tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome):null,
+          tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):null,
           reprocessado:true,
           custo:pnCusto(mid, s.qtd, dia.slice(0,7)) });
       }
@@ -9611,6 +9653,13 @@ function pnAlertas(){
       return r.classe_compra==='CRITICO' && (Number(r.saldo)||0)>0 && !r.proxima_validade && !susp;
     });
     window.pnSemLoteLista = semLote.map(r=>({id:r.material_id, nome:r.material}));
+  }
+  // ── v4.27b — preços subindo mora AQUI (saiu da seção de custos)
+  {
+    const sub=pnCalcSubindo();
+    if(sub.length) cards.push({cor:'ama',n:sub.length,t:'📈 PREÇOS SUBINDO — pauta de renegociação',
+      d:sub.slice(0,4).map(s=>(pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid))+' +'+s.pct+'%').join(' · ')+(sub.length>4?` · +${sub.length-4}`:'')+' — chegue na conversa com o histórico na mão',
+      a:'🗂 Ver a pauta completa',fn:`pnSubindoModal()`});
     if(semLote.length) cards.push({cor:'ama',n:semLote.length,t:'🔒 ITEM DE SEGURANÇA SEM LOTE/VALIDADE REGISTRADO',
       d:semLote.slice(0,4).map(r=>r.material).join(' · ')+(semLote.length>4?` · +${semLote.length-4}`:'')+' — sem validade no sistema, o alerta de vencimento não funciona para eles',
       a:'🗂 Tratar item a item',fn:`pnValidadeModal()`});
@@ -9753,6 +9802,7 @@ function pnStatOk(mid){ const m=pnMatFull[mid]; return !m || m.exibir_dashboard!
 let pnHistRows = [];   // staging_saidas_hist cru
 let pnHistPer = [];    // períodos históricos montados [{key,data,mes,medico,tipo,pac,custo,itens:[]}]
 let pnCustosMes = null; // mês selecionado na tabela de períodos
+let pnPerAberto = false; // v4.27b — o card "Custo por período" agora é dropdown
 
 function pnMontaHist(){
   const APP_VIVO_DESDE = '2026-07-21'; // planilha vale ATÉ 20/07; do dia 21 em diante, só o app
@@ -9783,13 +9833,13 @@ function pnMesesDisponiveis(){
 // períodos unificados (histórico + vivos) de um mês: [{origem, key/pid, data, medico, tipo, pac, custo}]
 function pnPeriodosDoMes(mes){
   const out = [];
-  for(const h of pnHistPer){ if(h.mes===mes) out.push({ origem:'planilha', id:h.key, data:h.data, medico:h.medico, tipo:pnTipoCanon(h.tipo), pac:h.pac, custo:h.custo }); }
+  for(const h of pnHistPer){ if(h.mes===mes) out.push({ origem:'planilha', id:h.key, data:h.data, medico:h.medico, tipo:pnTipoCanon(h.tipo, h.medico, h.data), pac:h.pac, custo:h.custo }); }
   const porPer = {};
   for(const m of pnMovs){ if(m.mes!==mes || !m.periodoId) continue; (porPer[m.periodoId]=porPer[m.periodoId]||[]).push(m); }
   for(const [pid,ms] of Object.entries(porPer)){
     const per = pnPeriodos.find(p=>p.id===Number(pid));
     out.push({ origem:'app', id:Number(pid), data:per?per.data:'', medico:per&&per.medicos?per.medicos.nome:'—',
-      tipo:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome):'—', pac:per?Number(per.qtd_pacientes)||0:0,
+      tipo:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):'—', pac:per?Number(per.qtd_pacientes)||0:0,
       custo:ms.reduce((s,x)=>s+x.custo,0) });
   }
   return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
@@ -9841,8 +9891,11 @@ function pnCustos(){
     }
     return agg;
   }
-  function htmlCpp(agg, titulo, funcao, nota){
-    const chaves = Object.keys(agg).sort((a,b)=>{
+  function htmlCpp(agg, titulo, funcao, nota, ordemNome){
+    // v4.27b — a tabela de TIPOS é ordenada pelo NOME da cirurgia (pedido dela)
+    const chaves = ordemNome
+      ? Object.keys(agg).sort((a,b)=>a.localeCompare(b,'pt-BR'))
+      : Object.keys(agg).sort((a,b)=>{
       const ult = ms => { for(let i=meses.length-1;i>=0;i--){ const v=agg[ms][meses[i]]; if(v&&v.p>0) return v.c/v.p; } return 0; };
       return ult(b)-ult(a); });
     if(!chaves.length) return `<div class="pn-card"><div class="pn-ct"><span>${titulo}</span></div><div class="pn-empty">sem períodos registrados</div></div>`;
@@ -9863,16 +9916,8 @@ function pnCustos(){
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th>${ths}<th class="num">Δ</th></tr></thead><tbody>${linhas}</tbody></table></div>
       <div class="pn-nota">${nota}</div></div>`;
   }
-  // preços subindo
-  const porMatNf = {};
-  for(const it of pnNfItens){ if(it.valor_unitario==null) continue; (porMatNf[it.material_id]=porMatNf[it.material_id]||[]).push(Number(it.valor_unitario)); }
-  const subindo = [];
-  for(const [mid,vals] of Object.entries(porMatNf)){
-    if(vals.length<2) continue;
-    const ult=vals[vals.length-1], ant=vals[vals.length-2];
-    if(ant>0&&ult>ant*1.1) subindo.push({mid:Number(mid), ant, ult, pct:Math.round((ult-ant)/ant*100)});
-  }
-  subindo.sort((a,b)=>b.pct-a.pct);
+  // preços subindo — v4.27b: o card completo mora nos ALERTAS; aqui só o KPI
+  const subindo = pnCalcSubindo();
   // compra vs consumo
   const nfsMes = pnNfs.filter(n=>((n.data_entrega||n.data_emissao||'')+'').slice(0,7)===mes&&n.status!=='DEVOLVIDO');
   const compraMes = nfsMes.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
@@ -9901,14 +9946,14 @@ function pnCustos(){
       <div class="pn-kpi ama"><div class="pn-kl">Preços subindo</div><div class="pn-kv" style="color:var(--amarelo)">${subindo.length}</div><div class="pn-ks">itens c/ última compra +10% mais cara</div><div class="pn-kq">"O que renegociar este mês?"</div></div>
       <div class="pn-kpi verd"><div class="pn-kl">Compra vs consumo — ${pnMesLabel(mes)}</div><div class="pn-kv" style="color:var(--verde)">${razao===null?'—':razao.toFixed(2)+'×'}</div><div class="pn-ks">comprou ${pnMoney0(compraMes)} · consumiu ${pnMoney0(consumoMes)}</div><div class="pn-kq">"Estou inflando ou queimando estoque?"</div></div>
     </div>
-    <div class="pn-card">
-      <div class="pn-ct"><span>Custo por PERÍODO — o número-mãe</span>
-        <span style="display:flex;gap:8px;align-items:center">
+    <details class="pn-card" ${pnPerAberto?'open':''} ontoggle="pnPerAberto=this.open">
+      <summary class="pn-ct" style="cursor:pointer;list-style:none"><span>▸ Custo por PERÍODO — o número-mãe</span>
+        <span style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           <select onchange="pnCustosMes=this.value;pnCustos()" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">
             ${meses.map(m=>`<option value="${m}" ${m===pnCustosMes?'selected':''}>${pnMesLabel(m)}/26</option>`).join('')}
           </select>
-          <span class="pn-funcao">clique ▸ explode os materiais</span>
-        </span></div>
+          <span class="pn-funcao">abra e clique ▸ explode os materiais</span>
+        </span></summary>
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th><th>Fonte</th></tr></thead><tbody>
       ${perRows.length?perRows.map(r=>{
         const cpp = r.pac>0?r.custo/r.pac:null;
@@ -9924,19 +9969,10 @@ function pnCustos(){
           ${aberto?`<tr><td></td><td colspan="8" style="background:#F8FBFE;padding:10px 14px" id="pn-per-det">carregando materiais…</td></tr>`:''}`;
       }).join(''):'<tr><td colspan="9" class="pn-empty">nenhum período neste mês</td></tr>'}
       </tbody></table></div>
-    </div>
+    </details>
     <div class="pn-duo">
-      ${htmlCpp(aggCpp('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o último mês com a média dos anteriores. Junho vem da planilha.')}
+      ${htmlCpp(aggCpp('tipo'),'R$/paciente por TIPO × mês','função: tipo encarecendo?','Sem custo médio global — cada tipo tem sua régua. Δ compara o último mês com a média dos anteriores. Junho vem da planilha.', true)}
       ${htmlCpp(aggCpp('medico'),'R$/paciente por MÉDICO × mês','função: comparar o médico com ele mesmo','Cada médico comparado com ELE MESMO — nunca médicos de tipos diferentes entre si.')}
-    </div>
-    <div class="pn-card">
-      <div class="pn-ct"><span>📈 Preços subindo — pauta de renegociação</span><span class="pn-funcao">função: chegar na conversa com o histórico na mão</span></div>
-      ${subindo.length?`<table class="pn-tb"><thead><tr><th>Material</th><th class="num">Compra anterior</th><th class="num">Última compra</th><th class="num">Variação</th><th>Marcas/fornecedores já usados</th></tr></thead><tbody>
-      ${subindo.slice(0,10).map(s=>{
-        const f=ccFontes[pnN(pnUvp[s.mid]?pnUvp[s.mid].nome:'')];
-        return `<tr><td style="font-weight:600">${pnUvp[s.mid]?pnUvp[s.mid].nome:('#'+s.mid)}</td><td class="num">${pnMoney(s.ant)}</td><td class="num">${pnMoney(s.ult)}</td>
-        <td class="num var-up">▲ +${s.pct}%</td><td style="font-size:11px;color:var(--cinza-4)">${f?[(f.marcas?'🏷️ '+f.marcas:''),(f.fornecedores?'🏪 '+f.fornecedores:'')].filter(Boolean).join(' · '):'—'}</td></tr>`;
-      }).join('')}</tbody></table>`:'<div class="pn-empty">Nenhuma alta acima de 10% entre as duas últimas compras registradas. ✓<br><span style="font-size:11px">A lista cresce conforme as NFs entram pelo app.</span></div>'}
     </div>
     <div class="pn-card" id="pn-cg"><div style="font-size:12px;color:var(--cinza-4)">Carregando custos gerais…</div></div>`;
   pnCG_Render();
@@ -10033,7 +10069,7 @@ async function pnCG_Render(){
   const histTot=histMes.reduce((s,h)=>s+(Number(h.custo)||0),0);
   const mergeHist=(pares,chave)=>{
     const m={}; pares.forEach(([k,v])=>m[k]={c:v.c,q:v.q});
-    for(const h of histMes){ const k=(chave==='tipo'?pnTipoCanon(h.tipo):h.medico)||'—'; (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(h.custo)||0; }
+    for(const h of histMes){ const k=(chave==='tipo'?pnTipoCanon(h.tipo,h.medico,h.data):h.medico)||'—'; (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(h.custo)||0; }
     return Object.entries(m).sort((a,b)=>b[1].c-a[1].c);
   };
   const agrupa=(arr,chave)=>{ const g={}; for(const m of arr){ const k=chave(m)||'—'; (g[k]=g[k]||{c:0,q:0}); g[k].c+=m.custo; g[k].q+=m.qtd; } return Object.entries(g).sort((a,b)=>b[1].c-a[1].c); };
@@ -10116,7 +10152,8 @@ async function pnCG_Render(){
     +'<button onclick="pnCG_Excel()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">📊 Excel</button>'
     +'<button onclick="pnCG_Print()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir</button>'
     +'</div>'
-    +D('💚 Economias geradas no mês (negociações de compra)'+(aumentos?' · '+aumentos+' aumento(s) à parte':''), econTotal,
+    +D('💚 Economias geradas no mês — 🚧 EM CONSTRUÇÃO'+(aumentos?' · '+aumentos+' aumento(s) à parte':''), econTotal,
+      '<div style="font-size:11.5px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:4px">🚧 Número em calibração — ainda NÃO usar para decisão ou apresentação. Precisamos validar juntas a régua de comparação.</div>'+
       (econLinhas.length?('<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">Item</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">De → Por</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Qtd</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Economia</th></tr></thead><tbody>'
         +econLinhas.slice(0,25).map(e=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+e.nome+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+money(e.de)+' → <b style="color:var(--verde)">'+money(e.para)+'</b></td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(e.q)+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:800;color:var(--verde)">'+money(e.econ)+'</td></tr>').join('')+'</tbody></table>')
         :'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma compra deste mês saiu mais barata que a anterior (ou ainda não houve recompra de itens).</div>')
