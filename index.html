@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.26</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.26b</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9904,7 +9904,8 @@ async function pnCG_Render(){
   const lav=nfsMes.filter(n=>n.natureza==='SERVICO_LAVANDERIA'&&okForn(n));
   const ester=nfsMes.filter(n=>n.natureza==='SERVICO_REPROCESSAMENTO'&&okForn(n));
   const manut=nfsMes.filter(n=>n.natureza==='SERVICO_MANUTENCAO'&&okForn(n));
-  const compras=nfsMes.filter(n=>!n.natureza&&okForn(n));
+  // v4.26b — nota de compra vem com natureza 'COMPRA' (ou vazia, nas antigas)
+  const compras=nfsMes.filter(n=>(!n.natureza||n.natureza==='COMPRA')&&okForn(n));
   const somaNf=a=>a.reduce((s,n)=>s+(Number(n.valor_total)||0),0);
   const listaNf=a=>'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+a.map(n=>'<tr><td style="padding:3px 8px;border-bottom:1px solid var(--cinza-2)">NF '+(n.numero_nf||'—')+' · '+rcNomeFornecedor(n.fornecedor_id)+'</td><td style="text-align:right;padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+money(n.valor_total)+'</td></tr>').join('')+'</tbody></table>';
   // compras CC × higiene (pela classe dos itens da NF)
