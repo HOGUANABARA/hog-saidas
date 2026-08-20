@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.31 · ficha de custo cobre o mês inteiro (app + planilha jun/jul)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.31b · ficha mês inteiro + unidades da planilha nas tabelas por médico/tipo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -10340,7 +10340,9 @@ async function pnCG_Render(){
   const histTot=histMes.reduce((s,h)=>s+(Number(h.custo)||0),0);
   const mergeHist=(pares,chave)=>{
     const m={}; pares.forEach(([k,v])=>m[k]={c:v.c,q:v.q});
-    for(const h of histMes){ const k=(chave==='tipo'?pnTipoCanon(h.tipo,h.medico,h.data):h.medico)||'—'; (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(h.custo)||0; }
+    // v4.31b — a planilha soma custo E unidades (antes só custo → médico da
+    // planilha aparecia com "0 un." e custo cheio, parecendo erro)
+    for(const h of histMes){ const k=(chave==='tipo'?pnTipoCanon(h.tipo,h.medico,h.data):h.medico)||'—'; (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(h.custo)||0; m[k].q+=(h.itens||[]).reduce((s,it)=>s+(Number(it.qtd)||0),0); }
     return Object.entries(m).sort((a,b)=>b[1].c-a[1].c);
   };
   const agrupa=(arr,chave)=>{ const g={}; for(const m of arr){ const k=chave(m)||'—'; (g[k]=g[k]||{c:0,q:0}); g[k].c+=m.custo; g[k].q+=m.qtd; } return Object.entries(g).sort((a,b)=>b[1].c-a[1].c); };
