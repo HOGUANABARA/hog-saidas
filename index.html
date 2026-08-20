@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.31b</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.32b</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1679,7 +1679,7 @@ const PERFIS = {
 const PAINEL_SECOES = {
   alertas:     ['COMPRAS','ADMINISTRATIVO'],
   saldos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],
-  cirurgias:   ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO','VISUALIZACAO'],
+  cirurgias:   ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO'],   // v4.32b — Visualização: só Custos no painel (pedido da diretoria, 20/08)
   cobertura:   ['COMPRAS','ADMINISTRATIVO'],
   custos:      ['COMPRAS','FINANCEIRO','DIRETORIA','ADMINISTRATIVO','VISUALIZACAO'],
   emprestimos: ['COMPRAS','ADMINISTRATIVO'],
@@ -9165,15 +9165,29 @@ function pnCusto(materialId, qtd, mes){
 function pnTipoCanon(t, medico, data){
   if(!t || t==='(diversas)') return t;
   const n=String(t).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
-  // v4.27b/v4.30 — FACO "solto" é CONTEXTUAL (regra da Evelise, 18-19/08):
-  // Dr Nilson = IMPORT · Dr Lucas = IMPORT, exceto SEGUNDA (fellow) e SEXTA = NACIONAL · Dr Pietro = NACIONAL
+  // v4.27b/v4.30/v4.32 — FACO "solto" é CONTEXTUAL (regra da Evelise, 18-20/08):
+  // Dr Nilson = IMPORT · Dr Pietro = NACIONAL · Dr Lucas = IMPORT, exceto
+  // SEGUNDA = NACIONAL FELLOW e SEXTA = NACIONAL (MARTINELLI) — na sexta o
+  // Lucas opera os pacientes do Dr Martinelli (1x/mês)
   if(n==='FACO' || n==='FACECTOMIA'){
     const med=String(medico||'').toUpperCase();
     let dow=null;
     if(data){ const d=new Date(String(data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dow=d.getDay(); }
     if(med.indexOf('PIETRO')>=0) return 'FACO NACIONAL';
-    if(med.indexOf('LUCAS')>=0)  return (dow===1 || dow===5) ? 'FACO NACIONAL' : 'FACO IMPORT';
+    if(med.indexOf('LUCAS')>=0)  return dow===1 ? 'FACO NACIONAL FELLOW' : (dow===5 ? 'FACO NACIONAL (MARTINELLI)' : 'FACO IMPORT');
     if(med.indexOf('NILSON')>=0) return 'FACO IMPORT';
+    return 'FACO NACIONAL';
+  }
+  // v4.32 — a separação fellow × Martinelli × nacional vale MESMO quando o tipo
+  // veio escrito ("FACO NACIONAL") — ela é da agenda, não da ficha
+  if(n==='FACO NACIONAL'||n==='FACO NACIONAL FELLOW'||n==='FACO FELLOW'||n==='FACO NACIONAL (MARTINELLI)'||n==='FACO MARTINELLI'||n==='FACO NACIONAL MARTINELLI'){
+    if(n.indexOf('FELLOW')>=0) return 'FACO NACIONAL FELLOW';
+    if(n.indexOf('MARTINELLI')>=0) return 'FACO NACIONAL (MARTINELLI)';
+    const med=String(medico||'').toUpperCase();
+    let dow=null;
+    if(data){ const d=new Date(String(data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dow=d.getDay(); }
+    if(med.indexOf('LUCAS')>=0 && dow===1) return 'FACO NACIONAL FELLOW';
+    if(med.indexOf('LUCAS')>=0 && dow===5) return 'FACO NACIONAL (MARTINELLI)';
     return 'FACO NACIONAL';
   }
   const M={ 'VITRE':'VITRECTOMIA','VITRECTOMIA':'VITRECTOMIA',
