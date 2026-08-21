@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.34 · rascunho avisa que é local · responsável do orçamento editável por Compras</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.37 · devolução com substituição de NF · dash do orçamento · ficha do item</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5496,6 +5496,62 @@ async function coPreencherSaldos(){
   _coSaldosBuscando=false;
 }
 
+// ═══ v4.35 — DASH DE DECISÃO DO GRUPO ═══════════════════════════════════
+// Montar orçamento é decidir: o que já dá para fechar, o que ainda falta preço,
+// quanto vai custar e onde o preço subiu. Isso agora fica no topo do grupo.
+function coDashGrupo(g, idxs, fids){
+  if(!idxs.length) return '';
+  let escolhidos=0, semPreco=0, semEscolha=0, total=0, economia=0, aumento=0;
+  const subiram=[], respondeu={};
+  fids.forEach(f=>respondeu[f]=0);
+  idxs.forEach(i=>{
+    const it=coItens[i];
+    const ops=(it.opcoes||[]).filter(o=>!o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0);
+    ops.forEach(o=>{ if(o.fornecedor_id!=null && respondeu[o.fornecedor_id]!==undefined) respondeu[o.fornecedor_id]++; });
+    if(!ops.length){ semPreco++; return; }
+    const esc=(it.opcoes||[]).find(o=>o.escolhida && Number(o.qtd_escolhida)>0 && o.fornecedor_id);
+    if(!esc){ semEscolha++; return; }
+    escolhidos++;
+    const unit=Number(coUnit(esc))||0, qtd=Number(esc.qtd_escolhida)||0;
+    total += unit*qtd;
+    // referência: a última compra que o histórico do item já traz (v4.28)
+    const hp = (typeof hpCache!=='undefined' && it.material_id!=null) ? hpCache['m'+it.material_id] : null;
+    const ultimo = (hp && hp.valor!=null) ? Number(hp.valor) : (it.uc_valor!=null?Number(it.uc_valor):null);
+    if(ultimo!=null && ultimo>0 && unit>0){
+      const dif=(unit-ultimo)*qtd;
+      if(dif<0) economia += -dif;
+      else if(dif>0){ aumento += dif; subiram.push({nome:it.material_nome, pct:((unit-ultimo)/ultimo*100)}); }
+    }
+  });
+  const tile=(rot,val,cor,sub)=>'<div style="flex:1;min-width:118px;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;padding:8px 11px">'
+    +'<div style="font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4)">'+rot+'</div>'
+    +'<div style="font-size:17px;font-weight:800;color:'+cor+';font-variant-numeric:tabular-nums">'+val+'</div>'
+    +(sub?'<div style="font-size:10px;color:var(--cinza-4)">'+sub+'</div>':'')+'</div>';
+  const fornResumo = fids.length
+    ? fids.map(f=>{ const n=respondeu[f]||0;
+        return '<span style="font-size:10.5px;padding:2px 8px;border-radius:20px;'
+          +(n?'background:var(--verde-claro);color:var(--verde)':'background:#FDEDEC;color:var(--vermelho)')
+          +';font-weight:700">'+coFornNomeById(f)+': '+n+'/'+idxs.length+'</span>'; }).join(' ')
+    : '<span style="font-size:10.5px;color:var(--cinza-4)">nenhum fornecedor no grupo</span>';
+  return '<div style="background:var(--cinza-1);border:1px solid var(--cinza-2);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+    + tile('Fechável agora', escolhidos+'/'+idxs.length, escolhidos?'var(--verde)':'var(--cinza-4)', 'itens com fornecedor escolhido')
+    + tile('Total escolhido', coMoney(total), 'var(--azul)', 'o que vira pedido')
+    + tile('Falta preço', semPreco, semPreco?'var(--vermelho)':'var(--verde)', 'nenhuma oferta recebida')
+    + tile('Falta escolher', semEscolha, semEscolha?'#D35400':'var(--verde)', 'tem preço, sem decisão')
+    + (economia>0?tile('Economia', '−'+coMoney(economia), 'var(--verde)', 'vs. último pago'):'')
+    + (aumento>0?tile('Aumento', '+'+coMoney(aumento), 'var(--vermelho)', 'vs. último pago'):'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    +'<b style="font-size:9.5px;text-transform:uppercase;color:var(--cinza-4)">Responderam:</b> '+fornResumo+'</div>'
+    +(subiram.length
+      ? '<div style="margin-top:7px;font-size:11px;color:#9C4221;background:#FDF2E9;border-radius:6px;padding:6px 9px">'
+        +'📈 <b>Subiu de preço:</b> '+subiram.slice(0,4).map(s=>s.nome+' +'+s.pct.toFixed(0)+'%').join(' · ')
+        +(subiram.length>4?(' · +'+(subiram.length-4)+' item(ns)'):'')+' — vale negociar antes de fechar.</div>'
+      : '')
+    +'</div>';
+}
+
 function coCardItem(i, it){
   const g = it.grupo||'Orçamento 1';
   const fids = coFornGrupo[g]||[];
@@ -5575,6 +5631,7 @@ function coRender(){
       ${chips || '<span style="color:var(--cinza-4);font-size:11px">nenhum fornecedor ainda</span>'}
       ${fids.length<3?`<span style="cursor:pointer;font-size:11px;font-weight:800;color:var(--azul)" onclick="coAddFornGrupo('${g.replace(/'/g,"\\'")}')">+ fornecedor ▾</span>`:''}
     </div>
+    ${coDashGrupo(g, idxs, fids)}
     ${coTextosDoGrupo(g)}
     <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px">
       ${idxs.map(i=>coCardItem(i, coItens[i])).join('') || '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
@@ -5818,8 +5875,16 @@ async function coFecharGrupo(g){
       // comparativo do pedido abria vazio e o cadastro voltava a ficar
       // incompleto. Fechado sai da fila de trabalho e FICA no histórico.
       try{
-        await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})&fechado=is.false`,
+        const marcados = await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})&fechado=is.false`,
           'PATCH', { fechado:true, fechado_em:new Date().toISOString(), pedido_id: pedidoId||null });
+        // v4.35 — se as ofertas não ficarem carimbadas com o pedido, o
+        // comparativo da aprovação abre sem elas. Isso não pode passar calado.
+        const n = (marcados||[]).length;
+        if(n < idsFechados.size){
+          toast('⚠ Atenção: '+n+' de '+idsFechados.size+' item(ns) tiveram as ofertas ligadas ao pedido. '
+            +'O comparativo deste pedido pode sair incompleto — me avise se acontecer.','erro');
+          console.warn('coFecharGrupo: itens marcados', n, 'de', idsFechados.size, [...idsFechados]);
+        }
       }catch(e){
         // banco ainda sem as colunas da v4.11 — mantém o comportamento antigo
         try{
@@ -8343,21 +8408,118 @@ async function rcDevAvancar(id){
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
+// ═══ v4.37 — RESOLVER DEVOLUÇÃO (modal, com substituição de NF) ══════════
+// A janela crua do navegador saiu (e travava a aba). Entrou o 5º desfecho, que
+// é o caso real: o fornecedor CANCELA a nota e emite outra, sem trocar produto
+// — muda só documento, valor e vencimento.
+const RC_DEV_RES = [
+  { k:'CREDITO',        rot:'💳 Crédito para próxima compra', ajuda:'o valor fica com o fornecedor e abate na próxima nota' },
+  { k:'ESTORNO',        rot:'↩️ Estorno do valor',            ajuda:'o fornecedor devolve o dinheiro' },
+  { k:'TROCA',          rot:'🔁 Troca (item novo chegou)',    ajuda:'quando o item novo chegar, dê a entrada normal' },
+  { k:'ABATIMENTO',     rot:'➖ Abatimento na nota',          ajuda:'o valor é descontado na própria nota' },
+  { k:'SUBSTITUICAO_NF',rot:'📄 NF cancelada e substituída',  ajuda:'o fornecedor cancelou a nota e emitiu outra, só com o que será pago' },
+];
 async function rcDevResolver(id){
   const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
-  const op=prompt('Como o caso foi resolvido?\n\n1 — Crédito para próxima compra\n2 — Estorno do valor\n3 — Troca (item novo chegou)\n4 — Abatimento na nota\n\nDigite o número:');
-  if(op===null) return;
-  const MAP={'1':'CREDITO','2':'ESTORNO','3':'TROCA','4':'ABATIMENTO'};
-  const res=MAP[(op||'').trim()];
-  if(!res){ toast('Opção inválida.','erro'); return; }
-  const valStr=prompt('Valor do acerto (R$):', (Number(d.qtd)||0)*(Number(d.valor_unitario)||0)||'');
-  if(valStr===null) return;
-  const val=parseFloat(String(valStr).replace(/\./g,'').replace(',','.'))||null;
+  const nfAntiga = ((await sbFetch('notas_fiscais?select=id,numero_nf,valor_total,frete,data_emissao,vencimentos_obs&id=eq.'+d.nota_fiscal_id))||[])[0] || {};
+  const valorCaso = (Number(d.qtd)||0)*(Number(d.valor_unitario)||0);
+  let ov=document.getElementById('rc-dev-res-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rc-dev-res-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:34px 16px;overflow:auto';
+  const inp='border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);width:100%';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:#A04000;color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>↩️ Resolver devolução #'+id+'</span>'
+    +'<button onclick="document.getElementById(\'rc-dev-res-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="background:var(--cinza-1);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:12px">'
+    +'<b>'+rcDevEsc(d.item_nome||'item')+'</b> · '+(Number(d.qtd)||0)+' un · '+rcMoney(d.valor_unitario)+'/un'
+    +'<br><span style="color:var(--cinza-4)">NF '+(nfAntiga.numero_nf||'—')+' · '+rcNomeFornecedor(d.fornecedor_id)+' · '+rcDevEsc(d.motivo||'')+'</span></div>'
+    +RC_DEV_RES.map(function(o){
+      return '<label style="display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1.5px solid var(--cinza-2);border-radius:8px;margin-bottom:6px;cursor:pointer">'
+        +'<input type="radio" name="rc-dev-res" value="'+o.k+'" onchange="rcDevResTrocou()" style="margin-top:3px;accent-color:#A04000">'
+        +'<span><b style="font-size:13px">'+o.rot+'</b><br><span style="font-size:11.5px;color:var(--cinza-4)">'+o.ajuda+'</span></span></label>';
+    }).join('')
+    +'<div id="rc-dev-res-valor" style="display:none;margin-top:10px">'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor do acerto (R$)</label>'
+    +'<input id="rc-dev-val" type="number" step="0.01" value="'+(valorCaso||'')+'" style="'+inp+'"></div>'
+    +'<div id="rc-dev-res-nf" style="display:none;margin-top:10px;background:#FEF6EC;border:1px solid #E8B48B;border-radius:8px;padding:12px">'
+    +'<div style="font-size:12px;color:#7D4A11;line-height:1.6;margin-bottom:10px">A nota <b>'+(nfAntiga.numero_nf||'—')+'</b> sai do pagamento e dos custos, e eu crio a nota nova <b>com os mesmos itens</b> (menos o devolvido). Estoque não se mexe — o produto já entrou e a devolução já baixou o que voltou.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Número da nota nova</label><input id="rc-dev-nf-num" style="'+inp+'" placeholder="ex: 68512"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor total (R$)</label><input id="rc-dev-nf-val" type="number" step="0.01" style="'+inp+'" value="'+(Math.max(0,(Number(nfAntiga.valor_total)||0)-valorCaso).toFixed(2))+'"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Emissão</label><input id="rc-dev-nf-emi" type="date" style="'+inp+'"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Vencimento / pagamento</label><input id="rc-dev-nf-venc" style="'+inp+'" placeholder="ex: 15/09/2026"></div>'
+    +'</div></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="rc-btn-editar" style="padding:8px 12px" onclick="document.getElementById(\'rc-dev-res-modal\').remove()">cancelar</button>'
+    +'<button class="rc-confirmar" style="padding:8px 16px" onclick="rcDevResolverExec('+id+')">✔ Registrar desfecho</button>'
+    +'</div></div></div>';
+}
+function rcDevEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function rcDevResTrocou(){
+  const sel=(document.querySelector('input[name=rc-dev-res]:checked')||{}).value;
+  const bxVal=document.getElementById('rc-dev-res-valor'), bxNf=document.getElementById('rc-dev-res-nf');
+  if(bxVal) bxVal.style.display = (sel && sel!=='SUBSTITUICAO_NF') ? '' : 'none';
+  if(bxNf)  bxNf.style.display  = (sel==='SUBSTITUICAO_NF') ? '' : 'none';
+}
+async function rcDevResolverExec(id){
+  const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
+  const res=(document.querySelector('input[name=rc-dev-res]:checked')||{}).value;
+  if(!res){ toast('Escolha como o caso foi resolvido.','erro'); return; }
+  const ov=document.getElementById('rc-dev-res-modal');
   try{
+    if(res==='SUBSTITUICAO_NF'){
+      const num=((document.getElementById('rc-dev-nf-num')||{}).value||'').trim();
+      if(!num){ toast('Informe o número da nota nova.','erro'); return; }
+      const val=parseFloat((document.getElementById('rc-dev-nf-val')||{}).value)||0;
+      const emi=(document.getElementById('rc-dev-nf-emi')||{}).value||null;
+      const venc=((document.getElementById('rc-dev-nf-venc')||{}).value||'').trim();
+      const antiga=((await sbFetch('notas_fiscais?select=*&id=eq.'+d.nota_fiscal_id))||[])[0];
+      if(!antiga){ toast('Não achei a nota original.','erro'); return; }
+      // 1) nota nova, herdando o que não muda
+      const nova=await sbFetch('notas_fiscais','POST',{
+        fornecedor_id:antiga.fornecedor_id, numero_nf:num, mes_referencia:antiga.mes_referencia,
+        data_emissao:emi||antiga.data_emissao, data_entrega:antiga.data_entrega, valor_total:val,
+        frete:antiga.frete, natureza:antiga.natureza, origem:'APP', status:'ENTREGUE',
+        confirmada:true, confirmada_por:rcDevQuem(), confirmada_em:new Date().toISOString(),
+        status_pagamento:'LIBERADA',
+        vencimentos_obs:(venc?(venc+' | '):'')+'Substitui a NF '+antiga.numero_nf+' (cancelada pelo fornecedor)' });
+      const novaId=nova&&nova[0]&&nova[0].id;
+      // 2) itens: os mesmos, menos o devolvido — sem tocar em estoque
+      let nItens=0;
+      try{
+        const its=(await sbFetch('nf_itens?select=*&nota_fiscal_id=eq.'+antiga.id))||[];
+        for(const it of its){
+          if(d.material_id && Number(it.material_id)===Number(d.material_id)) continue;
+          await sbFetch('nf_itens','POST',{ nota_fiscal_id:novaId, material_id:it.material_id,
+            descricao_nf:it.descricao_nf, qtd:it.qtd, unidade:it.unidade,
+            valor_unitario:it.valor_unitario, valor_item:it.valor_item });
+          nItens++;
+        }
+      }catch(e){}
+      // 3) peças de instrumental apontam para a nota nova
+      try{ await sbFetch('solicitacao_instrumental?nf_numero=eq.'+encodeURIComponent(antiga.numero_nf),'PATCH',{ nf_numero:num }); }catch(e){}
+      // 4) a antiga sai do pagamento e dos custos
+      await sbFetch('notas_fiscais?id=eq.'+antiga.id,'PATCH',{ status:'DEVOLVIDO',
+        motivo_tratativa:'NF cancelada pelo fornecedor — substituída pela NF '+num,
+        vencimentos_obs:'⛔ CANCELADA — substituída pela NF '+num+' | '+(antiga.vencimentos_obs||'') });
+      // 5) fecha o caso
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:'SUBSTITUICAO_NF',
+        valor_resolvido:(Number(d.qtd)||0)*(Number(d.valor_unitario)||0)||null,
+        historico:rcDevHist(d,'RESOLVIDA — NF '+antiga.numero_nf+' cancelada e substituída pela NF '+num+' ('+rcMoney(val)+')'),
+        atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+      if(ov) ov.remove();
+      toast('📄 NF '+num+' criada ('+nItens+' item(ns) herdados) e a NF '+antiga.numero_nf+' foi cancelada ✓','sucesso');
+      rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar();
+      return;
+    }
+    const val=parseFloat((document.getElementById('rc-dev-val')||{}).value)||null;
     await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:res, valor_resolvido:val,
       historico:rcDevHist(d,'RESOLVIDA — '+res+(val?(' de '+rcMoney(val)):'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+    if(ov) ov.remove();
     if(res==='TROCA') toast('Resolvida como TROCA — quando o item novo chegar, dê a entrada normal (NF ou aba Instrumentais).','');
-    if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor no fluxo de créditos, se for usar na próxima NF.','');
+    if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor na aba Ocorrências para usar na próxima NF.','');
     toast('Caso #'+id+' resolvido ✓','sucesso');
     rcDevCarregar();
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
@@ -8586,25 +8748,50 @@ async function apCarregarHist(cid){
 
 function apHistHtml(its){
   if(!its.length) return '<div style="padding:8px 0">Sem registros desta cotação.</div>';
-  return its.map(it=>{
+  // v4.35 — cores LITERAIS: este HTML também vai para a impressão, que não tem
+  // as variáveis de cor do app — por isso o destaque da escolhida sumia no papel.
+  const aviso = its.__parcial
+    ? '<div style="border-left:4px solid #B9770E;background:#FDF2E0;color:#7D5109;padding:8px 12px;border-radius:0 6px 6px 0;font-size:11px;margin:6px 0">'
+      + '⚠️ Mostrando <b>'+its.__parcial+'</b>.</div>'
+    : '';
+  return aviso + its.map(it=>{
     const ops=(it.cotacao_opcoes||[]);
     if(!ops.length) return '';
+    // menor preço entre as ofertas de verdade — para dizer se a escolha foi a mais barata
+    const validas = ops.filter(o=>!o.nao_tem && o.preco_unitario!=null);
+    const menor = validas.length ? Math.min(...validas.map(o=>Number(o.preco_unitario))) : null;
+    const esc = ops.find(o=>o.escolhida);
     const linhas=ops.map(o=>{
       const forn=rcNomeFornecedor(o.fornecedor_id)||o.fornecedor_nome||'—';
-      if(o.nao_tem) return `<tr style="opacity:.6"><td>🏪 ${forn}</td><td colspan="4">🚫 não tem${o.observacao?' — '+o.observacao:''}</td><td></td></tr>`;
+      if(o.nao_tem) return `<tr style="opacity:.55"><td>🏪 ${forn}</td><td colspan="4">🚫 não tem${o.observacao?' — '+o.observacao:''}</td><td></td></tr>`;
       const unit=o.preco_unitario!=null?rcMoney(o.preco_unitario):'—';
-      return `<tr${o.escolhida?' style="background:var(--verde-claro);font-weight:700"':''}>
-        <td>🏪 ${forn}${o.escolhida?' ✔':''}</td>
+      const ehMenor = menor!=null && Number(o.preco_unitario)===menor;
+      const estilo = o.escolhida
+        ? ' style="background:#E6F4EA;font-weight:700;border-left:4px solid #1E8449"'
+        : ' style="color:#666"';
+      return `<tr${estilo}>
+        <td>${o.escolhida?'<b style="color:#1E8449">✔ ESCOLHIDO</b> · ':''}🏪 ${forn}</td>
         <td>🏷️ ${o.marca||'—'}${o.apresentacao?' · '+o.apresentacao:''}</td>
-        <td style="text-align:right">${rcMoney(o.preco_total)}${o.qtd_embalagem?` <span style="font-size:10px;color:var(--cinza-4)">(${unit}/un)</span>`:''}</td>
+        <td style="text-align:right">${rcMoney(o.preco_total)}${o.qtd_embalagem?` <span style="font-size:10px;color:#777">(${unit}/un)</span>`:''}
+          ${ehMenor?'<span style="font-size:9.5px;color:#1E8449;font-weight:700"> ↓ menor preço</span>':''}</td>
         <td>💳 ${o.condicao_pagamento||'—'}</td>
         <td>🚚 ${o.prazo_entrega||'—'}</td>
-        <td style="font-size:10px;color:var(--cinza-4)">${o.observacao||''}</td>
+        <td style="font-size:10px;color:#777">${o.observacao||''}</td>
       </tr>`;
     }).join('');
-    return `<div style="margin:8px 0"><b style="color:var(--cinza-5)">${it.material_nome||rcNomeMaterial(it.material_id)}</b> <span style="font-size:10px">(qtd desejada: ${it.qtd_desejada??'—'})</span>
+    // por que não foi o mais barato? o papel da aprovação precisa dizer isso
+    let nota='';
+    if(esc && menor!=null && esc.preco_unitario!=null && Number(esc.preco_unitario)>menor){
+      const dif=((Number(esc.preco_unitario)-menor)/menor)*100;
+      nota = `<div style="font-size:10.5px;color:#9C4221;margin-top:3px">⚠️ O escolhido está <b>${dif.toFixed(1).replace('.',',')}% acima</b> do menor preço deste item — confira a justificativa.</div>`;
+    } else if(esc && menor!=null && Number(esc.preco_unitario)===menor){
+      nota = '<div style="font-size:10.5px;color:#1E8449;margin-top:3px">✔ Escolhido é o menor preço deste item.</div>';
+    } else if(!esc){
+      nota = '<div style="font-size:10.5px;color:#777;margin-top:3px">Sem escolha marcada — item ficou no orçamento.</div>';
+    }
+    return `<div style="margin:10px 0"><b>${it.material_nome||rcNomeMaterial(it.material_id)}</b> <span style="font-size:10px">(qtd desejada: ${it.qtd_desejada??'—'})</span>
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px">
-        <tbody>${linhas}</tbody></table></div>`;
+        <tbody>${linhas}</tbody></table>${nota}</div>`;
   }).join('');
 }
 
@@ -8614,7 +8801,23 @@ function apHistHtml(its){
 async function apHistDoPedido(pid, cid){
   const its = await apCarregarHist(cid);
   const doPedido = (its||[]).filter(it=>Number(it.pedido_id)===Number(pid));
-  return doPedido.length ? doPedido : its;
+  if(doPedido.length) return doPedido;
+  // v4.35 — antes, quando nenhum item da cotação carregava o pedido_id, o
+  // comparativo mostrava a cotação INTEIRA: no papel apareciam os itens que
+  // ficaram no orçamento, e não os que foram comprados. Agora casamos pelos
+  // materiais do próprio pedido; só se nem isso achar é que mostra o resto,
+  // e aí dizendo o que está mostrando.
+  try{
+    const ords = await sbFetch('ordens_compra?select=material_id&pedido_id=eq.'+pid+'&limit=200');
+    const mids = new Set((ords||[]).map(o=>Number(o.material_id)).filter(Boolean));
+    if(mids.size){
+      const casados = (its||[]).filter(it=>mids.has(Number(it.material_id)));
+      if(casados.length){ casados.__parcial='materiais do pedido'; return casados; }
+    }
+  }catch(e){}
+  const resto = its||[];
+  if(resto.length) resto.__parcial = 'a cotação inteira — as ofertas deste pedido não ficaram registradas';
+  return resto;
 }
 async function apMostrarHist(pid, cid){
   const div=document.getElementById('ap-hist-'+pid); if(!div||div.dataset.ok) return;
@@ -10996,15 +11199,25 @@ function pnFichaHtml(){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--cinza-2);padding-top:12px">
       <div style="font-size:13px">Saldo no Estoque Geral: <b style="${saldo!=null&&saldo<0?'color:var(--vermelho)':''}">${saldo!=null?saldo.toLocaleString('pt-BR'):'—'}</b>
         <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:6px 10px;font-size:11px;margin-left:8px" onclick="pnCorrigirSaldo(${m.id})">✔ corrigir saldo 🔒</button></div>
-      <button class="pn-btn pn-btn-azul" onclick="pnFichaSalvar()">💾 Salvar ficha</button>
+      <button class="pn-btn pn-btn-azul" onclick="pnFichaSalvar(${m.id})">💾 Salvar ficha</button>
     </div>
   </div>`;
 }
-async function pnFichaSalvar(){
-  const m=pnMatFull[pnFichaMid]; if(!m) return;
-  const v=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+async function pnFichaSalvar(midClicado){
+  // v4.36 — o Salvar não fazia NADA em silêncio quando pnFichaMid tinha sido
+  // zerado por um render em segundo plano (a ficha aberta pelo Inventário vive
+  // num modal, fora da seção Base). Agora o id vem do próprio botão, e os
+  // campos são lidos DENTRO do modal — antes, com a ficha renderizada nos dois
+  // lugares, os ids repetidos faziam ler o formulário errado.
+  const alvo = midClicado || pnFichaMid;
+  const m = pnMatFull[alvo];
+  if(!m){ toast('Não consegui identificar o item desta ficha — feche e abra de novo.','erro'); return; }
+  pnFichaMid = alvo;
+  const raiz = document.getElementById('inv-ficha-modal') || document;
+  const pega = id => raiz.querySelector('#'+id) || document.getElementById(id);
+  const v=id=>{ const el=pega(id); return el?el.value.trim():''; };
   const num=id=>{ const s=v(id); if(s==='') return null; const x=parseFloat(s.replace(',','.')); return isNaN(x)?null:x; };
-  const chk=id=>{ const el=document.getElementById(id); return el?el.checked:false; };
+  const chk=id=>{ const el=pega(id); return el?el.checked:false; };
   const novoNome=v('pf-nome');
   if(!novoNome){ toast('O nome não pode ficar vazio.','erro'); return; }
   if(pnN(novoNome)!==pnN(m.nome)&&pnNomeId[pnN(novoNome)]){ toast('Já existe outro material com esse nome.','erro'); return; }
@@ -11012,9 +11225,9 @@ async function pnFichaSalvar(){
   if(renomeou&&!confirm(`Renomear "${m.nome}" para "${novoNome}"?\n\nOs vínculos com as planilhas de consumo/histórico usam o nome antigo — os números históricos deste item podem deixar de aparecer até a próxima carga.`)) return;
   const body={ nome:novoNome, descricao_nf:v('pf-descnf')||null, marca:v('pf-marca')||null,
     unidade_medida:v('pf-unid')||null, qtd_kit:num('pf-kit'), ultimo_valor_pago:num('pf-uvp'),
-    preco_tratativa: !!(document.getElementById('pf-trat')&&document.getElementById('pf-trat').checked),
+    preco_tratativa: chk('pf-trat'),
     preco_anterior: num('pf-precoant'),
-    somente_amostra: !!(document.getElementById('pf-amostra')&&document.getElementById('pf-amostra').checked),
+    somente_amostra: chk('pf-amostra'),
     estoque_minimo:num('pf-min'), classe_compra:v('pf-classe')||m.classe_compra, classe_confirmada:true,
     fornecedor_padrao_id:v('pf-fornpad')?Number(v('pf-fornpad')):null,
     exibir_dashboard:chk('pf-stat'), controla_lote:chk('pf-lote'),
