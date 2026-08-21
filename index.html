@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.33</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.34</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1944,6 +1944,11 @@ function aplicarUsuarioNosSelects(){
   for (const id of SELECTS_REGISTRANTE){
     const el = document.getElementById(id);
     if (!el) continue;
+    // v4.34 — "Responsável pelo orçamento" diz QUEM VAI FALAR com o fornecedor,
+    // não é assinatura de movimentação: quem cuida de compras pode escolher.
+    // Os demais selects (saída, remessa, inventário, NF) continuam presos ao
+    // próprio nome — ali o registro vale como identificação.
+    const liberado = livre || (id === 'co-criado-por' && podeAba('cotacao'));
     el.innerHTML = '';
     for (const nome of EQUIPE){
       const o = document.createElement('option');
@@ -1951,9 +1956,13 @@ function aplicarUsuarioNosSelects(){
       el.appendChild(o);
     }
     el.value = SESSAO.nome;
-    el.disabled = !livre;
-    el.title = livre ? 'Você pode lançar no nome de outra pessoa'
-                     : 'Registrado no seu nome (' + SESSAO.nome + ')';
+    if (id === 'co-criado-por'){
+      const salvo = localStorage.getItem('hog_cotacao_criador');
+      if (liberado && salvo && EQUIPE.indexOf(salvo) >= 0) el.value = salvo;
+    }
+    el.disabled = !liberado;
+    el.title = liberado ? 'Escolha quem é o responsável por este orçamento'
+                        : 'Registrado no seu nome (' + SESSAO.nome + ')';
   }
 }
 
@@ -5530,7 +5539,19 @@ function coRender(){
   }
   coAtualizaLabelGrupo();
   const head=document.getElementById('co-status');
-  if(head) head.textContent = coCotacaoId? ('Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)') : ('Rascunho não salvo · '+coItens.length+' item(ns)');
+  // v4.34 — o rascunho vive SÓ no navegador de quem está montando: enquanto não
+  // for salvo, mais ninguém da equipe enxerga. Isso agora está dito na cara.
+  if(head){
+    if(coCotacaoId){
+      head.textContent = 'Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)';
+      head.style.cssText = '';
+    }else{
+      head.innerHTML = '📝 Rascunho só no SEU navegador · '+coItens.length+' item(ns)'
+        + (coItens.length ? ' — <b>clique em 💾 Salvar cotação</b> para a equipe ver' : '');
+      head.style.cssText = 'background:#FDF2E9;color:#A04000;border:1.5px solid #E8B48B;'
+        + 'border-radius:8px;padding:5px 10px;font-weight:700';
+    }
+  }
   const corpo=document.getElementById('co-corpo');
   if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use "Puxar itens da Etapa 1" ou a busca acima.</div>'; return; }
   const ordem=[]; const porGrupo={};
