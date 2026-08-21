@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.32b · perfil Visualização: painel só com Custos</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.33 · paginação, devolver saída, pacientes no dia, cirurgias validadas em todas as telas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2128,13 +2128,35 @@ async function sbFetch(ep, method='GET', body=null) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
 
-  const res = await fetch(`${baseUrl}/rest/v1/${ep}`, opts);
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`${res.status}: ${errText}`);
+  // v4.33 — PAGINAÇÃO CENTRAL. O servidor devolve no MÁXIMO 1000 linhas por
+  // resposta, mesmo quando o app pede limit=3000 — e o resto sumia calado (a
+  // planilha jun/jul tem 1052 linhas e o painel enxergava só 1000; as
+  // movimentações já passaram de 1100). Quando a resposta vem no teto,
+  // buscamos as páginas seguintes até completar.
+  const sbPedir = async (endpoint) => {
+    const res = await fetch(`${baseUrl}/rest/v1/${endpoint}`, opts);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`${res.status}: ${errText}`);
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+  const dados = await sbPedir(ep);
+  const SB_PAGINA = 1000, SB_TETO = 20000;
+  if (method === 'GET' && Array.isArray(dados) && dados.length === SB_PAGINA && !/[?&]offset=/.test(ep)) {
+    const m = /[?&]limit=(\d+)/.exec(ep);
+    const querido = m ? Number(m[1]) : SB_TETO;
+    let off = SB_PAGINA;
+    while (dados.length < querido && off < SB_TETO) {
+      const pg = await sbPedir(ep + (ep.includes('?') ? '&' : '?') + 'offset=' + off);
+      if (!Array.isArray(pg) || !pg.length) break;
+      dados.push(...pg);
+      if (pg.length < SB_PAGINA) break;
+      off += SB_PAGINA;
+    }
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  return dados;
 }
 
 // ── MÉDICO ────────────────────────────────────────────────────
@@ -2977,7 +2999,7 @@ function renderizarPendentes() {
   div.innerHTML = pendentes.map((p, i) => {
     const ehDiversa = !p.periodo && p.destino;
     const medico = ehDiversa ? `📦 Saída Diversa — ${p.destino}` : (p.periodo?.medicos?.nome || p.medico || '—');
-    const tipos  = ehDiversa ? (p.obs || '') : (p.tipos ? p.tipos.map(t => t.tipo).join(' + ') : p.periodo?.tipos_cirurgia?.nome || '—');
+    const tipos  = ehDiversa ? (p.obs || '') : (p.tipos ? p.tipos.map(t => t.tipo).join(' + ') : hogTipoCir(p.periodo,'—'));
     const data   = ehDiversa ? '' : (p.periodo?.data || p.data || '—');
 
     // Linhas com separadores de categoria (padrão da planilha)
@@ -3021,6 +3043,7 @@ function renderizarPendentes() {
       </div>
       <div class="acoes">
         <button class="btn btn-secundario btn-sm" onclick="aprIncluirItem(${i})" title="A equipe esqueceu de lançar algo? Inclua aqui antes de aprovar">➕ Incluir item</button>
+        ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprPacientes(${i})" title="Corrigir quantos pacientes foram atendidos neste período">👥 Pacientes</button>`}
         <button class="btn btn-aprovar btn-sm" onclick="aprovar(${i})">✓ Aprovar</button>
         <button class="btn btn-rejeitar btn-sm" onclick="rejeitar(${i})">✕</button>
       </div>
@@ -3209,6 +3232,17 @@ function apvAgrupar(){
 }
 
 // ── os filtros ───────────────────────────────────────────────────────
+// v4.33 — a classificação validada do período (FACO import/nacional, FELLOW da
+// segunda, MARTINELLI da sexta) vale em TODA tela onde a cirurgia aparece ou é
+// pesquisada — não só no Dashboard. Uma função só, usada por todas elas.
+function hogTipoCir(per, fallback){
+  if(!per) return fallback===undefined?'—':fallback;
+  const bruto = (per.tipos_cirurgia && per.tipos_cirurgia.nome) || per.tipo || '';
+  if(!bruto) return fallback===undefined?'—':fallback;
+  const med = (per.medicos && per.medicos.nome) || per.medico || '';
+  return (typeof pnTipoCanon==='function') ? pnTipoCanon(bruto, med, per.data) : bruto;
+}
+
 function apvGrupoPassa(g){
   const ehDiversa = !g.periodo && g.destino;
   if (apvF.kind === 'CIRURGICA' && ehDiversa) return false;
@@ -3219,7 +3253,7 @@ function apvGrupoPassa(g){
   if (apvF.ate && (!d || d > apvF.ate)) return false;
 
   if (apvF.medico && (!g.periodo || String(g.periodo.medicos?.nome || '') !== apvF.medico)) return false;
-  if (apvF.tipo   && (!g.periodo || String(g.periodo.tipos_cirurgia?.nome || '') !== apvF.tipo)) return false;
+  if (apvF.tipo   && (!g.periodo || String(hogTipoCir(g.periodo,'')) !== apvF.tipo)) return false;
   if (apvF.quem   && String(g.registrado_por || '') !== apvF.quem) return false;
 
   if (apvF.material){
@@ -3271,7 +3305,7 @@ function apvRenderFiltros(vis){
       ${dt('de','De')}
       ${dt('ate','Até')}
       ${sel('medico','Médico',  apvOpcoes(g=>g.periodo && g.periodo.medicos && g.periodo.medicos.nome))}
-      ${sel('tipo','Tipo de cirurgia', apvOpcoes(g=>g.periodo && g.periodo.tipos_cirurgia && g.periodo.tipos_cirurgia.nome))}
+      ${sel('tipo','Tipo de cirurgia', apvOpcoes(g=>g.periodo ? hogTipoCir(g.periodo,'') : ''))}
       ${sel('quem','Registrado por', apvOpcoes(g=>g.registrado_por))}
       <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:700;color:var(--cinza-4)">
         Material
@@ -3319,7 +3353,7 @@ function renderizarAprovadas() {
     const i = aprovadas.indexOf(p);   // índice REAL: é por ele que o ajuste grava
     const ehDiversa = !p.periodo && p.destino;
     const medico = ehDiversa ? `📦 Saída Diversa — ${p.destino}` : (p.periodo?.medicos?.nome || '—');
-    const tipo   = ehDiversa ? (p.obs || '') : (p.periodo?.tipos_cirurgia?.nome || '—');
+    const tipo   = ehDiversa ? (p.obs || '') : hogTipoCir(p.periodo,'—');
     const data   = ehDiversa ? '' : (p.periodo?.data || '—');
     let ultimaCat = null, linhas = '';
     p.itens.forEach((it, k) => {
@@ -3338,19 +3372,22 @@ function renderizarAprovadas() {
       </tr>`;
     });
     const temEdicao = p.itens.some(it => it.editado);
+    // v4.33 — quantos pacientes foram atendidos naquele dia (vem do período)
+    const pacDia = ehDiversa ? null : (Number(p.periodo && p.periodo.qtd_pacientes) || null);
     return `
     <div class="item-pendente" style="border-left:4px solid var(--verde)">
       <div>
         <div class="info-periodo" style="color:var(--verde)">✅ ${ehDiversa ? medico : medico + ' — ' + tipo}</div>
-        <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + apvData(data)} &nbsp;·&nbsp; ${p.itens.length} itens &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
+        <div class="info-meta">${ehDiversa ? (tipo || '') : '📅 ' + apvData(data)} &nbsp;·&nbsp; ${p.itens.length} itens${pacDia!=null?` &nbsp;·&nbsp; <b style="color:var(--verde)">👥 ${pacDia} paciente${pacDia===1?'':'s'}</b>`:''} &nbsp;·&nbsp; 👤 ${p.registrado_por || '—'}</div>
         <details>
-          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--verde);padding:4px 0">▶ Ver itens (${p.itens.length})</summary>
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--verde);padding:4px 0">▶ Ver itens (${p.itens.length})${pacDia?` · ${pacDia} paciente${pacDia===1?'':'s'} no dia${pacDia>1?` · ${(p.itens.reduce((s,x)=>s+(Number(x.qtd)||0),0)/pacDia).toFixed(1)} un/paciente`:''}`:''}</summary>
           <table class="mini-tabela">${linhas}</table>
         </details>
       </div>
       <div class="acoes" style="flex-direction:column">
         <button class="btn btn-primario btn-sm" onclick="imprimirGrupo(${i})">🖨️ Imprimir</button>
         <button class="btn btn-verde btn-sm" onclick="salvarAjustesAprovada(${i})" ${temEdicao ? '' : ''}>💾 Salvar ajustes</button>
+        <button class="btn btn-secundario btn-sm" onclick="apvDevolver(${i})" title="Voltar esta saída para a aba Aprovação de Saídas e corrigir com calma">↩ Devolver para ajustes</button>
       </div>
     </div>`;
   }).join('')
@@ -3359,7 +3396,16 @@ function renderizarAprovadas() {
            <button class="btn btn-secundario btn-sm" onclick="apvVerMais()">
              ▼ mostrar mais ${Math.min(30, vis.length - apvMostrar)} (faltam ${vis.length - apvMostrar})</button>
          </div>`
-      : '');
+      : '')
+  // v4.33 — "cadê as saídas antigas?": esta tela só tem o que foi registrado
+  // NO APP (a partir de 21/07/26). Junho e julho até 20/07 vieram da planilha
+  // e vivem no Dashboard — dizer isso aqui evita procurar o que não existe.
+  + `<div style="background:#EBF5FB;border-left:4px solid var(--azul-medio);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:12px;font-size:12px;color:#1B4F72;line-height:1.55">
+       📅 <b>Esta lista começa em 21/07/2026</b> — é a data em que o registro passou a ser feito aqui no app.
+       As saídas de <b>junho e julho até 20/07</b> vieram da planilha e não existem como período aprovado:
+       elas aparecem no <b style="cursor:pointer;text-decoration:underline" onclick="trocarAba('painel')">📊 Dashboard</b> (custos, consumo por cirurgia e ficha de custo), somadas ao que veio depois.
+       O botão "carregar mais antigas" traz o que ainda está no servidor <i>dentro desse período</i>.
+     </div>`;
 }
 
 function editarQtdAprovada(i, k, val) {
@@ -3367,6 +3413,135 @@ function editarQtdAprovada(i, k, val) {
   if (isNaN(qtd) || qtd < 0) return;
   aprovadas[i].itens[k].qtd = qtd;
   aprovadas[i].itens[k].editado = true;
+}
+
+// ═══ v4.33 — DEVOLVER SAÍDA APROVADA PARA AJUSTES ═══════════════════════
+// Pedido da Evelise (20/08): "se pego um erro, quantidade de pacientes, ou
+// tenho que dividir a saída por cirurgias, não consigo voltar para a aba
+// Aprovação". Agora volta — com prévia do efeito e sem apagar nada.
+function apvDevolver(i){
+  const p = aprovadas[i]; if(!p) return;
+  const ehDiversa = !p.periodo && p.destino;
+  const quem = ehDiversa ? ('📦 ' + p.destino) : ((p.periodo&&p.periodo.medicos&&p.periodo.medicos.nome)||'—');
+  const tipo = ehDiversa ? (p.obs||'') : hogTipoCir(p.periodo,'—');
+  const data = ehDiversa ? '' : ((p.periodo&&p.periodo.data)||'—');
+  const pac  = ehDiversa ? null : (Number(p.periodo&&p.periodo.qtd_pacientes)||null);
+  const un   = p.itens.reduce((s,it)=>s+(Number(it.qtd)||0),0);
+  let ov=document.getElementById('apv-dev-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='apv-dev-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:620px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--azul-medio);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>↩ Devolver esta saída para ajustes</span>'
+    +'<button onclick="document.getElementById(\'apv-dev-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="background:var(--cinza-1);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px">'
+    +'<b>'+quem+(ehDiversa?'':' — '+tipo)+'</b><br><span style="font-size:12px;color:var(--cinza-4)">'
+    +(data?('📅 '+apvData(data)+' · '):'')+p.itens.length+' itens · '+un+' unidades'+(pac?(' · 👥 '+pac+' paciente'+(pac===1?'':'s')):'')+'</span></div>'
+    +'<div style="font-size:12.5px;line-height:1.7;margin-bottom:12px">O que acontece quando você devolve:'
+    +'<ul style="margin:6px 0 0 18px;padding:0">'
+    +'<li>A saída volta para a aba <b>🔒 Aprovação de Saídas</b>, inteira.</li>'
+    +'<li><b>As unidades voltam para o saldo</b> do estoque — o consumo só conta de novo quando você aprovar.</li>'
+    +'<li>Lá dá para <b>corrigir quantidades</b>, <b>acertar o nº de pacientes</b>, <b>incluir item que faltou</b> e aprovar de novo.</li>'
+    +'<li><b>Nada é apagado</b> — nem itens, nem histórico. Para voltar atrás, é só aprovar de novo.</li>'
+    +'</ul></div>'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Motivo (fica no registro)</label>'
+    +'<textarea id="apv-dev-motivo" rows="2" placeholder="ex: nº de pacientes errado · precisa separar por cirurgia · item lançado a mais" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);margin-top:4px"></textarea>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-secundario btn-sm" onclick="document.getElementById(\'apv-dev-modal\').remove()">cancelar</button>'
+    +'<button class="btn btn-primario btn-sm" onclick="apvDevolverExecutar('+i+')">↩ Devolver para ajustes</button>'
+    +'</div></div></div>';
+}
+async function apvDevolverExecutar(i){
+  const p = aprovadas[i]; if(!p) return;
+  const motivo = ((document.getElementById('apv-dev-motivo')||{}).value||'').trim();
+  const quemFez = (typeof SESSAO!=='undefined' && SESSAO) ? SESSAO.nome : 'Gestora';
+  const carimbo = 'Devolvida para ajustes por '+quemFez+' em '+new Date().toLocaleString('pt-BR')+(motivo?(' — '+motivo):'');
+  const ov=document.getElementById('apv-dev-modal');
+  if(ov) ov.querySelector('div>div:last-child').innerHTML='<div style="padding:24px;text-align:center;color:var(--cinza-4)">Devolvendo…</div>';
+  try{
+    // O saldo é mexido por TRIGGER no banco quando aprovado muda. Em vez de
+    // adivinhar se ele desfaz sozinho, medimos no primeiro item e aplicamos a
+    // mesma conclusão nos demais — nunca devolvendo duas vezes.
+    let trigDesfaz = null;
+    for(const it of p.itens){
+      const q = Math.abs(Number(it.qtd)||0);
+      let antes = null;
+      if(trigDesfaz===null && it.material_id && it.local_id){
+        const e = await sbFetch('estoque?select=id,saldo&material_id=eq.'+it.material_id+'&local_id=eq.'+it.local_id+'&limit=1');
+        if(e && e.length) antes = { id:e[0].id, saldo:Number(e[0].saldo) };
+      }
+      await sbFetch('movimentacoes?id=eq.'+it.id,'PATCH',{
+        aprovado:false, aprovado_por:null, aprovado_em:null,
+        observacao: (it.observacao? (it.observacao+' | ') : '') + carimbo });
+      if(trigDesfaz===null && antes){
+        const e2 = await sbFetch('estoque?select=saldo&id=eq.'+antes.id);
+        const depois = (e2&&e2.length)?Number(e2[0].saldo):antes.saldo;
+        trigDesfaz = Math.abs(depois - antes.saldo) > 0.0001;   // o banco devolveu sozinho?
+        if(!trigDesfaz) await sbFetch('estoque?id=eq.'+antes.id,'PATCH',{ saldo: antes.saldo + q });
+      } else if(trigDesfaz===false && it.material_id && it.local_id){
+        const e = await sbFetch('estoque?select=id,saldo&material_id=eq.'+it.material_id+'&local_id=eq.'+it.local_id+'&limit=1');
+        if(e && e.length) await sbFetch('estoque?id=eq.'+e[0].id,'PATCH',{ saldo: Number(e[0].saldo) + q });
+      }
+    }
+    if(ov) ov.remove();
+    toast('↩ Saída devolvida — está na aba 🔒 Aprovação de Saídas para você ajustar.','sucesso');
+    aprovadas.splice(i,1);
+    renderizarAprovadas();
+    if(typeof carregarPendentes==='function') await carregarPendentes();
+    if(typeof carregarSaldos==='function') carregarSaldos();
+    if(typeof trocarAba==='function') trocarAba('aprovacao');
+  }catch(e){
+    if(ov) ov.remove();
+    toast('Erro ao devolver: '+(e.message||e),'erro');
+  }
+}
+
+// v4.33 — corrigir o nº de pacientes do período direto na aprovação, com
+// prévia do efeito (nada de janela crua — regra da casa)
+function aprPacientes(i){
+  const p = pendentes[i]; if(!p || !p.periodo) return;
+  const atual = Number(p.periodo.qtd_pacientes)||0;
+  const un = p.itens.reduce((s,it)=>s+(Number(it.qtd)||0),0);
+  let ov=document.getElementById('apr-pac-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='apr-pac-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--azul);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>👥 Pacientes atendidos neste período</span>'
+    +'<button onclick="document.getElementById(\'apr-pac-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:13px;margin-bottom:10px">'+((p.periodo.medicos&&p.periodo.medicos.nome)||'—')+' — '
+    +hogTipoCir(p.periodo,'—')+' · 📅 '+(p.periodo.data||'—')+'</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'
+    +'<input id="apr-pac-n" type="number" min="0" value="'+(atual||'')+'" placeholder="quantos?" oninput="aprPacPrever('+un+')" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:15px;font-weight:700;font-family:var(--fonte);text-align:center">'
+    +'<span style="font-size:12px;color:var(--cinza-4)">hoje: <b>'+(atual||'não informado')+'</b></span></div>'
+    +'<div id="apr-pac-previa" style="background:var(--cinza-1);border-radius:8px;padding:10px 14px;font-size:12.5px;line-height:1.6;color:var(--cinza-5)"></div>'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:10px;line-height:1.55">Este número <b>não mexe em estoque</b> — ele divide o custo do dia e define o <b>R$/paciente</b> no Dashboard e na ficha de custo. Dá para corrigir de novo quando quiser.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-secundario btn-sm" onclick="document.getElementById(\'apr-pac-modal\').remove()">cancelar</button>'
+    +'<button class="btn btn-primario btn-sm" onclick="aprPacSalvar('+i+')">💾 Salvar pacientes</button>'
+    +'</div></div></div>';
+  aprPacPrever(un);
+}
+function aprPacPrever(un){
+  const el=document.getElementById('apr-pac-previa'); if(!el) return;
+  const n=parseInt((document.getElementById('apr-pac-n')||{}).value,10);
+  el.innerHTML = (!n||n<=0)
+    ? '<span style="color:var(--vermelho)">Sem o nº de pacientes o sistema não calcula consumo nem custo por paciente deste dia.</span>'
+    : 'Com <b>'+n+' paciente'+(n===1?'':'s')+'</b>: <b>'+(un/n).toFixed(1)+' unidades por paciente</b> ('+un+' unidades no total do dia).';
+}
+async function aprPacSalvar(i){
+  const p = pendentes[i]; if(!p || !p.periodo) return;
+  const n = parseInt((document.getElementById('apr-pac-n')||{}).value,10);
+  if(isNaN(n) || n<0){ toast('Informe um número válido.','erro'); return; }
+  try{
+    await sbFetch('periodos_cirurgicos?id=eq.'+p.periodo.id,'PATCH',{ qtd_pacientes:n });
+    p.periodo.qtd_pacientes = n;
+    const ov=document.getElementById('apr-pac-modal'); if(ov) ov.remove();
+    toast('👥 '+n+' paciente'+(n===1?'':'s')+' salvos ✓','sucesso');
+    renderizarPendentes();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
 async function salvarAjustesAprovada(i) {
@@ -3423,7 +3598,7 @@ function imprimirGrupo(i) {
       <div><div class="comp-campo-label">Fellow</div><div class="comp-campo-valor">${pc.fellow ? 'Sim' : 'Não'}</div></div>`;
     document.getElementById('comp-tipos').innerHTML = `
       <tr>
-        <td class="col-tipo-1">${pc.tipos_cirurgia?.nome || '—'}</td>
+        <td class="col-tipo-1">${hogTipoCir(pc,'—')}</td>
         <td>${pc.modalidade || '—'}</td>
         <td class="centro">${pc.qtd_pacientes || '—'}</td>
         <td>${pc.protocolo || '—'}</td>
@@ -9444,7 +9619,7 @@ function pnCirFonte(){
   const movs = [], perInfo = {};
   for (const p of (pnPeriodos||[])){
     perInfo['p'+p.id] = { data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
-      tipo:(p.tipos_cirurgia&&p.tipos_cirurgia.nome)||'—', pac:Number(p.qtd_pacientes)||0,
+      tipo:hogTipoCir(p,'—'), pac:Number(p.qtd_pacientes)||0,   // v4.33 — Consumo por cirurgia usa a classificação validada
       modalidade:p.modalidade||'', origem:'app' };
   }
   for (const m of (pnMovs||[])){
@@ -10122,6 +10297,95 @@ function pnPeriodosDoMes(mes){
   return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 }
 
+// v4.33 — filtros do "número-mãe" + saída em Excel e impressão
+let pnPerFMed = '', pnPerFTipo = '';
+function pnPerContexto(){
+  const p=[]; if(pnPerFMed) p.push('médico: '+pnPerFMed); if(pnPerFTipo) p.push('cirurgia: '+pnPerFTipo);
+  return p.length?p.join(' · '):'todos os médicos e cirurgias';
+}
+function pnPerResumo(rows){
+  const tot=rows.reduce((s,r)=>s+(Number(r.custo)||0),0);
+  const pac=rows.reduce((s,r)=>s+(Number(r.pac)||0),0);
+  const porTipo={};
+  rows.forEach(r=>{ const k=r.tipo||'—'; (porTipo[k]=porTipo[k]||{c:0,p:0,n:0}); porTipo[k].c+=Number(r.custo)||0; porTipo[k].p+=Number(r.pac)||0; porTipo[k].n++; });
+  return { tot, pac, porTipo:Object.entries(porTipo).sort((a,b)=>b[1].c-a[1].c) };
+}
+function pnPerExcel(){
+  const rows=window._pnPerRows||[]; if(!rows.length){ toast('Nada para exportar com esse filtro.','erro'); return; }
+  const R=pnPerResumo(rows);
+  const csv=[['Custo por período — '+pnMesLabel(pnCustosMes)+'/26'],[pnPerContexto()],[],
+    ['Data','Médico','Tipo de cirurgia','Pacientes','Custo (R$)','R$/paciente','Fonte']];
+  rows.forEach(r=>csv.push([pnData(r.data), r.medico, r.tipo, r.pac||'', (Number(r.custo)||0).toFixed(2),
+    r.pac>0?(r.custo/r.pac).toFixed(2):'', r.origem==='planilha'?'planilha':'app']));
+  csv.push([],['TOTAL','','',R.pac,R.tot.toFixed(2), R.pac?(R.tot/R.pac).toFixed(2):'','']);
+  csv.push([],['Resumo por cirurgia'],['Tipo','Períodos','Pacientes','Custo (R$)','R$/paciente']);
+  R.porTipo.forEach(([k,v])=>csv.push([k, v.n, v.p, v.c.toFixed(2), v.p?(v.c/v.p).toFixed(2):'']));
+  pnCG_Csv(csv);
+}
+function pnPerImprimir(){
+  const rows=window._pnPerRows||[]; if(!rows.length){ toast('Nada para imprimir com esse filtro.','erro'); return; }
+  const R=pnPerResumo(rows);
+  const linhas=rows.map(r=>'<tr><td>'+pnData(r.data)+'</td><td>'+r.medico+'</td><td>'+r.tipo+'</td>'
+    +'<td style="text-align:center">'+(r.pac||'—')+'</td><td style="text-align:right">'+pnMoney(r.custo)+'</td>'
+    +'<td style="text-align:right"><b>'+(r.pac>0?pnMoney(r.custo/r.pac):'—')+'</b></td>'
+    +'<td>'+(r.origem==='planilha'?'planilha':'app')+'</td></tr>').join('');
+  const resumo=R.porTipo.map(([k,v])=>'<tr><td>'+k+'</td><td style="text-align:center">'+v.n+'</td>'
+    +'<td style="text-align:center">'+v.p+'</td><td style="text-align:right">'+pnMoney(v.c)+'</td>'
+    +'<td style="text-align:right"><b>'+(v.p?pnMoney(v.c/v.p):'—')+'</b></td></tr>').join('');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custo por período — '+pnMesLabel(pnCustosMes)+'/26</title>'
+    +'<style>body{font-family:Arial;font-size:12px;color:#222;margin:24px}h1{font-size:16px;margin-bottom:2px}h2{font-size:13px;margin:16px 0 6px}'
+    +'.sub{font-size:11px;color:#666;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin:6px 0}'
+    +'td,th{border:1px solid #ccc;padding:5px 7px;font-size:11px;text-align:left}th{background:#f0f3f7;text-transform:uppercase;font-size:10px}'
+    +'.tot{text-align:right;font-weight:bold;font-size:13px;margin-top:8px}@media print{button{display:none}}</style></head><body>'
+    +'<h1>🏥 HOG — Custo por período · '+pnMesLabel(pnCustosMes)+'/26</h1>'
+    +'<div class="sub">Filtro: '+pnPerContexto()+' · '+rows.length+' período(s) · emitido em '+new Date().toLocaleString('pt-BR')+'</div>'
+    +'<table><thead><tr><th>Data</th><th>Médico</th><th>Tipo</th><th>Pac.</th><th>Custo</th><th>R$/paciente</th><th>Fonte</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+    +'<p class="tot">Total: '+pnMoney(R.tot)+' · Pacientes: '+R.pac+' · Custo médio por paciente: '+(R.pac?pnMoney(R.tot/R.pac):'—')+'</p>'
+    +'<h2>Resumo por cirurgia</h2>'
+    +'<table><thead><tr><th>Tipo</th><th>Períodos</th><th>Pacientes</th><th>Custo</th><th>R$/paciente</th></tr></thead><tbody>'+resumo+'</tbody></table>'
+    +'<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
+    +'</body></html>');
+}
+
+// v4.33 — de que é feito o custo de cada mês (a barra deixa de ser um número solto)
+function pnComposicaoMes(mes){
+  const movs = pnMovs.filter(m=>m.mes===mes);
+  const c = { planilha:0, planilhaPer:0, cirurgia:0, consultorio:0, reproc:0, pac:0, itens:movs.length };
+  for(const m of movs){
+    if(m.reprocessado) c.reproc += m.custo;
+    if(m.tipoCir==='(diversas)') c.consultorio += m.custo; else c.cirurgia += m.custo;
+  }
+  for(const h of pnHistPer){ if(h.mes===mes){ c.planilha += Number(h.custo)||0; c.planilhaPer++; c.pac += Number(h.pac)||0; } }
+  for(const p of (typeof pnPeriodos!=='undefined'?pnPeriodos:[])){
+    if(((p.data||'')+'').slice(0,7)===mes) c.pac += Number(p.qtd_pacientes)||0;
+  }
+  c.app = c.cirurgia + c.consultorio;
+  return c;
+}
+function pnCompLinhas(x){
+  const c=x.comp, l=[];
+  if(c.planilha>0 && c.app>0) l.push('📄 planilha '+pnMoney0(c.planilha)+' + 📲 app '+pnMoney0(c.app));
+  else if(c.planilha>0) l.push('📄 só planilha');
+  else if(c.app>0) l.push('📲 só app');
+  const p2=[];
+  if(c.cirurgia>0) p2.push('🏥 cirurgias '+pnMoney0(c.cirurgia));
+  if(c.consultorio>0) p2.push('🩺 consultórios '+pnMoney0(c.consultorio));
+  if(p2.length) l.push(p2.join(' · '));
+  if(c.reproc>0) l.push('♻️ reprocessados '+pnMoney0(c.reproc));
+  if(c.pac>0) l.push('👥 '+c.pac+' pac · '+pnMoney0(x.v/c.pac)+'/pac');
+  return l.join('<br>');
+}
+function pnCompTitulo(x){
+  const c=x.comp;
+  return ('Mês '+pnMesLabel(x.mes)+'/26 — total '+pnMoney0(x.v)
+    +'\nPlanilha (jun/jul até 20/07): '+pnMoney0(c.planilha)+' em '+c.planilhaPer+' período(s)'
+    +'\nApp (dados vivos): '+pnMoney0(c.app)+' em '+c.itens+' lançamento(s)'
+    +'\n  · cirurgias '+pnMoney0(c.cirurgia)+'  · consultórios/diversas '+pnMoney0(c.consultorio)
+    +'\n  · destes, reprocessados: '+pnMoney0(c.reproc)
+    +'\nPacientes no mês: '+c.pac+(c.pac?('  → '+pnMoney0(x.v/c.pac)+' por paciente'):'')
+    +'\nNão inclui compras, lavanderia, esterilização nem manutenção.').replace(/"/g,'&quot;');
+}
+
 function pnCustoDoMes(mes){
   let tot = pnMovs.filter(m=>m.mes===mes).reduce((s,m)=>s+m.custo,0);
   for(const h of pnHistPer){ if(h.mes===mes) tot += h.custo; }
@@ -10139,7 +10403,7 @@ function pnCustos(){
   const negativos = ccDados.filter(r=>(Number(r.saldo)||0)<0).length;
   const triagem = ccDados.filter(r=>!r.classe_confirmada).length;
   // custo por mês (planilha + vivo)
-  const custoPorMes = meses.map(m=>({mes:m, v:pnCustoDoMes(m)}));
+  const custoPorMes = meses.map(m=>({mes:m, v:pnCustoDoMes(m), comp:pnComposicaoMes(m)}));
   const mxMes = Math.max(1,...custoPorMes.map(x=>x.v));
   // média R$/pac por tipo (todas as fontes) p/ comparação
   const cppTipo = {};
@@ -10154,7 +10418,14 @@ function pnCustos(){
     }
     for(const [t,v] of Object.entries(porTipo)) cppTipo[t]=v.p>0?v.c/v.p:null;
   }
-  const perRows = pnPeriodosDoMes(pnCustosMes);
+  // v4.33 — o número-mãe ganhou filtros (médico/tipo) + Excel e impressão
+  const perTodos = pnPeriodosDoMes(pnCustosMes);
+  const perMeds  = [...new Set(perTodos.map(p=>p.medico).filter(x=>x&&x!=='—'))].sort((a,b)=>a.localeCompare(b));
+  const perTipos = [...new Set(perTodos.map(p=>p.tipo).filter(x=>x&&x!=='—'))].sort((a,b)=>a.localeCompare(b));
+  if(pnPerFMed  && !perMeds.includes(pnPerFMed))   pnPerFMed='';
+  if(pnPerFTipo && !perTipos.includes(pnPerFTipo)) pnPerFTipo='';
+  const perRows = perTodos.filter(p=>(!pnPerFMed||p.medico===pnPerFMed)&&(!pnPerFTipo||p.tipo===pnPerFTipo));
+  window._pnPerRows = perRows;   // usado pelo Excel e pela impressão
   // tabelas R$/pac por tipo/médico × mês (planilha + vivo)
   function aggCpp(campo){
     const agg = {};
@@ -10212,11 +10483,22 @@ function pnCustos(){
     <div class="pn-card">
       <div class="pn-ct"><span>Custo CC por mês</span><span class="pn-funcao">"a tendência está sob controle?" · planilha + app</span></div>
       <div style="display:flex;align-items:flex-end;gap:18px;height:150px;padding:6px 8px 0">
-        ${custoPorMes.map(x=>`<div style="flex:1;max-width:130px;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
+        ${custoPorMes.map(x=>`<div style="flex:1;max-width:130px;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${pnCompTitulo(x)}">
           <div style="font-size:12px;font-weight:800;color:${x.mes===mes?'var(--azul)':'var(--cinza-4)'};margin-bottom:4px">${pnMoney0(x.v)}</div>
           <div style="background:${x.mes===mes?'var(--azul-medio)':'var(--cinza-3)'};height:${Math.max(6,Math.round(x.v/mxMes*96))}px;border-radius:6px 6px 0 0"></div>
           <div style="font-size:11px;font-weight:700;color:var(--cinza-4);margin-top:6px;border-top:2px solid var(--cinza-2);padding-top:4px">${pnMesLabel(x.mes)}/26</div>
         </div>`).join('')}
+      </div>
+      <!-- v4.33 — cada barra diz DE QUE é feita (pedido da Evelise, 20/08) -->
+      <div style="display:flex;gap:18px;padding:2px 8px 0">
+        ${custoPorMes.map(x=>`<div style="flex:1;max-width:130px;font-size:10px;line-height:1.5;color:var(--cinza-4);text-align:center">
+          ${pnCompLinhas(x)}
+        </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--cinza-4);border-top:1px solid var(--cinza-2);margin-top:10px;padding-top:8px;line-height:1.6">
+        📌 <b>O que entra nestas barras:</b> o <b>consumo</b> do mês — material que <b>saiu</b> para cirurgia, para os consultórios e as saídas diversas, valorado pelo último preço pago
+        (reprocessados entram pelo valor da remessa). <b>Não entram</b>: compras/notas do mês (isso é o card "Compra vs consumo"), lavanderia, esterilização e manutenção — esses aparecem
+        separados em <b>💼 Custos gerais</b>, cada um no seu bloco.
       </div>
     </div>
     <div class="pn-kpis">
@@ -10225,11 +10507,21 @@ function pnCustos(){
     </div>
     <details class="pn-card" ${pnPerAberto?'open':''} ontoggle="pnPerAberto=this.open">
       <summary class="pn-ct" style="cursor:pointer;list-style:none"><span>▸ Custo por PERÍODO — o número-mãe</span>
-        <span style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
-          <select onchange="pnCustosMes=this.value;pnCustos()" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">
+        <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <select onchange="pnCustosMes=this.value;pnPerAberto=true;pnCustos()" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">
             ${meses.map(m=>`<option value="${m}" ${m===pnCustosMes?'selected':''}>${pnMesLabel(m)}/26</option>`).join('')}
           </select>
-          <span class="pn-funcao">abra e clique ▸ explode os materiais</span>
+          <select onchange="pnPerFMed=this.value;pnPerAberto=true;pnCustos()" title="filtrar por médico" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte);max-width:170px">
+            <option value="">👨‍⚕️ todos os médicos</option>
+            ${perMeds.map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===pnPerFMed?'selected':''}>${x}</option>`).join('')}
+          </select>
+          <select onchange="pnPerFTipo=this.value;pnPerAberto=true;pnCustos()" title="filtrar por tipo de cirurgia" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte);max-width:200px">
+            <option value="">🏥 todas as cirurgias</option>
+            ${perTipos.map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===pnPerFTipo?'selected':''}>${x}</option>`).join('')}
+          </select>
+          ${(pnPerFMed||pnPerFTipo)?`<span style="font-size:11px;color:var(--azul);cursor:pointer;font-weight:700" onclick="pnPerFMed='';pnPerFTipo='';pnPerAberto=true;pnCustos()">✕ limpar</span>`:''}
+          <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:5px 10px;font-size:11px" onclick="pnPerExcel()">📊 Excel</button>
+          <button class="pn-btn" style="background:var(--azul-claro);color:var(--azul);padding:5px 10px;font-size:11px" onclick="pnPerImprimir()">🖨 Imprimir</button>
         </span></summary>
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th><th>Fonte</th></tr></thead><tbody>
       ${perRows.length?perRows.map(r=>{
@@ -10295,6 +10587,44 @@ function pnCG_SetF(campo,v){ pnCGf[campo]=v; pnCG_Render(); }
 // v4.27 — FICHA DE CUSTO por tipo de cirurgia: itens usados, qtd por
 // paciente/período, valor unitário e o total — por paciente quando é 1,
 // por período quando passa de 3 pacientes (regra da Evelise).
+// ═══ v4.33 — Excel da ficha: você escolhe as colunas ═══════════════════
+const PN_FICHA_COLS = [
+  { k:'item',  rot:'Item',                 fixa:true },
+  { k:'qtd',   rot:'Qtd no mês' },
+  { k:'qtdpac',rot:'Qtd por paciente' },
+  { k:'unit',  rot:'Valor unitário (R$)' },
+  { k:'total', rot:'Custo total (R$)' },
+  { k:'part',  rot:'% do custo do tipo' },
+];
+let pnFichaColsSel = ['item','qtd','qtdpac','unit','total'];
+function pnFichaExcelEscolher(){
+  const tipo=(document.getElementById('pn-cg-ficha-tipo')||{}).value;
+  if(!tipo){ toast('Escolha o tipo de cirurgia.','erro'); return; }
+  let ov=document.getElementById('pn-ficha-col-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='pn-ficha-col-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:44px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:460px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--verde);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>⬇ Excel da ficha — '+tipo+'</span>'
+    +'<button onclick="document.getElementById(\'pn-ficha-col-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-bottom:10px">Marque as colunas que você quer na planilha. O resumo (total, pacientes e custo por paciente) vai sempre no fim.</div>'
+    +PN_FICHA_COLS.map(c=>'<label style="display:flex;gap:8px;align-items:center;padding:6px 4px;font-size:13px;'+(c.fixa?'opacity:.65':'cursor:pointer')+'">'
+      +'<input type="checkbox" value="'+c.k+'" '+(pnFichaColsSel.includes(c.k)?'checked':'')+' '+(c.fixa?'disabled':'')+' style="width:16px;height:16px;accent-color:var(--verde)">'
+      +c.rot+(c.fixa?' <span style="font-size:10px;color:var(--cinza-4)">(sempre vai)</span>':'')+'</label>').join('')
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="pn-btn" style="background:var(--cinza-2);color:var(--cinza-5);padding:7px 12px;font-size:12px" onclick="document.getElementById(\'pn-ficha-col-modal\').remove()">cancelar</button>'
+    +'<button class="pn-btn" style="background:var(--verde);color:#fff;padding:7px 14px;font-size:12px" onclick="pnFichaExcelGerar()">⬇ Gerar planilha</button>'
+    +'</div></div></div>';
+}
+function pnFichaExcelGerar(){
+  const ov=document.getElementById('pn-ficha-col-modal');
+  const marcadas=[...(ov?ov.querySelectorAll('input[type=checkbox]'):[])].filter(c=>c.checked||c.disabled).map(c=>c.value);
+  pnFichaColsSel = marcadas.length?marcadas:['item'];
+  if(ov) ov.remove();
+  pnCG_Ficha(true);
+}
+
 function pnCG_Ficha(excel){
   const tipo=(document.getElementById('pn-cg-ficha-tipo')||{}).value;
   if(!tipo){ toast('Escolha o tipo de cirurgia.','erro'); return; }
@@ -10317,11 +10647,26 @@ function pnCG_Ficha(excel){
   const rows=Object.entries(ag).sort((a,b)=>b[1].c-a[1].c);
   const tot=rows.reduce((s,[,v])=>s+v.c,0);
   if(excel){
+    // v4.33 — só as colunas que a pessoa marcou (pnFichaColsSel)
+    const sel = (typeof pnFichaColsSel!=='undefined' && pnFichaColsSel.length) ? pnFichaColsSel : ['item','qtd','qtdpac','unit','total'];
+    const cols = PN_FICHA_COLS.filter(c=>sel.includes(c.k));
+    const valor = (c,k,v)=>{
+      if(c.k==='item')   return k;
+      if(c.k==='qtd')    return Math.round(v.q);
+      if(c.k==='qtdpac') return pac?(v.q/pac).toFixed(2):'—';
+      if(c.k==='unit')   return (Number(v.unit)||0).toFixed(4);
+      if(c.k==='total')  return v.c.toFixed(2);
+      if(c.k==='part')   return tot?((v.c/tot*100).toFixed(1)+'%'):'—';
+      return '';
+    };
     const csv=[['Ficha de custo — '+tipo+' — '+mes.split('-').reverse().join('/')],
-      ['Item','Qtd no mês','Qtd por paciente','Valor unitário (R$)','Custo total (R$)']];
-    rows.forEach(([k,v])=>csv.push([k,Math.round(v.q),(pac?(v.q/pac).toFixed(2):'—'),v.unit.toFixed(4),v.c.toFixed(2)]));
-    csv.push(['TOTAL','','','',tot.toFixed(2)],['Pacientes no mês',pac,'','',''],
-      ['Custo por paciente','','','',(pac?tot/pac:0).toFixed(2)]);
+               ['Pacientes no mês: '+pac+' · períodos: '+pers.length],[],
+               cols.map(c=>c.rot)];
+    rows.forEach(([k,v])=>csv.push(cols.map(c=>valor(c,k,v))));
+    const vazias = cols.slice(1).map(()=>'');
+    csv.push([], ['TOTAL'].concat(vazias.slice(0,-1)).concat([tot.toFixed(2)]),
+                 ['Pacientes no mês', pac].concat(vazias.slice(1)),
+                 ['Custo por paciente'].concat(vazias.slice(0,-1)).concat([(pac?tot/pac:0).toFixed(2)]));
     pnCG_Csv(csv); return;
   }
   const perLinhas=pers.map(p=>'<tr><td>'+(p.data||'').split('-').reverse().join('/')+'</td><td>'+(p.medico||'—')+'</td><td style="text-align:center">'+(p.pac||'—')+'</td><td style="text-align:right">'+pnMoney(p.custo)+'</td><td style="text-align:right;font-weight:bold">'+((Number(p.pac)||0)<=1?pnMoney(p.custo)+' (por paciente)':((Number(p.pac)||0)>3?pnMoney(p.custo)+' (por período)':pnMoney(p.pac?p.custo/p.pac:0)+'/pac'))+'</td></tr>').join('');
@@ -10352,6 +10697,18 @@ async function pnCG_Render(){
   // junto com os dados vivos (o filtro de material só alcança os vivos)
   const histMes=((pnCGf.mat||pnCGf.per)?[]:pnHistPer.filter(h=>h.mes===mes&&(!pnCGf.med||((h.medico||'')===pnCGf.med))));
   const histTot=histMes.reduce((s,h)=>s+(Number(h.custo)||0),0);
+  // v4.33 — junta os ITENS da planilha na lista de materiais (casa pelo nome,
+  // que é a chave do histórico); sem isso, mês só-planilha ficava sem itens
+  const mergeHistItens=(pares)=>{
+    const m={}; pares.forEach(([k,v])=>m[k]={c:v.c,q:v.q});
+    for(const h of histMes){
+      for(const it of (h.itens||[])){
+        const k=(it.mid&&pnUvp[it.mid]?pnUvp[it.mid].nome:it.nome)||'—';
+        (m[k]=m[k]||{c:0,q:0}); m[k].c+=Number(it.custo)||0; m[k].q+=Number(it.qtd)||0;
+      }
+    }
+    return Object.entries(m).sort((a,b)=>b[1].c-a[1].c);
+  };
   const mergeHist=(pares,chave)=>{
     const m={}; pares.forEach(([k,v])=>m[k]={c:v.c,q:v.q});
     // v4.31b — a planilha soma custo E unidades (antes só custo → médico da
@@ -10360,6 +10717,29 @@ async function pnCG_Render(){
     return Object.entries(m).sort((a,b)=>b[1].c-a[1].c);
   };
   const agrupa=(arr,chave)=>{ const g={}; for(const m of arr){ const k=chave(m)||'—'; (g[k]=g[k]||{c:0,q:0}); g[k].c+=m.custo; g[k].q+=m.qtd; } return Object.entries(g).sort((a,b)=>b[1].c-a[1].c); };
+  // v4.33 — tabela com PACIENTES e R$/paciente na mesma linha (fim da lista repetida)
+  const tabelaPac=(pares, mapaPac, c1)=>{
+    const tot={q:0,c:0,p:0};
+    const linhas=pares.map(([k,v])=>{
+      const pac=(mapaPac[k]&&mapaPac[k].p)||0;
+      tot.q+=v.q; tot.c+=v.c; tot.p+=pac;
+      return '<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+k+'</td>'
+        +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(v.q).toLocaleString('pt-BR')+'</td>'
+        +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+(pac||'—')+'</td>'
+        +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.c)+'</td>'
+        +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:800;color:var(--azul)">'+(pac?money(v.c/pac):'—')+'</td></tr>';
+    }).join('');
+    const th=(t,al)=>'<th style="text-align:'+(al||'right')+';padding:4px 8px;background:var(--cinza-1)">'+t+'</th>';
+    return '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">'
+      +'<thead><tr>'+th(c1,'left')+th('Qtd materiais')+th('Qtd pacientes')+th('Custo total')+th('R$/paciente')+'</tr></thead>'
+      +'<tbody>'+linhas
+      +'<tr style="background:var(--cinza-1)"><td style="padding:5px 8px;font-weight:800">TOTAL</td>'
+      +'<td style="text-align:right;padding:5px 8px;font-weight:800">'+Math.round(tot.q).toLocaleString('pt-BR')+'</td>'
+      +'<td style="text-align:right;padding:5px 8px;font-weight:800">'+(tot.p||'—')+'</td>'
+      +'<td style="text-align:right;padding:5px 8px;font-weight:800">'+money(tot.c)+'</td>'
+      +'<td style="text-align:right;padding:5px 8px;font-weight:800;color:var(--azul)">'+(tot.p?money(tot.c/tot.p):'—')+'</td></tr>'
+      +'</tbody></table>';
+  };
   const tabela=(pares,c1)=>'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">'+c1+'</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Unid.</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Custo</th></tr></thead><tbody>'
     +pares.map(([k,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+k+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+Math.round(v.q).toLocaleString('pt-BR')+'</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.c)+'</td></tr>').join('')+'</tbody></table>';
   // por paciente por tipo
@@ -10446,20 +10826,37 @@ async function pnCG_Render(){
         :'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma compra deste mês saiu mais barata que a anterior (ou ainda não houve recompra de itens).</div>')
       +'<div style="font-size:11px;color:var(--cinza-4);margin-top:6px">Comparação: preço da compra anterior × preço pago neste mês, item a item. Itens marcados "em tratativa" não distorcem os meses passados.</div>')
     +D('🏥 Saídas cirúrgicas (CC + CME) — inclui reprocessados'+(histTot?' e a planilha jun/jul':''), soma(cirur)+histTot,
-      (histTot?'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:5px 8px;border-radius:6px;margin-top:4px">📅 Este mês inclui '+money(histTot)+' da planilha histórica (antes de 21/07). Unidades listadas referem-se só aos dados vivos do app.</div>':'')
-      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por tipo de cirurgia:</div>'+tabela(mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo'),'Tipo')
+      (histTot?'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:5px 8px;border-radius:6px;margin-top:4px">📅 Este mês inclui '+money(histTot)+' da planilha histórica (antes de 21/07) — materiais e pacientes dela já entram nas contas abaixo.</div>':'')
+      // v4.33 — a ficha de custo sobe para o TOPO do bloco (era o último item da
+      // página) e o seletor passa a listar TODOS os tipos do mês, inclusive os que
+      // só existem na planilha — em junho ele aparecia vazio.
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 10px;padding:8px 10px;background:var(--cinza-1);border-radius:8px">'
+      +'<b style="font-size:11px;text-transform:uppercase;color:var(--cinza-4)">📄 Ficha de custo por cirurgia:</b>'
+      +'<select id="pn-cg-ficha-tipo" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte);min-width:190px">'
+      +[...new Set(perMes.map(p=>p.tipo).filter(t=>t&&t!=='—'&&t!=='(diversas)'))].sort().map(t=>'<option>'+t+'</option>').join('')+'</select>'
+      +'<button onclick="pnCG_Ficha(false)" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir ficha</button>'
+      +'<button onclick="pnFichaExcelEscolher()" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">⬇ Baixar (Excel)</button>'
+      +'<span style="font-size:10.5px;color:var(--cinza-4)">itens usados, qtd por paciente, valor unitário e custo total</span></div>'
+      // uma tabela só por tipo: materiais, pacientes, custo do mês e R$/paciente
+      // (a lista separada "R$ por paciente, por tipo" saiu — era a mesma informação)
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por tipo de cirurgia:</div>'
+      +tabelaPac(mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo'), porTipoPac, 'Tipo')
       +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Por médico:</div>'+tabela(mergeHist(agrupa(cirur,m=>m.medico),'medico'),'Médico')
-      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">R$ por paciente, por tipo:</div>'
-      +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+Object.entries(porTipoPac).map(([t,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+t+' ('+v.p+' pac.)</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.p?v.c/v.p:0)+'/pac</td></tr>').join('')+'</tbody></table>'
       +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">R$ por paciente, por MÉDICO:</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+Object.entries(porMedPac).sort((a,b)=>b[1].c-a[1].c).map(([md,v])=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+md+' ('+v.p+' pac.)</td><td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700">'+money(v.p?v.c/v.p:0)+'/pac</td></tr>').join('')+'</tbody></table>'
-      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens que mais custaram:</div>'+tabela(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).slice(0,20),'Item')
-      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:8px;border-top:1px dashed var(--cinza-2)">'
-      +'<b style="font-size:11px;text-transform:uppercase;color:var(--cinza-4)">📄 Ficha de custo por cirurgia:</b>'
-      +'<select id="pn-cg-ficha-tipo" style="border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--fonte)">'+[...new Set(cirur.map(m=>m.tipoCir).filter(Boolean))].sort().map(t=>'<option>'+t+'</option>').join('')+'</select>'
-      +'<button onclick="pnCG_Ficha(false)" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--azul-medio);color:#fff">🖨 Imprimir ficha</button>'
-      +'<button onclick="pnCG_Ficha(true)" style="border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--verde);color:#fff">⬇ Baixar (Excel)</button></div>')
-    +D('🚪 Materiais para os consultórios (saídas diversas)', soma(consult), tabela(agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item'))
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens que mais custaram:</div>'
+      // v4.33 — soma os itens da PLANILHA também: em junho (100% planilha) esta
+      // lista aparecia vazia, como se nada tivesse sido consumido.
+      +tabela(mergeHistItens(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).slice(0,20),'Item'))
+    +D('🚪 Materiais para os consultórios (saídas diversas)', soma(consult),
+      (consult.length
+        ? tabela(agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item')
+        // v4.33 — R$ 0,00 mudo confunde: explica que jun/jul só têm cirurgias
+        : '<div style="font-size:12px;color:var(--cinza-4);padding:8px 0;line-height:1.6">'
+          +(histTot
+            ? '📅 <b>Este mês vem da planilha</b>, e ela trouxe <b>só as cirurgias</b> — as saídas para consultórios daquele período não foram importadas. A partir de 21/07 elas aparecem aqui normalmente.'
+            : 'Nenhuma saída para consultórios registrada neste mês.')
+          +'</div>'))
     +D('🧺 Lavanderia (serviço do mês)', somaNf(lav), lav.length?listaNf(lav):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de lavanderia neste mês.</div>')
     +D('☣️ Esterilização (serviço cobrado)', somaNf(ester), (ester.length?listaNf(ester):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de esterilização neste mês.</div>')+'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:6px">⚠️ Os itens reprocessados também valorizam as cirurgias no bloco de cima — este é o valor do SERVIÇO cobrado pela esterilizadora. Não some os dois.</div>')
     +D('🔧 Manutenção de instrumental', somaNf(manut), manut.length?listaNf(manut):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de manutenção neste mês.</div>')
@@ -10773,7 +11170,7 @@ async function pnEmpDevolver(id){
 }
 
 // ── SIMULADOR ──
-function pnSimTipos(){ const s=new Set(); for(const p of pnPeriodos){ if(p.tipos_cirurgia&&p.tipos_cirurgia.nome) s.add(p.tipos_cirurgia.nome); } return [...s].sort(); }
+function pnSimTipos(){ const s=new Set(); for(const p of pnPeriodos){ const t=hogTipoCir(p,''); if(t) s.add(t); } return [...s].sort(); }   // v4.33 — tipos validados
 function pnSimMedicos(){ const s=new Set(); for(const p of pnPeriodos){ if(p.medicos&&p.medicos.nome) s.add(p.medicos.nome); } return [...s].sort(); }
 function pnSimulador(){
   const tipos=pnSimTipos(), meds=pnSimMedicos();
@@ -10803,7 +11200,7 @@ function pnSimAdd(){ pnSimLinhas.push({tipo:'',medico:'',qtd:1,protocolo:''}); p
 function pnSimRemover(i){ pnSimLinhas.splice(i,1); pnSimulador(); }
 
 function pnSimAchaModelo(tipo, medico, qtd){
-  const doTipo=pnPeriodos.filter(p=>p.tipos_cirurgia&&p.tipos_cirurgia.nome===tipo&&(Number(p.qtd_pacientes)||0)>0);
+  const doTipo=pnPeriodos.filter(p=>hogTipoCir(p,'')===tipo&&(Number(p.qtd_pacientes)||0)>0);
   if(!doTipo.length) return null;
   const doMed=medico?doTipo.filter(p=>p.medicos&&p.medicos.nome===medico):[];
   const pool=doMed.length?doMed:doTipo;
