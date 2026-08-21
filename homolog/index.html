@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.37 · devolução com substituição de NF · dash do orçamento · ficha do item</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.38 · devolução acerta a quantidade da peça no CME e na NF</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8440,6 +8440,7 @@ async function rcDevResolver(id){
         +'<input type="radio" name="rc-dev-res" value="'+o.k+'" onchange="rcDevResTrocou()" style="margin-top:3px;accent-color:#A04000">'
         +'<span><b style="font-size:13px">'+o.rot+'</b><br><span style="font-size:11.5px;color:var(--cinza-4)">'+o.ajuda+'</span></span></label>';
     }).join('')
+    +'<div id="rc-dev-res-peca" style="margin-top:10px"></div>'
     +'<div id="rc-dev-res-valor" style="display:none;margin-top:10px">'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor do acerto (R$)</label>'
     +'<input id="rc-dev-val" type="number" step="0.01" value="'+(valorCaso||'')+'" style="'+inp+'"></div>'
@@ -8455,6 +8456,26 @@ async function rcDevResolver(id){
     +'<button class="rc-btn-editar" style="padding:8px 12px" onclick="document.getElementById(\'rc-dev-res-modal\').remove()">cancelar</button>'
     +'<button class="rc-confirmar" style="padding:8px 16px" onclick="rcDevResolverExec('+id+')">✔ Registrar desfecho</button>'
     +'</div></div></div>';
+  // v4.38 — peça de instrumental devolvida precisa BAIXAR a quantidade recebida,
+  // senão o CME continua mandando dar destino ao que voltou e a NF soma a mais.
+  // O nome do caso e o da peça costumam ser diferentes ("cabo para pinça
+  // bipolar" × "Cabo de cautério"), então quem escolhe é você.
+  try{
+    const pecas=(await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd,valor_unitario,status&nf_numero=eq.'
+      +encodeURIComponent(nfAntiga.numero_nf||'')+'&limit=50'))||[];
+    const box=document.getElementById('rc-dev-res-peca');
+    if(box && pecas.length){
+      box.innerHTML='<div style="background:#EEF5FB;border:1px solid #BBD9EE;border-radius:8px;padding:10px 12px">'
+        +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--azul)">🔩 Acertar a quantidade da peça devolvida</div>'
+        +'<div style="font-size:11.5px;color:var(--cinza-4);margin:3px 0 7px">A peça volta a contar no CME e na nota pela quantidade que ficou.</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+        +'<select id="rc-dev-peca-id" style="'+inp+';max-width:300px"><option value="">— não é peça / não acertar —</option>'
+        + pecas.map(function(p){ return '<option value="'+p.id+'">'+rcDevEsc(p.peca_nome)+' (recebidas: '+(Number(p.qtd)||0)+')</option>'; }).join('')
+        +'</select>'
+        +'<label style="font-size:11.5px;color:var(--cinza-4)">baixar <input id="rc-dev-peca-qtd" type="number" min="1" step="1" value="'+(Number(d.qtd)||1)+'" style="width:70px;'+inp+';display:inline-block"> un</label>'
+        +'</div></div>';
+    }
+  }catch(e){}
 }
 function rcDevEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function rcDevResTrocou(){
@@ -8469,6 +8490,17 @@ async function rcDevResolverExec(id){
   if(!res){ toast('Escolha como o caso foi resolvido.','erro'); return; }
   const ov=document.getElementById('rc-dev-res-modal');
   try{
+    // v4.38 — baixa a quantidade da peça devolvida (vale para qualquer desfecho)
+    const pecaId=Number((document.getElementById('rc-dev-peca-id')||{}).value||0);
+    if(pecaId){
+      const baixa=Math.abs(parseFloat((document.getElementById('rc-dev-peca-qtd')||{}).value)||0);
+      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd&id=eq.'+pecaId))||[])[0];
+      if(p && baixa>0){
+        const nova=Math.max(0,(Number(p.qtd)||0)-baixa);
+        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',{ qtd:nova });
+        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+') ✓','sucesso');
+      }
+    }
     if(res==='SUBSTITUICAO_NF'){
       const num=((document.getElementById('rc-dev-nf-num')||{}).value||'').trim();
       if(!num){ toast('Informe o número da nota nova.','erro'); return; }
@@ -8511,7 +8543,7 @@ async function rcDevResolverExec(id){
         atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
       if(ov) ov.remove();
       toast('📄 NF '+num+' criada ('+nItens+' item(ns) herdados) e a NF '+antiga.numero_nf+' foi cancelada ✓','sucesso');
-      rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar();
+      rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar(); if(typeof siCarregar==='function') siCarregar();
       return;
     }
     const val=parseFloat((document.getElementById('rc-dev-val')||{}).value)||null;
@@ -8521,7 +8553,7 @@ async function rcDevResolverExec(id){
     if(res==='TROCA') toast('Resolvida como TROCA — quando o item novo chegar, dê a entrada normal (NF ou aba Instrumentais).','');
     if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor na aba Ocorrências para usar na próxima NF.','');
     toast('Caso #'+id+' resolvido ✓','sucesso');
-    rcDevCarregar();
+    rcDevCarregar(); if(typeof siCarregar==='function') siCarregar();
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
