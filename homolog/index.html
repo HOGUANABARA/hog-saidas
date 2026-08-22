@@ -372,7 +372,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.38 · devolução acerta a quantidade da peça no CME e na NF</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.39b · substituição de NF pergunta o frete da nota nova</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6802,7 +6802,12 @@ function hiRenderizarLista(){
     const mes = d ? d.slice(0,7) : 'sem data';
     if(!meses[mes]) meses[mes]={ nfs:[], total:0 };
     meses[mes].nfs.push(nf);
-    meses[mes].total += hiTotalItens(hiItensPorNf[nf.id]||[]) || Number(nf.valor_total)||0;
+    // v4.39 — o mês soma o valor DECLARADO das notas (o que foi cobrado); a soma
+    // dos itens só entra quando a nota não tem valor gravado. Nota DEVOLVIDA ou
+    // CANCELADA não entra no total — senão o mês conta uma compra que não existe.
+    if(String(nf.status||'').toUpperCase()!=='DEVOLVIDO'){
+      meses[mes].total += Number(nf.valor_total) || hiTotalItens(hiItensPorNf[nf.id]||[]) || 0;
+    }
   }
   const ordem = Object.keys(meses).sort().reverse();
 
@@ -6814,7 +6819,12 @@ function hiRenderizarLista(){
       const b = HI_BADGE[sit] || HI_BADGE['ENTREGUE'];
       const frete = hiFreteDe(nf, its);
       const somaItens = hiTotalItens(its);
-      const totalNota = (somaItens || Number(nf.valor_total)||0);
+      // v4.39 — o TOTAL passa a ser o valor DECLARADO na nota (é o que o
+      // fornecedor cobrou). A soma dos itens vira conferência: quando as duas
+      // não batem, a tela avisa em vez de inventar um total.
+      const declarado = Number(nf.valor_total)||0;
+      const totalNota = declarado || somaItens || 0;
+      const difItens = (declarado && somaItens) ? (declarado - (somaItens + (Number(nf.frete)||0))) : 0;
       const semNum = !nf.numero_nf || /^(nan|null|—)$/i.test(String(nf.numero_nf).trim());
       const podeEntrar = its.length && sit==='SEM ENTRADA';
       const aberto = podeEntrar;
@@ -6822,14 +6832,20 @@ function hiRenderizarLista(){
       const linhas = its.map(it=>{
         const lote = hiLoteTxt(it.id);
         return `<tr>
-          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id, it)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">${it.qtd??'—'}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(it.valor_unitario)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:10.5px;color:${lote?'var(--cinza-5)':'var(--cinza-3)'}">${lote||'—'}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
         </tr>`;
-      }).join('') || '<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>';
+      }).join('') || ('<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--cinza-4)">'
+        // v4.39 — nota cancelada/substituída não tem mais itens: eles foram para
+        // a nota nova. Dizer isso é melhor do que "sem itens detalhados".
+        + (String(nf.status||'').toUpperCase()==='DEVOLVIDO' && nf.motivo_tratativa
+            ? '⛔ '+nf.motivo_tratativa+' — os itens estão na nota nova.'
+            : 'sem itens detalhados')
+        + '</td></tr>');
 
       return `<div style="border:1px solid var(--cinza-2);border-radius:9px;margin-bottom:9px;overflow:hidden;background:#fff">
         <div style="padding:10px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;cursor:pointer;background:${b.bg}" onclick="hiToggle(${nf.id})">
@@ -6851,8 +6867,9 @@ function hiRenderizarLista(){
           </div>
           <div style="text-align:right">
             <b style="font-size:15px">${hiMoney(totalNota)}</b>
-            ${(!Number(nf.valor_total) && somaItens)?'<div style="font-size:9px;color:var(--cinza-4)">soma dos itens</div>':''}
-            ${frete>0?`<div style="font-size:11px;color:var(--azul-medio);font-weight:700">🚛 Frete ${hiMoney(frete)} · c/ frete ${hiMoney(totalNota+frete)}</div>`:''}
+            ${(!declarado && somaItens)?'<div style="font-size:9px;color:var(--cinza-4)">soma dos itens</div>':''}
+            ${frete>0?`<div style="font-size:11px;color:var(--azul-medio);font-weight:700">🚛 Frete ${hiMoney(frete)} · itens ${hiMoney(somaItens)}</div>`:''}
+            ${Math.abs(difItens)>0.01?`<div style="font-size:10.5px;color:#9C4221;font-weight:700" title="itens ${hiMoney(somaItens)} + frete ${hiMoney(frete)} = ${hiMoney(somaItens+frete)}">⚠ ${difItens>0?'faltam':'sobram'} ${hiMoney(Math.abs(difItens))} nos itens</div>`:''}
             <div style="margin-top:5px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
               ${podeEntrar?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button>`:''}
               ${(podeEntrar && nf.origem==='PLANILHA')?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px" onclick="event.stopPropagation();hiDispensar(${nf.id})" title="O saldo desta compra já está no estoque inicial">✓ já está no estoque</button>`:''}
@@ -6871,8 +6888,9 @@ function hiRenderizarLista(){
             <tbody>${linhas}</tbody>
             <tfoot>
               ${frete>0?`<tr><td colspan="3" style="padding:6px 8px;color:var(--azul-medio);font-weight:700">🚛 Frete</td><td style="padding:6px 8px;text-align:right;color:var(--azul-medio);font-weight:700">${hiMoney(frete)}</td><td colspan="2"></td></tr>`:''}
-              <tr><td colspan="3" style="padding:7px 8px;font-weight:800;border-top:1.5px solid var(--cinza-3)">TOTAL DA NF</td>
-                  <td style="padding:7px 8px;text-align:right;font-weight:800;border-top:1.5px solid var(--cinza-3)">${hiMoney(totalNota+frete)}</td><td colspan="2" style="border-top:1.5px solid var(--cinza-3)"></td></tr>
+              <tr><td colspan="3" style="padding:7px 8px;font-weight:800;border-top:1.5px solid var(--cinza-3)">TOTAL DA NF${declarado?' <span style="font-weight:400;font-size:10px;color:var(--cinza-4)">(valor da nota)</span>':' <span style="font-weight:400;font-size:10px;color:var(--cinza-4)">(soma dos itens + frete)</span>'}</td>
+                  <td style="padding:7px 8px;text-align:right;font-weight:800;border-top:1.5px solid var(--cinza-3)">${hiMoney(declarado||(somaItens+frete))}</td><td colspan="2" style="border-top:1.5px solid var(--cinza-3)"></td></tr>
+              ${Math.abs(difItens)>0.01?`<tr><td colspan="6" style="padding:6px 8px;font-size:11px;color:#9C4221;background:#FDF2E9">⚠ Itens ${hiMoney(somaItens)} + frete ${hiMoney(frete)} = ${hiMoney(somaItens+frete)}, mas a nota diz ${hiMoney(declarado)} — confira se algum item mudou de quantidade ou se falta lançar algo.</td></tr>`:''}
             </tfoot>
           </table>
           ${podeEntrar ? hiPainelEntrada(nf, its) : ''}
@@ -8449,9 +8467,12 @@ async function rcDevResolver(id){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Número da nota nova</label><input id="rc-dev-nf-num" style="'+inp+'" placeholder="ex: 68512"></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor total (R$)</label><input id="rc-dev-nf-val" type="number" step="0.01" style="'+inp+'" value="'+(Math.max(0,(Number(nfAntiga.valor_total)||0)-valorCaso).toFixed(2))+'"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Frete da nota nova (R$)</label><input id="rc-dev-nf-frete" type="number" step="0.01" style="'+inp+'" value="'+(Number(nfAntiga.frete)||0)+'"></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Emissão</label><input id="rc-dev-nf-emi" type="date" style="'+inp+'"></div>'
-    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Vencimento / pagamento</label><input id="rc-dev-nf-venc" style="'+inp+'" placeholder="ex: 15/09/2026"></div>'
-    +'</div></div>'
+    +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Vencimento / pagamento</label><input id="rc-dev-nf-venc" style="'+inp+'" placeholder="ex: 15/09/2026"></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#7D4A11;margin-top:8px">💡 O frete costuma mudar junto com a nota — confira no papel. Se a soma dos itens + frete não fechar com o valor total, a tela de <b>Compras e notas</b> vai avisar.</div>'
+    +'</div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
     +'<button class="rc-btn-editar" style="padding:8px 12px" onclick="document.getElementById(\'rc-dev-res-modal\').remove()">cancelar</button>'
     +'<button class="rc-confirmar" style="padding:8px 16px" onclick="rcDevResolverExec('+id+')">✔ Registrar desfecho</button>'
@@ -8494,11 +8515,16 @@ async function rcDevResolverExec(id){
     const pecaId=Number((document.getElementById('rc-dev-peca-id')||{}).value||0);
     if(pecaId){
       const baixa=Math.abs(parseFloat((document.getElementById('rc-dev-peca-qtd')||{}).value)||0);
-      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd&id=eq.'+pecaId))||[])[0];
+      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd,valor_unitario,nf_valor&id=eq.'+pecaId))||[])[0];
       if(p && baixa>0){
         const nova=Math.max(0,(Number(p.qtd)||0)-baixa);
-        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',{ qtd:nova });
-        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+') ✓','sucesso');
+        // o valor da peça na nota acompanha a quantidade que ficou — senão a NF
+        // continua somando o que foi devolvido
+        const patch={ qtd:nova };
+        if(p.nf_valor!=null && Number(p.valor_unitario)>0) patch.nf_valor = nova*Number(p.valor_unitario);
+        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',patch);
+        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+')'
+          +(patch.nf_valor!=null?(' · valor na nota: '+rcMoney(patch.nf_valor)):'')+' ✓','sucesso');
       }
     }
     if(res==='SUBSTITUICAO_NF'){
@@ -8513,7 +8539,8 @@ async function rcDevResolverExec(id){
       const nova=await sbFetch('notas_fiscais','POST',{
         fornecedor_id:antiga.fornecedor_id, numero_nf:num, mes_referencia:antiga.mes_referencia,
         data_emissao:emi||antiga.data_emissao, data_entrega:antiga.data_entrega, valor_total:val,
-        frete:antiga.frete, natureza:antiga.natureza, origem:'APP', status:'ENTREGUE',
+        frete:(function(){ const f=(document.getElementById('rc-dev-nf-frete')||{}).value; return f===''||f==null ? antiga.frete : (parseFloat(f)||0); })(),
+        natureza:antiga.natureza, origem:'APP', status:'ENTREGUE',
         confirmada:true, confirmada_por:rcDevQuem(), confirmada_em:new Date().toISOString(),
         status_pagamento:'LIBERADA',
         vencimentos_obs:(venc?(venc+' | '):'')+'Substitui a NF '+antiga.numero_nf+' (cancelada pelo fornecedor)' });
