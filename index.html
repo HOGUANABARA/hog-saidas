@@ -332,6 +332,37 @@ details[open] summary { margin-bottom: 6px; }
   .hs-item{padding-top:12px;padding-bottom:12px;font-size:15px}
 }
 
+/* ═══ v4.40 — MENU HORIZONTAL (desktop). A sidebar vira o menu do celular. ═══ */
+.hog-menubar{background:#fff;border-bottom:2px solid var(--cinza-2);display:flex;align-items:center;padding:0 10px;position:sticky;top:0;z-index:65;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.hog-menubar .mb-item{position:relative}
+.hog-menubar .mb-btn{border:none;background:none;font-family:var(--fonte);font-size:13.5px;font-weight:700;color:var(--cinza-5);padding:13px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:3px solid transparent}
+.hog-menubar .mb-btn:hover{background:var(--cinza-1)}
+.hog-menubar .mb-btn .mb-seta{font-size:9px;color:var(--cinza-3);transition:transform .15s}
+.hog-menubar .mb-item.aberto .mb-btn{background:var(--azul-claro);color:var(--azul);border-bottom-color:var(--azul)}
+.hog-menubar .mb-item.aberto .mb-btn .mb-seta{transform:rotate(180deg);color:var(--azul)}
+.hog-menubar .mb-btn.secao-ativa{border-bottom-color:var(--azul-medio)}
+.hog-menubar .mb-badge{background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:800;display:none}
+.hog-menubar .mb-dd{display:none;position:absolute;top:100%;left:0;min-width:236px;background:#fff;border:1px solid var(--cinza-2);border-radius:0 0 10px 10px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px 0;z-index:80}
+.hog-menubar .mb-item.aberto .mb-dd{display:block}
+.hog-menubar .mbi{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;font-size:13.5px;color:var(--cinza-5);cursor:pointer;white-space:nowrap}
+.hog-menubar .mbi:hover{background:var(--azul-claro);color:var(--azul)}
+.hog-menubar .mbi.ativa{color:var(--azul);font-weight:800;box-shadow:inset 3px 0 0 var(--azul)}
+.hog-menubar .mb-sep{height:1px;background:var(--cinza-2);margin:6px 0}
+.hog-menubar .mb-rot{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);padding:7px 16px 3px}
+.hog-menubar .mb-dir{margin-left:auto;display:flex;align-items:center;gap:2px}
+.hog-menubar .mb-sino{border:none;background:none;font-size:17px;padding:9px 10px;cursor:pointer;border-radius:8px;position:relative;font-family:var(--fonte)}
+.hog-menubar .mb-sino:hover{background:var(--cinza-1)}
+.hog-menubar .mb-sino .mb-badge{position:absolute;top:2px;right:0}
+.hog-menubar .mb-user{font-size:12.5px;font-weight:700;color:var(--cinza-5);display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.hog-menubar .mb-user:hover{background:var(--cinza-1)}
+@media (min-width:901px){
+  .hog-side{display:none}                      /* sidebar sai do desktop — vira menu do celular */
+  .hog-main > .container{max-width:1360px}     /* conteúdo aproveita a largura ganha */
+}
+@media (max-width:900px){
+  .hog-menubar{display:none}                   /* no celular vale a gaveta ☰ de sempre */
+}
+
 /* ═══ RESPONSIVIDADE MOBILE ═══ */
 @media (max-width: 760px) {
   header { padding: 12px 16px; }
@@ -372,12 +403,101 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.38</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.40</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
 
 <button class="hs-burger" onclick="hsMobile()" aria-label="menu">☰ Menu</button>
+
+<!-- ═══ v4.40 — BARRA DE MENU HORIZONTAL (desktop). Projeção da sidebar: cada item
+     espelha (data-ref) o item correspondente do menu lateral — permissões, badges e
+     estado ativo continuam sendo decididos lá. No celular vale a gaveta ☰. ═══ -->
+<nav class="hog-menubar" id="hog-menubar">
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">📋 Saídas <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-registro" onclick="mbFechar();trocarAba('registro')">Saída Cirúrgica <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-diversas" onclick="mbFechar();trocarAba('diversas')">Saídas Diversas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-aprovacao" onclick="mbFechar();trocarAba('aprovacao')">🔒 Aprovação de Saídas <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🔁 Remessas <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-remessas" onclick="mbFechar();rmIrTipo('LAVANDERIA')">🧺 Lavanderia <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-rem-oxido" onclick="mbFechar();rmIrTipo('ESTERILIZACAO')">☣️ Óxido de etileno <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-man" onclick="mbFechar();cmeIr('manutencao')">🔧 Manutenção de peças <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🛒 Comprar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-comprar" onclick="mbFechar();trocarAba('comprar')">🛒 Compras CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-instrumentais" onclick="mbFechar();cmeIr('compras')">🔩 Compras CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_comp" onclick="mbFechar();trocarAba('hig_comp')">🧼 Compras Higiene <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Compras Administrativo')">🗂️ Compras Administrativo <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">💲 Orçar &amp; Pagar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mb-rot">Orçamentos</div>
+      <div class="mbi" data-ref="aba-btn-cotacao" onclick="mbFechar();trocarAba('cotacao')">Orçamentos CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-orc" onclick="mbFechar();cmeIr('compras')">Orçamentos CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_orc" onclick="mbFechar();trocarAba('hig_orc')">Orçamentos Higiene <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mbi" data-ref="aba-btn-decisao" onclick="mbFechar();trocarAba('decisao')">📦 Pedidos <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-aprovarpedido" onclick="mbFechar();trocarAba('aprovarpedido')">🔏 Aprovar Pedido <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-receber" onclick="mbFechar();trocarAba('receber')">📥 Receber NF <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🗂️ Administrativo <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mb-rot">Materiais administrativos · estoque próprio</div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Solicitações dos departamentos')">📨 Solicitações dos departamentos <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Separação e entrega')">📦 Separação &amp; entrega <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Estoque administrativo')">🗃️ Estoque administrativo <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">📐 Acompanhar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-painel" onclick="mbFechar();trocarAba('painel')">📊 Dashboard <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mb-rot">Inventários</div>
+      <div class="mbi" data-ref="aba-btn-inventario" onclick="mbFechar();trocarAba('inventario')">Inventário CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-inv" onclick="mbFechar();cmeIr('inventario')">Inventário CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">Inventário Higiene <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mb-rot">Relatórios</div>
+      <div class="mbi" data-ref="aba-btn-historico" onclick="mbFechar();trocarAba('historico')">Compras e notas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="hs-rel-estoque" onclick="mbFechar();trocarAba('inventario');setTimeout(()=>{var e=document.getElementById('rel-card');if(e)e.scrollIntoView({behavior:'smooth'})},300)">Saldo de estoque <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_rel" onclick="mbFechar();trocarAba('hig_rel')">Relatório de higiene <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🔧 Manutenção <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Solicitações')">📨 Solicitações <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Agendados')">📅 Agendados <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Executados')">✅ Executados <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">⚙️ Sistema <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-ocorrencias" onclick="mbFechar();trocarAba('ocorrencias')">⚠️ Ocorrências <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-usuarios" onclick="mbFechar();trocarAba('usuarios')">👥 Usuários <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-dir">
+    <button class="mb-sino" id="mb-sino" title="Alertas" onclick="mbFechar();trocarAba('alertas')">🔔<span class="mb-badge" id="mb-sino-badge"></span></button>
+    <div class="mb-user" onclick="mbFechar();menuUsuario()" title="Trocar senha ou sair">👤 <span id="mb-user-nome">Entrar</span></div>
+  </div>
+</nav>
+
 <div class="hog-shell">
 <aside class="hog-side" id="hog-side">
   <nav>
@@ -6802,7 +6922,12 @@ function hiRenderizarLista(){
     const mes = d ? d.slice(0,7) : 'sem data';
     if(!meses[mes]) meses[mes]={ nfs:[], total:0 };
     meses[mes].nfs.push(nf);
-    meses[mes].total += hiTotalItens(hiItensPorNf[nf.id]||[]) || Number(nf.valor_total)||0;
+    // v4.39 — o mês soma o valor DECLARADO das notas (o que foi cobrado); a soma
+    // dos itens só entra quando a nota não tem valor gravado. Nota DEVOLVIDA ou
+    // CANCELADA não entra no total — senão o mês conta uma compra que não existe.
+    if(String(nf.status||'').toUpperCase()!=='DEVOLVIDO'){
+      meses[mes].total += Number(nf.valor_total) || hiTotalItens(hiItensPorNf[nf.id]||[]) || 0;
+    }
   }
   const ordem = Object.keys(meses).sort().reverse();
 
@@ -6814,7 +6939,12 @@ function hiRenderizarLista(){
       const b = HI_BADGE[sit] || HI_BADGE['ENTREGUE'];
       const frete = hiFreteDe(nf, its);
       const somaItens = hiTotalItens(its);
-      const totalNota = (somaItens || Number(nf.valor_total)||0);
+      // v4.39 — o TOTAL passa a ser o valor DECLARADO na nota (é o que o
+      // fornecedor cobrou). A soma dos itens vira conferência: quando as duas
+      // não batem, a tela avisa em vez de inventar um total.
+      const declarado = Number(nf.valor_total)||0;
+      const totalNota = declarado || somaItens || 0;
+      const difItens = (declarado && somaItens) ? (declarado - (somaItens + (Number(nf.frete)||0))) : 0;
       const semNum = !nf.numero_nf || /^(nan|null|—)$/i.test(String(nf.numero_nf).trim());
       const podeEntrar = its.length && sit==='SEM ENTRADA';
       const aberto = podeEntrar;
@@ -6822,14 +6952,20 @@ function hiRenderizarLista(){
       const linhas = its.map(it=>{
         const lote = hiLoteTxt(it.id);
         return `<tr>
-          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)">${rcNomeMaterial(it.material_id, it)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">${it.qtd??'—'}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${hiMoney(it.valor_unitario)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;font-weight:600">${hiMoney(it.valor_item)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:10.5px;color:${lote?'var(--cinza-5)':'var(--cinza-3)'}">${lote||'—'}</td>
           <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rc-btn-editar" style="padding:3px 7px;font-size:10px" onclick="event.stopPropagation();hiCorrigirItem(${it.id},${nf.id})">✎</button></td>
         </tr>`;
-      }).join('') || '<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--cinza-4)">sem itens detalhados</td></tr>';
+      }).join('') || ('<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--cinza-4)">'
+        // v4.39 — nota cancelada/substituída não tem mais itens: eles foram para
+        // a nota nova. Dizer isso é melhor do que "sem itens detalhados".
+        + (String(nf.status||'').toUpperCase()==='DEVOLVIDO' && nf.motivo_tratativa
+            ? '⛔ '+nf.motivo_tratativa+' — os itens estão na nota nova.'
+            : 'sem itens detalhados')
+        + '</td></tr>');
 
       return `<div style="border:1px solid var(--cinza-2);border-radius:9px;margin-bottom:9px;overflow:hidden;background:#fff">
         <div style="padding:10px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;cursor:pointer;background:${b.bg}" onclick="hiToggle(${nf.id})">
@@ -6851,8 +6987,9 @@ function hiRenderizarLista(){
           </div>
           <div style="text-align:right">
             <b style="font-size:15px">${hiMoney(totalNota)}</b>
-            ${(!Number(nf.valor_total) && somaItens)?'<div style="font-size:9px;color:var(--cinza-4)">soma dos itens</div>':''}
-            ${frete>0?`<div style="font-size:11px;color:var(--azul-medio);font-weight:700">🚛 Frete ${hiMoney(frete)} · c/ frete ${hiMoney(totalNota+frete)}</div>`:''}
+            ${(!declarado && somaItens)?'<div style="font-size:9px;color:var(--cinza-4)">soma dos itens</div>':''}
+            ${frete>0?`<div style="font-size:11px;color:var(--azul-medio);font-weight:700">🚛 Frete ${hiMoney(frete)} · itens ${hiMoney(somaItens)}</div>`:''}
+            ${Math.abs(difItens)>0.01?`<div style="font-size:10.5px;color:#9C4221;font-weight:700" title="itens ${hiMoney(somaItens)} + frete ${hiMoney(frete)} = ${hiMoney(somaItens+frete)}">⚠ ${difItens>0?'faltam':'sobram'} ${hiMoney(Math.abs(difItens))} nos itens</div>`:''}
             <div style="margin-top:5px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
               ${podeEntrar?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px;background:var(--verde-claro);color:var(--verde)" onclick="event.stopPropagation();hiAbrirEntrada(${nf.id})">📥 Ver itens e dar entrada</button>`:''}
               ${(podeEntrar && nf.origem==='PLANILHA')?`<button class="rc-btn-editar" style="padding:5px 9px;font-size:10.5px" onclick="event.stopPropagation();hiDispensar(${nf.id})" title="O saldo desta compra já está no estoque inicial">✓ já está no estoque</button>`:''}
@@ -6871,8 +7008,9 @@ function hiRenderizarLista(){
             <tbody>${linhas}</tbody>
             <tfoot>
               ${frete>0?`<tr><td colspan="3" style="padding:6px 8px;color:var(--azul-medio);font-weight:700">🚛 Frete</td><td style="padding:6px 8px;text-align:right;color:var(--azul-medio);font-weight:700">${hiMoney(frete)}</td><td colspan="2"></td></tr>`:''}
-              <tr><td colspan="3" style="padding:7px 8px;font-weight:800;border-top:1.5px solid var(--cinza-3)">TOTAL DA NF</td>
-                  <td style="padding:7px 8px;text-align:right;font-weight:800;border-top:1.5px solid var(--cinza-3)">${hiMoney(totalNota+frete)}</td><td colspan="2" style="border-top:1.5px solid var(--cinza-3)"></td></tr>
+              <tr><td colspan="3" style="padding:7px 8px;font-weight:800;border-top:1.5px solid var(--cinza-3)">TOTAL DA NF${declarado?' <span style="font-weight:400;font-size:10px;color:var(--cinza-4)">(valor da nota)</span>':' <span style="font-weight:400;font-size:10px;color:var(--cinza-4)">(soma dos itens + frete)</span>'}</td>
+                  <td style="padding:7px 8px;text-align:right;font-weight:800;border-top:1.5px solid var(--cinza-3)">${hiMoney(declarado||(somaItens+frete))}</td><td colspan="2" style="border-top:1.5px solid var(--cinza-3)"></td></tr>
+              ${Math.abs(difItens)>0.01?`<tr><td colspan="6" style="padding:6px 8px;font-size:11px;color:#9C4221;background:#FDF2E9">⚠ Itens ${hiMoney(somaItens)} + frete ${hiMoney(frete)} = ${hiMoney(somaItens+frete)}, mas a nota diz ${hiMoney(declarado)} — confira se algum item mudou de quantidade ou se falta lançar algo.</td></tr>`:''}
             </tfoot>
           </table>
           ${podeEntrar ? hiPainelEntrada(nf, its) : ''}
@@ -8449,9 +8587,12 @@ async function rcDevResolver(id){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Número da nota nova</label><input id="rc-dev-nf-num" style="'+inp+'" placeholder="ex: 68512"></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor total (R$)</label><input id="rc-dev-nf-val" type="number" step="0.01" style="'+inp+'" value="'+(Math.max(0,(Number(nfAntiga.valor_total)||0)-valorCaso).toFixed(2))+'"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Frete da nota nova (R$)</label><input id="rc-dev-nf-frete" type="number" step="0.01" style="'+inp+'" value="'+(Number(nfAntiga.frete)||0)+'"></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Emissão</label><input id="rc-dev-nf-emi" type="date" style="'+inp+'"></div>'
-    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Vencimento / pagamento</label><input id="rc-dev-nf-venc" style="'+inp+'" placeholder="ex: 15/09/2026"></div>'
-    +'</div></div>'
+    +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Vencimento / pagamento</label><input id="rc-dev-nf-venc" style="'+inp+'" placeholder="ex: 15/09/2026"></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#7D4A11;margin-top:8px">💡 O frete costuma mudar junto com a nota — confira no papel. Se a soma dos itens + frete não fechar com o valor total, a tela de <b>Compras e notas</b> vai avisar.</div>'
+    +'</div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
     +'<button class="rc-btn-editar" style="padding:8px 12px" onclick="document.getElementById(\'rc-dev-res-modal\').remove()">cancelar</button>'
     +'<button class="rc-confirmar" style="padding:8px 16px" onclick="rcDevResolverExec('+id+')">✔ Registrar desfecho</button>'
@@ -8494,11 +8635,16 @@ async function rcDevResolverExec(id){
     const pecaId=Number((document.getElementById('rc-dev-peca-id')||{}).value||0);
     if(pecaId){
       const baixa=Math.abs(parseFloat((document.getElementById('rc-dev-peca-qtd')||{}).value)||0);
-      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd&id=eq.'+pecaId))||[])[0];
+      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd,valor_unitario,nf_valor&id=eq.'+pecaId))||[])[0];
       if(p && baixa>0){
         const nova=Math.max(0,(Number(p.qtd)||0)-baixa);
-        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',{ qtd:nova });
-        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+') ✓','sucesso');
+        // o valor da peça na nota acompanha a quantidade que ficou — senão a NF
+        // continua somando o que foi devolvido
+        const patch={ qtd:nova };
+        if(p.nf_valor!=null && Number(p.valor_unitario)>0) patch.nf_valor = nova*Number(p.valor_unitario);
+        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',patch);
+        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+')'
+          +(patch.nf_valor!=null?(' · valor na nota: '+rcMoney(patch.nf_valor)):'')+' ✓','sucesso');
       }
     }
     if(res==='SUBSTITUICAO_NF'){
@@ -8513,7 +8659,8 @@ async function rcDevResolverExec(id){
       const nova=await sbFetch('notas_fiscais','POST',{
         fornecedor_id:antiga.fornecedor_id, numero_nf:num, mes_referencia:antiga.mes_referencia,
         data_emissao:emi||antiga.data_emissao, data_entrega:antiga.data_entrega, valor_total:val,
-        frete:antiga.frete, natureza:antiga.natureza, origem:'APP', status:'ENTREGUE',
+        frete:(function(){ const f=(document.getElementById('rc-dev-nf-frete')||{}).value; return f===''||f==null ? antiga.frete : (parseFloat(f)||0); })(),
+        natureza:antiga.natureza, origem:'APP', status:'ENTREGUE',
         confirmada:true, confirmada_por:rcDevQuem(), confirmada_em:new Date().toISOString(),
         status_pagamento:'LIBERADA',
         vencimentos_obs:(venc?(venc+' | '):'')+'Substitui a NF '+antiga.numero_nf+' (cancelada pelo fornecedor)' });
@@ -17338,6 +17485,86 @@ async function siDeskFechar(){
     siCarregar();
   }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
 }
+</script>
+
+<script>
+// ═══ v4.40 — BARRA DE MENU HORIZONTAL: sincronização com a sidebar ═══
+// A sidebar continua sendo a dona de permissões, badges e estado ativo.
+// mbSync() apenas ESPELHA isso na barra — nada de lógica nova de permissão.
+function mbAbrir(btn){
+  var item = btn.parentElement;
+  var jaAberto = item.classList.contains('aberto');
+  mbFechar();
+  if(!jaAberto){ item.classList.add('aberto'); mbSync(); }
+}
+function mbFechar(){
+  document.querySelectorAll('#hog-menubar .mb-item.aberto').forEach(function(i){ i.classList.remove('aberto'); });
+}
+function mbEmConstrucao(nome){
+  if(typeof toast==='function') toast('🚧 "'+nome+'" está em construção — o menu já reserva o lugar.','erro');
+  else alert('"'+nome+'" em construção.');
+}
+function mbSync(){
+  var bar = document.getElementById('hog-menubar'); if(!bar) return;
+  // itens espelhados da sidebar
+  bar.querySelectorAll('.mbi[data-ref]').forEach(function(it){
+    var ref = document.getElementById(it.getAttribute('data-ref'));
+    if(!ref){ it.style.display='none'; return; }
+    it.style.display = (ref.style.display==='none') ? 'none' : '';
+    it.classList.toggle('ativa', ref.classList.contains('ativa'));
+    var bsrc = ref.querySelector('span[id^="badge-"]');
+    var bdst = it.querySelector('.mb-badge');
+    if(bdst){
+      var n = bsrc ? (parseInt(bsrc.textContent,10)||0) : 0;
+      var vis = bsrc && bsrc.style.display!=='none' && n>0;
+      bdst.textContent = n; bdst.style.display = vis ? '' : 'none';
+    }
+  });
+  // itens de módulos em construção: aparecem só pra quem tem acesso a compras
+  bar.querySelectorAll('.mbi[data-perm]').forEach(function(it){
+    var ok = (typeof SESSAO!=='undefined' && SESSAO && typeof podeAba==='function' && podeAba(it.getAttribute('data-perm')));
+    it.style.display = ok ? '' : 'none';
+  });
+  // gatilhos: esconder grupo vazio, somar badges dos filhos, marcar seção ativa
+  bar.querySelectorAll('.mb-item').forEach(function(g){
+    var itens = [].slice.call(g.querySelectorAll('.mbi'));
+    if(!itens.length) return;
+    var algum = itens.some(function(i){ return i.style.display!=='none'; });
+    g.style.display = algum ? '' : 'none';
+    var soma = 0;
+    itens.forEach(function(i){
+      var b = i.querySelector('.mb-badge');
+      if(b && b.style.display!=='none') soma += parseInt(b.textContent,10)||0;
+    });
+    var tb = g.querySelector('.mb-btn > .mb-badge');
+    if(tb){ tb.textContent = soma; tb.style.display = soma>0 ? '' : 'none'; }
+    var btn = g.querySelector('.mb-btn');
+    if(btn) btn.classList.toggle('secao-ativa', itens.some(function(i){ return i.classList.contains('ativa'); }));
+  });
+  // sino de alertas (projeta o item Alertas da sidebar)
+  var refA = document.getElementById('aba-btn-alertas');
+  var sino = document.getElementById('mb-sino');
+  if(sino && refA) sino.style.display = (refA.style.display==='none') ? 'none' : '';
+  var alB = document.getElementById('badge-alertas');
+  var sinoB = document.getElementById('mb-sino-badge');
+  if(alB && sinoB){
+    var na = parseInt(alB.textContent,10)||0;
+    var visA = alB.style.display!=='none' && na>0;
+    sinoB.textContent = na; sinoB.style.display = visA ? '' : 'none';
+  }
+  // usuário
+  var u = document.getElementById('mb-user-nome');
+  if(u) u.textContent = (typeof SESSAO!=='undefined' && SESSAO) ? SESSAO.nome : 'Entrar';
+}
+document.addEventListener('click', function(ev){
+  if(!ev.target.closest('#hog-menubar .mb-item')) mbFechar();
+});
+document.addEventListener('keydown', function(ev){ if(ev.key==='Escape') mbFechar(); });
+document.addEventListener('DOMContentLoaded', function(){
+  mbSync();
+  // pega mudanças de permissão, badges e aba ativa sem tocar em nenhum loader existente
+  setInterval(mbSync, 1500);
+});
 </script>
 
 </body>
