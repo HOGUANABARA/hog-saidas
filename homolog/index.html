@@ -332,6 +332,37 @@ details[open] summary { margin-bottom: 6px; }
   .hs-item{padding-top:12px;padding-bottom:12px;font-size:15px}
 }
 
+/* ═══ v4.40 — MENU HORIZONTAL (desktop). A sidebar vira o menu do celular. ═══ */
+.hog-menubar{background:#fff;border-bottom:2px solid var(--cinza-2);display:flex;align-items:center;padding:0 10px;position:sticky;top:0;z-index:65;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.hog-menubar .mb-item{position:relative}
+.hog-menubar .mb-btn{border:none;background:none;font-family:var(--fonte);font-size:13.5px;font-weight:700;color:var(--cinza-5);padding:13px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:3px solid transparent}
+.hog-menubar .mb-btn:hover{background:var(--cinza-1)}
+.hog-menubar .mb-btn .mb-seta{font-size:9px;color:var(--cinza-3);transition:transform .15s}
+.hog-menubar .mb-item.aberto .mb-btn{background:var(--azul-claro);color:var(--azul);border-bottom-color:var(--azul)}
+.hog-menubar .mb-item.aberto .mb-btn .mb-seta{transform:rotate(180deg);color:var(--azul)}
+.hog-menubar .mb-btn.secao-ativa{border-bottom-color:var(--azul-medio)}
+.hog-menubar .mb-badge{background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:800;display:none}
+.hog-menubar .mb-dd{display:none;position:absolute;top:100%;left:0;min-width:236px;background:#fff;border:1px solid var(--cinza-2);border-radius:0 0 10px 10px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px 0;z-index:80}
+.hog-menubar .mb-item.aberto .mb-dd{display:block}
+.hog-menubar .mbi{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;font-size:13.5px;color:var(--cinza-5);cursor:pointer;white-space:nowrap}
+.hog-menubar .mbi:hover{background:var(--azul-claro);color:var(--azul)}
+.hog-menubar .mbi.ativa{color:var(--azul);font-weight:800;box-shadow:inset 3px 0 0 var(--azul)}
+.hog-menubar .mb-sep{height:1px;background:var(--cinza-2);margin:6px 0}
+.hog-menubar .mb-rot{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);padding:7px 16px 3px}
+.hog-menubar .mb-dir{margin-left:auto;display:flex;align-items:center;gap:2px}
+.hog-menubar .mb-sino{border:none;background:none;font-size:17px;padding:9px 10px;cursor:pointer;border-radius:8px;position:relative;font-family:var(--fonte)}
+.hog-menubar .mb-sino:hover{background:var(--cinza-1)}
+.hog-menubar .mb-sino .mb-badge{position:absolute;top:2px;right:0}
+.hog-menubar .mb-user{font-size:12.5px;font-weight:700;color:var(--cinza-5);display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.hog-menubar .mb-user:hover{background:var(--cinza-1)}
+@media (min-width:901px){
+  .hog-side{display:none}                      /* sidebar sai do desktop — vira menu do celular */
+  .hog-main > .container{max-width:1360px}     /* conteúdo aproveita a largura ganha */
+}
+@media (max-width:900px){
+  .hog-menubar{display:none}                   /* no celular vale a gaveta ☰ de sempre */
+}
+
 /* ═══ RESPONSIVIDADE MOBILE ═══ */
 @media (max-width: 760px) {
   header { padding: 12px 16px; }
@@ -372,12 +403,101 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.39b</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.40 · menu horizontal com dropdowns</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
 
 <button class="hs-burger" onclick="hsMobile()" aria-label="menu">☰ Menu</button>
+
+<!-- ═══ v4.40 — BARRA DE MENU HORIZONTAL (desktop). Projeção da sidebar: cada item
+     espelha (data-ref) o item correspondente do menu lateral — permissões, badges e
+     estado ativo continuam sendo decididos lá. No celular vale a gaveta ☰. ═══ -->
+<nav class="hog-menubar" id="hog-menubar">
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">📋 Saídas <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-registro" onclick="mbFechar();trocarAba('registro')">Saída Cirúrgica <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-diversas" onclick="mbFechar();trocarAba('diversas')">Saídas Diversas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-aprovacao" onclick="mbFechar();trocarAba('aprovacao')">🔒 Aprovação de Saídas <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🔁 Remessas <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-remessas" onclick="mbFechar();rmIrTipo('LAVANDERIA')">🧺 Lavanderia <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-rem-oxido" onclick="mbFechar();rmIrTipo('ESTERILIZACAO')">☣️ Óxido de etileno <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-man" onclick="mbFechar();cmeIr('manutencao')">🔧 Manutenção de peças <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🛒 Comprar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-comprar" onclick="mbFechar();trocarAba('comprar')">🛒 Compras CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-instrumentais" onclick="mbFechar();cmeIr('compras')">🔩 Compras CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_comp" onclick="mbFechar();trocarAba('hig_comp')">🧼 Compras Higiene <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Compras Administrativo')">🗂️ Compras Administrativo <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">💲 Orçar &amp; Pagar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mb-rot">Orçamentos</div>
+      <div class="mbi" data-ref="aba-btn-cotacao" onclick="mbFechar();trocarAba('cotacao')">Orçamentos CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-orc" onclick="mbFechar();cmeIr('compras')">Orçamentos CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_orc" onclick="mbFechar();trocarAba('hig_orc')">Orçamentos Higiene <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mbi" data-ref="aba-btn-decisao" onclick="mbFechar();trocarAba('decisao')">📦 Pedidos <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-aprovarpedido" onclick="mbFechar();trocarAba('aprovarpedido')">🔏 Aprovar Pedido <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-receber" onclick="mbFechar();trocarAba('receber')">📥 Receber NF <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🗂️ Administrativo <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mb-rot">Materiais administrativos · estoque próprio</div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Solicitações dos departamentos')">📨 Solicitações dos departamentos <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Separação e entrega')">📦 Separação &amp; entrega <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Estoque administrativo')">🗃️ Estoque administrativo <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">📐 Acompanhar <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-painel" onclick="mbFechar();trocarAba('painel')">📊 Dashboard <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mb-rot">Inventários</div>
+      <div class="mbi" data-ref="aba-btn-inventario" onclick="mbFechar();trocarAba('inventario')">Inventário CC <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-cme-inv" onclick="mbFechar();cmeIr('inventario')">Inventário CME <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">Inventário Higiene <span class="mb-badge"></span></div>
+      <div class="mb-sep"></div>
+      <div class="mb-rot">Relatórios</div>
+      <div class="mbi" data-ref="aba-btn-historico" onclick="mbFechar();trocarAba('historico')">Compras e notas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="hs-rel-estoque" onclick="mbFechar();trocarAba('inventario');setTimeout(()=>{var e=document.getElementById('rel-card');if(e)e.scrollIntoView({behavior:'smooth'})},300)">Saldo de estoque <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_rel" onclick="mbFechar();trocarAba('hig_rel')">Relatório de higiene <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">🔧 Manutenção <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Solicitações')">📨 Solicitações <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Agendados')">📅 Agendados <span class="mb-badge"></span></div>
+      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Manutenção — Executados')">✅ Executados <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-item">
+    <button class="mb-btn" onclick="mbAbrir(this)">⚙️ Sistema <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
+    <div class="mb-dd">
+      <div class="mbi" data-ref="aba-btn-ocorrencias" onclick="mbFechar();trocarAba('ocorrencias')">⚠️ Ocorrências <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-usuarios" onclick="mbFechar();trocarAba('usuarios')">👥 Usuários <span class="mb-badge"></span></div>
+    </div>
+  </div>
+  <div class="mb-dir">
+    <button class="mb-sino" id="mb-sino" title="Alertas" onclick="mbFechar();trocarAba('alertas')">🔔<span class="mb-badge" id="mb-sino-badge"></span></button>
+    <div class="mb-user" onclick="mbFechar();menuUsuario()" title="Trocar senha ou sair">👤 <span id="mb-user-nome">Entrar</span></div>
+  </div>
+</nav>
+
 <div class="hog-shell">
 <aside class="hog-side" id="hog-side">
   <nav>
@@ -17365,6 +17485,86 @@ async function siDeskFechar(){
     siCarregar();
   }catch(e){ toast('Erro ao fechar: '+e.message,'erro'); }
 }
+</script>
+
+<script>
+// ═══ v4.40 — BARRA DE MENU HORIZONTAL: sincronização com a sidebar ═══
+// A sidebar continua sendo a dona de permissões, badges e estado ativo.
+// mbSync() apenas ESPELHA isso na barra — nada de lógica nova de permissão.
+function mbAbrir(btn){
+  var item = btn.parentElement;
+  var jaAberto = item.classList.contains('aberto');
+  mbFechar();
+  if(!jaAberto){ item.classList.add('aberto'); mbSync(); }
+}
+function mbFechar(){
+  document.querySelectorAll('#hog-menubar .mb-item.aberto').forEach(function(i){ i.classList.remove('aberto'); });
+}
+function mbEmConstrucao(nome){
+  if(typeof toast==='function') toast('🚧 "'+nome+'" está em construção — o menu já reserva o lugar.','erro');
+  else alert('"'+nome+'" em construção.');
+}
+function mbSync(){
+  var bar = document.getElementById('hog-menubar'); if(!bar) return;
+  // itens espelhados da sidebar
+  bar.querySelectorAll('.mbi[data-ref]').forEach(function(it){
+    var ref = document.getElementById(it.getAttribute('data-ref'));
+    if(!ref){ it.style.display='none'; return; }
+    it.style.display = (ref.style.display==='none') ? 'none' : '';
+    it.classList.toggle('ativa', ref.classList.contains('ativa'));
+    var bsrc = ref.querySelector('span[id^="badge-"]');
+    var bdst = it.querySelector('.mb-badge');
+    if(bdst){
+      var n = bsrc ? (parseInt(bsrc.textContent,10)||0) : 0;
+      var vis = bsrc && bsrc.style.display!=='none' && n>0;
+      bdst.textContent = n; bdst.style.display = vis ? '' : 'none';
+    }
+  });
+  // itens de módulos em construção: aparecem só pra quem tem acesso a compras
+  bar.querySelectorAll('.mbi[data-perm]').forEach(function(it){
+    var ok = (typeof SESSAO!=='undefined' && SESSAO && typeof podeAba==='function' && podeAba(it.getAttribute('data-perm')));
+    it.style.display = ok ? '' : 'none';
+  });
+  // gatilhos: esconder grupo vazio, somar badges dos filhos, marcar seção ativa
+  bar.querySelectorAll('.mb-item').forEach(function(g){
+    var itens = [].slice.call(g.querySelectorAll('.mbi'));
+    if(!itens.length) return;
+    var algum = itens.some(function(i){ return i.style.display!=='none'; });
+    g.style.display = algum ? '' : 'none';
+    var soma = 0;
+    itens.forEach(function(i){
+      var b = i.querySelector('.mb-badge');
+      if(b && b.style.display!=='none') soma += parseInt(b.textContent,10)||0;
+    });
+    var tb = g.querySelector('.mb-btn > .mb-badge');
+    if(tb){ tb.textContent = soma; tb.style.display = soma>0 ? '' : 'none'; }
+    var btn = g.querySelector('.mb-btn');
+    if(btn) btn.classList.toggle('secao-ativa', itens.some(function(i){ return i.classList.contains('ativa'); }));
+  });
+  // sino de alertas (projeta o item Alertas da sidebar)
+  var refA = document.getElementById('aba-btn-alertas');
+  var sino = document.getElementById('mb-sino');
+  if(sino && refA) sino.style.display = (refA.style.display==='none') ? 'none' : '';
+  var alB = document.getElementById('badge-alertas');
+  var sinoB = document.getElementById('mb-sino-badge');
+  if(alB && sinoB){
+    var na = parseInt(alB.textContent,10)||0;
+    var visA = alB.style.display!=='none' && na>0;
+    sinoB.textContent = na; sinoB.style.display = visA ? '' : 'none';
+  }
+  // usuário
+  var u = document.getElementById('mb-user-nome');
+  if(u) u.textContent = (typeof SESSAO!=='undefined' && SESSAO) ? SESSAO.nome : 'Entrar';
+}
+document.addEventListener('click', function(ev){
+  if(!ev.target.closest('#hog-menubar .mb-item')) mbFechar();
+});
+document.addEventListener('keydown', function(ev){ if(ev.key==='Escape') mbFechar(); });
+document.addEventListener('DOMContentLoaded', function(){
+  mbSync();
+  // pega mudanças de permissão, badges e aba ativa sem tocar em nenhum loader existente
+  setInterval(mbSync, 1500);
+});
 </script>
 
 </body>
