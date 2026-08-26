@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.40 · menu horizontal com dropdowns</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.40b · imprimir pedido · obs no Receber NF · saída na Higiene/Copa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -469,7 +469,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="mb-rot">Inventários</div>
       <div class="mbi" data-ref="aba-btn-inventario" onclick="mbFechar();trocarAba('inventario')">Inventário CC <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-cme-inv" onclick="mbFechar();cmeIr('inventario')">Inventário CME <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">Inventário Higiene <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">Inventário Higiene / Copa <span class="mb-badge"></span></div>
       <div class="mb-sep"></div>
       <div class="mb-rot">Relatórios</div>
       <div class="mbi" data-ref="aba-btn-historico" onclick="mbFechar();trocarAba('historico')">Compras e notas <span class="mb-badge"></span></div>
@@ -551,7 +551,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-inv">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-inventario" onclick="trocarAba('inventario')">Inventário CC</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-inv" onclick="cmeIr('inventario')">Inventário CME</div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário Higiene</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário Higiene / Copa</div>
       </div>
     </div>
     <div class="hs-grupo">
@@ -5622,18 +5622,25 @@ async function coPreencherSaldos(){
 function coDashGrupo(g, idxs, fids){
   if(!idxs.length) return '';
   let escolhidos=0, semPreco=0, semEscolha=0, total=0, economia=0, aumento=0;
-  const subiram=[], respondeu={};
+  const subiram=[], respondeu={}, detalhe=[];
   fids.forEach(f=>respondeu[f]=0);
   idxs.forEach(i=>{
     const it=coItens[i];
     const ops=(it.opcoes||[]).filter(o=>!o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0);
     ops.forEach(o=>{ if(o.fornecedor_id!=null && respondeu[o.fornecedor_id]!==undefined) respondeu[o.fornecedor_id]++; });
     if(!ops.length){ semPreco++; return; }
-    const esc=(it.opcoes||[]).find(o=>o.escolhida && Number(o.qtd_escolhida)>0 && o.fornecedor_id);
-    if(!esc){ semEscolha++; return; }
+    // v4.40 — SOMA TODAS as escolhas do item: o mesmo produto pode ser dividido
+    // entre dois fornecedores ("quebra"), e o dash contava só a primeira.
+    const escs=(it.opcoes||[]).filter(o=>o.escolhida && Number(o.qtd_escolhida)>0 && o.fornecedor_id);
+    if(!escs.length){ semEscolha++; return; }
     escolhidos++;
-    const unit=Number(coUnit(esc))||0, qtd=Number(esc.qtd_escolhida)||0;
-    total += unit*qtd;
+    let unit=0, qtd=0, subtotal=0;
+    escs.forEach(function(o){
+      const u=Number(coUnit(o))||0, q=Number(o.qtd_escolhida)||0;
+      subtotal += u*q; qtd += q; unit = u;   // unit do último para a comparação de preço
+    });
+    total += subtotal;
+    detalhe.push({ nome:it.material_nome, qtd:qtd, sub:subtotal, n:escs.length });
     // referência: a última compra que o histórico do item já traz (v4.28)
     const hp = (typeof hpCache!=='undefined' && it.material_id!=null) ? hpCache['m'+it.material_id] : null;
     const ultimo = (hp && hp.valor!=null) ? Number(hp.valor) : (it.uc_valor!=null?Number(it.uc_valor):null);
@@ -5656,7 +5663,8 @@ function coDashGrupo(g, idxs, fids){
   return '<div style="background:var(--cinza-1);border:1px solid var(--cinza-2);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
     + tile('Fechável agora', escolhidos+'/'+idxs.length, escolhidos?'var(--verde)':'var(--cinza-4)', 'itens com fornecedor escolhido')
-    + tile('Total escolhido', coMoney(total), 'var(--azul)', 'o que vira pedido')
+    + tile('Total escolhido', coMoney(total), 'var(--azul)',
+        detalhe.length ? ('<span title="'+detalhe.map(function(d){ return d.nome+': '+d.qtd+' × … = '+coMoney(d.sub)+(d.n>1?(' ('+d.n+' fornecedores)'):''); }).join(' | ').replace(/"/g,'&quot;')+'" style="cursor:help;border-bottom:1px dotted var(--cinza-3)">de '+detalhe.length+' item(ns) — passe o mouse</span>') : 'o que vira pedido')
     + tile('Falta preço', semPreco, semPreco?'var(--vermelho)':'var(--verde)', 'nenhuma oferta recebida')
     + tile('Falta escolher', semEscolha, semEscolha?'#D35400':'var(--verde)', 'tem preço, sem decisão')
     + (economia>0?tile('Economia', '−'+coMoney(economia), 'var(--verde)', 'vs. último pago'):'')
@@ -6576,11 +6584,100 @@ function deRenderizar(){
         <div style="font-size:14px;font-weight:700">Total do pedido: <span id="de-total-${pid}" style="color:var(--azul)">${deMoney(Math.max(0,totItens+(Number(p.frete)||0)-(Number(p.desconto)||0)))}</span></div>
         <div style="display:flex;gap:8px">
           <button style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deSalvarPedido(${pid},false)">💾 Salvar dados</button>
+          <button style="background:var(--azul-medio);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="dePedidoPDF(${pid})" title="Documento do pedido para mandar ao fornecedor">🖨 Imprimir pedido</button>
           <button class="de-confirmar" onclick="deConfirmar(${pid})">✅ Enviar para Aprovação</button>
         </div>
       </div>
     </div>`;
   }).join('');
+}
+
+// ═══ v4.40 — PEDIDO DE COMPRA IMPRESSO (o documento que vai ao fornecedor) ══
+// Modelo padrão: quem pede, para quem, o que, quanto, quando e como paga —
+// com o que foi combinado por escrito, para não depender do WhatsApp.
+async function dePedidoPDF(pid){
+  // v4.40b — dá para imprimir de dois lugares: montando o pedido (onde os
+  // campos ainda estão na tela) e depois de aprovado, no Receber NF. No
+  // segundo caso não há board carregado, então busca no banco.
+  let b=(typeof deBoards!=='undefined'&&deBoards)?deBoards.find(x=>x.pedido.id===pid):null;
+  if(!b){
+    try{
+      const ps=await sbFetch('pedidos?select=*&id=eq.'+pid+'&limit=1');
+      if(!ps||!ps.length){ toast('Pedido #'+pid+' não encontrado.','erro'); return; }
+      const its=await sbFetch('ordens_compra?select=*&pedido_id=eq.'+pid+'&limit=500');
+      b={ pedido:ps[0], itens:its||[] };
+    }catch(e){ toast('Erro ao carregar o pedido: '+(e.message||e),'erro'); return; }
+  }
+  // os nomes vêm de caches que podem não estar carregados nesta aba
+  try{
+    if(typeof coFornecedores==='undefined' || !coFornecedores || !coFornecedores.length)
+      coFornecedores = (await sbFetch('fornecedores?select=id,nome&order=nome&limit=2000'))||[];
+    if(typeof catalogoMateriais==='undefined' || !catalogoMateriais || !catalogoMateriais.length)
+      catalogoMateriais = (await sbFetch('materiais?select=id,nome&limit=5000'))||[];
+  }catch(e){ /* sem os nomes o documento ainda sai, com "material #id" */ }
+  const p=b.pedido, itens=b.itens||[];
+  if(!itens.length){ toast('Este pedido não tem itens para imprimir.','erro'); return; }
+  // o que está digitado na tela vale mais que o que está gravado
+  const campo=(id,alt)=>{ const el=document.getElementById(id+'-'+pid); return el?(el.value||'').trim():(alt||''); };
+  const frete=parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||Number(p.frete)||0;
+  const desconto=parseFloat((document.getElementById('de-desc-'+pid)||{}).value)||Number(p.desconto)||0;
+  const pagamento=campo('de-pag', p.condicao_pagamento)||'a combinar';
+  const prazo=campo('de-prazo', p.prazo_previsto)||'a combinar';
+  const obsForn=campo('de-obsf', p.obs_fornecedor);
+  const quem=((document.getElementById('de-por-'+pid)||{}).value)||p.pedido_por||'—';
+  let totItens=0;
+  const linhas=itens.map(function(o){
+    const qtd=Number(o.qtd_a_comprar)||0, unit=Number(o.valor_unitario)||0;
+    const sub=Math.max(0,(qtd*unit)-(Number(o.desconto)||0));
+    totItens+=sub;
+    const desc=(o.descricao_nf||'').trim();
+    return '<tr>'
+      +'<td>'+deNomeMat(o.material_id,o)+(desc?('<div style="font-size:9.5px;color:#666">'+desc+'</div>'):'')
+        +(o.observacao?('<div style="font-size:9.5px;color:#666">'+o.observacao+'</div>'):'')+'</td>'
+      +'<td>'+(o.marca_escolhida||'—')+'</td>'
+      +'<td>'+(o.codigo_escolhido||'—')+'</td>'
+      +'<td style="text-align:center">'+(qtd||'—')+'</td>'
+      +'<td style="text-align:right">'+deMoney(unit)+'</td>'
+      +'<td style="text-align:right">'+deMoney(sub)
+        +(Number(o.desconto)>0?('<div style="font-size:9.5px;color:#1E8449">−'+deMoney(o.desconto)+' desc.</div>'):'')+'</td>'
+      +'</tr>';
+  }).join('');
+  const total=Math.max(0,totItens+frete-desconto);
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Pedido de compra #'+pid+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:26px}'
+    +'h1{font-size:18px;margin:0 0 2px}.sub{color:#555;font-size:11.5px;margin-bottom:14px}'
+    +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
+    +'.num{text-align:right;font-size:13px}.num b{font-size:20px;color:#1B4F72}'
+    +'.blocos{display:flex;gap:14px;margin-bottom:14px}'
+    +'.bloco{flex:1;border:1px solid #ccc;border-radius:6px;padding:9px 12px}'
+    +'.bloco h2{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;margin:0 0 5px}'
+    +'.bloco div{font-size:12px;line-height:1.6}'
+    +'table{width:100%;border-collapse:collapse;margin:6px 0}'
+    +'td,th{border:1px solid #ccc;padding:6px 8px;font-size:11px;text-align:left;vertical-align:top}'
+    +'th{background:#EEF3F8;text-transform:uppercase;font-size:9.5px;letter-spacing:.4px}'
+    +'.tot{margin-top:8px;text-align:right;font-size:12px}.tot b{font-size:16px;color:#1B4F72}'
+    +'.obs{border:1px solid #E8B48B;background:#FEF6EC;border-radius:6px;padding:10px 12px;margin-top:12px;font-size:12px;white-space:pre-wrap}'
+    +'.ass{margin-top:26px;display:flex;gap:30px}.ass div{flex:1;border-top:1px solid #999;padding-top:5px;font-size:10.5px;color:#555;text-align:center}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+    +'<div class="sub">Centro Cirúrgico · Compras</div></div>'
+    +'<div class="num">PEDIDO DE COMPRA<br><b>Nº '+pid+'</b><br><span style="font-size:11px;color:#555">Emitido em '+hoje+'</span></div></div>'
+    +'<div class="blocos">'
+    +'<div class="bloco"><h2>Fornecedor</h2><div><b>'+deNomeForn(p.fornecedor_id)+'</b></div></div>'
+    +'<div class="bloco"><h2>Condições combinadas</h2><div>💳 Pagamento: <b>'+pagamento+'</b><br>🚚 Entrega: <b>'+prazo+'</b>'
+      +(frete>0?('<br>🚛 Frete: <b>'+deMoney(frete)+'</b>'):'<br>🚛 Frete: <b>sem frete</b>')+'</div></div>'
+    +'<div class="bloco"><h2>Solicitante</h2><div>'+quem+'<br><span style="font-size:11px;color:#555">'+(p.aprovado_por?('Aprovado por '+p.aprovado_por):'Aguardando aprovação interna')+'</span></div></div>'
+    +'</div>'
+    +'<table><thead><tr><th>Produto</th><th>Marca</th><th>Código</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table>'
+    +'<div class="tot">Itens: '+deMoney(totItens)+(frete>0?(' &nbsp;·&nbsp; Frete: '+deMoney(frete)):'')
+      +(desconto>0?(' &nbsp;·&nbsp; Desconto: −'+deMoney(desconto)):'')
+      +'<br><b>TOTAL DO PEDIDO: '+deMoney(total)+'</b></div>'
+    +(obsForn?('<div class="obs"><b>Observações:</b><br>'+obsForn+'</div>'):'')
+    +'<div class="ass"><div>Assinatura do solicitante</div><div>Confirmação do fornecedor</div></div>'
+    +'<button onclick="window.print()" style="margin-top:16px;padding:9px 18px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
+    +'</body></html>');
 }
 
 function deAtualizaTotal(pid){
@@ -7652,8 +7749,12 @@ function rcRenderizar(){
         <span>🚚 ${ped.prazo_previsto||'—'}</span>
         ${ped.frete?`<span>🚛 frete ${rcMoney(ped.frete)}</span>`:''}
         ${ped.aprovado_em?`<span>✔ aprovado ${(''+ped.aprovado_em).slice(0,10).split('-').reverse().join('/')}${ped.aprovado_por?' por '+ped.aprovado_por:''}</span>`:''}
-        <span style="margin-left:auto;color:var(--cinza-4)">confira o que foi pedido e marque o que chegou</span>
-      </div>`:''}
+        <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <button type="button" onclick="dePedidoPDF(${ped.id})" title="Abre o pedido no modelo padrão, para imprimir ou mandar ao fornecedor" style="background:var(--branco);color:var(--azul);border:1.5px solid var(--azul-medio,#AED6F1);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);white-space:nowrap">🖨 Imprimir pedido</button>
+          <span style="color:var(--cinza-4)">confira o que foi pedido e marque o que chegou</span></span>
+      </div>
+      ${ped.obs_fornecedor?`<div style="padding:8px 16px;background:#FEF9E7;border-bottom:1px solid #F5E6B8;font-size:11.5px;color:#7D6608">📨 <b>Combinado com o fornecedor:</b> ${ped.obs_fornecedor}</div>`:''}
+      ${ped.observacao?`<div style="padding:7px 16px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2);font-size:11px;color:var(--cinza-4)">📝 <b>Observação do pedido:</b> ${ped.observacao}</div>`:''}`:''}
       ${semCusto?`<div style="background:#EAF7EE;border-bottom:1.5px solid #A9DFBF;color:var(--verde);padding:8px 16px;font-size:12px;font-weight:700">🎁 ENTRADA SEM CUSTO (amostra grátis / bonificação) — valores ficam zerados, o nº da NF é opcional e o <b>preço de referência do item é preservado</b> para quando precisar comprar.</div>`:''}
       <div class="rc-secrot">📄 Dados da nota <span>copie do papel, como está impresso</span></div>
       <div class="rc-nfform">
@@ -15650,7 +15751,7 @@ async function alIgnorar(id){
 
 <div id="aba-hig_inv" class="container" style="display:none">
   <div class="card">
-    <div class="card-titulo">🧼 Inventário de Higiene</div>
+    <div class="card-titulo">🧼 Inventário de Higiene / Copa</div>
     <div class="hg-nota">O <b>saldo</b> é a contagem de consumo (rolo/pacote/frasco). <b>Consumo</b> e <b>sugestão</b> acendem quando existirem duas contagens fechadas — a de <b>31/08</b> é o marco zero.</div>
     <div class="hg-filtros">
       <input type="text" id="hg-inv-busca" placeholder="🔍 Buscar por código ou produto..." oninput="hgInvRender()">
@@ -15680,6 +15781,20 @@ async function alIgnorar(id){
   <div class="card">
     <div class="card-titulo">📊 Relatório de Higiene</div>
     <div id="hg-rel-box"></div>
+  </div>
+</div>
+<!-- v4.40 — modal de saída da higiene/copa -->
+<div id="hg-saida-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--branco);border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">
+      <b style="font-size:15px;color:var(--cinza-5)">↗ Saída de item — Higiene / Copa</b>
+      <button onclick="hgSaidaFechar()" style="margin-left:auto;border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--cinza-4)" title="Fechar">&#10005;</button>
+    </div>
+    <div id="hg-saida-corpo" style="padding:20px 22px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)">
+      <button onclick="hgSaidaFechar()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>
+      <button id="hg-sai-btn" onclick="hgSaidaGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">Registrar saída</button>
+    </div>
   </div>
 </div>
 <!-- ═══════════ FIM MÓDULO HIGIENE ═══════════ -->
@@ -16237,8 +16352,9 @@ function hgInvRender(){
     +'<th>Código</th><th>Produto</th><th>Fornecedor</th>'
     +'<th class="hg-num">Valor compra</th><th class="hg-num">Valor/unid</th>'
     +'<th class="hg-num">Saldo</th><th class="hg-num">Consumo 3m</th><th class="hg-num">Sugestão</th>'
+    +'<th></th>'
     +'</tr></thead><tbody>';
-  if(!dados.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
+  if(!dados.length) h+='<tr><td colspan="9" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
   dados.forEach(function(r){
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
     const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
@@ -16251,10 +16367,109 @@ function hgInvRender(){
       +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
       +'<td class="hg-num hg-aguardando">'+(r.consumo_3m==null?'—':hgN(r.consumo_3m))+'</td>'
       +'<td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td>'
+      +'<td style="text-align:right"><button onclick="hgSaidaAbrir('+r.material_id+')" title="Registrar saída deste item — para a copa, um consultório, outro setor, perda ou descarte" style="background:var(--branco);color:var(--azul);border:1.5px solid var(--azul-medio,#AED6F1);border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);white-space:nowrap">↗ Dar saída</button></td>'
       +'</tr>';
   });
   h+='</tbody></table>';
   document.getElementById('hg-inv-tabela').innerHTML=h;
+}
+
+// ═══ v4.40 — SAÍDA PELA PRÓPRIA ABA DE HIGIENE / COPA ═══════════════════
+// Antes só dava para dar baixa pela Saída Diversa do CC, que lista o catálogo
+// cirúrgico inteiro. Item de higiene e de copa que sai para outro setor
+// (ou some, ou vence) agora se resolve na tela onde a contagem é feita.
+// Grava igual a qualquer outra saída: SAIDA_GERAL, quantidade negativa,
+// e passa por Aprovações — para nada sumir do estoque sem alguém ver.
+// Os destinos são um enum no banco (destino_saida_geral_enum) — inventar um
+// valor aqui dá erro 22P02 na hora de gravar. COPA, RECEPÇÃO e ADMINISTRATIVO
+// foram acrescentados ao enum em 26/08 (SQL 64) justamente para esta tela.
+const HG_DESTINOS = ['COPA','RECEPÇÃO','ADMINISTRATIVO','CONSULTÓRIOS','USO CC','USO CME','USO RPA','AUTORREFRATOR','PERDA','VENCIMENTO','DESCARTE','EMPRESTIMO'];
+let hgSaidaMid = null;
+
+function hgSaidaAbrir(mid){
+  const r = hgDados.find(function(x){ return x.material_id===mid; });
+  if(!r){ toast('Item não encontrado — recarregue a aba.','erro'); return; }
+  hgSaidaMid = mid;
+  const saldo = Number(r.saldo)||0;
+  const un = (r.unidade_medida||'unidade').toLowerCase();
+  const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : '';
+  const cx = document.getElementById('hg-saida-modal');
+  cx.querySelector('#hg-saida-corpo').innerHTML =
+     '<div style="font-size:13px;color:var(--cinza-4);margin-bottom:2px">Saída de</div>'
+    +'<div style="font-size:17px;font-weight:800;color:var(--cinza-5);line-height:1.25">'+hgEsc(r.material)+'</div>'
+    +'<div style="font-size:12px;color:var(--cinza-4);margin-top:3px">'+(r.codigo?('cód. '+hgEsc(r.codigo)+' · '):'')
+      +'saldo hoje: <b style="color:var(--cinza-5)">'+hgN(saldo)+'</b> '+hgEsc(un)+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">'
+    +  '<div><label style="'+HGS_LBL+'">Quantidade que saiu</label>'
+    +    '<input id="hg-sai-qtd" type="number" step="any" min="0" max="'+saldo+'" value="1" oninput="hgSaidaPreview()" style="'+HGS_INP+'"></div>'
+    +  '<div><label style="'+HGS_LBL+'">Data</label>'
+    +    '<input id="hg-sai-data" type="date" value="'+new Date().toISOString().split('T')[0]+'" style="'+HGS_INP+'"></div>'
+    +'</div>'
+    +'<div style="margin-top:12px"><label style="'+HGS_LBL+'">Para onde foi</label>'
+    +  '<select id="hg-sai-dest" onchange="hgSaidaPreview()" style="'+HGS_INP+'"><option value="">Selecione…</option>'
+    +  HG_DESTINOS.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('')+'</select></div>'
+    +'<div style="margin-top:12px"><label style="'+HGS_LBL+'">Quem está registrando</label>'
+    +  '<input id="hg-sai-quem" value="'+hgEsc(quem)+'" placeholder="seu nome" style="'+HGS_INP+'"></div>'
+    +'<div style="margin-top:12px"><label style="'+HGS_LBL+'">Observação <span style="font-weight:400;color:var(--cinza-4)">(opcional)</span></label>'
+    +  '<input id="hg-sai-obs" placeholder="ex.: reposição da copa da recepção" style="'+HGS_INP+'"></div>'
+    +'<div id="hg-sai-preview" style="margin-top:14px"></div>';
+  cx.style.display='flex';
+  hgSaidaPreview();
+  setTimeout(function(){ const q=document.getElementById('hg-sai-qtd'); if(q){ q.focus(); q.select(); } },60);
+}
+function hgSaidaFechar(){ const c=document.getElementById('hg-saida-modal'); if(c) c.style.display='none'; hgSaidaMid=null; }
+
+function hgSaidaPreview(){
+  const r = hgDados.find(function(x){ return x.material_id===hgSaidaMid; }); if(!r) return;
+  const box = document.getElementById('hg-sai-preview'); if(!box) return;
+  const saldo = Number(r.saldo)||0;
+  const qtd = parseFloat(String((document.getElementById('hg-sai-qtd')||{}).value||'').replace(',','.'));
+  const dest = (document.getElementById('hg-sai-dest')||{}).value||'';
+  if(!(qtd>0)){ box.innerHTML='<div style="'+HGS_AVISO+'">Informe a quantidade que saiu.</div>'; return; }
+  if(qtd>saldo){
+    box.innerHTML='<div style="'+HGS_AVISO_R+'">A contagem tem <b>'+hgN(saldo)+'</b> e você está tirando <b>'+hgN(qtd)+'</b>. '
+      +'Se saiu mais do que o sistema sabe, a contagem é que está atrasada — corrija o saldo antes, senão o estoque fica negativo.</div>';
+    return;
+  }
+  box.innerHTML='<div style="'+HGS_OK+'">Saldo <b>'+hgN(saldo)+'</b> → <b>'+hgN(saldo-qtd)+'</b>'
+    +(dest?(' · destino <b>'+hgEsc(dest)+'</b>'):'')
+    +'<div style="margin-top:5px;font-weight:400;color:var(--cinza-4);font-size:12px">Vai para <b>Aprovações</b>, como toda saída — o saldo só muda depois de aprovada, e dá para desfazer lá.</div></div>';
+}
+
+async function hgSaidaGravar(){
+  const r = hgDados.find(function(x){ return x.material_id===hgSaidaMid; });
+  if(!r){ toast('Item não encontrado.','erro'); return; }
+  const saldo = Number(r.saldo)||0;
+  const qtd  = parseFloat(String((document.getElementById('hg-sai-qtd')||{}).value||'').replace(',','.'));
+  const dest = (document.getElementById('hg-sai-dest')||{}).value||'';
+  const quem = ((document.getElementById('hg-sai-quem')||{}).value||'').trim();
+  const data = (document.getElementById('hg-sai-data')||{}).value||new Date().toISOString().split('T')[0];
+  const obs  = ((document.getElementById('hg-sai-obs')||{}).value||'').trim();
+  if(!(qtd>0)){ toast('Informe a quantidade que saiu.','erro'); return; }
+  if(qtd>saldo){ toast('Quantidade maior que o saldo — corrija a contagem antes.','erro'); return; }
+  if(!dest){ toast('Diga para onde o item foi.','erro'); return; }
+  if(!quem){ toast('Escreva quem está registrando.','erro'); return; }
+  const btn=document.getElementById('hg-sai-btn'); if(btn){ btn.disabled=true; btn.textContent='gravando…'; }
+  try{
+    const localId = await getEstoqueGeralId();
+    await sbFetch('movimentacoes','POST',{
+      tipo:'SAIDA_GERAL', material_id:hgSaidaMid, local_id:localId,
+      qtd: -Math.abs(qtd), destino_saida_geral: dest, aprovado:false, registrado_por: quem,
+      observacao:'Higiene/Copa — '+dest+' — '+data+(obs?(' · '+obs):'') });
+    toast('Saída de '+hgN(qtd)+' × '+r.material+' registrada ✓ — aguardando aprovação','sucesso');
+    hgSaidaFechar();
+    await hgInvCarregar();
+  }catch(e){
+    const msg=String(e.message||e);
+    // 22P02 = o destino não existe no enum do banco. Erro de configuração, não da pessoa —
+    // então a mensagem diz o que fazer, em vez de só reclamar.
+    if(msg.indexOf('22P02')>=0 || msg.indexOf('invalid input value for enum')>=0){
+      toast('O banco ainda não conhece o destino "'+dest+'". Rode o SQL 64 (acrescenta COPA, RECEPÇÃO e ADMINISTRATIVO) — nada foi gravado.','erro');
+    } else {
+      toast('Erro ao gravar a saída: '+msg,'erro');
+    }
+    if(btn){ btn.disabled=false; btn.textContent='Registrar saída'; }
+  }
 }
 
 async function hgCompCarregar(){
@@ -16409,6 +16624,12 @@ let hgOrcAtivo  = 'Orçamento 1';
 const HG_BTN  = 'border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)';
 const HG_BTNV = HG_BTN+';background:var(--verde)';
 const HG_BTNX = 'border:1px solid var(--vermelho);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--vermelho);background:#FDEDEC';
+// v4.40 — estilos do modal de saída da higiene/copa
+const HGS_LBL = 'display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700;margin-bottom:4px';
+const HGS_INP = 'width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);background:var(--branco);outline:none;box-sizing:border-box';
+const HGS_OK    = 'background:#EAF7EF;border-left:3px solid var(--verde);border-radius:0 8px 8px 0;padding:10px 13px;font-size:13px;color:var(--cinza-5);font-weight:600;line-height:1.45';
+const HGS_AVISO = 'background:#FEF9E7;border-left:3px solid #B7950B;border-radius:0 8px 8px 0;padding:10px 13px;font-size:13px;color:#7D6608;line-height:1.45';
+const HGS_AVISO_R='background:#FDEDEC;border-left:3px solid var(--vermelho);border-radius:0 8px 8px 0;padding:10px 13px;font-size:13px;color:#943126;line-height:1.45';
 const HG_INP  = 'border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)';
 const HG_CHIP = 'border:1px solid var(--cinza-2);border-radius:16px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);background:var(--branco);color:var(--cinza-4)';
 const HG_CHIP_ON = HG_CHIP+';background:var(--verde);border-color:var(--verde);color:#fff';
