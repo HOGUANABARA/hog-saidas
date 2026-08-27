@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.40b · imprimir pedido · obs no Receber NF · saída na Higiene/Copa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.41b · Inventário Administrativo · cirurgias unificadas no filtro · somar várias cirurgias</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -470,6 +470,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="mbi" data-ref="aba-btn-inventario" onclick="mbFechar();trocarAba('inventario')">Inventário CC <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-cme-inv" onclick="mbFechar();cmeIr('inventario')">Inventário CME <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">Inventário Higiene / Copa <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-adm_inv" onclick="mbFechar();trocarAba('adm_inv')">Inventário Administrativo <span class="mb-badge"></span></div>
       <div class="mb-sep"></div>
       <div class="mb-rot">Relatórios</div>
       <div class="mbi" data-ref="aba-btn-historico" onclick="mbFechar();trocarAba('historico')">Compras e notas <span class="mb-badge"></span></div>
@@ -552,6 +553,7 @@ details[open] summary { margin-bottom: 6px; }
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-inventario" onclick="trocarAba('inventario')">Inventário CC</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-inv" onclick="cmeIr('inventario')">Inventário CME</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_inv" onclick="trocarAba('hig_inv')">Inventário Higiene / Copa</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-adm_inv" onclick="trocarAba('adm_inv')">Inventário Administrativo</div>
       </div>
     </div>
     <div class="hs-grupo">
@@ -1767,7 +1769,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -1787,7 +1789,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv']
   }
 };
 
@@ -1884,7 +1886,7 @@ function exigirAssinatura(ato){
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
-                    'hig_inv','hig_comp','hig_orc','hig_rel'];
+                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -4001,10 +4003,11 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
+  if (aba==='adm_inv')  { admInvCarregar(); }
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
   if (aba==='hig_orc')  { hgOrcCarregar(); }
@@ -10088,7 +10091,54 @@ function pnAplicarSecoes(){
 //   • quanto consome cada médico, cada tipo de cirurgia, ou o cruzamento dos dois?
 //   • qual o custo por paciente disso?
 // Nada aqui é média do app inteiro: tudo obedece aos filtros de cima.
-let pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:'medico' };
+let pnCirF = { material:'', medico:'', tipo:'', tipos:[], de:'', ate:'', agrupar:'medico' };
+
+// ═══ v4.41b — ESCOLHER VÁRIAS CIRURGIAS E SOMAR O CUSTO ═════════════════
+// Pedido da gestão: "é possível deixar a opção de check box para o usuário
+// escolher quais cirurgias quer ver o custo unificado?". Serve para juntar o
+// que na prática é a mesma coisa vista de ângulos diferentes — as três faco
+// nacionais, por exemplo — sem precisar somar na mão.
+function pnCirTiposAbrir(){
+  const fonte = pnCirFonte();
+  const tipos = [...new Set(Object.values(fonte.perInfo).map(p=>p.tipo).filter(x=>x&&x!=='—'))].sort();
+  const sel = new Set(pnCirF.tipos||[]);
+  const box = document.getElementById('pn-cirtipos-modal');
+  box.querySelector('#pn-cirtipos-corpo').innerHTML =
+     '<div style="font-size:13px;color:var(--cinza-4);margin-bottom:12px">Marque as cirurgias que você quer ver somadas. '
+    +'<b>Nenhuma marcada = todas</b>, como estava antes.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">'
+    + tipos.map(function(t,i){
+        return '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;padding:5px 7px;border-radius:6px;cursor:pointer;background:'+(sel.has(t)?'#F4FBF6':'transparent')+'">'
+          +'<input type="checkbox" class="pn-cirtipo" value="'+String(t).replace(/"/g,'&quot;')+'"'+(sel.has(t)?' checked':'')
+          +' onchange="this.closest(\'label\').style.background=this.checked?\'#F4FBF6\':\'transparent\';pnCirTiposPrevia()">'
+          +'<span>'+t+'</span></label>';
+      }).join('')
+    +'</div>'
+    +'<div id="pn-cirtipos-previa" style="margin-top:14px"></div>';
+  box.style.display='flex';
+  pnCirTiposPrevia();
+}
+function pnCirTiposPrevia(){
+  const marcadas=[...document.querySelectorAll('.pn-cirtipo')].filter(c=>c.checked).map(c=>c.value);
+  const el=document.getElementById('pn-cirtipos-previa'); if(!el) return;
+  el.innerHTML = marcadas.length
+    ? '<div style="background:#EAF7EF;border-left:3px solid var(--verde);border-radius:0 8px 8px 0;padding:10px 13px;font-size:13px">'
+      +'Vai somar <b>'+marcadas.length+'</b>: '+marcadas.join(' · ')+'</div>'
+    : '<div style="background:var(--cinza-1);border-left:3px solid var(--cinza-3);border-radius:0 8px 8px 0;padding:10px 13px;font-size:13px;color:var(--cinza-4)">'
+      +'Nenhuma marcada — vai mostrar <b>todas as cirurgias</b>.</div>';
+}
+function pnCirTiposFechar(){ const b=document.getElementById('pn-cirtipos-modal'); if(b) b.style.display='none'; }
+function pnCirTiposAplicar(){
+  pnCirF.tipos=[...document.querySelectorAll('.pn-cirtipo')].filter(c=>c.checked).map(c=>c.value);
+  pnCirF.tipo='';               // a escolha múltipla substitui a antiga
+  pnCirTiposFechar();
+  pnCirurgias();
+}
+function pnCirTiposTodas(marcar){
+  document.querySelectorAll('.pn-cirtipo').forEach(function(c){
+    c.checked=!!marcar; c.closest('label').style.background=marcar?'#F4FBF6':'transparent'; });
+  pnCirTiposPrevia();
+}
 let pnCirAberto = null;
 
 function pnCirSet(campo, valor){
@@ -10109,7 +10159,7 @@ function pnCirPeriodoRapido(dias){
   pnCirurgias();
 }
 function pnCirLimpar(){
-  pnCirF = { material:'', medico:'', tipo:'', de:'', ate:'', agrupar:pnCirF.agrupar, rapido:0 };
+  pnCirF = { material:'', medico:'', tipo:'', tipos:[], de:'', ate:'', agrupar:pnCirF.agrupar, rapido:0 };
   pnCirAberto = null; pnCirurgias();
 }
 function pnCirBr(d){ return d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'; }
@@ -10131,11 +10181,21 @@ function pnCirFonte(){
     movs.push({ ...m, chave:'p'+m.periodoId });
   }
   for (const h of (pnHistPer||[])){
-    perInfo['h'+h.key] = { data:h.data, medico:h.medico||'—', tipo:h.tipo||'—',
+    // v4.41b — os períodos do app já vinham pela classificação validada, mas os
+    // de junho/julho (planilha) entravam com o nome cru. Resultado: o filtro
+    // CIRURGIA listava "FACO" e "FACECTOMIA" ao lado de "FACO IMPORT" e
+    // "FACO NACIONAL FELLOW", como se fossem cirurgias diferentes — enquanto a
+    // tela de Custos, que já canonizava, mostrava a lista certa. Mesmo critério
+    // nas duas fontes agora: a regra do fellow e do Martinelli é da agenda
+    // (médico + dia da semana), então vale igual para o mês importado.
+    const tipoCanon = (typeof pnTipoCanon==='function')
+      ? pnTipoCanon(h.tipo||'—', h.medico, h.data)
+      : (h.tipo||'—');
+    perInfo['h'+h.key] = { data:h.data, medico:h.medico||'—', tipo:tipoCanon,
       pac:Number(h.pac)||0, modalidade:'', origem:'planilha' };
     for (const it of (h.itens||[])){
       movs.push({ qtd:Number(it.qtd)||0, material_id:it.mid, dia:h.data, mes:h.mes,
-        chave:'h'+h.key, medico:h.medico||'—', tipoCir:h.tipo||'—',
+        chave:'h'+h.key, medico:h.medico||'—', tipoCir:tipoCanon,
         custo:Number(it.custo)||0, nomeHist:it.nome, origem:'planilha' });
     }
   }
@@ -10161,6 +10221,10 @@ function pnCirurgias(){
   const termo = (pnCirF.material||'').trim().toUpperCase();
   const movs = movsTodos.filter(m=>{
     if (pnCirF.medico && m.medico !== pnCirF.medico) return false;
+    // v4.41b — antes era uma cirurgia por vez. Agora dá para marcar várias e
+    // ver o custo somado (ex.: as três faco nacionais juntas, ou plástica +
+    // sondagem). Nenhuma marcada = todas, como era.
+    if (pnCirF.tipos && pnCirF.tipos.length && pnCirF.tipos.indexOf(m.tipoCir) < 0) return false;
     if (pnCirF.tipo   && m.tipoCir !== pnCirF.tipo) return false;
     if (pnCirF.de  && m.dia < pnCirF.de)  return false;
     if (pnCirF.ate && m.dia > pnCirF.ate) return false;
@@ -10237,7 +10301,9 @@ function pnCirurgias(){
         <div class="cp"><label>Médico</label>
           <select onchange="pnCirSet('medico',this.value)">${opc(medicos, pnCirF.medico)}</select></div>
         <div class="cp"><label>Cirurgia</label>
-          <select onchange="pnCirSet('tipo',this.value)">${opc(tipos, pnCirF.tipo)}</select></div>
+          <button class="pn-btn" onclick="pnCirTiposAbrir()" style="text-align:left;min-width:190px;font-weight:600">
+            ${(!pnCirF.tipos||!pnCirF.tipos.length) ? 'todas as cirurgias'
+              : (pnCirF.tipos.length===1 ? pnCirF.tipos[0] : pnCirF.tipos.length+' cirurgias somadas')} ▾</button></div>
         <div class="cp"><label>De</label>
           <input type="date" value="${pnCirF.de}" onchange="pnCirSet('de',this.value)"></div>
         <div class="cp"><label>Até</label>
@@ -15783,6 +15849,59 @@ async function alIgnorar(id){
     <div id="hg-rel-box"></div>
   </div>
 </div>
+<!-- v4.41b — escolher várias cirurgias no Consumo por cirurgia -->
+<div id="pn-cirtipos-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--branco);border-radius:14px;max-width:620px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">
+      <b style="font-size:15px;color:var(--cinza-5)">🔬 Quais cirurgias somar</b>
+      <button onclick="pnCirTiposFechar()" style="margin-left:auto;border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--cinza-4)" title="Fechar">&#10005;</button>
+    </div>
+    <div id="pn-cirtipos-corpo" style="padding:18px 22px"></div>
+    <div style="display:flex;gap:10px;align-items:center;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)">
+      <button onclick="pnCirTiposTodas(true)" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">marcar todas</button>
+      <button onclick="pnCirTiposTodas(false)" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">limpar</button>
+      <span style="flex:1"></span>
+      <button onclick="pnCirTiposFechar()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>
+      <button onclick="pnCirTiposAplicar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MÓDULO ADMINISTRATIVO (v4.41) ═══════════ -->
+<div id="aba-adm_inv" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🗄️ Inventário Administrativo — impressos e expediente</div>
+    <div class="hg-nota" id="adm-nota"></div>
+    <div class="hg-filtros">
+      <input type="text" id="adm-busca" placeholder="🔍 Buscar por código (MOD. 004) ou nome…" oninput="admInvRender()">
+      <select id="adm-classe" onchange="admInvRender()">
+        <option value="">Impressos e expediente</option>
+        <option value="ADM_IMPRESSOS">Só impressos (gráfica)</option>
+        <option value="ADM_EXPEDIENTE">Só expediente</option>
+      </select>
+      <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="adm-so-contados" onchange="admInvRender()"> só o que eu já preenchi</label>
+      <span style="flex:1"></span>
+      <button id="adm-btn-gravar" onclick="admContagemRevisar()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">✔ Conferir e gravar contagem</button>
+    </div>
+    <div id="adm-tabela"></div>
+  </div>
+</div>
+
+<div id="adm-conf-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--branco);border-radius:14px;max-width:680px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">
+      <b style="font-size:15px;color:var(--cinza-5)">Conferir a contagem antes de gravar</b>
+      <button onclick="admConfFechar()" style="margin-left:auto;border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--cinza-4)" title="Fechar">&#10005;</button>
+    </div>
+    <div id="adm-conf-corpo" style="padding:18px 22px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)">
+      <button onclick="admConfFechar()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Voltar e corrigir</button>
+      <button id="adm-conf-btn" onclick="admContagemGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">Gravar contagem</button>
+    </div>
+  </div>
+</div>
+<!-- ═══════════ FIM MÓDULO ADMINISTRATIVO ═══════════ -->
+
 <!-- v4.40 — modal de saída da higiene/copa -->
 <div id="hg-saida-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--branco);border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
@@ -16372,6 +16491,196 @@ function hgInvRender(){
   });
   h+='</tbody></table>';
   document.getElementById('hg-inv-tabela').innerHTML=h;
+}
+
+// ═══ v4.41 — INVENTÁRIO ADMINISTRATIVO (impressos e expediente) ═════════
+// A contagem é o marco zero: sem ela, a tela de separação não tem com o que
+// comparar o pedido do setor. Digita-se o que existe na prateleira; o sistema
+// grava a diferença como ajuste de inventário, item por item, com quem contou.
+let admDados = [];
+let admContagem = {};   // material_id -> valor digitado (string)
+
+async function admInvCarregar(){
+  try{
+    admDados = (await sbFetch('vw_administrativo_inventario?select=*&order=classe,codigo,material&limit=1000')) || [];
+  }catch(e){
+    admDados = [];
+    document.getElementById('adm-tabela').innerHTML =
+      '<div style="'+HGS_AVISO_R+'">Não consegui ler o inventário administrativo. Se o erro falar em <b>vw_administrativo_inventario</b>, é porque a visão ainda não existe no banco — rode o SQL 65.</div>';
+    return;
+  }
+  admInvRender();
+}
+
+function admFiltrar(){
+  const busca=(document.getElementById('adm-busca').value||'').toLowerCase();
+  const classe=document.getElementById('adm-classe').value;
+  const soCont=document.getElementById('adm-so-contados').checked;
+  return admDados.filter(function(r){
+    if(classe && r.classe!==classe) return false;
+    if(soCont && !(admContagem[r.material_id]!==undefined && admContagem[r.material_id]!=='')) return false;
+    if(busca){ const alvo=((r.codigo||'')+' '+(r.material||'')).toLowerCase(); if(alvo.indexOf(busca)<0) return false; }
+    return true;
+  });
+}
+
+function admInvRender(){
+  const dados=admFiltrar();
+  let preenchidos=0, comSaldo=0;
+  admDados.forEach(function(r){
+    if(admContagem[r.material_id]!==undefined && admContagem[r.material_id]!=='') preenchidos++;
+    if(Number(r.saldo)>0) comSaldo++;
+  });
+  const nota=document.getElementById('adm-nota');
+  if(nota) nota.innerHTML = comSaldo===0
+    ? 'Primeira contagem: <b>nenhum item tem saldo ainda</b>. Escreva na coluna <b>contei</b> o que existe hoje na prateleira e clique em <b>Conferir e gravar</b>. Item que você deixar em branco fica como está — dá para contar em partes, num dia as impressos e no outro o expediente.'
+    : 'Escreva na coluna <b>contei</b> o que existe hoje. Só o que for preenchido muda; o resto fica como está.';
+
+  let h='<div class="hg-kpis">'
+    +'<div class="hg-kpi"><div class="rot">Itens no catálogo</div><div class="val">'+admDados.length+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Já preenchidos</div><div class="val" style="color:var(--verde)">'+preenchidos+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Com saldo hoje</div><div class="val">'+comSaldo+'</div></div>'
+    +'<div class="hg-kpi"><div class="rot">Mostrando</div><div class="val">'+dados.length+'</div></div>'
+    +'</div>';
+
+  h+='<table class="hg-tab"><thead><tr>'
+    +'<th>Código</th><th>Item</th><th>Unidade</th>'
+    +'<th class="hg-num">Saldo hoje</th><th class="hg-num" style="width:130px">Contei</th><th class="hg-num">Vai virar</th>'
+    +'</tr></thead><tbody>';
+  if(!dados.length) h+='<tr><td colspan="6" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item com esse filtro.</td></tr>';
+
+  let classeAtual=null;
+  dados.forEach(function(r){
+    if(r.classe!==classeAtual){
+      classeAtual=r.classe;
+      const rot = classeAtual==='ADM_IMPRESSOS' ? '🖨️ IMPRESSOS — formulários da gráfica' : '✏️ EXPEDIENTE — papelaria e suprimentos';
+      h+='<tr><td colspan="6" style="background:var(--cinza-1);font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--cinza-5);padding:8px 10px">'+rot+'</td></tr>';
+    }
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">—</span>';
+    const saldo=Number(r.saldo)||0;
+    const digitado = admContagem[r.material_id];
+    const tem = (digitado!==undefined && digitado!=='');
+    const novo = tem?parseFloat(String(digitado).replace(',','.')):null;
+    let virar='<span style="color:var(--cinza-3)">—</span>';
+    if(tem && !isNaN(novo)){
+      const d=novo-saldo;
+      virar = d===0 ? '<span style="color:var(--cinza-4)">sem mudança</span>'
+            : '<b style="color:'+(d>0?'var(--verde)':'var(--vermelho)')+'">'+(d>0?'+':'')+hgN(d)+'</b>';
+    }
+    h+='<tr>'
+      +'<td>'+cod+'</td>'
+      +'<td class="hg-prod">'+hgEsc(r.material)+'</td>'
+      +'<td style="font-size:12px;color:var(--cinza-4)">'+hgEsc(r.unidade_medida||'unidade')+'</td>'
+      +'<td class="hg-num">'+hgN(saldo)+'</td>'
+      +'<td class="hg-num"><input type="number" step="any" min="0" value="'+(tem?hgEsc(digitado):'')+'" placeholder="—" '
+        +'oninput="admSetContagem('+r.material_id+',this.value)" '
+        +'style="width:100px;border:1.5px solid '+(tem?'var(--verde)':'var(--cinza-2)')+';border-radius:6px;padding:5px 7px;text-align:right;font-size:13px;font-family:var(--fonte);background:'+(tem?'#F4FBF6':'var(--branco)')+'"></td>'
+      +'<td class="hg-num">'+virar+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('adm-tabela').innerHTML=h;
+}
+
+function admSetContagem(mid, v){
+  if(v===''||v===null||v===undefined) delete admContagem[mid];
+  else admContagem[mid]=v;
+  // redesenhar inteiro faria perder o foco do campo — atualiza só os números
+  const r=admDados.find(function(x){ return x.material_id===mid; });
+  if(!r) return;
+  const kpi=document.querySelectorAll('#adm-tabela .hg-kpi .val')[1];
+  if(kpi){ let n=0; admDados.forEach(function(x){ if(admContagem[x.material_id]!==undefined&&admContagem[x.material_id]!=='') n++; }); kpi.textContent=n; }
+  const inp=event&&event.target?event.target:null;
+  if(inp){
+    const tr=inp.closest('tr'); if(!tr) return;
+    const saldo=Number(r.saldo)||0;
+    const novo=(v===''?null:parseFloat(String(v).replace(',','.')));
+    const cel=tr.lastElementChild;
+    if(novo===null||isNaN(novo)){ cel.innerHTML='<span style="color:var(--cinza-3)">—</span>'; }
+    else{
+      const d=novo-saldo;
+      cel.innerHTML = d===0 ? '<span style="color:var(--cinza-4)">sem mudança</span>'
+        : '<b style="color:'+(d>0?'var(--verde)':'var(--vermelho)')+'">'+(d>0?'+':'')+hgN(d)+'</b>';
+    }
+    inp.style.borderColor = (v==='')?'var(--cinza-2)':'var(--verde)';
+    inp.style.background  = (v==='')?'var(--branco)':'#F4FBF6';
+  }
+}
+
+function admConfFechar(){ const c=document.getElementById('adm-conf-modal'); if(c) c.style.display='none'; }
+
+function admContagemRevisar(){
+  const linhas=[];
+  admDados.forEach(function(r){
+    const v=admContagem[r.material_id];
+    if(v===undefined||v==='') return;
+    const novo=parseFloat(String(v).replace(',','.'));
+    if(isNaN(novo)||novo<0) return;
+    const saldo=Number(r.saldo)||0;
+    if(novo===saldo) return;           // nada a gravar
+    linhas.push({ r, saldo, novo, delta:novo-saldo });
+  });
+  if(!linhas.length){
+    toast('Nada para gravar — preencha a coluna "contei" nos itens que você contou.','erro');
+    return;
+  }
+  const corpo=document.getElementById('adm-conf-corpo');
+  corpo.innerHTML =
+     '<div style="'+HGS_OK+'">Vão ser gravados <b>'+linhas.length+'</b> ajuste(s) de inventário. '
+    +'Item em branco não entra. Se algum número estiver errado, dá para voltar e corrigir agora — '
+    +'e mesmo depois de gravado, é só contar de novo.</div>'
+    +'<div style="max-height:44vh;overflow:auto;margin-top:14px;border:1px solid var(--cinza-2);border-radius:8px">'
+    +'<table class="hg-tab"><thead><tr><th>Item</th><th class="hg-num">De</th><th class="hg-num">Para</th><th class="hg-num">Ajuste</th></tr></thead><tbody>'
+    + linhas.map(function(l){
+        return '<tr><td class="hg-prod">'+hgEsc(l.r.material)+'</td>'
+          +'<td class="hg-num">'+hgN(l.saldo)+'</td>'
+          +'<td class="hg-num"><b>'+hgN(l.novo)+'</b></td>'
+          +'<td class="hg-num"><b style="color:'+(l.delta>0?'var(--verde)':'var(--vermelho)')+'">'+(l.delta>0?'+':'')+hgN(l.delta)+'</b></td></tr>';
+      }).join('')
+    +'</tbody></table></div>'
+    +'<div style="margin-top:14px"><label style="'+HGS_LBL+'">Quem contou</label>'
+    +'<input id="adm-conf-quem" value="'+hgEsc((typeof SESSAO!=='undefined'&&SESSAO&&SESSAO.nome)?SESSAO.nome:'')+'" placeholder="seu nome" style="'+HGS_INP+'"></div>';
+  document.getElementById('adm-conf-modal').style.display='flex';
+}
+
+async function admContagemGravar(){
+  const quem=((document.getElementById('adm-conf-quem')||{}).value||'').trim();
+  if(!quem){ toast('Escreva quem contou.','erro'); return; }
+  const btn=document.getElementById('adm-conf-btn');
+  if(btn){ btn.disabled=true; btn.textContent='gravando…'; }
+  const hoje=new Date().toISOString().split('T')[0];
+  let ok=0; const falhou=[];
+  try{
+    const localId=await getEstoqueGeralId();
+    for(const r of admDados){
+      const v=admContagem[r.material_id];
+      if(v===undefined||v==='') continue;
+      const novo=parseFloat(String(v).replace(',','.'));
+      if(isNaN(novo)||novo<0) continue;
+      const saldo=Number(r.saldo)||0;
+      const delta=novo-saldo;
+      if(delta===0) continue;
+      try{
+        await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:r.material_id,
+          local_id:localId, qtd:delta, aprovado:true, registrado_por:quem,
+          aprovado_por:quem, aprovado_em:new Date().toISOString(),
+          observacao:'Contagem do inventário administrativo — '+hoje+' — de '+saldo+' para '+novo });
+        ok++;
+      }catch(e){ falhou.push(r.material+': '+String(e.message||e).slice(0,80)); }
+    }
+  }catch(e){
+    toast('Erro ao gravar: '+(e.message||e),'erro');
+    if(btn){ btn.disabled=false; btn.textContent='Gravar contagem'; }
+    return;
+  }
+  admConfFechar();
+  if(btn){ btn.disabled=false; btn.textContent='Gravar contagem'; }
+  if(falhou.length){
+    alert('⚠️ '+falhou.length+' item(ns) não gravaram:\n\n'+falhou.join('\n'));
+  }
+  admContagem={};
+  toast(ok+' item(ns) atualizados pela contagem ✓','sucesso');
+  await admInvCarregar();
 }
 
 // ═══ v4.40 — SAÍDA PELA PRÓPRIA ABA DE HIGIENE / COPA ═══════════════════
