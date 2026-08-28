@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.49 · de quem é o paciente · reembolso do médico · bisturi trazido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.49b · dividir mostrando os dois registros · modalidade na divisão</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3883,8 +3883,12 @@ async function aprDividir(i){
     +'<select id="apr-div-dono" onchange="aprDivPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)">'
     +[['','— igual ao registro atual'],['CASA','Da casa'],['MARTINELLI','Do Dr Martinelli'],['PARCEIRO','De médico parceiro']]
       .map(([v,rot])=>`<option value="${v}">${rot}</option>`).join('')+'</select></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Modalidade</label>'
+    +'<select id="apr-div-mod" onchange="aprDivPrevia()" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)">'
+    +[['','— igual ao atual'],['IMPORT','Import'],['CONVENIO','Nacional (convênio)']]
+      .map(([v,rot])=>`<option value="${v}">${rot}</option>`).join('')+'</select></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Reembolso/paciente</label>'
-    +'<input id="apr-div-reemb" type="number" step="0.01" min="0" placeholder="R$" style="width:120px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)"></div>'
+    +'<input id="apr-div-reemb" type="number" step="0.01" min="0" placeholder="R$" oninput="aprDivPrevia()" style="width:120px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)"></div>'
     +'<div style="min-width:200px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Nome (se for externo)</label>'
     +'<input id="apr-div-nome" placeholder="ex.: Dra Aline Apis" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)"></div>'
     +'</div>'
@@ -3931,9 +3935,38 @@ function aprDivPrevia(){
     const q=Number(inp.value)||0; if(q>0){ n++; un+=q; }
   });
   const el=document.getElementById('apr-div-previa'); if(!el) return;
-  el.innerHTML = n
-    ? `Vão para o segundo médico <b>${n} item(ns)</b>, <b>${un} unidade(s)</b>. O resto fica no registro atual.`
-    : 'Nada marcado ainda — escreva as quantidades do segundo médico na coluna da direita.';
+  if(!n){ el.innerHTML='Nada marcado ainda — escreva as quantidades do segundo médico na coluna da direita.'; return; }
+  // v4.49b — mostra COMO os dois registros vão ficar, com a classificação de
+  // cada um. Dividir sem ver isso é o jeito mais fácil de criar dois períodos
+  // com a conta errada e só descobrir no relatório do mês.
+  const per=aprDivPer||p.periodo||{};
+  const sel=document.getElementById('apr-div-med');
+  const medNome=sel&&sel.selectedOptions[0]?sel.selectedOptions[0].textContent:'(escolha o médico)';
+  const dono=((document.getElementById('apr-div-dono')||{}).value)||per.paciente_de||'';
+  const mod =((document.getElementById('apr-div-mod') ||{}).value)||per.modalidade||'';
+  const reemb=parseFloat((document.getElementById('apr-div-reemb')||{}).value)||0;
+  const pacNovo=Number((document.getElementById('apr-div-pac')||{}).value)||0;
+  const pacOrig=Number(per.qtd_pacientes)||0;
+  const tipoBruto=(per.tipos_cirurgia&&per.tipos_cirurgia.nome)||'';
+  const novoTipo=hogTipoCir(Object.assign({},per,{paciente_de:dono||null,modalidade:mod||null,
+      medicos:{nome:medNome}}), tipoBruto);
+  const restoTipo=hogTipoCir(per, tipoBruto);
+  const unOrig=p.itens.reduce((s,it)=>s+(Number(it.qtd)||0),0);
+  el.innerHTML =
+     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div style="background:#F4FBF6;border-left:3px solid var(--verde);border-radius:0 8px 8px 0;padding:9px 12px">'
+      +'<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700">Registro novo</div>'
+      +'<b>'+medNome+' — '+novoTipo+'</b><br>'
+      +'<span style="font-size:12px;color:var(--cinza-4)">'+n+' item(ns) · '+un+' unidade(s)'
+      +(pacNovo?(' · '+pacNovo+' paciente'+(pacNovo===1?'':'s')):' · <b style="color:var(--vermelho)">sem pacientes</b>')
+      +(reemb>0&&pacNovo?('<br>💵 reembolso R$ '+(reemb*pacNovo).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})):'')
+      +'</span></div>'
+    +'<div style="background:var(--cinza-1);border-left:3px solid var(--cinza-3);border-radius:0 8px 8px 0;padding:9px 12px">'
+      +'<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700">Fica no atual</div>'
+      +'<b>'+(((per.medicos&&per.medicos.nome)||'—'))+' — '+restoTipo+'</b><br>'
+      +'<span style="font-size:12px;color:var(--cinza-4)">'+(unOrig-un)+' unidade(s)'
+      +(pacOrig?(' · '+Math.max(0,pacOrig-pacNovo)+' paciente(s)'):'')+'</span></div>'
+    +'</div>';
 }
 async function aprDividirGravar(){
   const i=aprDivIdx, p=pendentes[i]; if(!p) return;
@@ -3955,8 +3988,9 @@ async function aprDividirGravar(){
     const donoNovo=((document.getElementById('apr-div-dono')||{}).value)||per.paciente_de||null;
     const reembNovo=parseFloat((document.getElementById('apr-div-reemb')||{}).value);
     const nomeExt=((document.getElementById('apr-div-nome')||{}).value||'').trim();
+    const modNovo=((document.getElementById('apr-div-mod')||{}).value)||per.modalidade||null;
     const novo=await sbFetch('periodos_cirurgicos','POST',{ data:per.data, medico_id:med,
-      tipo_cirurgia_id:per.tipo_cirurgia_id, modalidade:per.modalidade, qtd_pacientes:pac||null,
+      tipo_cirurgia_id:per.tipo_cirurgia_id, modalidade:modNovo, qtd_pacientes:pac||null,
       protocolo:per.protocolo||null, paciente_de:donoNovo,
       reembolso_por_paciente:(reembNovo>0?reembNovo:null),
       medico_trouxe_bisturi:!!per.medico_trouxe_bisturi,
