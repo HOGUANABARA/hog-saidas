@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.48 · só a gestão cadastra médico · nome do externo no período</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.49 · de quem é o paciente · reembolso do médico · bisturi trazido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3095,7 +3095,7 @@ async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
   await hogGarantirParceiros();   // v4.48 — a classificação de parceiro precisa estar carregada antes de montar a tela
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
@@ -3376,7 +3376,7 @@ async function carregarAprovadas(reiniciar){
   apvRenderizar();
   try {
     const campos = 'id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),'
-      + 'periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,medicos(nome),tipos_cirurgia(nome)),'
+      + 'periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)),'
       + 'registrado_por,aprovado_em';
     const novos = await sbFetch(`movimentacoes?select=${campos}&aprovado=eq.true`
       + `&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)`
@@ -3431,6 +3431,25 @@ function hogTipoCir(per, fallback){
   const bruto = (per.tipos_cirurgia && per.tipos_cirurgia.nome) || per.tipo || '';
   if(!bruto) return fallback===undefined?'—':fallback;
   const med = (per.medicos && per.medicos.nome) || per.medico || '';
+
+  // ═══ v4.49 — O REGISTRO MANDA; O DIA DA SEMANA É SÓ O PLANO B ═════════
+  // A regra "Lucas na sexta = Martinelli" foi criada para adivinhar o
+  // histórico importado, quando ninguém registrava de quem era o paciente.
+  // Em 28/08 ela erra: o Lucas operou 1 paciente PRÓPRIO, 15 do Martinelli
+  // (4 convênio + 11 import, estes reembolsados) e ainda houve 1 de parceira
+  // — e os três primeiros viravam a mesma conta.
+  // Quando o período DIZ de quem é o paciente, é isso que vale. Período sem
+  // essa informação (junho/julho da planilha) segue pela regra antiga, sem
+  // precisar reprocessar nada.
+  const dono = String(per.paciente_de||'').toUpperCase();
+  const ehFaco = /^(FACO|FACECTOMIA)/.test(String(bruto).trim().toUpperCase());
+  if(dono && ehFaco){
+    const imp = String(per.modalidade||'').toUpperCase()==='IMPORT';
+    if(dono==='PARCEIRO')   return 'FACO PARCEIRO';
+    if(dono==='MARTINELLI') return imp ? 'FACO IMPORT (MARTINELLI)' : 'FACO NACIONAL (MARTINELLI)';
+    if(per.fellow)          return 'FACO NACIONAL FELLOW';
+    return imp ? 'FACO IMPORT' : 'FACO NACIONAL';
+  }
   return (typeof pnTipoCanon==='function') ? pnTipoCanon(bruto, med, per.data) : bruto;
 }
 
@@ -3726,7 +3745,21 @@ async function aprMedico(i){
     +'<select id="apr-med-sel" onchange="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(meds, per.medico_id)+'</select>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Cirurgia</label>'
     +'<select id="apr-tipo-sel" onchange="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(tipos, per.tipo_cirurgia_id)+'</select>'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">De quem é o paciente</label>'
+    +'<select id="apr-dono-sel" onchange="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'
+    +[['','— pelo padrão antigo (médico + dia da semana)'],['CASA','Da casa'],['MARTINELLI','Do Dr Martinelli'],['PARCEIRO','De médico parceiro']]
+      .map(([v,rot])=>`<option value="${v}"${String(per.paciente_de||'')===v?' selected':''}>${rot}</option>`).join('')+'</select>'
     +'<div id="apr-med-previa" style="margin:0 0 12px"></div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
+    +'<div style="flex:1;min-width:180px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Reembolso por paciente (R$)</label>'
+    +'<input id="apr-reemb" type="number" step="0.01" min="0" value="'+(per.reembolso_por_paciente!=null?per.reembolso_por_paciente:'')+'" placeholder="em branco = custo da casa" oninput="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte)"></div>'
+    +'<label style="display:flex;gap:7px;align-items:center;font-size:13px;padding-bottom:9px;cursor:pointer">'
+    +'<input type="checkbox" id="apr-bisturi"'+(per.medico_trouxe_bisturi?' checked':'')+'> o médico trouxe o bisturi</label>'
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);line-height:1.5;margin-bottom:12px">'
+    +'O reembolso aparece como <b>linha própria</b> no custo — não é abatido do material. '
+    +'A marca do bisturi <b>só explica o zero</b>: não preenche, não apaga e não trava o lançamento, '
+    +'porque o médico pode trazer alguns e usar outros do HOG.</div>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Modalidade</label>'
     +'<select id="apr-mod-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'
     // v4.47 — os valores são os do enum modalidade_enum: IMPORT e CONVENIO.
@@ -3756,14 +3789,30 @@ function aprMedPrevia(){
   if(!selT||!selM) return;
   const tipoNome=(selT.selectedOptions[0]||{}).textContent||'';
   const medNome =(selM.selectedOptions[0]||{}).textContent||'';
-  const canon=(typeof pnTipoCanon==='function')?pnTipoCanon(tipoNome, medNome, per.data):tipoNome;
+  const dono=((document.getElementById('apr-dono-sel')||{}).value)||'';
+  const mod =((document.getElementById('apr-mod-sel') ||{}).value)||'';
+  const reemb=parseFloat((document.getElementById('apr-reemb')||{}).value)||0;
+  const pac=Number(per.qtd_pacientes)||0;
+
+  // simula o período como ele vai ficar, e pergunta ao mesmo lugar que os
+  // relatórios perguntam — assim a prévia nunca discorda da tela de custos
+  const simulado=Object.assign({}, per, { paciente_de:dono||null, modalidade:mod||null,
+    tipos_cirurgia:{nome:tipoNome}, medicos:{nome:medNome} });
+  const canon=hogTipoCir(simulado, tipoNome);
+
   const dias=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
   let dia=''; if(per.data){ const d=new Date(String(per.data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dia=dias[d.getDay()]; }
   const mudou = canon && canon.toUpperCase()!==tipoNome.toUpperCase();
   el.innerHTML = '<div style="background:'+(mudou?'#EAF7EF':'var(--cinza-1)')+';border-left:3px solid '+(mudou?'var(--verde)':'var(--cinza-3)')+';border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.5px;color:var(--cinza-5)">'
     +'Vai aparecer nos relatórios como <b>'+canon+'</b>'
-    +(mudou?('<div style="margin-top:5px;color:var(--cinza-4)">A classificação sai do médico com o dia da semana'
-        +(dia?(' — '+medNome+' em uma <b>'+dia+'</b>'):'')+'. Não existe (nem precisa) uma opção com esse nome na lista de cirurgias.</div>'):'')
+    +(mudou?('<div style="margin-top:5px;color:var(--cinza-4)">'
+        +(dono ? 'Sai do que você marcou aqui — de quem é o paciente, com a modalidade.'
+               : ('Sai do médico com o dia da semana'+(dia?(' — '+medNome+' em uma <b>'+dia+'</b>'):'')
+                  +'. Marcando <b>de quem é o paciente</b> acima, a classificação passa a vir do registro e não do palpite.'))
+        +'</div>'):'')
+    + (reemb>0 && pac>0 ? ('<div style="margin-top:7px;padding-top:7px;border-top:1px dashed var(--cinza-3)">'
+        +'💵 Reembolso: <b>R$ '+reemb.toFixed(2).replace('.',',')+'</b> × '+pac+' paciente(s) = '
+        +'<b>R$ '+(reemb*pac).toFixed(2).replace('.',',')+'</b> <span style="color:var(--cinza-4)">— entra como linha própria, não abate o material.</span></div>') : '')
     +'</div>';
 }
 async function aprMedicoGravar(){
@@ -3771,8 +3820,12 @@ async function aprMedicoGravar(){
   const med=Number((document.getElementById('apr-med-sel')||{}).value)||null;
   const tip=Number((document.getElementById('apr-tipo-sel')||{}).value)||null;
   const mod=((document.getElementById('apr-mod-sel')||{}).value)||null;
+  const dono=((document.getElementById('apr-dono-sel')||{}).value)||null;
+  const reembV=parseFloat((document.getElementById('apr-reemb')||{}).value);
+  const bist=!!(document.getElementById('apr-bisturi')||{}).checked;
   try{
-    await sbFetch('periodos_cirurgicos?id=eq.'+p.periodo.id,'PATCH',{ medico_id:med, tipo_cirurgia_id:tip, modalidade:mod||null });
+    await sbFetch('periodos_cirurgicos?id=eq.'+p.periodo.id,'PATCH',{ medico_id:med, tipo_cirurgia_id:tip, modalidade:mod||null,
+      paciente_de:dono||null, reembolso_por_paciente:(reembV>0?reembV:null), medico_trouxe_bisturi:bist });
     const ov=document.getElementById('apr-med-modal'); if(ov) ov.remove();
     toast('Período corrigido ✓','sucesso');
     if(typeof carregarPendentes==='function') await carregarPendentes();
@@ -3823,6 +3876,18 @@ async function aprDividir(i){
     +'<input id="apr-div-pac" type="number" min="0" value="0" oninput="aprDivPrevia()" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte);text-align:center"></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">&nbsp;</label>'
     +'<button class="btn btn-secundario btn-sm" onclick="aprDivSugerir()" title="Preenche a coluna proporcional aos pacientes — depois você ajusta o que foi diferente">📊 Sugerir por paciente</button></div></div>'
+    // v4.49 — o registro novo é outra conta: precisa dizer de quem é o paciente
+    // e quanto o médico paga, senão nasce herdando a classificação do primeiro
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
+    +'<div style="flex:1;min-width:210px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">De quem é o paciente</label>'
+    +'<select id="apr-div-dono" onchange="aprDivPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)">'
+    +[['','— igual ao registro atual'],['CASA','Da casa'],['MARTINELLI','Do Dr Martinelli'],['PARCEIRO','De médico parceiro']]
+      .map(([v,rot])=>`<option value="${v}">${rot}</option>`).join('')+'</select></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Reembolso/paciente</label>'
+    +'<input id="apr-div-reemb" type="number" step="0.01" min="0" placeholder="R$" style="width:120px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)"></div>'
+    +'<div style="min-width:200px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Nome (se for externo)</label>'
+    +'<input id="apr-div-nome" placeholder="ex.: Dra Aline Apis" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)"></div>'
+    +'</div>'
     +'<div style="max-height:40vh;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px">'
     +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--cinza-1)">'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>'
@@ -3887,9 +3952,15 @@ async function aprDividirGravar(){
   try{
     const per=aprDivPer||p.periodo;
     // 1) o período do segundo médico — mesma data, cirurgia e modalidade
+    const donoNovo=((document.getElementById('apr-div-dono')||{}).value)||per.paciente_de||null;
+    const reembNovo=parseFloat((document.getElementById('apr-div-reemb')||{}).value);
+    const nomeExt=((document.getElementById('apr-div-nome')||{}).value||'').trim();
     const novo=await sbFetch('periodos_cirurgicos','POST',{ data:per.data, medico_id:med,
       tipo_cirurgia_id:per.tipo_cirurgia_id, modalidade:per.modalidade, qtd_pacientes:pac||null,
-      protocolo:per.protocolo||null });
+      protocolo:per.protocolo||null, paciente_de:donoNovo,
+      reembolso_por_paciente:(reembNovo>0?reembNovo:null),
+      medico_trouxe_bisturi:!!per.medico_trouxe_bisturi,
+      observacao: nomeExt ? ('Médico externo: '+nomeExt) : null });
     const novoId=novo[0].id;
     // 2) cada linha: tira do original e cria a do segundo médico
     for(const m of mover){
@@ -10549,7 +10620,8 @@ function pnCirFonte(){
   for (const p of (pnPeriodos||[])){
     perInfo['p'+p.id] = { data:p.data||'', medico:(p.medicos&&p.medicos.nome)||'—',
       tipo:hogTipoCir(p,'—'), pac:Number(p.qtd_pacientes)||0,   // v4.33 — Consumo por cirurgia usa a classificação validada
-      modalidade:p.modalidade||'', origem:'app' };
+      modalidade:p.modalidade||'', origem:'app',
+      reembolso:Number(p.reembolso_por_paciente)||0 };          // v4.49
   }
   for (const m of (pnMovs||[])){
     if(!m.periodoId) continue;
@@ -10616,6 +10688,13 @@ function pnCirurgias(){
     const p = perInfo[k]; return sm + (Number(p&&p.pac)||0); }, 0);
   const custoTot = movs.reduce((sm,m)=>sm+m.custo,0);
   const qtdTot   = movs.reduce((sm,m)=>sm+m.qtd,0);
+  // v4.49 — o que o médico paga pelo material, quando paga. Linha PRÓPRIA:
+  // não é abatido do custo, porque ainda não se sabe tudo o que esse valor
+  // cobre (a LIO, por exemplo, entra no sistema só a partir de 30/08). Quando
+  // a lente estiver lá dentro, a diferença encolhe sozinha.
+  const reembTot = [...periodosSet].reduce((sm,k)=>{
+    const p = perInfo[k];
+    return sm + ((Number(p&&p.reembolso)||0) * (Number(p&&p.pac)||0)); }, 0);
 
   // ── agrupamento ──
   const chave = m => {
@@ -10710,6 +10789,20 @@ function pnCirurgias(){
         <div class="pn-nota">${pacientes>0?'vale para o recorte acima, não para o hospital inteiro':'nenhum paciente no filtro'}</div>
       </div>
     </div>
+
+    ${reembTot>0 ? `<div class="pn-card" style="padding:12px 16px;background:#F4FBF6;border-left:3px solid var(--verde)">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline">
+        <span><span style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700">Material</span><br>
+          <b style="font-size:19px;color:var(--cinza-5)">${pnMoney(custoTot)}</b></span>
+        <span><span style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700">Reembolso do médico</span><br>
+          <b style="font-size:19px;color:var(--verde)">${pnMoney(reembTot)}</b></span>
+        <span><span style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);font-weight:700">Diferença</span><br>
+          <b style="font-size:19px;color:${reembTot>custoTot?'var(--verde)':'var(--vermelho)'}">${pnMoney(reembTot-custoTot)}</b></span>
+      </div>
+      <div class="pn-nota" style="margin-top:8px">O reembolso <b>não é abatido</b> do custo — fica ao lado.
+      A diferença só é sobra se nada além do material estiver dentro do que o médico paga;
+      quando a LIO entrar no sistema, ela encolhe sozinha.</div>
+    </div>` : ''}
 
     ${termo ? `<div class="pn-card" style="padding:12px 16px;font-size:12.5px;background:#FFFDF3">
       🔬 <b>${termo}</b> aparece em <b>${periodosSet.size}</b> período(s) cirúrgico(s) no filtro,
@@ -10845,7 +10938,7 @@ async function pnCarregar(){
       for(const m of mats) if(m.somente_amostra) pnAmostraOnly.add(m.id);
     }
     document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
-    pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
+    pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,fellow,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
     const perMap={}; for(const p of pnPeriodos) perMap[p.id]=p;
     const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
     pnMovs=[];
@@ -10857,7 +10950,7 @@ async function pnCarregar(){
       pnMovs.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
         periodoId:mv.periodo_cirurgico_id||null,
         medico:per&&per.medicos?per.medicos.nome:null,
-        tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),
+        tipoCir:per&&per.tipos_cirurgia?hogTipoCir(per,null):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),   // v4.49 — mesma função dos relatórios
         custo:pnCusto(mv.material_id,mv.qtd,dia.slice(0,7)) });
     }
     // ═══ v4.26 — REPROCESSADOS entram no CUSTO: a saída deles vive no livro
@@ -10874,7 +10967,7 @@ async function pnCarregar(){
         pnMovs.push({ qtd:Number(s.qtd)||0, material_id:mid, dia, mes:dia.slice(0,7),
           periodoId:s.periodo_cirurgico_id||null,
           medico:per&&per.medicos?per.medicos.nome:null,
-          tipoCir:per&&per.tipos_cirurgia?pnTipoCanon(per.tipos_cirurgia.nome, per.medicos&&per.medicos.nome, per.data):null,
+          tipoCir:per&&per.tipos_cirurgia?hogTipoCir(per,null):null,   // v4.49 — mesma função dos relatórios
           reprocessado:true,
           custo:pnCusto(mid, s.qtd, dia.slice(0,7)) });
       }
