@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.44 · corrigir médico e dividir período na aprovação</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.46 · FACO PARCEIRO · médico e divisão na aprovação</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3645,7 +3645,7 @@ async function apvDevolverExecutar(i){
 // pacientes, mas não em QUEM operou — e não havia como separar um período que
 // na verdade foi de dois médicos. Como nada foi aprovado ainda, o saldo não se
 // mexeu: corrigir aqui é só acertar o registro, sem estorno.
-let aprMedIdx = null;
+let aprMedIdx = null, aprMedPer = null;
 async function aprMedico(i){
   const p = pendentes[i]; if(!p || !p.periodo) return;
   aprMedIdx = i;
@@ -3658,6 +3658,7 @@ async function aprMedico(i){
     const full=await sbFetch('periodos_cirurgicos?select=*&id=eq.'+p.periodo.id+'&limit=1');
     if(full&&full.length) per=Object.assign({}, p.periodo, full[0]);
   }catch(e){}
+  aprMedPer=per;
   const un = p.itens.reduce((s,it)=>s+(Number(it.qtd)||0),0);
   let ov=document.getElementById('apr-med-modal');
   if(!ov){ ov=document.createElement('div'); ov.id='apr-med-modal'; document.body.appendChild(ov); }
@@ -3672,9 +3673,10 @@ async function aprMedico(i){
     +(per.data||'—')+' · '+p.itens.length+' itens · '+un+' unidades · '
     +(Number(per.qtd_pacientes)||0)+' paciente(s)</div>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Médico</label>'
-    +'<select id="apr-med-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(meds, per.medico_id)+'</select>'
+    +'<select id="apr-med-sel" onchange="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(meds, per.medico_id)+'</select>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Cirurgia</label>'
-    +'<select id="apr-tipo-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(tipos, per.tipo_cirurgia_id)+'</select>'
+    +'<select id="apr-tipo-sel" onchange="aprMedPrevia()" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(tipos, per.tipo_cirurgia_id)+'</select>'
+    +'<div id="apr-med-previa" style="margin:0 0 12px"></div>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Modalidade</label>'
     +'<select id="apr-mod-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'
     +['IMPORT','NACIONAL',''].map(m=>`<option value="${m}"${(per.modalidade||'')===m?' selected':''}>${m||'(sem modalidade)'}</option>`).join('')+'</select>'
@@ -3684,6 +3686,30 @@ async function aprMedico(i){
     +'<button class="btn btn-secundario btn-sm" onclick="document.getElementById(\'apr-med-modal\').remove()">cancelar</button>'
     +'<button class="btn btn-primario btn-sm" onclick="aprMedicoGravar()">Gravar</button>'
     +'</div></div></div>';
+  aprMedPrevia();
+}
+// v4.45 — mostra COMO o período vai ser classificado antes de gravar.
+// FACO IMPORT / NACIONAL / FELLOW / (MARTINELLI) não são linhas de cadastro —
+// saem da combinação médico + dia da semana. Sem esta prévia, quem escolhe
+// "FACECTOMIA" fica procurando na lista uma opção "Martinelli" que não existe
+// (e não precisa existir).
+function aprMedPrevia(){
+  const el=document.getElementById('apr-med-previa'); if(!el) return;
+  const per=aprMedPer||{};
+  const selT=document.getElementById('apr-tipo-sel');
+  const selM=document.getElementById('apr-med-sel');
+  if(!selT||!selM) return;
+  const tipoNome=(selT.selectedOptions[0]||{}).textContent||'';
+  const medNome =(selM.selectedOptions[0]||{}).textContent||'';
+  const canon=(typeof pnTipoCanon==='function')?pnTipoCanon(tipoNome, medNome, per.data):tipoNome;
+  const dias=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+  let dia=''; if(per.data){ const d=new Date(String(per.data).slice(0,10)+'T12:00:00'); if(!isNaN(d)) dia=dias[d.getDay()]; }
+  const mudou = canon && canon.toUpperCase()!==tipoNome.toUpperCase();
+  el.innerHTML = '<div style="background:'+(mudou?'#EAF7EF':'var(--cinza-1)')+';border-left:3px solid '+(mudou?'var(--verde)':'var(--cinza-3)')+';border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.5px;color:var(--cinza-5)">'
+    +'Vai aparecer nos relatórios como <b>'+canon+'</b>'
+    +(mudou?('<div style="margin-top:5px;color:var(--cinza-4)">A classificação sai do médico com o dia da semana'
+        +(dia?(' — '+medNome+' em uma <b>'+dia+'</b>'):'')+'. Não existe (nem precisa) uma opção com esse nome na lista de cirurgias.</div>'):'')
+    +'</div>';
 }
 async function aprMedicoGravar(){
   const i=aprMedIdx, p=pendentes[i]; if(!p) return;
@@ -4112,6 +4138,8 @@ document.addEventListener('DOMContentLoaded', function(){
     try{ if(localStorage.getItem('hog_menu_'+g)==='0') hsToggle(g); }catch(e){}
   }
   hsAjustarGrupos();
+  // v4.46 — quem é parceiro, para a classificação FACO PARCEIRO
+  if(typeof hogCarregarParceiros==='function') hogCarregarParceiros();
   // fecha o menu do celular ao tocar fora
   document.addEventListener('click', function(ev){
     if(window.innerWidth>900) return;
@@ -10063,9 +10091,42 @@ function pnCusto(materialId, qtd, mes){
 // tabela R$/paciente comparava cada uma consigo mesma. Uma grafia só, em
 // exibição — retroativo e sem mexer em nenhum dado. FACO e FACECTOMIA
 // avulsas contam como FACO NACIONAL (decisão dela).
+// ═══ v4.46 — MÉDICO PARCEIRO ════════════════════════════════════════════
+// Regra da gestão (28/08): médico parceiro opera 1 ou 2 pacientes no fim do
+// mesmo período, e o custo dele não é import nem nacional — é caixinha
+// própria, "FACO PARCEIRO". Sem isso, a Dra Aline caía no padrão e virava
+// FACO NACIONAL, contradizendo a modalidade IMPORT gravada no período.
+//
+// A marca mora em medicos.parceiro (SQL 68). Enquanto ele não roda, vale a
+// lista abaixo — a tela não pode quebrar por falta de uma coluna.
+const HOG_PARCEIROS_FALLBACK = ['ALINE APIS'];
+let hogParceiros = null;   // Set de nomes em MAIÚSCULA, carregado uma vez
+async function hogCarregarParceiros(){
+  try{
+    const m = await sbFetch('medicos?select=nome,parceiro&parceiro=is.true&limit=200');
+    hogParceiros = new Set((m||[]).map(x=>String(x.nome||'').trim().toUpperCase()));
+    // se a coluna existe mas ninguém foi marcado, ainda assim respeita a lista
+    if(!hogParceiros.size) HOG_PARCEIROS_FALLBACK.forEach(n=>hogParceiros.add(n));
+  }catch(e){
+    // coluna ainda não existe — degrada para a lista
+    hogParceiros = new Set(HOG_PARCEIROS_FALLBACK);
+  }
+}
+function hogEhParceiro(medico){
+  const n = String(medico||'').trim().toUpperCase();
+  if(!n) return false;
+  const lista = hogParceiros || new Set(HOG_PARCEIROS_FALLBACK);
+  for(const p of lista){ if(n.indexOf(p)>=0 || p.indexOf(n)>=0) return true; }
+  return false;
+}
+
 function pnTipoCanon(t, medico, data){
   if(!t || t==='(diversas)') return t;
   const n=String(t).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+  // parceiro vem antes de tudo: a cirurgia é faco, mas o custo é de outra conta
+  if(n.indexOf('FACO')===0 || n==='FACECTOMIA'){
+    if(hogEhParceiro(medico)) return 'FACO PARCEIRO';
+  }
   // v4.27b/v4.30/v4.32 — FACO "solto" é CONTEXTUAL (regra da Evelise, 18-20/08):
   // Dr Nilson = IMPORT · Dr Pietro = NACIONAL · Dr Lucas = IMPORT, exceto
   // SEGUNDA = NACIONAL FELLOW e SEXTA = NACIONAL (MARTINELLI) — na sexta o
