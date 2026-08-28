@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.46 · FACO PARCEIRO · médico e divisão na aprovação</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.47 · FACO PARCEIRO · médico e divisão na aprovação</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3679,7 +3679,12 @@ async function aprMedico(i){
     +'<div id="apr-med-previa" style="margin:0 0 12px"></div>'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Modalidade</label>'
     +'<select id="apr-mod-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'
-    +['IMPORT','NACIONAL',''].map(m=>`<option value="${m}"${(per.modalidade||'')===m?' selected':''}>${m||'(sem modalidade)'}</option>`).join('')+'</select>'
+    // v4.47 — os valores são os do enum modalidade_enum: IMPORT e CONVENIO.
+    // "Nacional" é o nome que a equipe usa; no banco isso é CONVENIO — é assim
+    // que a tela de registro grava (onTipoChange). Escrever "NACIONAL" aqui
+    // dava erro 22P02 na hora de gravar.
+    +[['IMPORT','Import'],['CONVENIO','Nacional (convênio)'],['','(sem modalidade)']]
+      .map(([v,rot])=>`<option value="${v}"${(per.modalidade||'')===v?' selected':''}>${rot}</option>`).join('')+'</select>'
     +'<div style="background:#FEF9E7;border-left:3px solid #B7950B;border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.5px;color:#7D6608">'
     +'Isto corrige <b>o registro inteiro</b>. Se o período foi de <b>dois médicos</b>, feche aqui e use <b>✂️ Dividir</b> — lá dá para separar as quantidades.</div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
@@ -3721,7 +3726,12 @@ async function aprMedicoGravar(){
     const ov=document.getElementById('apr-med-modal'); if(ov) ov.remove();
     toast('Período corrigido ✓','sucesso');
     if(typeof carregarPendentes==='function') await carregarPendentes();
-  }catch(e){ toast('Erro: '+e.message,'erro'); }
+  }catch(e){
+    const msg=String(e.message||e);
+    if(msg.indexOf('modalidade_enum')>=0){
+      toast('O banco não conhece essa modalidade. As válidas são Import e Nacional (convênio) — nada foi gravado.','erro');
+    } else { toast('Erro: '+msg,'erro'); }
+  }
 }
 
 // ── DIVIDIR: parte das quantidades vai para um segundo médico ──
