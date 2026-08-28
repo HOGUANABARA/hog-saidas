@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.43 · crédito na conferência da NF · abrir cola · ocorrências sem prompt</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.44 · corrigir médico e dividir período na aprovação</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3183,6 +3183,8 @@ function renderizarPendentes() {
       <div class="acoes">
         <button class="btn btn-secundario btn-sm" onclick="aprIncluirItem(${i})" title="A equipe esqueceu de lançar algo? Inclua aqui antes de aprovar">➕ Incluir item</button>
         ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprPacientes(${i})" title="Corrigir quantos pacientes foram atendidos neste período">👥 Pacientes</button>`}
+        ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprMedico(${i})" title="Trocar o médico, a cirurgia ou a modalidade deste período">🩺 Médico</button>`}
+        ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprDividir(${i})" title="Foram dois médicos neste período? Separe as quantidades em dois registros">✂️ Dividir</button>`}
         <button class="btn btn-aprovar btn-sm" onclick="aprovar(${i})">✓ Aprovar</button>
         <button class="btn btn-rejeitar btn-sm" onclick="rejeitar(${i})">✕</button>
       </div>
@@ -3638,6 +3640,169 @@ async function apvDevolverExecutar(i){
 
 // v4.33 — corrigir o nº de pacientes do período direto na aprovação, com
 // prévia do efeito (nada de janela crua — regra da casa)
+// ═══ v4.44 — CORRIGIR O MÉDICO E DIVIDIR O PERÍODO ══════════════════════
+// Faltavam as duas coisas na aprovação: dava para mexer em quantidade e em
+// pacientes, mas não em QUEM operou — e não havia como separar um período que
+// na verdade foi de dois médicos. Como nada foi aprovado ainda, o saldo não se
+// mexeu: corrigir aqui é só acertar o registro, sem estorno.
+let aprMedIdx = null;
+async function aprMedico(i){
+  const p = pendentes[i]; if(!p || !p.periodo) return;
+  aprMedIdx = i;
+  const meds  = await sbFetch('medicos?select=id,nome&order=nome&limit=200');
+  const tipos = await sbFetch('tipos_cirurgia?select=id,nome&order=nome&limit=200');
+  // o objeto da tela não traz todos os ids (tipo_cirurgia_id vem só como nome),
+  // então lê o período inteiro do banco — senão o select abre no item errado
+  let per=p.periodo;
+  try{
+    const full=await sbFetch('periodos_cirurgicos?select=*&id=eq.'+p.periodo.id+'&limit=1');
+    if(full&&full.length) per=Object.assign({}, p.periodo, full[0]);
+  }catch(e){}
+  const un = p.itens.reduce((s,it)=>s+(Number(it.qtd)||0),0);
+  let ov=document.getElementById('apr-med-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='apr-med-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+  const opt=(arr,sel)=>arr.map(x=>`<option value="${x.id}"${Number(x.id)===Number(sel)?' selected':''}>${x.nome}</option>`).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:540px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--azul);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>🩺 Quem operou neste período</span>'
+    +'<button onclick="document.getElementById(\'apr-med-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="background:var(--cinza-1);border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:12px">📅 '
+    +(per.data||'—')+' · '+p.itens.length+' itens · '+un+' unidades · '
+    +(Number(per.qtd_pacientes)||0)+' paciente(s)</div>'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Médico</label>'
+    +'<select id="apr-med-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(meds, per.medico_id)+'</select>'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Cirurgia</label>'
+    +'<select id="apr-tipo-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'+opt(tipos, per.tipo_cirurgia_id)+'</select>'
+    +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Modalidade</label>'
+    +'<select id="apr-mod-sel" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:14px;font-family:var(--fonte);margin:4px 0 12px">'
+    +['IMPORT','NACIONAL',''].map(m=>`<option value="${m}"${(per.modalidade||'')===m?' selected':''}>${m||'(sem modalidade)'}</option>`).join('')+'</select>'
+    +'<div style="background:#FEF9E7;border-left:3px solid #B7950B;border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.5px;color:#7D6608">'
+    +'Isto corrige <b>o registro inteiro</b>. Se o período foi de <b>dois médicos</b>, feche aqui e use <b>✂️ Dividir</b> — lá dá para separar as quantidades.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-secundario btn-sm" onclick="document.getElementById(\'apr-med-modal\').remove()">cancelar</button>'
+    +'<button class="btn btn-primario btn-sm" onclick="aprMedicoGravar()">Gravar</button>'
+    +'</div></div></div>';
+}
+async function aprMedicoGravar(){
+  const i=aprMedIdx, p=pendentes[i]; if(!p) return;
+  const med=Number((document.getElementById('apr-med-sel')||{}).value)||null;
+  const tip=Number((document.getElementById('apr-tipo-sel')||{}).value)||null;
+  const mod=((document.getElementById('apr-mod-sel')||{}).value)||null;
+  try{
+    await sbFetch('periodos_cirurgicos?id=eq.'+p.periodo.id,'PATCH',{ medico_id:med, tipo_cirurgia_id:tip, modalidade:mod||null });
+    const ov=document.getElementById('apr-med-modal'); if(ov) ov.remove();
+    toast('Período corrigido ✓','sucesso');
+    if(typeof carregarPendentes==='function') await carregarPendentes();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+}
+
+// ── DIVIDIR: parte das quantidades vai para um segundo médico ──
+let aprDivIdx=null, aprDivPer=null;
+async function aprDividir(i){
+  const p=pendentes[i]; if(!p||!p.periodo) return;
+  aprDivIdx=i;
+  const meds=await sbFetch('medicos?select=id,nome&order=nome&limit=200');
+  let per=p.periodo;
+  try{
+    const full=await sbFetch('periodos_cirurgicos?select=*&id=eq.'+p.periodo.id+'&limit=1');
+    if(full&&full.length) per=Object.assign({}, p.periodo, full[0]);
+  }catch(e){}
+  aprDivPer=per;
+  let ov=document.getElementById('apr-div-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='apr-div-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow:auto';
+  const linhas=p.itens.map((it,k)=>{
+    const q=Number(it.qtd)||0;
+    return `<tr>
+      <td style="padding:5px 8px;font-size:12.5px">${it.nome||('#'+it.material_id)}</td>
+      <td style="padding:5px 8px;text-align:center;font-size:12.5px;color:var(--cinza-4)">${q}</td>
+      <td style="padding:5px 8px;text-align:right">
+        <input type="number" min="0" max="${q}" value="0" data-k="${k}" class="apr-div-q"
+          oninput="aprDivPrevia()" style="width:74px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:4px 7px;text-align:right;font-size:12.5px;font-family:var(--fonte)"></td></tr>`;
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:660px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--azul);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>✂️ Dividir o período entre dois médicos</span>'
+    +'<button onclick="document.getElementById(\'apr-div-modal\').remove()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12.5px;line-height:1.65;margin-bottom:12px">Escreva <b>quanto de cada item foi do segundo médico</b>. '
+    +'O que sobrar continua com <b>'+((per.medicos&&per.medicos.nome)||'—')+'</b>. Item com 0 não se mexe.</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
+    +'<div style="flex:1;min-width:200px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Segundo médico</label>'
+    +'<select id="apr-div-med" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)">'
+    +'<option value="">Selecione…</option>'+meds.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('')+'</select></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Pacientes dele</label>'
+    +'<input id="apr-div-pac" type="number" min="0" value="0" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte);text-align:center"></div></div>'
+    +'<div style="max-height:40vh;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--cinza-1)">'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>'
+    +'<th style="padding:6px 8px;text-align:center;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Lançado</th>'
+    +'<th style="padding:6px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Vai p/ o 2º</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div id="apr-div-previa" style="margin-top:12px;background:var(--cinza-1);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--cinza-5)"></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-secundario btn-sm" onclick="document.getElementById(\'apr-div-modal\').remove()">cancelar</button>'
+    +'<button class="btn btn-primario btn-sm" id="apr-div-btn" onclick="aprDividirGravar()">✂️ Dividir</button>'
+    +'</div></div></div>';
+  aprDivPrevia();
+}
+function aprDivPrevia(){
+  const p=pendentes[aprDivIdx]; if(!p) return;
+  let n=0, un=0;
+  document.querySelectorAll('.apr-div-q').forEach(inp=>{
+    const q=Number(inp.value)||0; if(q>0){ n++; un+=q; }
+  });
+  const el=document.getElementById('apr-div-previa'); if(!el) return;
+  el.innerHTML = n
+    ? `Vão para o segundo médico <b>${n} item(ns)</b>, <b>${un} unidade(s)</b>. O resto fica no registro atual.`
+    : 'Nada marcado ainda — escreva as quantidades do segundo médico na coluna da direita.';
+}
+async function aprDividirGravar(){
+  const i=aprDivIdx, p=pendentes[i]; if(!p) return;
+  const med=Number((document.getElementById('apr-div-med')||{}).value)||null;
+  const pac=Number((document.getElementById('apr-div-pac')||{}).value)||0;
+  if(!med){ toast('Escolha o segundo médico.','erro'); return; }
+  const mover=[];
+  document.querySelectorAll('.apr-div-q').forEach(inp=>{
+    const q=Number(inp.value)||0, k=Number(inp.dataset.k);
+    const it=p.itens[k]; if(!it) return;
+    const orig=Number(it.qtd)||0;
+    if(q>0 && q<=orig) mover.push({it, q, orig});
+  });
+  if(!mover.length){ toast('Escreva quanto vai para o segundo médico.','erro'); return; }
+  const btn=document.getElementById('apr-div-btn'); if(btn){ btn.disabled=true; btn.textContent='dividindo…'; }
+  try{
+    const per=aprDivPer||p.periodo;
+    // 1) o período do segundo médico — mesma data, cirurgia e modalidade
+    const novo=await sbFetch('periodos_cirurgicos','POST',{ data:per.data, medico_id:med,
+      tipo_cirurgia_id:per.tipo_cirurgia_id, modalidade:per.modalidade, qtd_pacientes:pac||null,
+      protocolo:per.protocolo||null });
+    const novoId=novo[0].id;
+    // 2) cada linha: tira do original e cria a do segundo médico
+    for(const m of mover){
+      const resta=m.orig-m.q;
+      const base={ tipo:m.it.tipo||'SAIDA_CIRURGIA', material_id:m.it.material_id, local_id:m.it.local_id,
+        qtd:-Math.abs(m.q), aprovado:false, registrado_por:(m.it.registrado_por||'')+' · dividido',
+        periodo_cirurgico_id:novoId,
+        observacao:'Dividido do período #'+per.id+' em '+new Date().toLocaleString('pt-BR') };
+      await sbFetch('movimentacoes','POST', base);
+      if(resta>0) await sbFetch('movimentacoes?id=eq.'+m.it.id,'PATCH',{ qtd:-Math.abs(resta) });
+      else        await sbFetch('movimentacoes?id=eq.'+m.it.id,'DELETE');
+    }
+    // 3) desconta os pacientes do original, se fizer sentido
+    const pacOrig=Number(per.qtd_pacientes)||0;
+    if(pac>0 && pacOrig>pac) await sbFetch('periodos_cirurgicos?id=eq.'+per.id,'PATCH',{ qtd_pacientes:pacOrig-pac });
+    const ov=document.getElementById('apr-div-modal'); if(ov) ov.remove();
+    toast('Dividido ✓ — o segundo registro está logo abaixo, esperando aprovação.','sucesso');
+    if(typeof carregarPendentes==='function') await carregarPendentes();
+  }catch(e){
+    toast('Erro ao dividir: '+(e.message||e),'erro');
+    if(btn){ btn.disabled=false; btn.textContent='✂️ Dividir'; }
+  }
+}
+
 function aprPacientes(i){
   const p = pendentes[i]; if(!p || !p.periodo) return;
   const atual = Number(p.periodo.qtd_pacientes)||0;
