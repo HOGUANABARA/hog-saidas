@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.41b · Inventário Administrativo · cirurgias unificadas no filtro · somar várias cirurgias</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.43 · crédito na conferência da NF · abrir cola · ocorrências sem prompt</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1431,6 +1431,14 @@ details[open] summary { margin-bottom: 6px; }
     <select id="inv-registrado-por" style="margin-left:8px;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)" onchange="localStorage.setItem('hog_inv_registrante', this.value)">
       <option value="">Selecione...</option>
     </select>
+
+  <!-- ═══ v4.42 — COLA ABERTA ═══
+       Um frasco caro rende um número de cirurgias que só se descobre quando
+       acaba. Aqui a abertura do frasco novo fecha a conta do anterior. -->
+  <div class="inv-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul-medio);margin-bottom:10px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2)">🧪 Cola aberta — abrir frasco novo e fechar o custo do anterior</div>
+    <div id="cola-box"><div style="font-size:12px;color:var(--cinza-4)">carregando…</div></div>
+  </div>
 
   <!-- ═══ v4.29 — FICHA DO ITEM NO INVENTÁRIO ═══
        O mesmo editor completo da Base do Painel, aberto por busca aqui —
@@ -4000,7 +4008,7 @@ function trocarAba(aba) {
   if (aba==='decisao')   { deCarregar(); }
   if (aba==='historico') { hiCarregarLista(); }
   if (aba==='receber')   { rcCarregar(); }
-  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
+  if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'].forEach(function(a){
@@ -7596,6 +7604,20 @@ function rcSemCusto(fid){
 }
 function rcNomeFornecedor(id){ if(!id) return '(sem fornecedor)'; const f = coFornecedores.find(x=>x.id===id); return f ? f.nome : ('fornecedor #'+id); }
 function rcMoney(v){ return (v===null||v===undefined||v==='')?'—':'R$ '+Number(v).toFixed(2).replace('.',','); }
+
+// v4.42b — de que jeito o crédito foi usado nesta nota?
+//   'NA_NOTA'     → o fornecedor já abateu: itens + frete − crédito = total da nota.
+//                   Nesse caso a nota NÃO tem diferença, e não se desconta de novo
+//                   na hora de pagar.
+//   'NO_PAGAMENTO'→ a nota veio cheia (itens + frete = total) e o crédito é abatido
+//                   no pagamento.
+// Sem crédito, ou quando nenhuma das contas fecha, devolve 'NO_PAGAMENTO' — que é
+// o comportamento antigo, e aí a diferença (se houver) continua sendo apontada.
+function rcCredModo(totalNota, totalCalc, cred){
+  if(!(cred>0) || totalNota===null || totalNota===undefined) return 'NO_PAGAMENTO';
+  if(Math.abs(totalNota - (totalCalc - cred)) < 0.01) return 'NA_NOTA';
+  return 'NO_PAGAMENTO';
+}
 function rcMesRef(dataStr){
   if(!dataStr) return '';
   const d = new Date(dataStr+'T12:00:00');
@@ -7995,6 +8017,7 @@ function rcAtualizaTotais(chave){
   const frete = parseFloat((document.getElementById('rc-nf-frete-'+chave)||{}).value)||0;
   const cred  = parseFloat((document.getElementById('rc-nf-cred-'+chave)||{}).value)||0;
   const totalCalc = totalItens + frete;
+  // (rcCredModo definida logo abaixo — decide se o crédito já veio abatido na nota)
   const elTot = document.getElementById('rc-nf-total-'+chave);
   const totalNota = elTot && elTot.value!=='' ? parseFloat(elTot.value) : null;
   const semCusto = rcSemCusto(fid);
@@ -8011,15 +8034,28 @@ function rcAtualizaTotais(chave){
       conf.innerHTML = `Itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''} = <b>${rcMoney(totalCalc)}</b><br>
         <span style="font-weight:600">Sem o total da nota preenchido, gravo esse valor.</span>`;
     } else {
+      // v4.42b — o crédito precisa entrar na conferência. Há dois jeitos de o
+      // fornecedor usar um crédito, e os números dizem qual foi:
+      //   · abatido NA NOTA   → a nota já vem menor: itens − crédito = nota
+      //   · abatido NO PAGAMENTO → a nota vem cheia: itens = nota, paga-se menos
+      // Antes o crédito era lido e ignorado, então o primeiro caso acendia um
+      // alerta vermelho de diferença exatamente do tamanho do crédito.
+      const modo = rcCredModo(totalNota, totalCalc, cred);
       const dif = totalNota - totalCalc;
-      if(Math.abs(dif) < 0.01){
+      if(modo === 'NA_NOTA'){
         conf.classList.add('ok');
-        conf.innerHTML = `✅ Confere: nota ${rcMoney(totalNota)} = itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''}`;
+        conf.innerHTML = `✅ Confere: itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''} − 💳 crédito ${rcMoney(cred)} = nota <b>${rcMoney(totalNota)}</b><br>
+          <span style="font-weight:600">O fornecedor já abateu o crédito na nota — nada a pagar além dela.</span>`;
+      } else if(Math.abs(dif) < 0.01){
+        conf.classList.add('ok');
+        conf.innerHTML = `✅ Confere: nota ${rcMoney(totalNota)} = itens ${rcMoney(totalItens)}${frete?` + frete ${rcMoney(frete)}`:''}`
+          + (cred>0?`<br><span style="font-weight:600">O crédito de ${rcMoney(cred)} não está na nota — vai ser abatido no pagamento.</span>`:'');
       } else {
         conf.classList.add('ruim');
         conf.innerHTML = `⚠️ Diferença de <b>${rcMoney(Math.abs(dif))}</b> — nota ${rcMoney(totalNota)} × itens${frete?' + frete':''} ${rcMoney(totalCalc)}.<br>
           <span style="font-weight:600">${dif>0?'A nota cobra mais do que os itens somam. Falta lançar frete ou algum item?'
-                                              :'Os itens somam mais do que a nota. Confira quantidade ou valor unitário.'}</span>`;
+                                              :'Os itens somam mais do que a nota. Confira quantidade ou valor unitário.'}</span>`
+          + (cred>0?`<br><span style="font-weight:600">O crédito de ${rcMoney(cred)} não explica essa diferença.</span>`:'');
       }
     }
   }
@@ -8042,7 +8078,16 @@ function rcAtualizaTotais(chave){
     res.innerHTML = `${marcados} item(ns) marcado(s) · <span class="rc-status-entregue" style="font-weight:800">🎁 ENTRADA SEM CUSTO — Total R$ 0,00</span> <span style="font-size:10px;color:var(--cinza-4)">(não entra em contas a pagar nem altera o preço de referência)</span>`;
     return;
   }
-  if(res) res.innerHTML = `Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}${cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>`:''} · Total da nota: <b>${rcMoney(totalNota!==null?totalNota:totalCalc)}</b>${cred?` · a pagar <b>${rcMoney((totalNota!==null?totalNota:totalCalc)-cred)}</b>`:''}`;
+  // v4.42b — "a pagar" só desconta o crédito quando ele NÃO está na nota.
+  // Antes descontava sempre, e no caso mais comum (nota já abatida) o valor
+  // saía com o crédito descontado duas vezes.
+  const notaFinal = (totalNota!==null?totalNota:totalCalc);
+  const modoCred  = rcCredModo(totalNota, totalCalc, cred);
+  const aPagar    = (modoCred==='NA_NOTA') ? notaFinal : (notaFinal - cred);
+  if(res) res.innerHTML = `Itens: <b>${rcMoney(totalItens)}</b>${frete?` · Frete: <b>${rcMoney(frete)}</b>`:''}`
+    + (cred?` · 💳 Crédito: <b style="color:var(--verde)">−${rcMoney(cred)}</b>${modoCred==='NA_NOTA'?' <span style="font-size:10px;color:var(--cinza-4)">(já abatido na nota)</span>':''}`:'')
+    + ` · Total da nota: <b>${rcMoney(notaFinal)}</b>`
+    + (cred?` · a pagar <b>${rcMoney(aPagar)}</b>`:'');
 }
 
 async function rcMarcarProblema(ordemId){
@@ -8168,7 +8213,9 @@ async function rcGravarNF(chave, confirmar){
     (formaPag.trim()?`Pagamento: ${formaPag.trim()}\n`:'') +
     `Total da nota ${rcMoney(valorNota)}` +
     (frete?` · frete ${rcMoney(frete)}`:'') +
-    (cred?` · 💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorNota-cred)}`:'') +
+    (cred?(rcCredModo(totalNotaDigitado, valorTotal, cred)==='NA_NOTA'
+            ? ` · 💳 crédito −${rcMoney(cred)} já abatido na nota · a pagar ${rcMoney(valorNota)}`
+            : ` · 💳 crédito −${rcMoney(cred)} · a pagar ${rcMoney(valorNota-cred)}`):'') +
     (Math.abs(difNota) > 0.01
       ? `\n\n⚠️ ATENÇÃO: a nota (${rcMoney(totalNotaDigitado)}) não bate com os itens${frete?' + frete':''} (${rcMoney(valorTotal)}). Diferença de ${rcMoney(Math.abs(difNota))}.`
       : '');
@@ -8189,7 +8236,14 @@ async function rcGravarNF(chave, confirmar){
   if(!ok) return;
 
   if(formaPag.trim()) obs = (obs ? obs + ' | ' : '') + 'Pagamento: ' + formaPag.trim();
-  if(cred>0){ obs = (obs?obs+' | ':'')+'CRÉDITO UTILIZADO: '+rcMoney(cred)+' — a pagar '+rcMoney(valorTotal-cred); }
+  if(cred>0){
+    // registra COMO o crédito entrou, para o financeiro não descontar de novo
+    const modoC = rcCredModo(totalNotaDigitado, valorTotal, cred);
+    obs = (obs?obs+' | ':'') + 'CRÉDITO UTILIZADO: '+rcMoney(cred)
+        + (modoC==='NA_NOTA'
+            ? ' — já abatido pelo fornecedor na nota; a pagar '+rcMoney(valorNota)
+            : ' — a pagar '+rcMoney(valorNota-cred));
+  }
 
   try{
     // 1. Cabeçalho da NF
@@ -11998,16 +12052,23 @@ async function ocRegistrar(){
     const oc=await sbFetch('ocorrencias','POST',{ situacao:k, fornecedor_id:fornId, material_id:matId,
       numero_nf:nf, valor, data_prometida:dataC, criado_por:por, acao_aplicada:acao, status:'aberta' });
     if(!oc||!oc.length) throw new Error('sem permissão (RLS) ou SQL da v3.9 não rodado');
+    const idNovo=oc[0].id;
     if(k==='VALOR_ERRADO_CREDITO'){
       await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:fornId, valor,
-        origem:'Ocorrência #'+oc[0].id+(nf?(' — NF '+nf):''), ocorrencia_id:oc[0].id, status:'ABERTO' });
+        origem:'Ocorrência #'+idNovo+(nf?(' — NF '+nf):''), ocorrencia_id:idNovo, status:'ABERTO' });
       toast('Ocorrência registrada e crédito de '+ocMoney(valor)+' criado 💳','sucesso');
     } else {
       toast('Ocorrência registrada ✓','sucesso');
     }
     ['oc-situacao','oc-fornecedor','oc-material','oc-nf','oc-valor','oc-data','oc-acao'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
     document.getElementById('oc-valor-box').style.display='none';
-    ocCarregar();
+    await ocCarregar();
+    // (a) v4.43 — qualquer ocorrência com valor pergunta se o dinheiro volta.
+    // Antes isso dependia de a pessoa ter escolhido o rótulo do crédito; quem
+    // escolhesse outro e digitasse um valor perdia o controle do dinheiro.
+    if(k!=='VALOR_ERRADO_CREDITO' && valor>0 && fornId && ocCreditos!==null){
+      ocPerguntarCredito(idNovo, valor, fornId, nf);
+    }
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 function ocRender(){
@@ -12026,6 +12087,8 @@ function ocRender(){
           <br><span style="font-size:11px">aberta há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
         </div>
         <div style="display:flex;gap:6px;align-self:center">
+          ${(Number(o.valor)>0 && !ocCreditoDa(o.id))?`<button class="oc-btn" style="background:#FEF9E7;color:#7D6608;padding:7px 11px;font-size:12px" onclick="ocGerarCredito(${o.id})" title="Cria um crédito com este fornecedor no valor da ocorrência, para abater na próxima nota">💳 Gerar crédito</button>`:''}
+          ${ocCreditoDa(o.id)?`<span class="oc-chip" style="background:var(--verde-claro);color:var(--verde);align-self:center" title="Já existe crédito ligado a esta ocorrência">💳 crédito ${ocMoney(ocCreditoDa(o.id).valor)}</span>`:''}
           <button class="oc-btn" style="background:var(--verde-claro);color:var(--verde);padding:7px 11px;font-size:12px" onclick="ocResolver(${o.id})">✔ Resolver</button>
           <button class="oc-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:12px" onclick="ocCancelar(${o.id})">✕</button>
         </div>
@@ -12053,13 +12116,131 @@ function ocRender(){
       </tbody></table>`
     : '<div class="oc-empty">Nada resolvido ainda.</div>';
 }
-async function ocResolver(id){
-  const res=prompt('Como foi resolvida? (ex: crédito recebido, item trocado, NF ajustada)');
-  if(res===null) return;
+// ═══ v4.43 — OCORRÊNCIAS E CRÉDITOS, SEM prompt() CRU ════════════════════
+// Três buracos que a gestão apontou:
+//  (a) só a situação "valores cobrados errados" virava crédito. Se a pessoa
+//      escolhesse outro rótulo e digitasse um valor, o dinheiro sumia do
+//      controle. Agora QUALQUER ocorrência com valor pergunta se volta.
+//  (b) o botão Resolver era um prompt() do navegador — não dizia o que ia
+//      acontecer com o crédito ligado, que é a parte que vale dinheiro.
+//  (c) não havia como gerar crédito depois, numa pendência já registrada.
+// (a) pergunta feita logo depois de registrar, quando há valor mas o rótulo
+// escolhido não é o de crédito. A pergunta é sobre o dinheiro, não sobre o rótulo.
+function ocPerguntarCredito(id, valor, fornId, nf){
+  ocGerando=id;
+  ocAbrirModal('Esse valor volta do fornecedor?',
+     `<div style="font-size:14px;color:var(--cinza-5)">A ocorrência <b>#${id}</b> foi registrada com <b>${ocMoney(valor)}</b> de ${ocForn(fornId)}.</div>`
+    +`<div style="margin-top:12px;${HGS_AVISO}">O sistema precisa saber o que esse dinheiro é. Se ele volta, vira <b>crédito</b> e some da sua conta a pagar na próxima nota. Se não volta, fica só como registro do prejuízo.</div>`
+    +`<div style="margin-top:14px"><label style="${HGS_LBL}">Valor do crédito (R$)</label>`
+    +`<input id="oc-cred-valor" type="number" step="0.01" min="0" value="${valor}" style="${HGS_INP}"></div>`
+    +`<input type="hidden" id="oc-cred-origem" value="Ocorrência #${id}${nf?(' — NF '+nf):''}">`,
+     `<button onclick="ocFecharModal()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Não volta — só registrar</button>`
+    +`<button id="oc-cred-btn" onclick="ocGerarCreditoGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">💳 Sim — criar crédito</button>`);
+}
+
+function ocCreditoDa(ocorrenciaId){
+  return (ocCreditos||[]).find(c=>Number(c.ocorrencia_id)===Number(ocorrenciaId)) || null;
+}
+function ocFecharModal(){ const b=document.getElementById('oc-modal'); if(b) b.style.display='none'; }
+function ocAbrirModal(titulo, corpo, botoes){
+  const b=document.getElementById('oc-modal');
+  b.querySelector('#oc-modal-titulo').textContent=titulo;
+  b.querySelector('#oc-modal-corpo').innerHTML=corpo;
+  b.querySelector('#oc-modal-pe').innerHTML=botoes;
+  b.style.display='flex';
+}
+
+// (b) RESOLVER — modal que mostra o crédito ligado e o que fazer com ele
+let ocResolvendo=null;
+function ocResolver(id){
+  const o=ocLista.find(x=>x.id===id); if(!o){ toast('Ocorrência não encontrada.','erro'); return; }
+  ocResolvendo=id;
+  const cred=ocCreditoDa(id);
+  let bloco='';
+  if(cred){
+    const saldo=cred.valor-(cred.valor_utilizado||0);
+    bloco = `<div style="margin-top:14px;${HGS_OK}">💳 Esta ocorrência tem um crédito de <b>${ocMoney(cred.valor)}</b> com ${ocForn(cred.fornecedor_id)}`
+      + (cred.valor_utilizado?` — já usados ${ocMoney(cred.valor_utilizado)}, saldo <b>${ocMoney(saldo)}</b>`:` — <b>ainda inteiro</b>`)
+      + `.<div style="margin-top:8px;font-weight:400;color:var(--cinza-5);font-size:12.5px">Resolver a ocorrência <b>não mexe no crédito</b>. Diga o que aconteceu com ele:</div>`
+      + `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px">`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="MANTER" checked><span><b>Continua em aberto</b> — vou abater numa nota futura deste fornecedor.</span></label>`
+      + (saldo>0.001?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="BAIXAR"><span><b>Já foi usado</b> — dar baixa nos ${ocMoney(saldo)} restantes agora.</span></label>`:'')
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="CANCELAR"><span><b>Não vai vir</b> — cancelar o crédito (o fornecedor não vai devolver).</span></label>`
+      + `</div></div>`;
+  } else if(Number(o.valor)>0){
+    bloco = `<div style="margin-top:14px;${HGS_AVISO}">Esta ocorrência tem <b>${ocMoney(o.valor)}</b> registrado e <b>nenhum crédito ligado</b>. `
+      + `Se esse valor volta do fornecedor, feche com o botão <b>💳 Gerar crédito</b> antes de resolver — senão o dinheiro sai do controle.</div>`;
+  }
+  ocAbrirModal('✔ Resolver ocorrência #'+id,
+     `<div style="font-size:13px;color:var(--cinza-4)">${ocRot(o.situacao)} · 🏪 ${ocForn(o.fornecedor_id)}${o.numero_nf?(' · NF '+o.numero_nf):''}</div>`
+    +`<div style="margin-top:14px"><label style="${HGS_LBL}">Como foi resolvida</label>`
+    +`<input id="oc-res-txt" placeholder="ex.: crédito recebido · item trocado · NF ajustada" style="${HGS_INP}"></div>`
+    + bloco,
+     `<button onclick="ocFecharModal()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>`
+    +`<button id="oc-res-btn" onclick="ocResolverGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">Resolver</button>`);
+  setTimeout(()=>{const e=document.getElementById('oc-res-txt'); if(e) e.focus();},60);
+}
+
+async function ocResolverGravar(){
+  const id=ocResolvendo; if(!id) return;
+  const txt=((document.getElementById('oc-res-txt')||{}).value||'').trim();
+  if(!txt){ toast('Escreva como foi resolvida — é o que explica o caso daqui a três meses.','erro'); return; }
+  const escolha=(document.querySelector('input[name="oc-cred-fim"]:checked')||{}).value||null;
+  const btn=document.getElementById('oc-res-btn'); if(btn){ btn.disabled=true; btn.textContent='gravando…'; }
   try{
-    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:res.trim()||null, resolvido_em:new Date().toISOString() });
-    toast('Ocorrência #'+id+' resolvida ✓','sucesso'); ocCarregar();
-  }catch(e){ toast('Erro: '+e.message,'erro'); }
+    const cred=ocCreditoDa(id);
+    if(cred && escolha==='BAIXAR'){
+      await sbFetch(`creditos_fornecedor?id=eq.${cred.id}`,'PATCH',{ valor_utilizado:cred.valor, status:'UTILIZADO' });
+    } else if(cred && escolha==='CANCELAR'){
+      await sbFetch(`creditos_fornecedor?id=eq.${cred.id}`,'PATCH',{ status:'CANCELADO',
+        origem:(cred.origem||'')+' · cancelado ao resolver a ocorrência' });
+    }
+    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:txt,
+      resolvido_em:new Date().toISOString() });
+    ocFecharModal();
+    toast('Ocorrência #'+id+' resolvida ✓'+(cred&&escolha==='BAIXAR'?' · crédito baixado':'')
+      +(cred&&escolha==='CANCELAR'?' · crédito cancelado':''),'sucesso');
+    ocCarregar();
+  }catch(e){
+    toast('Erro: '+e.message,'erro');
+    if(btn){ btn.disabled=false; btn.textContent='Resolver'; }
+  }
+}
+
+// (c) GERAR CRÉDITO numa pendência já registrada
+let ocGerando=null;
+function ocGerarCredito(id){
+  const o=ocLista.find(x=>x.id===id); if(!o) return;
+  if(!o.fornecedor_id){ toast('Esta ocorrência não tem fornecedor — crédito precisa de um.','erro'); return; }
+  if(ocCreditos===null){ toast('Rode o SQL dos créditos antes.','erro'); return; }
+  ocGerando=id;
+  ocAbrirModal('💳 Gerar crédito da ocorrência #'+id,
+     `<div style="font-size:13px;color:var(--cinza-4)">${ocRot(o.situacao)} · 🏪 ${ocForn(o.fornecedor_id)}${o.numero_nf?(' · NF '+o.numero_nf):''}</div>`
+    +`<div style="margin-top:14px;${HGS_OK}">Vai criar um crédito de <b id="oc-cred-espelho">${ocMoney(o.valor)}</b> com <b>${ocForn(o.fornecedor_id)}</b>.`
+    +`<div style="margin-top:6px;font-weight:400;color:var(--cinza-5);font-size:12.5px">Ele aparece no campo 💳 da tela <b>Receber NF</b> desse fornecedor e é abatido sozinho na próxima nota. Dá para baixar ou cancelar depois.</div></div>`
+    +`<div style="margin-top:14px"><label style="${HGS_LBL}">Valor do crédito (R$)</label>`
+    +`<input id="oc-cred-valor" type="number" step="0.01" min="0" value="${Number(o.valor)||''}" oninput="const e=document.getElementById('oc-cred-espelho'); if(e) e.textContent='R$ '+(Number(this.value)||0).toFixed(2).replace('.',',')" style="${HGS_INP}"></div>`
+    +`<div style="margin-top:12px"><label style="${HGS_LBL}">Motivo</label>`
+    +`<input id="oc-cred-origem" value="Ocorrência #${id}${o.numero_nf?(' — NF '+o.numero_nf):''}" style="${HGS_INP}"></div>`,
+     `<button onclick="ocFecharModal()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>`
+    +`<button id="oc-cred-btn" onclick="ocGerarCreditoGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">Criar crédito</button>`);
+}
+async function ocGerarCreditoGravar(){
+  const id=ocGerando; const o=ocLista.find(x=>x.id===id); if(!o) return;
+  const v=parseFloat((document.getElementById('oc-cred-valor')||{}).value);
+  const origem=((document.getElementById('oc-cred-origem')||{}).value||'').trim()||('Ocorrência #'+id);
+  if(!(v>0)){ toast('Informe o valor do crédito.','erro'); return; }
+  const btn=document.getElementById('oc-cred-btn'); if(btn){ btn.disabled=true; btn.textContent='criando…'; }
+  try{
+    await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:o.fornecedor_id, valor:v, origem,
+      ocorrencia_id:id, status:'ABERTO' });
+    ocFecharModal();
+    toast('Crédito de '+ocMoney(v)+' criado com '+ocForn(o.fornecedor_id)+' 💳','sucesso');
+    ocCarregar();
+  }catch(e){
+    toast('Erro: '+e.message,'erro');
+    if(btn){ btn.disabled=false; btn.textContent='Criar crédito'; }
+  }
 }
 async function ocCancelar(id){
   if(!confirm('Cancelar a ocorrência #'+id+'?')) return;
@@ -15849,6 +16030,33 @@ async function alIgnorar(id){
     <div id="hg-rel-box"></div>
   </div>
 </div>
+<!-- v4.43 — modal das ocorrências e créditos (substitui os prompt() crus) -->
+<div id="oc-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--branco);border-radius:14px;max-width:580px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">
+      <b id="oc-modal-titulo" style="font-size:15px;color:var(--cinza-5)"></b>
+      <button onclick="ocFecharModal()" style="margin-left:auto;border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--cinza-4)" title="Fechar">&#10005;</button>
+    </div>
+    <div id="oc-modal-corpo" style="padding:20px 22px"></div>
+    <div id="oc-modal-pe" style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)"></div>
+  </div>
+</div>
+
+<!-- v4.42 — abrir frasco de cola e fechar o custo do anterior -->
+<div id="cola-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--branco);border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">
+      <b style="font-size:15px;color:var(--cinza-5)">🧪 Abrir frasco novo</b>
+      <button onclick="colaFechar()" style="margin-left:auto;border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--cinza-4)" title="Fechar">&#10005;</button>
+    </div>
+    <div id="cola-corpo" style="padding:20px 22px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)">
+      <button onclick="colaFechar()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>
+      <button id="cola-btn" onclick="colaGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">Abrir frasco e fechar a conta</button>
+    </div>
+  </div>
+</div>
+
 <!-- v4.41b — escolher várias cirurgias no Consumo por cirurgia -->
 <div id="pn-cirtipos-modal" style="display:none;position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--branco);border-radius:14px;max-width:620px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
@@ -16491,6 +16699,156 @@ function hgInvRender(){
   });
   h+='</tbody></table>';
   document.getElementById('hg-inv-tabela').innerHTML=h;
+}
+
+// ═══ v4.42 — COLA ABERTA: o custo que só se sabe quando o frasco acaba ═══
+// A regra, na palavra da gestora: "abre uma cola TYSSEL, essa vira COLA ABERTA.
+// A cola aberta rende uma quantidade de cirurgias; o custo deve ser calculado
+// retroativamente, SOMENTE quando abrir a cola nova de novo, dividido pela
+// quantidade de vezes que foi colocado na saída cola aberta."
+//
+// Ou seja o rendimento não se sabe na abertura — se descobre contando os
+// lançamentos até o frasco acabar. E como o relatório lê `ultimo_valor_pago`
+// na hora de gerar, atualizar o preço aqui refaz o custo dos períodos daquele
+// ciclo sozinho: a parte "retroativa" não precisa de código nenhum.
+//
+// Os pares são descobertos pelo nome: "X NOVA" + "X PREPARADA". Para incluir
+// outra cola, basta cadastrar os dois materiais nesse padrão.
+const COLA_MARCA_ABERTURA = 'ABERTURA DE FRASCO';
+let colaPares = [];
+
+async function colaCarregar(){
+  const box=document.getElementById('cola-box'); if(!box) return;
+  try{
+    const mats=await sbFetch('materiais?select=id,nome,ultimo_valor_pago,ativo&or=(nome.ilike.*NOVA*,nome.ilike.*PREPARADA*)&ativo=eq.true&limit=200');
+    const novas=mats.filter(m=>/\sNOVA$/i.test(m.nome.trim()));
+    colaPares=[];
+    for(const n of novas){
+      const base=n.nome.trim().replace(/\sNOVA$/i,'').trim();
+      const p=mats.find(m=>m.nome.trim().toUpperCase()===(base+' PREPARADA').toUpperCase());
+      if(p) colaPares.push({ base, nova:n, aberta:p });
+    }
+    if(!colaPares.length){ box.innerHTML='<div style="font-size:12px;color:var(--cinza-4)">Nenhuma cola cadastrada no padrão <b>“NOME NOVA”</b> + <b>“NOME PREPARADA”</b>.</div>'; return; }
+    let h='';
+    for(const par of colaPares){
+      const est=await colaCiclo(par);
+      h+=colaCard(par, est);
+    }
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div style="'+HGS_AVISO_R+'">Não consegui ler as colas: '+(e.message||e)+'</div>'; }
+}
+
+// Descobre onde começou o ciclo atual e quantos lançamentos já entraram nele.
+async function colaCiclo(par){
+  const abert=await sbFetch('movimentacoes?select=id,created_at,registrado_por,observacao&material_id=eq.'+par.nova.id
+    +'&observacao=ilike.*'+encodeURIComponent(COLA_MARCA_ABERTURA)+'*&order=created_at.desc&limit=2');
+  const desde = abert.length ? abert[0].created_at : null;
+  let ep='movimentacoes?select=id,qtd,created_at&material_id=eq.'+par.aberta.id+'&qtd=lt.0&order=created_at&limit=500';
+  if(desde) ep+='&created_at=gt.'+encodeURIComponent(desde);
+  const usos=await sbFetch(ep);
+  const n=usos.reduce((s,m)=>s+Math.abs(Number(m.qtd)),0);
+  const saldoNova=(await sbFetch('estoque?select=saldo&material_id=eq.'+par.nova.id+'&local_id=eq.'+(await getEstoqueGeralId())));
+  return { abertoEm:desde, abertoPor:abert.length?abert[0].registrado_por:null, usos:n,
+           primeiroUso:usos.length?usos[0].created_at:null,
+           frascosNovos:saldoNova.length?Number(saldoNova[0].saldo):0 };
+}
+
+function colaCard(par, c){
+  const custoAtual=Number(par.aberta.ultimo_valor_pago)||0;
+  const precoFrasco=Number(par.nova.ultimo_valor_pago)||0;
+  const projetado = c.usos>0 ? precoFrasco/c.usos : null;
+  const dt=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+  return '<div style="border:1px solid var(--cinza-2);border-radius:10px;padding:13px 15px;margin-bottom:10px;background:var(--branco)">'
+    +'<div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">'
+      +'<b style="font-size:14px;color:var(--cinza-5)">'+hgEsc(par.base)+'</b>'
+      +'<span style="font-size:11.5px;color:var(--cinza-4)">frasco novo: '+hgMoeda(precoFrasco)+' · em estoque: <b>'+c.frascosNovos+'</b></span>'
+      +'<span style="flex:1"></span>'
+      +'<button onclick="colaAbrirModal(\''+encodeURIComponent(par.base)+'\')" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">🧪 Abrir frasco novo</button>'
+    +'</div>'
+    +'<div style="margin-top:9px;display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:var(--cinza-5)">'
+      +'<span>Aberto em <b>'+dt(c.abertoEm)+'</b>'+(c.abertoPor?(' por '+hgEsc(c.abertoPor)):'')+'</span>'
+      +'<span>Usado até agora: <b>'+c.usos+'</b> cirurgia(s)</span>'
+      +'<span>Custo em uso hoje: <b>'+hgMoeda(custoAtual)+'</b> por cirurgia</span>'
+    +'</div>'
+    + (!c.abertoEm
+        ? '<div style="margin-top:9px;'+HGS_AVISO+'">Nenhuma abertura foi registrada aqui ainda, então <b>o sistema não sabe onde este frasco começou</b> — '
+          +'os '+c.usos+' lançamento(s) acima são a história inteira do item, não um ciclo. '
+          +'A conta passa a valer a partir da <b>primeira vez que você abrir um frasco por esta tela</b>.</div>'
+        : (projetado!==null
+        ? '<div style="margin-top:9px;'+HGS_AVISO+'">Se o frasco acabasse agora, o custo real seria <b>'+hgMoeda(projetado)+'</b> por cirurgia '
+          +'('+hgMoeda(precoFrasco)+' ÷ '+c.usos+'). O sistema só grava isso quando você abrir o próximo — é aí que a conta fecha.</div>'
+        : '<div style="margin-top:9px;font-size:12px;color:var(--cinza-4)">Nenhum uso lançado neste ciclo ainda.</div>'))
+    +'</div>';
+}
+
+let colaParAtual=null;
+async function colaAbrirModal(baseEnc){
+  const base=decodeURIComponent(baseEnc);
+  const par=colaPares.find(p=>p.base===base); if(!par){ toast('Cola não encontrada.','erro'); return; }
+  colaParAtual=par;
+  const c=await colaCiclo(par);
+  const precoFrasco=Number(par.nova.ultimo_valor_pago)||0;
+  const custoAtual=Number(par.aberta.ultimo_valor_pago)||0;
+  const novo = c.usos>0 ? precoFrasco/c.usos : null;
+  const quem=(typeof SESSAO!=='undefined'&&SESSAO&&SESSAO.nome)?SESSAO.nome:'';
+  const box=document.getElementById('cola-modal');
+  box.querySelector('#cola-corpo').innerHTML =
+     '<div style="font-size:17px;font-weight:800;color:var(--cinza-5)">'+hgEsc(par.base)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--cinza-4);margin-top:3px">Vai sair <b>1 frasco novo</b> do estoque (restam '+c.frascosNovos+') e o frasco anterior será fechado.</div>'
+    + (!c.abertoEm
+        ? '<div style="margin-top:15px;'+HGS_AVISO+'">Esta é a <b>primeira abertura registrada</b> desta cola. Como o sistema não sabe quando o frasco atual foi aberto, '
+          +'ele <b>não vai mexer no custo agora</b> — só marca o início do ciclo. Da próxima vez que você abrir, aí sim a conta fecha sozinha.</div>'
+        : c.usos>0
+        ? '<div style="margin-top:15px;'+HGS_OK+'">O frasco que está acabando rendeu <b>'+c.usos+' cirurgia(s)</b>.<br>'
+          +'Custo real: '+hgMoeda(precoFrasco)+' ÷ '+c.usos+' = <b>'+hgMoeda(novo)+'</b> por cirurgia.'
+          +'<div style="margin-top:6px;font-weight:400;color:var(--cinza-4);font-size:12px">Estava gravado '+hgMoeda(custoAtual)+'. '
+          +'Ao gravar, <b>os períodos desse ciclo passam a custar o valor novo</b> — os relatórios se refazem sozinhos.</div></div>'
+        : '<div style="margin-top:15px;'+HGS_AVISO+'">Não houve nenhum lançamento de <b>'+hgEsc(par.aberta.nome)+'</b> neste ciclo, '
+          +'então não há como dividir. O custo por cirurgia fica como está ('+hgMoeda(custoAtual)+') e só o frasco novo será baixado.</div>')
+    +'<div style="margin-top:14px"><label style="'+HGS_LBL+'">Quem está abrindo</label>'
+    +'<input id="cola-quem" value="'+hgEsc(quem)+'" placeholder="seu nome" style="'+HGS_INP+'"></div>'
+    +'<div style="margin-top:12px"><label style="'+HGS_LBL+'">Observação <span style="font-weight:400;color:var(--cinza-4)">(opcional)</span></label>'
+    +'<input id="cola-obs" placeholder="ex.: frasco anterior venceu antes de acabar" style="'+HGS_INP+'"></div>';
+  box.style.display='flex';
+}
+function colaFechar(){ const b=document.getElementById('cola-modal'); if(b) b.style.display='none'; colaParAtual=null; }
+
+async function colaGravar(){
+  const par=colaParAtual; if(!par){ toast('Cola não encontrada.','erro'); return; }
+  const quem=((document.getElementById('cola-quem')||{}).value||'').trim();
+  const obs=((document.getElementById('cola-obs')||{}).value||'').trim();
+  if(!quem){ toast('Escreva quem está abrindo o frasco.','erro'); return; }
+  const btn=document.getElementById('cola-btn'); if(btn){ btn.disabled=true; btn.textContent='gravando…'; }
+  try{
+    const c=await colaCiclo(par);
+    const localId=await getEstoqueGeralId();
+    const precoFrasco=Number(par.nova.ultimo_valor_pago)||0;
+    // 1) fecha o ciclo anterior — o custo por cirurgia do frasco que acabou
+    let novo=null;
+    // primeira abertura: não há ciclo anterior conhecido, então não se mexe no
+    // custo — marca-se só o início. Dividir aqui daria um número inventado.
+    if(c.abertoEm && c.usos>0 && precoFrasco>0){
+      novo=Math.round((precoFrasco/c.usos)*10000)/10000;
+      await sbFetch('materiais?id=eq.'+par.aberta.id,'PATCH',{ ultimo_valor_pago:novo });
+    }
+    // 2) baixa o frasco novo, marcando a abertura (é o marco do próximo ciclo)
+    await sbFetch('movimentacoes','POST',{ tipo:'SAIDA_GERAL', material_id:par.nova.id, local_id:localId,
+      qtd:-1, destino_saida_geral:'USO CC', aprovado:true, registrado_por:quem,
+      aprovado_por:quem, aprovado_em:new Date().toISOString(),
+      observacao: COLA_MARCA_ABERTURA+' — '+par.base
+        + (novo!=null ? (' · o frasco anterior rendeu '+c.usos+' cirurgia(s) → R$ '+novo.toFixed(4)+' cada')
+                      : (c.abertoEm ? ' · sem uso lançado no ciclo anterior' : ' · primeira abertura registrada, custo não alterado'))
+        + (obs?(' · '+obs):'') });
+    toast(novo!=null
+      ? ('Frasco aberto ✓ — o anterior rendeu '+c.usos+' cirurgia(s), custo agora R$ '+novo.toFixed(2).replace('.',','))
+      : 'Frasco aberto ✓ — início do ciclo marcado','sucesso');
+    colaFechar();
+    await colaCarregar();
+    if(typeof pnUvp!=='undefined' && novo!=null && pnUvp[par.aberta.id]) pnUvp[par.aberta.id].uvp=novo;
+  }catch(e){
+    toast('Erro ao abrir o frasco: '+(e.message||e),'erro');
+    if(btn){ btn.disabled=false; btn.textContent='Abrir frasco e fechar a conta'; }
+  }
 }
 
 // ═══ v4.41 — INVENTÁRIO ADMINISTRATIVO (impressos e expediente) ═════════
