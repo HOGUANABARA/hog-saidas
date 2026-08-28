@@ -403,7 +403,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.47 · FACO PARCEIRO · médico e divisão na aprovação</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.48 · só a gestão cadastra médico · nome do externo no período</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -641,12 +641,16 @@ details[open] summary { margin-bottom: 6px; }
       <!-- Campo nome médico externo -->
       <div class="campo-medico-externo" id="campo-ext">
         <div class="campo">
-          <label>Nome do Médico Externo</label>
+          <label>Nome do Médico Externo <span style="font-weight:400;color:var(--cinza-4);text-transform:none;letter-spacing:0">— fica no histórico deste período</span></label>
           <input type="text" id="inp-medico-ext" placeholder="Digite o nome completo..." />
         </div>
         <div style="margin-top:8px">
-          <button class="btn btn-primario btn-sm" onclick="cadastrarMedicoExterno()">+ Cadastrar na base</button>
+          <button class="btn btn-primario btn-sm" onclick="cadastrarMedicoExterno()">✔ Anotar neste período</button>
           <span id="status-ext" style="font-size:12px;color:var(--cinza-4);margin-left:8px"></span>
+        </div>
+        <div style="margin-top:7px;font-size:11.5px;color:var(--cinza-4);line-height:1.5">
+          O nome fica gravado <b>no período</b>, para você saber depois quem operou — <b>não entra no cadastro de médicos</b>.
+          Cadastro novo é só da gestão, para quem vai operar sempre.
         </div>
       </div>
     </div>
@@ -2308,10 +2312,45 @@ function onMedicoChange() {
   limparMateriais();
 }
 
+// ═══ v4.48 — SÓ A GESTORA CADASTRA MÉDICO ═══════════════════════════════
+// Antes, qualquer pessoa que escolhesse "Médico Externo" e digitasse um nome
+// criava um médico PERMANENTE na base. Foi assim que "ALINE APIS" virou linha
+// de cadastro — e cada parceiro que passasse pelo CC viraria outra. Regra da
+// gestão (28/08): "não ter mais a permissão para inserir médico. Somente
+// Evelise pode inserir médico novo".
+//
+// Para quem não é a gestora, o nome do externo passa a ser ANOTADO NO PERÍODO
+// (fica em periodos_cirurgicos.observacao) e o médico do registro continua
+// sendo "Médico Externo". Não se perde a informação de quem operou — ela só
+// deixa de sujar o cadastro.
+let medicoExternoNome = '';   // lido por salvarRegistro ao gravar o período
+function podeCadastrarMedico(){
+  const p = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.perfil) ? String(SESSAO.perfil).toUpperCase() : '';
+  return p === 'ADMINISTRATIVO';
+}
 async function cadastrarMedicoExterno() {
   const nome = document.getElementById('inp-medico-ext').value.trim();
   if (!nome) { toast('Digite o nome do médico.', 'erro'); return; }
   const statusEl = document.getElementById('status-ext');
+
+  // ── caminho de quem NÃO é a gestora: anota no período, não no cadastro ──
+  if(!podeCadastrarMedico()){
+    medicoExternoNome = nome;
+    statusEl.innerHTML = '✅ <b>'+nome+'</b> vai ficar anotado neste período. '
+      + '<span style="color:var(--cinza-4)">O cadastro de médicos é só da gestão — se ele for operar sempre, peça para a Evelise cadastrar.</span>';
+    toast('Anotado: '+nome+' — o registro fica como Médico Externo.','sucesso');
+    return;
+  }
+
+  // ── caminho da gestora: cadastra de verdade ──
+  if(!confirm('Cadastrar "'+nome+'" como médico permanente na base?\n\n'
+    +'Use isto só para quem vai operar com frequência. Para um parceiro que passou uma vez, '
+    +'cancele — o nome fica anotado no período do mesmo jeito.')){
+    medicoExternoNome = nome;
+    statusEl.innerHTML = '✅ <b>'+nome+'</b> anotado só neste período.';
+    toast('Anotado: '+nome+' — sem criar no cadastro.','sucesso');
+    return;
+  }
   statusEl.textContent = '⏳ Cadastrando...';
   try {
     if (sbUrl && sbKey) {
@@ -2319,12 +2358,12 @@ async function cadastrarMedicoExterno() {
         nome, especialidade: 'Oftalmologia', ativo: true
       });
     }
-    // Adicionar à lista do select
     const sel = document.getElementById('sel-medico');
     const opt = document.createElement('option');
     opt.value = nome; opt.textContent = nome;
     sel.insertBefore(opt, sel.lastElementChild);
     sel.value = nome;
+    medicoExternoNome = '';
     statusEl.textContent = `✅ ${nome} cadastrado!`;
     document.getElementById('campo-ext').classList.remove('visivel');
     toast(`${nome} cadastrado na base!`, 'sucesso');
@@ -2956,6 +2995,9 @@ async function enviarSupabase(reg) {
         qtd_pacientes: t.pacientes, fellow: reg.fellow === 'true' || reg.fellow === true,
         modalidade: t.modalidade || null,
         protocolo: (t.protocolos && t.protocolos.length) ? t.protocolos[0] : null,
+        // v4.48 — o nome do médico externo fica AQUI, não no cadastro
+        observacao: (typeof medicoExternoNome!=='undefined' && medicoExternoNome)
+          ? ('Médico externo: '+medicoExternoNome) : null,
       });
       periodoId = Array.isArray(periodoArr) ? periodoArr[0].id : periodoArr.id;
     }
@@ -3051,8 +3093,9 @@ async function carregarSaldos() {
 
 async function carregarPendentes() {
   if (!sbUrl || !sbKey) return;
+  await hogGarantirParceiros();   // v4.48 — a classificação de parceiro precisa estar carregada antes de montar a tela
   try {
-    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
+    const movs = await sbFetch('movimentacoes?select=id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,medicos(nome),tipos_cirurgia(nome)),registrado_por&aprovado=eq.false&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&order=created_at.desc');
     await carregarSaldos();
     const grupos = {};
     for (const m of movs || []) {
@@ -3104,8 +3147,14 @@ function apdMeta(p, ehDiversa, tipos, data){
   const pac = Number(per.qtd_pacientes) || 0;
   const totalItens = p.itens.reduce((sm, it) => sm + (Number(it.qtd) || 0), 0);
 
+  // v4.48 — quando o período é de médico externo, o nome fica na observação.
+  // Mostrar aqui é o que torna esse histórico útil: sem isso ele fica escrito
+  // num campo que ninguém abre.
+  const obsMed = /^Médico externo:/i.test(per.observacao||'') ? String(per.observacao).replace(/^Médico externo:\s*/i,'').trim() : '';
+
   const contexto = [
     '📅 ' + (data || '—'),
+    obsMed ? `<b style="color:var(--azul)">🩺 ${obsMed}</b>` : '',
     pac > 0 ? `<b style="color:var(--azul)">👥 ${pac} paciente${pac===1?'':'s'}</b>`
             : '<span style="color:var(--vermelho);font-weight:700">👥 pacientes não informados</span>',
     per.protocolo  ? '💉 ' + per.protocolo  : null,
@@ -3321,12 +3370,13 @@ function apvDataDoGrupo(g){
 
 async function carregarAprovadas(reiniciar){
   if (!sbUrl || !sbKey) return;
+  await hogGarantirParceiros();   // v4.48 — a classificação de parceiro precisa estar carregada antes de montar a tela
   if (reiniciar !== false){ apvMovs = []; apvFimDaLista = false; apvMostrar = 30; }
   apvCarregando = true;
   apvRenderizar();
   try {
     const campos = 'id,qtd,tipo,material_id,local_id,destino_saida_geral,observacao,materiais(nome),'
-      + 'periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,medicos(nome),tipos_cirurgia(nome)),'
+      + 'periodos_cirurgicos(id,data,qtd_pacientes,fellow,modalidade,protocolo,observacao,medicos(nome),tipos_cirurgia(nome)),'
       + 'registrado_por,aprovado_em';
     const novos = await sbFetch(`movimentacoes?select=${campos}&aprovado=eq.true`
       + `&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)`
@@ -3770,7 +3820,9 @@ async function aprDividir(i){
     +'<select id="apr-div-med" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte)">'
     +'<option value="">Selecione…</option>'+meds.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('')+'</select></div>'
     +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Pacientes dele</label>'
-    +'<input id="apr-div-pac" type="number" min="0" value="0" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte);text-align:center"></div></div>'
+    +'<input id="apr-div-pac" type="number" min="0" value="0" oninput="aprDivPrevia()" style="width:110px;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:var(--fonte);text-align:center"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">&nbsp;</label>'
+    +'<button class="btn btn-secundario btn-sm" onclick="aprDivSugerir()" title="Preenche a coluna proporcional aos pacientes — depois você ajusta o que foi diferente">📊 Sugerir por paciente</button></div></div>'
     +'<div style="max-height:40vh;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px">'
     +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--cinza-1)">'
     +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Material</th>'
@@ -3784,6 +3836,29 @@ async function aprDividir(i){
     +'</div></div></div>';
   aprDivPrevia();
 }
+// v4.48 — preenche a coluna proporcional aos pacientes. É um ponto de partida,
+// não uma verdade: material de faco não se divide igual entre pacientes (uma
+// cola rende vários, um campo é por cirurgia). Por isso arredonda para BAIXO e
+// diz na prévia que é sugestão — o ajuste fino é de quem viu a sala.
+function aprDivSugerir(){
+  const p=pendentes[aprDivIdx]; if(!p) return;
+  const per=aprDivPer||p.periodo||{};
+  const pacTotal=Number(per.qtd_pacientes)||0;
+  const pacDele=Number((document.getElementById('apr-div-pac')||{}).value)||0;
+  if(!pacDele){ toast('Escreva primeiro quantos pacientes foram do segundo médico.','erro'); return; }
+  if(pacTotal<=pacDele){
+    toast('O período está com '+pacTotal+' paciente(s) no total — corrija em 👥 Pacientes antes, senão não há o que dividir.','erro');
+    return;
+  }
+  document.querySelectorAll('.apr-div-q').forEach(inp=>{
+    const k=Number(inp.dataset.k); const it=p.itens[k]; if(!it) return;
+    const q=Number(it.qtd)||0;
+    inp.value=Math.floor(q*pacDele/pacTotal);
+  });
+  aprDivPrevia();
+  toast('Sugestão preenchida — confira item por item antes de gravar.','sucesso');
+}
+
 function aprDivPrevia(){
   const p=pendentes[aprDivIdx]; if(!p) return;
   let n=0, un=0;
@@ -10110,17 +10185,27 @@ function pnCusto(materialId, qtd, mes){
 // A marca mora em medicos.parceiro (SQL 68). Enquanto ele não roda, vale a
 // lista abaixo — a tela não pode quebrar por falta de uma coluna.
 const HOG_PARCEIROS_FALLBACK = ['ALINE APIS'];
-let hogParceiros = null;   // Set de nomes em MAIÚSCULA, carregado uma vez
+let hogParceiros = null;      // Set de nomes em MAIÚSCULA
+let hogParceirosDoBanco = false;   // já conseguimos ler do banco?
 async function hogCarregarParceiros(){
   try{
     const m = await sbFetch('medicos?select=nome,parceiro&parceiro=is.true&limit=200');
     hogParceiros = new Set((m||[]).map(x=>String(x.nome||'').trim().toUpperCase()));
+    hogParceirosDoBanco = true;
     // se a coluna existe mas ninguém foi marcado, ainda assim respeita a lista
     if(!hogParceiros.size) HOG_PARCEIROS_FALLBACK.forEach(n=>hogParceiros.add(n));
   }catch(e){
-    // coluna ainda não existe — degrada para a lista
+    // coluna ainda não existe, ou a conexão ainda não subiu — degrada para a
+    // lista e deixa marcado que precisa tentar de novo
     hogParceiros = new Set(HOG_PARCEIROS_FALLBACK);
+    hogParceirosDoBanco = false;
   }
+}
+// No boot a conexão com o Supabase muitas vezes ainda não está pronta, e a
+// primeira tentativa cai no fallback — foi assim que "Médico Externo" apareceu
+// como FACO NACIONAL numa tela. Quem carrega dados chama isto antes de montar.
+async function hogGarantirParceiros(){
+  if(!hogParceirosDoBanco) await hogCarregarParceiros();
 }
 function hogEhParceiro(medico){
   const n = String(medico||'').trim().toUpperCase();
@@ -10730,6 +10815,7 @@ function pnSaldos(){
 }
 
 async function pnCarregar(){
+  await hogGarantirParceiros();   // v4.48 — idem no Dashboard
   const st=document.getElementById('pn-status');
   st.textContent='carregando…';
   try{
