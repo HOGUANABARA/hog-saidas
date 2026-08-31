@@ -396,14 +396,16 @@ details[open] summary { margin-bottom: 6px; }
 }
 
 </style>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- v4.52 — xlsx-js-style: o MESMO SheetJS 0.18.5, com escrita de estilo (fonte/cor/borda),
+     que a build comum não faz. API idêntica; leitura das planilhas não muda. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
 </head>
 <body>
 
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.51 · lote por local — a contagem de um local não apaga mais o lote de outro</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.52 · lote por local + planilha do local completa, na ordem nova</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9843,28 +9845,53 @@ async function invExportar(){
       const lts = (await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000')) || [];
       for(const l of lts){ (lotesPorMat[l.material_id]=lotesPorMat[l.material_id]||[]).push(l); }
     }catch(e){}
-    const fmtD = d => { if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
+    // v4.52 — saldo do Estoque Geral no dia do download. A ordem das colunas é a
+    // que a gestora usa nas planilhas de agosto (SALDO SISTEMA antes da FOTO), e a
+    // subida lê por NOME de coluna — ordem diferente não quebra. Se falhar, sai vazia.
+    let geralId = null;
+    try{ geralId = await getEstoqueGeralId(); }catch(e){}
+    const hj = new Date();
+    const hdrSaldoHoje = 'SALDO SISTEMA ' + String(hj.getDate()).padStart(2,'0') + '/' + String(hj.getMonth()+1).padStart(2,'0');
+    // validade como DATA de verdade — no modelo dela a coluna VAL é data, não texto
+    const dataCel = d => d ? new Date((''+d).slice(0,10)+'T12:00:00') : '';
 
-    function invMateriaisDoLocal(nomeLocal){
-      const chave = Object.keys(ITENS_POR_LOCAL).find(k => normNome(k) === normNome(nomeLocal));
-      if(!chave) return materiais;
-      const nomesOriginais = ITENS_POR_LOCAL[chave];
-      const ids = new Set();
-      for(const nomeOriginal of nomesOriginais){
-        const alvo = normNome(nomeOriginal);
-        let m = materiais.find(x => normNome(x.nome) === alvo);
-        if(!m) m = materiais.find(x => normNome(x.nome).includes(alvo) || alvo.includes(normNome(x.nome)));
-        if(m) ids.add(m.id);
+    function invMateriaisDoLocal(local){
+      const chave = Object.keys(ITENS_POR_LOCAL).find(k => normNome(k) === normNome(local.nome));
+      let base;
+      if(!chave) base = materiais.slice();
+      else {
+        const nomesOriginais = ITENS_POR_LOCAL[chave];
+        const ids = new Set();
+        for(const nomeOriginal of nomesOriginais){
+          const alvo = normNome(nomeOriginal);
+          let m = materiais.find(x => normNome(x.nome) === alvo);
+          if(!m) m = materiais.find(x => normNome(x.nome).includes(alvo) || alvo.includes(normNome(x.nome)));
+          if(m) ids.add(m.id);
+        }
+        base = materiais.filter(m => ids.has(m.id));
       }
-      return materiais.filter(m => ids.has(m.id));
+      // v4.51 — a lista fixa envelhece (caso furosemida do CARRINHO, 31/08): a
+      // planilha do local agora une a lista com a FOTO DE ALOCAÇÃO — o que foi
+      // contado neste local na última contagem entra na planilha dele mesmo fora
+      // da lista. Só ativos entram (o catálogo aqui é ativo=true); item inativo
+      // com foto velha fica de fora.
+      const jaTem = new Set(base.map(m => m.id));
+      for(const e of estoqueRows){
+        if(e.local_id === local.id && Number(e.saldo) > 0 && !jaTem.has(e.material_id)){
+          const m = materiais.find(x => x.id === e.material_id);
+          if(m){ base.push(m); jaTem.add(m.id); }
+        }
+      }
+      base.sort((a,b)=>a.nome.localeCompare(b.nome));
+      return base;
     }
 
-    const HDR = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF','FOTO ÚLT. CONTAGEM','CONTAGEM',
+    const HDR = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF', hdrSaldoHoje, 'FOTO ÚLT. CONTAGEM','CONTAGEM',
                  'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
     const wb = XLSX.utils.book_new();
     const nomesUsados = new Set();
     for(const local of locaisAlvo){
-      const materiaisDoLocal = invMateriaisDoLocal(local.nome);
+      const materiaisDoLocal = invMateriaisDoLocal(local);
       const linhas = [HDR];
       for(const m of materiaisDoLocal){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
@@ -9874,22 +9901,48 @@ async function invExportar(){
           loteCols = [];
           for(let k=0;k<3;k++){
             const l = lts[k];
-            loteCols.push(l?(l.lote||''):'', l?fmtD(l.validade):'', '');
+            loteCols.push(l?(l.lote||''):'', l?dataCel(l.validade):'', '');
           }
-        } else {
-          // itens sem controle de lote: colunas marcadas para não preencher
-          loteCols = ['—','—','—','—','—','—','—','—','—'];
-        }
-        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldo, '', ...loteCols, '']);
+        }   // sem controla_lote: lotes saem em branco (v4.52 — fim dos risquinhos)
+        const saldoHoje = geralId!=null ? (saldoMap[m.id+'_'+geralId] ?? 0) : '';
+        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldoHoje, saldo, '', ...loteCols, '']);
       }
-      const ws = XLSX.utils.aoa_to_sheet(linhas);
-      ws['!cols'] = [{wch:6},{wch:14},{wch:38},{wch:14},{wch:34},{wch:12},{wch:11},
-                     {wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:22}];
+      const ws = XLSX.utils.aoa_to_sheet(linhas, {cellDates:true});
+      // v4.52 — larguras e visual copiados da planilha do inventário de julho
+      // (ARSENAL 30/07): LOTE 3 escondido como lá, filtro no cabeçalho.
+      ws['!cols'] = [{wch:3.9},{wch:6.6},{wch:22.7},{wch:11.7},{wch:34.8},{wch:14},{wch:12.8},{wch:11.8},
+                     {wch:11.8},{wch:11.8},{wch:7.8},{wch:11.8},{wch:11.8},{wch:7.8},
+                     {wch:11.8,hidden:true},{wch:11.8,hidden:true},{wch:7.8,hidden:true},{wch:22.8}];
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      // estilo do modelo: cabeçalho Calibri 10 negrito centralizado em cinza,
+      // dados Calibri 10 (MATERIAL em 9) com grade fina; datas em dd/mm/aaaa.
+      const bAll = (t=>({top:t,bottom:t,left:t,right:t}))({style:'thin',color:{rgb:'000000'}});
+      const rng = XLSX.utils.decode_range(ws['!ref']);
+      for(let R=rng.s.r; R<=rng.e.r; R++){
+        for(let C=rng.s.c; C<=rng.e.c; C++){
+          const cel = ws[XLSX.utils.encode_cell({r:R,c:C})];
+          if(!cel) continue;
+          if(R===0){
+            cel.s = { font:{name:'Calibri',sz:10,bold:true},
+                      fill:{patternType:'solid',fgColor:{rgb:'D9D9D9'}},
+                      alignment:{horizontal:'center',vertical:'center',wrapText:true},
+                      border:bAll };
+          } else {
+            cel.s = { font:{name:'Calibri',sz:(C===2?9:10)},
+                      alignment:{vertical:'center',wrapText:(C===2||C===4||C===17)},
+                      border:bAll };
+            if((C===9||C===12||C===15) && (cel.t==='d'||cel.t==='n')) cel.z='dd/mm/yyyy';
+          }
+        }
+      }
       const nomeAba = invNomeAbaSeguro(local.nome, nomesUsados);
       XLSX.utils.book_append_sheet(wb, ws, nomeAba);
     }
     const dataStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, 'Inventario_HOG_'+dataStr+'.xlsx');
+    // v4.52 — baixando UM local, o nome do arquivo carrega o local (a subida não
+    // usa o nome do arquivo — casa pela aba — então é só rótulo, sem risco)
+    const sufixoLocal = locaisAlvo.length===1 ? '_'+String(locaisAlvo[0].nome).replace(/[\\\/:*?"<>|]/g,'-').replace(/\s+/g,'-') : '';
+    XLSX.writeFile(wb, 'Inventario_HOG'+sufixoLocal+'_'+dataStr+'.xlsx');
     toast('Planilha exportada — itens com 🔒 lote vêm com LOTE/VAL pré-preenchidos ✓','sucesso');
   }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
 }
@@ -9924,10 +9977,9 @@ async function invImportar(file){
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = Number(e.saldo);
 
-    const CAB_ANTIGO = ['ID','MATERIAL','DESCRIÇÃO NF','MARCA','UNIDADE','QTD/PACOTE',['FOTO ÚLT. CONTAGEM','SALDO SISTEMA'],'CONTAGEM FÍSICA'];
-    const CAB_NOVO   = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF','FOTO ÚLT. CONTAGEM','CONTAGEM',
-                        'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
-    const bate = (cab, esperado) => esperado.every((e,i)=> Array.isArray(e)?e.includes(cab[i]):cab[i]===e);
+    // v4.52 — leitura POR NOME de coluna: a ordem da planilha é livre (ela
+    // reordena no Excel — ex.: SALDO SISTEMA antes da FOTO). Precisa ter ID ou
+    // MATERIAL + CONTAGEM (ou CONTAGEM FÍSICA); colunas extras são ignoradas.
 
 
     for(const sheetName of wb.SheetNames){
@@ -9938,29 +9990,34 @@ async function invImportar(file){
       const ws = wb.Sheets[sheetName];
       const linhas = XLSX.utils.sheet_to_json(ws, {header:1});
       const cabecalho = (linhas[0] || []).map(c => (c===undefined||c===null) ? '' : String(c).trim().toUpperCase());
-      const formato = bate(cabecalho, CAB_NOVO) ? 'novo' : (bate(cabecalho, CAB_ANTIGO) ? 'antigo' : null);
-      if(!formato){
-        avisos.push(`Aba "${sheetName}" — colunas não batem com o modelo exportado. Aba ignorada. Use sempre o arquivo gerado pelo botão "Exportar".`);
+      const ix = {}; cabecalho.forEach((c,i)=>{ if(c && ix[c]===undefined) ix[c]=i; });
+      const iId = ix['ID'] ?? -1, iMat = ix['MATERIAL'] ?? -1;
+      const iCont = ix['CONTAGEM'] ?? ix['CONTAGEM FÍSICA'] ?? -1;
+      const iObs = ix['OBSERVAÇÃO'] ?? -1;
+      const iLote=[1,2,3].map(k=>ix['LOTE '+k] ?? -1);
+      const iVal =[1,2,3].map(k=>ix['VAL '+k] ?? -1);
+      const iQtd =[1,2,3].map(k=>ix['QTD '+k] ?? -1);
+      if((iId<0 && iMat<0) || iCont<0){
+        avisos.push(`Aba "${sheetName}" — não achei as colunas ID/MATERIAL e CONTAGEM. Aba ignorada. Use o arquivo gerado pelo botão "Exportar" (a ordem das colunas pode ser qualquer uma).`);
         continue;
       }
 
       for(let i=1; i<linhas.length; i++){
         const r = linhas[i] || [];
-        const id = r[0];
-        const nome = formato==='novo' ? r[2] : r[1];
-        const contagemStr = formato==='novo' ? r[6] : r[7];
-        const obs = formato==='novo' ? (r[16]!==undefined&&r[16]!==null?String(r[16]).trim():'') : '';
+        const id = iId>=0 ? r[iId] : undefined;
+        const nome = iMat>=0 ? r[iMat] : undefined;
+        const contagemStr = r[iCont];
+        const obs = (iObs>=0 && r[iObs]!==undefined && r[iObs]!==null) ? String(r[iObs]).trim() : '';
 
-        // lotes (só no formato novo): 3 blocos LOTE/VAL/QTD
+        // lotes: 3 blocos LOTE/VAL/QTD, cada coluna pelo próprio nome
         let lotes = [];
-        if(formato==='novo'){
-          for(let k=0;k<3;k++){
-            const lote=(r[7+k*3]!==undefined&&r[7+k*3]!==null)?String(r[7+k*3]).trim():'';
-            const val=invParseDataCel(r[8+k*3]);
-            const q=parseFloat(r[9+k*3]);
-            if(lote==='—'||lote==='') { if(!val && isNaN(q)) continue; }
-            if(lote!=='—' && (lote || val || !isNaN(q))) lotes.push({lote, validade:val, qtd:isNaN(q)?0:q});
-          }
+        for(let k=0;k<3;k++){
+          if(iLote[k]<0) continue;
+          const lote=(r[iLote[k]]!==undefined&&r[iLote[k]]!==null)?String(r[iLote[k]]).trim():'';
+          const val=invParseDataCel(iVal[k]>=0 ? r[iVal[k]] : null);
+          const q=parseFloat(iQtd[k]>=0 ? r[iQtd[k]] : NaN);
+          if(lote==='—'||lote==='') { if(!val && isNaN(q)) continue; }
+          if(lote!=='—' && (lote || val || !isNaN(q))) lotes.push({lote, validade:val, qtd:isNaN(q)?0:q});
         }
         const somaLotes = lotes.reduce((s,l)=>s+(l.qtd||0),0);
         let contagem = parseFloat(contagemStr);
@@ -13240,7 +13297,10 @@ async function ivSubirLocal(localId, file){
     const iCont=cab.indexOf('CONTAGEM')>=0?cab.indexOf('CONTAGEM'):cab.indexOf('CONTAGEM FÍSICA');
     const iId=cab.indexOf('ID'), iMat=cab.indexOf('MATERIAL');
     if(iId<0 || iCont<0){ toast('Planilha fora do modelo — use a que o botão ⬇ planilha gera.','erro'); return; }
-    const iL1=cab.indexOf('LOTE 1');
+    // v4.52 — lote/val/qtd achados POR NOME: a ordem das colunas é livre
+    const iLote=[1,2,3].map(k=>cab.indexOf('LOTE '+k));
+    const iVal =[1,2,3].map(k=>cab.indexOf('VAL '+k));
+    const iQtd =[1,2,3].map(k=>cab.indexOf('QTD '+k));
     const iDesc=cab.indexOf('DESCRIÇÃO NF'), iMarca=cab.indexOf('MARCA');
     const regs=[]; let ignoradas=0, naoReconhecidas=[];
     // cadastro atual, para saber o que ela mudou na planilha
@@ -13261,15 +13321,14 @@ async function ivSubirLocal(localId, file){
         if(cru) naoReconhecidas.push(cru);
         continue;
       }
-      // lotes (3 blocos) quando existirem
+      // lotes (3 blocos) quando existirem — cada coluna pelo próprio nome
       const lotes=[];
-      if(iL1>=0){
-        for(let k=0;k<3;k++){
-          const lote=String(r[iL1+k*3]??'').trim();
-          const val=r[iL1+1+k*3];
-          const q=parseFloat(r[iL1+2+k*3]);
-          if(lote && lote!=='—' && !isNaN(q) && q>0) lotes.push({lote, validade:invParseDataCel?invParseDataCel(val):null, qtd:q});
-        }
+      for(let k=0;k<3;k++){
+        if(iLote[k]<0) continue;
+        const lote=String(r[iLote[k]]??'').trim();
+        const val=iVal[k]>=0 ? r[iVal[k]] : null;
+        const q=parseFloat(iQtd[k]>=0 ? r[iQtd[k]] : NaN);
+        if(lote && lote!=='—' && !isNaN(q) && q>0) lotes.push({lote, validade:invParseDataCel?invParseDataCel(val):null, qtd:q});
       }
       const somaLotes=lotes.reduce((s,l)=>s+l.qtd,0);
       let cont=parseFloat(r[iCont]);
