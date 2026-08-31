@@ -396,16 +396,14 @@ details[open] summary { margin-bottom: 6px; }
 }
 
 </style>
-<!-- v4.50 — xlsx-js-style: o MESMO SheetJS 0.18.5, com escrita de estilo (fonte/cor/borda),
-     que a build comum não faz. API idêntica; leitura das planilhas não muda. -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.50 · planilha de contagem no modelo do inventário</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.51 · lote por local — a contagem de um local não apaga mais o lote de outro</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1437,6 +1435,9 @@ details[open] summary { margin-bottom: 6px; }
     <select id="inv-registrado-por" style="margin-left:8px;font-size:12px;font-weight:700;padding:6px 9px;border-radius:6px;border:1.5px solid var(--cinza-2);color:var(--azul);font-family:var(--fonte)" onchange="localStorage.setItem('hog_inv_registrante', this.value)">
       <option value="">Selecione...</option>
     </select>
+  </div>
+  <!-- v4.50 — este card não era fechado, e por isso TODO o resto da aba ficava
+       aninhado dentro dele. Na tela isso aparecia como blocos repetidos. -->
 
   <!-- ═══ v4.42 — COLA ABERTA ═══
        Um frasco caro rende um número de cirurgias que só se descobre quando
@@ -1459,53 +1460,6 @@ details[open] summary { margin-bottom: 6px; }
     <div style="font-size:11px;color:var(--cinza-4);margin-top:6px">A busca lista TODOS os que batem — é assim que a duplicata aparece (ex.: "campo" mostra a família inteira). Cada linha abre a ficha completa: nome, descrição de NF, marca, unidade, mínimo, classe e mais.</div>
     <div id="inv-ficha-res"></div>
   </div>
-
-  <div class="inv-card">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span>📋 Contagem do mês — por local, com fechamento</span>
-      <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
-    </div>
-    <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
-  </div>
-
-  <!-- ═══ LIVRO DO DML (v4.10) ═══
-       O DML guarda o excedente que não coube no Arsenal. O saldo dele JÁ ESTÁ
-       dentro do saldo total: este livro diz ONDE o material está, não quanto existe.
-       "No Arsenal" é calculado (total − DML) — número derivado não se guarda. -->
-  <div class="inv-card" id="dml-card">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--laranja);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span>📦 DML — guarda do excedente</span>
-      <button onclick="dmlCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
-    </div>
-    <div style="background:#FDF2E4;border-left:4px solid var(--laranja);padding:10px 14px;font-size:12px;color:#7E4A11;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
-      O saldo do DML <b>já está dentro do saldo total</b> — este livro não cria estoque novo, ele diz
-      <b>onde o material está guardado</b>. Guardar move do Arsenal para o DML; retirar faz o caminho de volta.
-      <b>O total nunca muda.</b> Por isso a coluna <b>no Arsenal</b> é calculada: saldo total menos o que está no DML.
-    </div>
-    <div id="dml-corpo"><div class="inv-empty">Carregando o livro do DML…</div></div>
-  </div>
-
-  <!-- ═══ DE-PARA DE NOMES (v4.14b) ═══
-       A ficha de saída usa nomes curtos ("LUVA 7") e o cadastro usa nomes
-       completos ("LUVA 7.0"). O de-para liga os dois — e o casamento é POR
-       NOME, então toda renomeação de material deixa uma seta morta aqui.
-       Em 08/08 havia 9 setas mortas e 43 unidades de saída invisíveis no
-       Painel. Esta tela existe para isso ser visto no dia, e não seis
-       semanas depois num diagnóstico. -->
-  <div class="inv-card" id="dp-card">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#117A65;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span>🔀 De-para de nomes — o que a ficha chama × o que o cadastro chama</span>
-      <button onclick="dpCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
-    </div>
-    <div style="background:#E8F6F3;border-left:4px solid #117A65;padding:10px 14px;font-size:12px;color:#0B5345;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
-      O histórico de saídas casa com o cadastro <b>pelo nome</b>. Quando um material é renomeado, a seta
-      do mapa continua apontando para o nome antigo e <b>a saída some do Painel</b> — sem erro, sem aviso.
-      Aqui isso aparece: <b>seta morta</b> é destino que não existe mais, e <b>nome órfão</b> é saída que
-      não achou material nenhum.
-    </div>
-    <div id="dp-corpo"><div class="inv-empty">Carregando o mapa…</div></div>
-  </div>
-
   <!-- ═══ RELATÓRIO DE ESTOQUE (conferências pontuais) ═══ -->
   <div class="inv-card" id="rel-card">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1536,8 +1490,6 @@ details[open] summary { margin-bottom: 6px; }
       <button onclick="relImprimir()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🖨 Imprimir / PDF</button>
       <button onclick="relExportar()" style="background:var(--verde);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">📄 Exportar planilha</button>
     </div>
-  </div>
-
   </div>
 
   <!-- AJUSTE AVULSO -->
@@ -1582,6 +1534,14 @@ details[open] summary { margin-bottom: 6px; }
     </div>
   </div>
 
+  <div class="inv-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📋 Contagem do mês — por local, com fechamento</span>
+      <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
+  </div>
+
   <!-- INVENTÁRIO POR LOCAL -->
   <div class="inv-card">
     <h3>📋 Inventário físico por local</h3>
@@ -1610,6 +1570,47 @@ details[open] summary { margin-bottom: 6px; }
       </div>
     </div>
   </div>
+  <!-- ═══ LIVRO DO DML (v4.10) ═══
+       O DML guarda o excedente que não coube no Arsenal. O saldo dele JÁ ESTÁ
+       dentro do saldo total: este livro diz ONDE o material está, não quanto existe.
+       "No Arsenal" é calculado (total − DML) — número derivado não se guarda. -->
+  <div class="inv-card" id="dml-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--laranja);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>📦 DML — guarda do excedente</span>
+      <button onclick="dmlCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#FDF2E4;border-left:4px solid var(--laranja);padding:10px 14px;font-size:12px;color:#7E4A11;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      O saldo do DML <b>já está dentro do saldo total</b> — este livro não cria estoque novo, ele diz
+      <b>onde o material está guardado</b>. Guardar move do Arsenal para o DML; retirar faz o caminho de volta.
+      <b>O total nunca muda.</b> Por isso a coluna <b>no Arsenal</b> é calculada: saldo total menos o que está no DML.
+    </div>
+    <div id="dml-corpo"><div class="inv-empty">Carregando o livro do DML…</div></div>
+  </div>
+
+  <!-- ═══ DE-PARA DE NOMES (v4.14b) ═══
+       A ficha de saída usa nomes curtos ("LUVA 7") e o cadastro usa nomes
+       completos ("LUVA 7.0"). O de-para liga os dois — e o casamento é POR
+       NOME, então toda renomeação de material deixa uma seta morta aqui.
+       Em 08/08 havia 9 setas mortas e 43 unidades de saída invisíveis no
+       Painel. Esta tela existe para isso ser visto no dia, e não seis
+       semanas depois num diagnóstico. -->
+  <div class="inv-card" id="dp-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#117A65;margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>🔀 De-para de nomes — o que a ficha chama × o que o cadastro chama</span>
+      <button onclick="dpCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
+    </div>
+    <div style="background:#E8F6F3;border-left:4px solid #117A65;padding:10px 14px;font-size:12px;color:#0B5345;border-radius:0 8px 8px 0;margin-bottom:12px;line-height:1.55">
+      O histórico de saídas casa com o cadastro <b>pelo nome</b>. Quando um material é renomeado, a seta
+      do mapa continua apontando para o nome antigo e <b>a saída some do Painel</b> — sem erro, sem aviso.
+      Aqui isso aparece: <b>seta morta</b> é destino que não existe mais, e <b>nome órfão</b> é saída que
+      não achou material nenhum.
+    </div>
+    <div id="dp-corpo"><div class="inv-empty">Carregando o mapa…</div></div>
+  </div>
+
+
+  </div>
+
 
 </div>
 
@@ -7747,6 +7748,7 @@ async function hiDarEntrada(nfId){
   const quem=(document.getElementById('rc-registrado-por')||{}).value || 'Evelise (Gestora)';
   try{
     const localId=await getEstoqueGeralId();
+    await loteLocalOk();
     const agora=new Date().toISOString();
     let n=0;
     for(const {it, qtd, lote, val} of escolhidos){
@@ -7754,8 +7756,8 @@ async function hiDarEntrada(nfId){
       // consome por FEFO e precisa encontrar o lote já gravado
       if(lote || val){
         try{
-          await sbFetch('lotes','POST',{ material_id:it.material_id, lote:lote||'—', validade:val,
-            qtd:qtd, nf_item_id:it.id, status:'ativo' });
+          await sbFetch('lotes','POST', loteCom({ material_id:it.material_id, lote:lote||'—', validade:val,
+            qtd:qtd, nf_item_id:it.id, status:'ativo' }, localId));
         }catch(e){ toast('⚠ Lote não gravado ('+(lote||'—')+'): '+e.message,'erro'); }
       }
       const mv=await sbFetch('movimentacoes','POST',{
@@ -7955,7 +7957,9 @@ async function hiSalvarCorrecao(nfId){
     await sbFetch(`notas_fiscais?id=eq.${nfId}`,'PATCH',body);
     for(const m of mudaItens) await sbFetch(`nf_itens?id=eq.${m.id}`,'PATCH',{ qtd:m.qtd, valor_unitario:m.valor_unitario, valor_item:m.valor_item });
     for(const l of mudaLotes) await sbFetch(`lotes?id=eq.${l.id}`,'PATCH',{ lote:l.lote, validade:l.validade });
-    for(const l of criaLotes) await sbFetch('lotes','POST', l);
+    await loteLocalOk();
+    const geralCria = await getEstoqueGeralId();
+    for(const l of criaLotes) await sbFetch('lotes','POST', loteCom(l, geralCria));
     toast('Nota corrigida ✓'+(mudaLotes.length||criaLotes.length?' (lote e validade incluídos)':''),'sucesso');
     hiCarregarLista();
   }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); }
@@ -8687,13 +8691,15 @@ async function rcGravarNF(chave, confirmar){
       const nfItemId = itemArr && itemArr[0] && itemArr[0].id;
 
       // grava os lotes (validade controla o crítico; FEFO consome depois)
+      await loteLocalOk();
+      const geralNf = await getEstoqueGeralId();
       for(const l of (lotes||[])){
         if(!l.lote && !l.validade) continue;
         try{
-          await sbFetch('lotes','POST',{
+          await sbFetch('lotes','POST', loteCom({
             material_id: ordem.material_id, lote: l.lote || '—', validade: l.validade,
             qtd: l.qtd || qtd, nf_item_id: nfItemId, status: 'ativo',
-          });
+          }, geralNf));
         }catch(e){ toast('⚠ Lote não gravado ('+(l.lote||'—')+'): '+e.message,'erro'); }
       }
       // v4.27 — chegou compra com validade: a suspensão do alerta cai sozinha
@@ -9837,15 +9843,7 @@ async function invExportar(){
       const lts = (await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000')) || [];
       for(const l of lts){ (lotesPorMat[l.material_id]=lotesPorMat[l.material_id]||[]).push(l); }
     }catch(e){}
-    // v4.50 — saldo do Estoque Geral no dia do download, em coluna própria NO FIM
-    // da linha: invImportar lê as colunas por posição fixa, e no fim ela não
-    // desloca nada — planilha velha e nova continuam subindo. Se falhar, sai vazia.
-    let geralId = null;
-    try{ geralId = await getEstoqueGeralId(); }catch(e){}
-    const hj = new Date();
-    const hdrSaldoHoje = 'SALDO SISTEMA ' + String(hj.getDate()).padStart(2,'0') + '/' + String(hj.getMonth()+1).padStart(2,'0');
-    // validade como DATA de verdade — no modelo dela a coluna VAL é data, não texto
-    const dataCel = d => d ? new Date((''+d).slice(0,10)+'T12:00:00') : '';
+    const fmtD = d => { if(!d) return ''; const p=(''+d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
 
     function invMateriaisDoLocal(nomeLocal){
       const chave = Object.keys(ITENS_POR_LOCAL).find(k => normNome(k) === normNome(nomeLocal));
@@ -9862,7 +9860,7 @@ async function invExportar(){
     }
 
     const HDR = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF','FOTO ÚLT. CONTAGEM','CONTAGEM',
-                 'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO', hdrSaldoHoje];
+                 'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
     const wb = XLSX.utils.book_new();
     const nomesUsados = new Set();
     for(const local of locaisAlvo){
@@ -9876,48 +9874,22 @@ async function invExportar(){
           loteCols = [];
           for(let k=0;k<3;k++){
             const l = lts[k];
-            loteCols.push(l?(l.lote||''):'', l?dataCel(l.validade):'', '');
+            loteCols.push(l?(l.lote||''):'', l?fmtD(l.validade):'', '');
           }
-        }   // sem controla_lote: lotes saem em branco (v4.50 — fim dos risquinhos)
-        const saldoHoje = geralId!=null ? (saldoMap[m.id+'_'+geralId] ?? 0) : '';
-        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldo, '', ...loteCols, '', saldoHoje]);
-      }
-      const ws = XLSX.utils.aoa_to_sheet(linhas, {cellDates:true});
-      // v4.50 — larguras e visual copiados da planilha do inventário de julho
-      // (ARSENAL 30/07): LOTE 3 escondido como lá, filtro no cabeçalho.
-      ws['!cols'] = [{wch:3.9},{wch:6.6},{wch:22.7},{wch:11.7},{wch:34.8},{wch:12.8},{wch:11.8},
-                     {wch:11.8},{wch:11.8},{wch:7.8},{wch:11.8},{wch:11.8},{wch:7.8},
-                     {wch:11.8,hidden:true},{wch:11.8,hidden:true},{wch:7.8,hidden:true},{wch:22.8},{wch:14}];
-      ws['!autofilter'] = { ref: ws['!ref'] };
-      // estilo do modelo: cabeçalho Calibri 10 negrito centralizado em cinza,
-      // dados Calibri 10 (MATERIAL em 9) com grade fina; datas em dd/mm/aaaa.
-      const bAll = (t=>({top:t,bottom:t,left:t,right:t}))({style:'thin',color:{rgb:'000000'}});
-      const rng = XLSX.utils.decode_range(ws['!ref']);
-      for(let R=rng.s.r; R<=rng.e.r; R++){
-        for(let C=rng.s.c; C<=rng.e.c; C++){
-          const cel = ws[XLSX.utils.encode_cell({r:R,c:C})];
-          if(!cel) continue;
-          if(R===0){
-            cel.s = { font:{name:'Calibri',sz:10,bold:true},
-                      fill:{patternType:'solid',fgColor:{rgb:'D9D9D9'}},
-                      alignment:{horizontal:'center',vertical:'center',wrapText:true},
-                      border:bAll };
-          } else {
-            cel.s = { font:{name:'Calibri',sz:(C===2?9:10)},
-                      alignment:{vertical:'center',wrapText:(C===2||C===4||C===16)},
-                      border:bAll };
-            if((C===8||C===11||C===14) && (cel.t==='d'||cel.t==='n')) cel.z='dd/mm/yyyy';
-          }
+        } else {
+          // itens sem controle de lote: colunas marcadas para não preencher
+          loteCols = ['—','—','—','—','—','—','—','—','—'];
         }
+        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldo, '', ...loteCols, '']);
       }
+      const ws = XLSX.utils.aoa_to_sheet(linhas);
+      ws['!cols'] = [{wch:6},{wch:14},{wch:38},{wch:14},{wch:34},{wch:12},{wch:11},
+                     {wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:22}];
       const nomeAba = invNomeAbaSeguro(local.nome, nomesUsados);
       XLSX.utils.book_append_sheet(wb, ws, nomeAba);
     }
     const dataStr = new Date().toISOString().split('T')[0];
-    // v4.50 — baixando UM local, o nome do arquivo carrega o local (a subida não
-    // usa o nome do arquivo — casa pela aba — então é só rótulo, sem risco)
-    const sufixoLocal = locaisAlvo.length===1 ? '_'+String(locaisAlvo[0].nome).replace(/[\\\/:*?"<>|]/g,'-').replace(/\s+/g,'-') : '';
-    XLSX.writeFile(wb, 'Inventario_HOG'+sufixoLocal+'_'+dataStr+'.xlsx');
+    XLSX.writeFile(wb, 'Inventario_HOG_'+dataStr+'.xlsx');
     toast('Planilha exportada — itens com 🔒 lote vêm com LOTE/VAL pré-preenchidos ✓','sucesso');
   }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
 }
@@ -10137,14 +10109,19 @@ async function invAplicarAjustesImportados(){
       await sbFetch(`movimentacoes?id=eq.${movId}`,'PATCH',{ aprovado:true, aprovado_por:registrante, aprovado_em: agora });
     }
 
-    // 4) Lotes contados viram a nova FOTO de lotes do material (validade alimenta os críticos)
-    for(const it of selecionados){
-      const lts = (it.lotes||[]).filter(l=>l.lote&&l.validade&&l.qtd>0);
+    // 4) Lotes contados viram a nova FOTO de lotes DAQUELE LOCAL
+    //    v4.51 — antes isto percorria os materiais (sem local): baixava TODOS os
+    //    lotes ativos do item e regravava só os desta passada. Contar o Arsenal
+    //    apagava o lote que estava guardado no CME, e junto sumia o alerta de
+    //    vencimento daquela caixa. Agora percorre as contagens, que sabem o local.
+    await loteLocalOk();
+    for(const c of contagens){
+      const lts = (c.lotes||[]).filter(l=>l.lote&&l.validade&&l.qtd>0);
       if(!lts.length) continue;
       try{
-        await sbFetch(`lotes?material_id=eq.${it.material_id}&status=eq.ativo`,'PATCH',{ status:'baixado' });
-        await sbFetch('lotes','POST', lts.map(l=>({ material_id: it.material_id, lote: l.lote, validade: l.validade, qtd: l.qtd, status:'ativo' })));
-      }catch(e){ console.warn('lotes não gravados p/ material '+it.material_id+': '+e.message); }
+        await sbFetch(loteFiltroContagem(c.material_id, c.local_id, geralId),'PATCH',{ status:'baixado' });
+        await sbFetch('lotes','POST', lts.map(l=>loteCom({ material_id: c.material_id, lote: l.lote, validade: l.validade, qtd: l.qtd, status:'ativo' }, c.local_id)));
+      }catch(e){ toast('⚠ Lotes não gravados de "'+c.nome+'" em '+c.localNome+': '+(e.message||e),'erro'); }
     }
 
     toast(`Inventário fechado ✓ — foto de ${contagens.length} contagem(ns) gravada, ${comAjuste.length} ajuste(s) no Estoque Geral`,'sucesso');
@@ -10488,7 +10465,9 @@ async function pnValGravar(mid, nome){
   const resumo=lts.map(function(x){ return 'lote '+x.lote+' · vence '+pnData(x.validade)+' · '+x.qtd+' un'; }).join('\n');
   if(!confirm('Gravar no cadastro de "'+nome+'":\n\n'+resumo+'\n\n• O item sai do alerta e entra no controle de vencimento (FEFO).\n• Nenhum saldo de estoque muda — isto só registra lote/validade.\n• Errou? Dá para corrigir depois no card de lote vencido/vencendo.')) return;
   try{
-    for(const x of lts) await sbFetch('lotes','POST', x);
+    await loteLocalOk();
+    const geralVal = await getEstoqueGeralId();
+    for(const x of lts) await sbFetch('lotes','POST', loteCom(x, geralVal));
     try{ await sbFetch('materiais?id=eq.'+mid,'PATCH',{ validade_suspensa:false }); }catch(e){}
     lts.forEach(function(x){ pnLotes.push(x); });
     window.pnSemLoteLista=(window.pnSemLoteLista||[]).filter(function(i){ return i.id!==mid; });
@@ -11044,6 +11023,18 @@ async function pnCarregar(){
     }catch(e){}
     pnNfs=(await sbFetch('notas_fiscais?select=id,valor_total,data_entrega,data_emissao,status,fornecedor_id&order=id.desc&limit=300'))||[];
     try{ pnLotes=(await sbFetch('lotes?select=material_id,lote,validade,qtd,status&status=eq.ativo&limit=1000'))||[]; }catch(e){ pnLotes=[]; }
+    // v4.51 — com lote por local, o MESMO lote pode ter duas linhas (a do Estoque
+    // Geral e a foto da prateleira). O alerta contaria a mesma caixa duas vezes,
+    // então aqui ele vira uma linha só por (item, lote, validade) — a maior qtd,
+    // nunca a soma, que seria contar em dobro.
+    pnLotes = (function(ls){
+      const por={};
+      for(const l of ls){
+        const k=l.material_id+'|'+(l.lote||'—')+'|'+(l.validade||'');
+        if(!por[k] || Number(l.qtd||0)>Number(por[k].qtd||0)) por[k]=l;
+      }
+      return Object.values(por);
+    })(pnLotes);
     try{ pnEmp=(await sbFetch('emprestimos?select=*&order=id.desc&limit=200'))||[]; }catch(e){ pnEmp=null; }
     try{ const inv=(await sbFetch('inventarios?select=*&order=id.desc&limit=1')); pnUltInv=inv&&inv[0]?inv[0]:null; }catch(e){ pnUltInv=null; }
     try{ pnCotAbertas=(await sbFetch('cotacoes?select=id,created_at,criado_por,fornecedores_grupo&status=eq.aberta&order=id.desc&limit=20'))||[]; }catch(e){ pnCotAbertas=[]; }
@@ -12081,6 +12072,7 @@ function pnFichaHtml(){
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-oculto" type="checkbox" ${m.ocultar_compra?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> 🚫 Fora da lista de compras</label>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="pf-ativo" type="checkbox" ${m.ativo!==false?'checked':''} style="width:16px;height:16px;accent-color:var(--azul-medio)"> ✅ Ativo no catálogo</label>
     </div>
+    <div id="pf-onde-${m.id}" style="margin-top:14px"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--cinza-2);padding-top:12px">
       <div style="font-size:13px">Saldo no Estoque Geral: <b style="${saldo!=null&&saldo<0?'color:var(--vermelho)':''}">${saldo!=null?saldo.toLocaleString('pt-BR'):'—'}</b>
         <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:6px 10px;font-size:11px;margin-left:8px" onclick="pnCorrigirSaldo(${m.id})">✔ corrigir saldo 🔒</button></div>
@@ -12088,6 +12080,143 @@ function pnFichaHtml(){
     </div>
   </div>`;
 }
+// ═══ v4.50 — ONDE O ITEM ESTÁ, E COM QUE LOTE ═══════════════════════════
+// Pedido da gestão: abrir a ficha e ver "a quantidade e os locais que o
+// produto fica disponível, e a quantidade e lote de cada local".
+//
+// Duas coisas que o banco impõe e a tela precisa dizer com todas as letras:
+//  · o ESTOQUE GERAL é o saldo VIVO — é ele que a saída baixa e o alerta usa.
+//    Os locais físicos são a FOTO da última contagem, e por isso trazem a data.
+//    Somar os dois contaria a mesma peça duas vezes (está no CLAUDE.md).
+//  · o LOTE não tem local. `lotes` guarda material, lote, validade e qtd —
+//    não dá para dizer "3 do lote X estão no arsenal". Então os lotes vêm
+//    listados por item, e não repartidos por local: melhor mostrar o que
+//    existe do que inventar uma divisão.
+// ── v4.51 · LOTE POR LOCAL (SQL 71) ──────────────────────────────────────
+// A tabela lotes ganhou local_id. Enquanto o SQL 71 não roda, tudo continua
+// funcionando como antes: o lote é gravado sem local e a ficha avisa que não
+// sabe em que prateleira ele está.
+let loteTemLocal = null;
+async function loteLocalOk(){
+  if(loteTemLocal!==null) return loteTemLocal;
+  try{ await sbFetch('lotes?select=local_id&limit=1'); loteTemLocal=true; }
+  catch(e){ loteTemLocal=false; }
+  return loteTemLocal;
+}
+function loteCom(obj, localId){
+  if(!loteTemLocal || !localId) return obj;
+  return Object.assign({}, obj, { local_id: localId });
+}
+// O que uma contagem pode substituir: os lotes DAQUELA prateleira, mais os
+// "recém-chegados" (Estoque Geral / sem local). NUNCA outra prateleira — era
+// isso que fazia a contagem do Arsenal apagar o lote guardado no CME.
+function loteFiltroContagem(mid, localId, geralId){
+  let f = 'lotes?material_id=eq.'+mid+'&status=eq.ativo';
+  if(loteTemLocal){
+    const alvos = ['local_id.is.null','local_id.eq.'+geralId];
+    if(localId && localId!==geralId) alvos.push('local_id.eq.'+localId);
+    f += '&or=('+alvos.join(',')+')';
+  }
+  return f;
+}
+
+async function pnFichaOnde(mid){
+  const el=document.getElementById('pf-onde-'+mid); if(!el) return;
+  el.innerHTML='<div style="font-size:12px;color:var(--cinza-4)">carregando onde está…</div>';
+  try{
+    const temLocal = await loteLocalOk();
+    const selLote = temLocal ? 'lote,validade,qtd,status,local_id' : 'lote,validade,qtd,status';
+    const [est, locais, lotes] = await Promise.all([
+      sbFetch('estoque?select=local_id,saldo,updated_at&material_id=eq.'+mid),
+      sbFetch('locais?select=id,nome,tipo&limit=100'),
+      sbFetch('lotes?select='+selLote+'&material_id=eq.'+mid+'&order=validade')
+    ]);
+    const nomeLocal=id=>{ const l=locais.find(x=>x.id===id); return l?l.nome:('local #'+id); };
+    const tipoLocal=id=>{ const l=locais.find(x=>x.id===id); return l?l.tipo:''; };
+    const dt=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+    const geral=est.find(e=>tipoLocal(e.local_id)==='virtual');
+    const fisicos=est.filter(e=>tipoLocal(e.local_id)!=='virtual' && Number(e.saldo)!==0)
+                     .sort((a,b)=>Number(b.saldo)-Number(a.saldo));
+    const hoje=new Date().toISOString().slice(0,10);
+    const ativos=lotes.filter(l=>l.status==='ativo');
+    const saldoVivo=geral?Number(geral.saldo)||0:null;
+    // v4.51 — lote do Estoque Geral (ou sem local) é o que a saída consome;
+    // lote de prateleira é foto da contagem. Um não se soma ao outro.
+    const geralLocalId = geral ? geral.local_id : null;
+    const noSistema = temLocal ? ativos.filter(l=>l.local_id==null || l.local_id===geralLocalId) : ativos;
+    const somaLotes = noSistema.reduce((s,l)=>s+(Number(l.qtd)||0),0);
+
+    let h='<div style="border:1px solid var(--cinza-2);border-radius:10px;overflow:hidden">'
+      +'<div style="background:var(--cinza-1);padding:8px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-5)">📍 Onde está</div>'
+      +'<div style="padding:11px 13px">';
+
+    h+='<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:9px">'
+      +'<b style="font-size:20px;color:var(--azul)">'+(saldoVivo!=null?saldoVivo.toLocaleString('pt-BR'):'—')+'</b>'
+      +'<span style="font-size:12.5px;color:var(--cinza-5)">no <b>Estoque Geral</b> — é este que a saída baixa</span></div>';
+
+    if(fisicos.length){
+      h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+        +'<thead><tr style="background:var(--cinza-1)">'
+        +'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Local</th>'
+        +'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Contado</th>'
+        +'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Quando</th></tr></thead><tbody>'
+        + fisicos.map(e=>'<tr><td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2)">'+nomeLocal(e.local_id)+'</td>'
+            +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);font-weight:700">'+Number(e.saldo).toLocaleString('pt-BR')+'</td>'
+            +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);color:var(--cinza-4)">'+dt(e.updated_at)+'</td></tr>').join('')
+        +'</tbody></table>'
+        +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Estes são a <b>foto da última contagem</b> de cada local, não saldo vivo — por isso não se somam ao Estoque Geral.</div>';
+    } else {
+      h+='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhum local físico com contagem para este item.</div>';
+    }
+
+    // ── lotes ──
+    h+='<div style="margin-top:13px;padding-top:11px;border-top:1px dashed var(--cinza-3)">'
+      +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-5);margin-bottom:7px">🏷️ Lotes e validade</div>';
+    if(ativos.length){
+      h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+        +'<thead><tr style="background:var(--cinza-1)">'
+        +'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Lote</th>'
+        +'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Validade</th>'
+        +'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Qtd</th>'
+        +(temLocal?'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Onde</th>':'')
+        +'</tr></thead><tbody>'
+        + ativos.map(l=>{
+            const venceu = l.validade && String(l.validade).slice(0,10) < hoje;
+            const perto  = !venceu && l.validade && String(l.validade).slice(0,10) <
+                           new Date(Date.now()+60*86400000).toISOString().slice(0,10);
+            const cor = venceu?'var(--vermelho)':(perto?'#B9770E':'var(--cinza-5)');
+            return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);font-family:ui-monospace,monospace">'+(l.lote||'—')+'</td>'
+              +'<td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);color:'+cor+';font-weight:'+(venceu||perto?'700':'400')+'">'
+                +dt(l.validade)+(venceu?' · vencido':(perto?' · vence em breve':''))+'</td>'
+              +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);font-weight:700">'+Number(l.qtd||0).toLocaleString('pt-BR')+'</td>'
+              +(temLocal?('<td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2);font-size:11.5px;color:'
+                  +(l.local_id==null?'var(--cinza-4)':'var(--cinza-5)')+'">'
+                  +(l.local_id==null?'<i>local não informado</i>'
+                    :(l.local_id===geralLocalId?'Estoque Geral <span style="color:var(--cinza-4)">· recém-chegado</span>':nomeLocal(l.local_id)))
+                  +'</td>'):'')
+              +'</tr>';
+          }).join('')
+        +'</tbody></table>'
+        +(temLocal
+          ? '<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px"><b>Estoque Geral</b> é o lote que a saída consome. O lote com nome de prateleira é a <b>foto da contagem</b> daquele local — os dois não se somam. Quem está como <i>local não informado</i> ainda não passou por contagem.</div>'
+          : '<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">O lote ainda é do <b>item</b>, não do local — falta rodar o <b>SQL 71</b> para o sistema guardar em qual prateleira está cada lote.</div>');
+      if(saldoVivo!=null && Math.abs(somaLotes-saldoVivo)>0.001){
+        h+='<div style="margin-top:8px;background:#FEF9E7;border-left:3px solid #B7950B;border-radius:0 8px 8px 0;padding:9px 12px;font-size:12.5px;color:#7D6608">'
+          +'Os lotes do Estoque Geral somam <b>'+somaLotes.toLocaleString('pt-BR')+'</b> e o saldo é <b>'+saldoVivo.toLocaleString('pt-BR')+'</b>. '
+          +'A diferença é normal quando a saída não escolhe lote — mas se for grande, o lote está desatualizado.</div>';
+      }
+    } else {
+      h+='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhum lote registrado'
+        +(m_controlaLote(mid)?' — e este item está marcado como <b>controla lote</b>.':'.')+'</div>';
+    }
+    h+='</div></div></div>';
+    el.innerHTML=h;
+  }catch(e){
+    el.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Não consegui ler onde o item está: '+(e.message||e)+'</div>';
+  }
+}
+function m_controlaLote(mid){ const m=pnMatFull[mid]; return !!(m&&m.controla_lote); }
+
 async function pnFichaSalvar(midClicado){
   // v4.36 — o Salvar não fazia NADA em silêncio quando pnFichaMid tinha sido
   // zerado por um render em segundo plano (a ficha aberta pelo Inventário vive
@@ -13400,14 +13529,16 @@ async function ivConfirmar(){
       const id=mv&&mv[0]&&mv[0].id;
       if(id) await sbFetch(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora });
     }
-    // 3) lotes contados viram a foto de lotes
+    // 3) lotes contados viram a foto de lotes DAQUELE LOCAL (v4.51)
+    //    o catch mudo daqui escondia justamente a perda de lote de outro local
+    await loteLocalOk();
     for(const it of ivItens){
       const lts=(it.lotes||[]).filter(x=>x.lote&&x.validade&&x.qtd>0);
       if(!lts.length) continue;
       try{
-        await sbFetch(`lotes?material_id=eq.${it.material_id}&status=eq.ativo`,'PATCH',{ status:'baixado' });
-        await sbFetch('lotes','POST', lts.map(x=>({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' })));
-      }catch(e){}
+        await sbFetch(loteFiltroContagem(it.material_id, it.local_id, geralId),'PATCH',{ status:'baixado' });
+        await sbFetch('lotes','POST', lts.map(x=>loteCom({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' }, it.local_id)));
+      }catch(e){ toast('⚠ Lote não gravado de "'+(typeof rcNomeMaterial==='function'?rcNomeMaterial(it.material_id):it.material_id)+'": '+(e.message||e),'erro'); }
     }
     // 4) fecha
     await sbFetch(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'fechado', fechado_por:quem, fechado_em:agora });
@@ -16127,6 +16258,7 @@ async function invFichaAbrirId(mid){
     if(!ov){ ov=document.createElement('div'); ov.id='inv-ficha-modal'; document.body.appendChild(ov); }
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto';
     ov.innerHTML='<div class="inv-ficha-holder" style="max-width:920px;width:100%">'+pnFichaHtml()+'</div>';
+    if(typeof pnFichaOnde==='function') pnFichaOnde(alvo.id);   // v4.50 — onde está e com que lote
   }catch(e){ toast('Erro ao abrir a ficha: '+(e.message||e),'erro'); }
 }
 // fecha a ficha no contexto certo: modal do Inventário ou seção Base do Painel
@@ -17034,10 +17166,14 @@ function dmlRender(){
         <div class="s">${dmlHist.length?(dmlNome(dmlHist[0].material_id)+' · '+(dmlHist[0].sentido==='GUARDAR'?'guardado':'retirado')):'nenhuma ainda'}</div></div>
     </div>
 
-    <input id="dml-busca" class="rel-busca" value="${(dmlBusca||'').replace(/"/g,'&quot;')}"
-      placeholder="procurar item… (vazio mostra só o que está no DML)"
-      style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte);margin-bottom:10px"
-      oninput="dmlBusca=this.value;clearTimeout(window._dmlb);window._dmlb=setTimeout(()=>{dmlRender();const e=document.getElementById('dml-busca');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},280)">
+    <div style="position:relative;margin-bottom:10px">
+      <input id="dml-busca" class="rel-busca" value="${(dmlBusca||'').replace(/"/g,'&quot;')}"
+        placeholder="procurar item… (vazio mostra só o que está no DML)" autocomplete="off"
+        style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)"
+        oninput="dmlSugerir(this.value)" onfocus="dmlSugerir(this.value)"
+        onkeydown="if(event.key==='Escape'){dmlFecharSug();this.blur();}">
+      <div id="dml-sug" style="display:none;position:absolute;z-index:60;left:0;right:0;top:100%;margin-top:3px;background:var(--branco);border:1.5px solid var(--cinza-2);border-radius:8px;box-shadow:0 10px 26px rgba(0,0,0,.14);max-height:290px;overflow:auto"></div>
+    </div>
 
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th class="num">Saldo total</th><th class="num">No DML</th>
@@ -17063,7 +17199,63 @@ function dmlRender(){
   if(dmlAberto) dmlPrever(dmlAberto.mid);
 }
 
-function dmlAbrir(mid, sentido){ dmlAberto = { mid, sentido }; dmlRender();
+// ═══ v4.50 — DROPDOWN DE ITENS NO DML ═══════════════════════════════════
+// Antes era só um campo de texto: para guardar algo que ainda não está no DML
+// era preciso adivinhar o nome quase inteiro. Agora a busca mostra a lista
+// enquanto se digita, com o que há no Arsenal e no DML de cada um — e clicar
+// já deixa a linha pronta na tabela abaixo.
+function dmlFecharSug(){ const s=document.getElementById('dml-sug'); if(s) s.style.display='none'; }
+function dmlSugerir(texto){
+  dmlBusca=texto;
+  // A tabela se redesenha depois de digitar — e o redesenho REFAZ o próprio
+  // dropdown, apagando a lista. Por isso ele é desenhado de novo logo após.
+  clearTimeout(window._dmlb);
+  window._dmlb=setTimeout(()=>{
+    dmlRender();
+    const e=document.getElementById('dml-busca');
+    if(e){ e.focus(); e.setSelectionRange(e.value.length,e.value.length); }
+    dmlDesenharSug();
+  },280);
+  dmlDesenharSug();
+}
+function dmlDesenharSug(){
+  const cx=document.getElementById('dml-sug'); if(!cx) return;
+  const termo=String(dmlBusca||'').trim().toUpperCase();
+  if(termo.length<2){ cx.style.display='none'; return; }
+  const achados=dmlMats
+    .filter(m=>m.nome.toUpperCase().indexOf(termo)>=0)
+    .sort((a,b)=>{
+      const na=(dmlNoDml[a.id]||0)>0?0:1, nb=(dmlNoDml[b.id]||0)>0?0:1;   // quem já está no DML primeiro
+      return na-nb || a.nome.localeCompare(b.nome,'pt-BR');
+    })
+    .slice(0,12);
+  if(!achados.length){
+    cx.innerHTML='<div style="padding:11px 13px;font-size:12.5px;color:var(--cinza-4)">Nenhum item com esse nome no catálogo.</div>';
+    cx.style.display='block'; return;
+  }
+  cx.innerHTML=achados.map(m=>{
+    const total=dmlSaldoTotal[m.id]||0, noDml=dmlNoDml[m.id]||0, ars=total-noDml;
+    return '<div onmousedown="event.preventDefault();dmlEscolher('+m.id+')" '
+      +'style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--cinza-2);display:flex;gap:10px;align-items:baseline"'
+      +' onmouseover="this.style.background=\'var(--cinza-1)\'" onmouseout="this.style.background=\'\'">'
+      +'<span style="flex:1;font-size:13px;font-weight:600;color:var(--cinza-5)">'+m.nome
+      +'<span style="display:block;font-size:10.5px;font-weight:400;color:var(--cinza-4)">'+(m.unidade||'')+'</span></span>'
+      +'<span style="font-size:11.5px;white-space:nowrap;color:var(--cinza-4)">'
+      +'arsenal <b style="color:'+(ars>0?'var(--azul)':'var(--cinza-3)')+'">'+dmlN(ars)+'</b>'
+      +' · DML <b style="color:'+(noDml>0?'#B9770E':'var(--cinza-3)')+'">'+dmlN(noDml)+'</b></span></div>';
+  }).join('');
+  cx.style.display='block';
+}
+function dmlEscolher(mid){
+  const m=dmlMats.find(x=>x.id===mid); if(!m) return;
+  dmlBusca=m.nome;
+  dmlFecharSug();
+  dmlRender();
+  // deixa a linha do item à vista, já com os botões de guardar/retirar
+  setTimeout(()=>{ const e=document.getElementById('dml-busca'); if(e) e.blur(); },30);
+}
+
+function dmlAbrir(mid, sentido){ dmlAberto = { mid, sentido }; dmlFecharSug(); dmlRender();
   setTimeout(()=>{ const e=document.getElementById('dml-q'); if(e) e.focus(); }, 60); }
 function dmlFechar(){ dmlAberto = null; dmlRender(); }
 
