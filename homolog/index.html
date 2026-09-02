@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.52d · planilha do CC só com itens do CC — higiene/copa/escritório fora</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.53 · diferenças de inventário nos custos · DML com marca e sem prender a busca</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11954,6 +11954,37 @@ async function pnCG_Render(){
     }
     econLinhas.sort((a,b)=>b.econ-a.econ);
   }
+  // ── v4.53 — DIFERENÇAS DE INVENTÁRIO do mês (pedido do financeiro, 02/09).
+  // A contagem fechada do mês gera AJUSTE_INVENTARIO com observação
+  // "Inventário #N de …". Valorização = diferença × custo do item (regra M:
+  // média das compras reais; amostra/sem compra real = custo zero).
+  // Unificações de SKU e a contagem do administrativo têm outra observação
+  // e ficam DE FORA — são acerto de cadastro, não perda nem sobra.
+  let invFaltas=0, invSobras=0, invLinhas=[], invRotulo='';
+  try{
+    const pm=mes.split('-').map(Number);
+    const proxMes=(pm[1]===12 ? (pm[0]+1)+'-01' : pm[0]+'-'+String(pm[1]+1).padStart(2,'0'));
+    const invsMes=(await sbFetch(`inventarios?select=id,data_contagem&status=eq.fechado&data_contagem=gte.${mes}-01&data_contagem=lt.${proxMes}-01&order=id.desc`))||[];
+    invRotulo=invsMes.map(i=>'contagem de '+((i.data_contagem||'').slice(0,10).split('-').reverse().join('/'))).join(' · ');
+    const porMat={};
+    for(const iv of invsMes){
+      const ajs=(await sbFetch(`movimentacoes?select=material_id,qtd&tipo=eq.AJUSTE_INVENTARIO&observacao=like.${encodeURIComponent('Inventário #'+iv.id+' de%')}&limit=1000`))||[];
+      for(const a of ajs){
+        const q=Number(a.qtd)||0; if(!q) continue;
+        (porMat[a.material_id]=porMat[a.material_id]||0); porMat[a.material_id]+=q;
+      }
+    }
+    for(const midStr of Object.keys(porMat)){
+      const midN=Number(midStr), q=porMat[midStr];
+      const custoUn=pnCusto(midN,1,mes);
+      const valDif=q*custoUn;
+      invLinhas.push({ nome:(pnUvp[midN]||{}).nome||('#'+midN), q, custoUn, val:valDif });
+      if(valDif<0) invFaltas+=valDif; else invSobras+=valDif;
+    }
+    invLinhas.sort((a,b)=>Math.abs(b.val)-Math.abs(a.val));
+  }catch(e){ console.warn('diferenças de inventário:', e); }
+  const invLiquido=invFaltas+invSobras;
+  const invSemCusto=invLinhas.filter(l=>l.q!==0&&!(l.custoUn>0)).length;
   // ── R$/paciente por MÉDICO (planilha + app)
   const porMedPac={}; for(const p of perMes){ if(!p.medico||p.medico==='—'||!(p.pac>0)) continue; (porMedPac[p.medico]=porMedPac[p.medico]||{c:0,p:0}); porMedPac[p.medico].c+=p.custo; porMedPac[p.medico].p+=p.pac; }
   // ── filtros (opções)
@@ -11975,6 +12006,10 @@ async function pnCG_Render(){
   Object.entries(porMedPac).forEach(([md,v])=>pnCGultimoCsv.push(['R$/paciente — médico',md+' ('+v.p+' pac.)','',(v.p?v.c/v.p:0).toFixed(2)]));
   econLinhas.forEach(e=>pnCGultimoCsv.push(['Economia',e.nome+' ('+money(e.de)+'→'+money(e.para)+')',Math.round(e.q),e.econ.toFixed(2)]));
   pnCGultimoCsv.push(['ECONOMIA TOTAL DO MÊS','','',econTotal.toFixed(2)]);
+  invLinhas.forEach(l=>pnCGultimoCsv.push(['Diferenças de inventário',l.nome,(l.q>0?'+':'')+l.q,l.val.toFixed(2)]));
+  pnCGultimoCsv.push(['DIFERENÇAS DE INVENTÁRIO — faltas','','',invFaltas.toFixed(2)],
+                     ['DIFERENÇAS DE INVENTÁRIO — sobras','','',invSobras.toFixed(2)],
+                     ['DIFERENÇAS DE INVENTÁRIO — líquido do mês','','',invLiquido.toFixed(2)]);
   // ── monta o card
   box.innerHTML=
     '<div class="pn-ct"><span>💼 Custos gerais da empresa — '+mes.split('-').reverse().join('/')+'</span><span class="pn-funcao">tudo num lugar só · clique nos blocos para abrir</span></div>'
@@ -12031,7 +12066,24 @@ async function pnCG_Render(){
     +D('🔧 Manutenção de instrumental', somaNf(manut), manut.length?listaNf(manut):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de manutenção neste mês.</div>')
     +D('🛒 Compras CC (entradas do mês)', compCC, '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Soma dos itens de NF de compra do mês, fora higiene.</div>')
     +D('🧼 Compras Higiene', compHig, '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Soma dos itens classe LIMPEZA nas NFs do mês.</div>')
-    +D('🔩 Compras CME (peças recebidas)', compCME, solsMes.length?('<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+solsMes.map(s=>'<tr><td style="padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+s.peca_nome+' ×'+s.qtd+'</td><td style="text-align:right;padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+money(Number(s.nf_valor)||Number(s.valor_total)||0)+'</td></tr>').join('')+'</tbody></table>'):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma peça recebida neste mês.</div>');
+    +D('🔩 Compras CME (peças recebidas)', compCME, solsMes.length?('<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tbody>'+solsMes.map(s=>'<tr><td style="padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+s.peca_nome+' ×'+s.qtd+'</td><td style="text-align:right;padding:3px 8px;border-bottom:1px solid var(--cinza-2)">'+money(Number(s.nf_valor)||Number(s.valor_total)||0)+'</td></tr>').join('')+'</tbody></table>'):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma peça recebida neste mês.</div>')
+    // v4.53 — o número do financeiro: quanto o inventário do mês custou (ou devolveu)
+    +D('📐 Diferenças de inventário'+(invRotulo?' — '+invRotulo:''), invLiquido,
+      (invLinhas.length
+        ? '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">'
+          +'<div style="flex:1;min-width:140px;background:#FDEDEC;border-radius:8px;padding:10px 12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--vermelho)">Faltas (perdas)</div><div style="font-size:17px;font-weight:800;color:var(--vermelho)">'+money(invFaltas)+'</div></div>'
+          +'<div style="flex:1;min-width:140px;background:#EAF2FB;border-radius:8px;padding:10px 12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--azul)">Sobras</div><div style="font-size:17px;font-weight:800;color:var(--azul)">'+money(invSobras)+'</div></div>'
+          +'<div style="flex:1;min-width:140px;background:var(--cinza-1);border-radius:8px;padding:10px 12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-5)">Líquido do mês</div><div style="font-size:17px;font-weight:800">'+money(invLiquido)+'</div></div>'
+          +'</div>'
+          +'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:8px">💰 <b>Para o rateio do financeiro:</b> use o <b>líquido</b> (ou só as faltas, se preferir o conservador) como custo do mês a dividir entre as cirurgias — mesma prática da lavanderia e da esterilização. Valorização pela regra da casa: custo médio das compras reais'+(invSemCusto?'; '+invSemCusto+' item(ns) de amostra/sem compra real valem R$ 0':'')+'. Unificações de cadastro e o inventário administrativo não entram.</div>'
+          +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px"><thead><tr><th style="text-align:left;padding:4px 8px;background:var(--cinza-1)">Item</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Diferença</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Custo unit.</th><th style="text-align:right;padding:4px 8px;background:var(--cinza-1)">Valor</th></tr></thead><tbody>'
+          +invLinhas.slice(0,40).map(l=>'<tr><td style="padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+l.nome+'</td>'
+            +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:700;color:'+(l.q<0?'var(--vermelho)':'var(--azul)')+'">'+(l.q>0?'+':'')+Math.round(l.q*100)/100+'</td>'
+            +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2)">'+(l.custoUn>0?money(l.custoUn):'<span style="color:var(--cinza-4)">R$ 0 (amostra)</span>')+'</td>'
+            +'<td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--cinza-2);font-weight:800;color:'+(l.val<0?'var(--vermelho)':(l.val>0?'var(--azul)':'var(--cinza-4)'))+'">'+money(l.val)+'</td></tr>').join('')
+          +'</tbody></table>'
+          +(invLinhas.length>40?'<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">…mais '+(invLinhas.length-40)+' item(ns) — a lista completa sai no 📊 Excel.</div>':'')
+        : '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhum inventário fechado com data neste mês.</div>'));
 }
 
 async function pnPerDrill(id, origem){
@@ -13599,6 +13651,11 @@ async function ivConfirmar(){
     `• ${ajustar.length} ajuste(s) no saldo do Estoque Geral\n`+
     `• ${naoContados} item(ns) não contados mantêm o saldo atual\n\n`+
     `Depois disso o saldo confirmado passa a valer como base — e as saídas do período já podem ser lançadas.`)) return;
+  // v4.53 — a confirmação grava centenas de registros um a um e levava minutos
+  // em silêncio: parecia travada (aconteceu no fechamento de 31/08). O botão
+  // agora vira o contador do progresso e trava o clique duplo.
+  const btnConf=(function(){ for(const b of document.querySelectorAll('button')){ if((b.getAttribute('onclick')||'')==='ivConfirmar()') return b; } return null; })();
+  const progresso=t=>{ if(btnConf){ btnConf.disabled=true; btnConf.textContent='⏳ '+t; } };
   try{
     const geralId=await getEstoqueGeralId();
     const agora=new Date().toISOString();
@@ -13609,7 +13666,10 @@ async function ivConfirmar(){
       const k = it.material_id + '_' + it.local_id;
       fotoPorChave[k] = (fotoPorChave[k]||0) + (Number(it.qtd_contada)||0);
     }
-    for(const k of Object.keys(fotoPorChave)){
+    const chavesFoto = Object.keys(fotoPorChave);
+    let feito = 0;
+    for(const k of chavesFoto){
+      progresso('gravando fotos… '+(++feito)+' de '+chavesFoto.length);
       const par = k.split('_');
       const matId = Number(par[0]), locId = Number(par[1]);
       const e=await sbFetch(`estoque?select=id&material_id=eq.${matId}&local_id=eq.${locId}&limit=1`);
@@ -13617,7 +13677,9 @@ async function ivConfirmar(){
       else await sbFetch('estoque','POST',{ material_id:matId, local_id:locId, saldo:fotoPorChave[k] });
     }
     // 2) ajustes no Estoque Geral
+    feito = 0;
     for(const l of ajustar){
+      progresso('aplicando ajustes… '+(++feito)+' de '+ajustar.length);
       const mv=await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:l.mid, local_id:geralId,
         qtd:l.dif, aprovado:false, registrado_por:quem,
         observacao:`Inventário #${ivAtual.id} de ${ivData(ivAtual.data_contagem)} — contado ${ivN(l.contado)} · sistema ${ivN(l.sistema)}` });
@@ -13640,7 +13702,10 @@ async function ivConfirmar(){
     toast(`Inventário de ${ivData(ivAtual.data_contagem)} confirmado ✓ — ${ajustar.length} ajuste(s). Já pode lançar as saídas.`,'sucesso');
     ivCarregar();
     if(typeof invCarregar==='function') invCarregar();
-  }catch(e){ toast('Erro ao confirmar: '+e.message,'erro'); }
+  }catch(e){
+    toast('Erro ao confirmar: '+e.message,'erro');
+    if(btnConf){ btnConf.disabled=false; btnConf.textContent='🔒 Confirmar inventário'; }
+  }
 }
 
 // aviso de contagem aberta nas telas de saída
@@ -17167,6 +17232,7 @@ let dmlAberto = null;    // {mid, sentido} da linha expandida
 function dmlN(v){ return Number(v||0).toLocaleString('pt-BR'); }
 function dmlArsenal(mid){ return (dmlSaldoTotal[mid]||0) - (dmlNoDml[mid]||0); }
 
+let dmlMarcas = {};   // v4.53 — material_id -> [marcas registradas no grupo]
 async function dmlCarregar(){
   const alvo = document.getElementById('dml-corpo'); if(!alvo) return;
   alvo.innerHTML = '<div class="inv-empty">Carregando o livro do DML…</div>';
@@ -17187,6 +17253,18 @@ async function dmlCarregar(){
       return;
     }
     dmlNoDml = {}; for(const r of sal) dmlNoDml[r.material_id] = Number(r.saldo_dml)||0;
+
+    // v4.53 — regra da gestão: transferir item de GRUPO escolhe a MARCA.
+    // As marcas moram no registro de marcas do grupo; sem registro, nada muda.
+    dmlMarcas = {};
+    try{
+      const mcs = (await sbFetch('material_codigo?select=material_id,marca&vigente=eq.true&marca=not.is.null&limit=1000')) || [];
+      for(const r of mcs){
+        if(!r.marca) continue;
+        (dmlMarcas[r.material_id] = dmlMarcas[r.material_id] || []);
+        if(!dmlMarcas[r.material_id].includes(r.marca)) dmlMarcas[r.material_id].push(r.marca);
+      }
+    }catch(e){ dmlMarcas = {}; }
 
     try{ dmlHist = (await sbFetch('dml_movimentos?select=*&order=criado_em.desc&limit=30')) || []; }
     catch(e){ dmlHist = []; }
@@ -17239,6 +17317,13 @@ function dmlRender(){
               <label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Quantidade (máximo ${dmlN(ab==='GUARDAR'?ars:noDml)})</label>
               <input type="number" id="dml-q" step="any" min="0" style="width:130px" value="${ab==='RETIRAR'?noDml:''}" oninput="dmlPrever(${m.id})">
             </div>
+            ${(dmlMarcas[m.id]&&dmlMarcas[m.id].length)?`<div style="display:flex;flex-direction:column;gap:3px">
+              <label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Marca</label>
+              <select id="dml-marca" style="min-width:150px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:8px;font-size:12.5px;font-family:var(--fonte)">
+                <option value="">qual marca?</option>
+                ${dmlMarcas[m.id].map(mk=>'<option>'+mk+'</option>').join('')}
+              </select>
+            </div>`:''}
             <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">
               <label style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--cinza-4)">Observação (opcional)</label>
               <input type="text" id="dml-o" placeholder="ex: chegou NF 1204, não coube no arsenal">
@@ -17266,7 +17351,8 @@ function dmlRender(){
       <input id="dml-busca" class="rel-busca" value="${(dmlBusca||'').replace(/"/g,'&quot;')}"
         placeholder="procurar item… (vazio mostra só o que está no DML)" autocomplete="off"
         style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 11px;font-size:13px;font-family:var(--fonte)"
-        oninput="dmlSugerir(this.value)" onfocus="dmlSugerir(this.value)"
+        oninput="dmlSugerir(this.value)" onfocus="if(!window._dmlRefoco)dmlSugerir(this.value)"
+        onblur="setTimeout(dmlFecharSug,150)"
         onkeydown="if(event.key==='Escape'){dmlFecharSug();this.blur();}">
       <div id="dml-sug" style="display:none;position:absolute;z-index:60;left:0;right:0;top:100%;margin-top:3px;background:var(--branco);border:1.5px solid var(--cinza-2);border-radius:8px;box-shadow:0 10px 26px rgba(0,0,0,.14);max-height:290px;overflow:auto"></div>
     </div>
@@ -17307,10 +17393,15 @@ function dmlSugerir(texto){
   // dropdown, apagando a lista. Por isso ele é desenhado de novo logo após.
   clearTimeout(window._dmlb);
   window._dmlb=setTimeout(()=>{
+    // v4.53 — o foco devolvido aqui disparava onfocus → dmlSugerir → outro
+    // redesenho, num laço sem fim que prendia a pessoa na tela. A bandeira
+    // _dmlRefoco distingue foco programático de foco de gente.
+    window._dmlRefoco=true;
     dmlRender();
     const e=document.getElementById('dml-busca');
     if(e){ e.focus(); e.setSelectionRange(e.value.length,e.value.length); }
     dmlDesenharSug();
+    setTimeout(()=>{ window._dmlRefoco=false; },80);
   },280);
   dmlDesenharSug();
 }
@@ -17394,9 +17485,14 @@ async function dmlGravar(mid){
     toast(sentido==='GUARDAR' ? 'Não dá para guardar mais do que há no Arsenal.' : 'Não dá para retirar mais do que há no DML.','erro');
     return;
   }
+  // v4.53 — item de grupo transfere COM a marca (fica registrada na observação;
+  // a coluna própria vem com o pacote definitivo de marca)
+  const marcasDoItem = dmlMarcas[mid]||[];
+  const marcaSel = ((document.getElementById('dml-marca')||{}).value||'').trim();
+  if(marcasDoItem.length && !marcaSel){ toast('Escolha a MARCA — este item é grupo com mais de uma marca.','erro'); return; }
   try{
     const r = await sbFetch('dml_movimentos','POST',{
-      material_id: mid, qtd: q, sentido, observacao: obs || null,
+      material_id: mid, qtd: q, sentido, observacao: ((marcaSel?('['+marcaSel+'] '):'')+obs) || null,
       registrado_por: (SESSAO ? SESSAO.nome : null),
       registrado_por_id: (SESSAO ? SESSAO.id : null) });
     if(!r || !r.length) throw new Error('sem permissão para gravar (RLS)');
