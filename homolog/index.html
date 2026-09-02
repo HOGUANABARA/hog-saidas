@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.52c · grupo contado por marca: linha repetida soma no grupo e não mexe no cadastro</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.52d · planilha do CC só com itens do CC — higiene/copa/escritório fora</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9844,7 +9844,10 @@ async function invExportar(){
     const localId = document.getElementById('inv-export-local').value;
     const locaisAlvo = localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais;
 
-    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,controla_lote&ativo=eq.true&order=nome.asc&limit=1000')) || [];
+    // v4.52d — a planilha do CC é SÓ do centro cirúrgico: higiene, copa e
+    // escritório têm inventário próprio e ficam fora (regra da gestão, 02/09).
+    // Item sem classe continua entrando (o or= preserva classe_compra nula).
+    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,controla_lote&ativo=eq.true&or=(classe_compra.is.null,classe_compra.not.in.(ADM_IMPRESSOS,ADM_EXPEDIENTE,LIMPEZA,COPA))&order=nome.asc&limit=1000')) || [];
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = e.saldo;
@@ -13405,10 +13408,11 @@ async function ivApurar(){
     // contados no inventário do estoque: apareciam como "não contado" indevidamente.
     let remessaSet=new Set();
     try{ const rr=await sbFetch('materiais?select=id&controla_remessa=eq.true&limit=500'); remessaSet=new Set((rr||[]).map(x=>x.id)); }catch(e){}
-    // v4.52b — itens do ADMINISTRATIVO têm contagem própria (tela do módulo):
-    // não entram como "não contado" no inventário do CC.
+    // v4.52b — itens do ADMINISTRATIVO têm contagem própria (tela do módulo).
+    // v4.52c — regra da gestão (02/09): higiene, copa e escritório NÃO fazem
+    // parte deste inventário — também não entram como "não contado".
     let admSet=new Set();
-    try{ const aa=await sbFetch('materiais?select=id&classe_compra=in.(ADM_IMPRESSOS,ADM_EXPEDIENTE)&limit=500'); admSet=new Set((aa||[]).map(x=>x.id)); }catch(e){}
+    try{ const aa=await sbFetch('materiais?select=id&classe_compra=in.(ADM_IMPRESSOS,ADM_EXPEDIENTE,LIMPEZA,COPA)&limit=500'); admSet=new Set((aa||[]).map(x=>x.id)); }catch(e){}
 
     // saídas lançadas DEPOIS que o item foi contado — divergência legítima, não erro de contagem
     const movDepois={};
