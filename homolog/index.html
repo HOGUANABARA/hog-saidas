@@ -307,6 +307,10 @@ details[open] summary { margin-bottom: 6px; }
 .hog-side{width:214px;flex-shrink:0;background:#fff;border-right:1px solid var(--cinza-2);padding:14px 0 30px;position:sticky;top:0;min-height:calc(100vh - 64px);max-height:100vh;overflow-y:auto}
 .hog-main{flex:1;min-width:0}
 .hog-main > .container{max-width:1180px}
+/* v4.52b — aba que mora FORA da moldura (higiene/administrativo): a moldura
+   vazia tinha min-height de uma tela inteira e virava um buraco em branco. */
+.hog-shell.encolhida{min-height:0}
+.hog-shell.encolhida .hog-main{display:none}
 .hs-grupo{margin-bottom:2px}
 .hs-cab{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;font-size:12px;font-weight:800;color:var(--cinza-4);text-transform:uppercase;letter-spacing:.4px;cursor:pointer;user-select:none}
 .hs-cab:hover{color:var(--azul)}
@@ -405,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.52 · lote por local + planilha do local completa, na ordem nova</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.52b · planilha do administrativo · sem buraco antes das telas de higiene/adm</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4403,6 +4407,11 @@ function trocarAba(aba) {
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
+  // v4.52b — essas abas moram fora da moldura do menu lateral: recolhe a
+  // moldura vazia (min-height de tela inteira) para não sobrar buraco em branco
+  { const fora = ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'].includes(aba);
+    const shell = document.querySelector('.hog-shell');
+    if(shell) shell.classList.toggle('encolhida', fora); }
   if (aba==='adm_inv')  { admInvCarregar(); }
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
@@ -16765,6 +16774,7 @@ async function alIgnorar(id){
       </select>
       <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="adm-so-contados" onchange="admInvRender()"> só o que eu já preenchi</label>
       <span style="flex:1"></span>
+      <button onclick="admExportar()" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">📄 Baixar planilha</button>
       <button id="adm-btn-gravar" onclick="admContagemRevisar()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">✔ Conferir e gravar contagem</button>
     </div>
     <div id="adm-tabela"></div>
@@ -17604,6 +17614,40 @@ async function admInvCarregar(){
     return;
   }
   admInvRender();
+}
+
+// v4.52b — planilha de contagem do administrativo, no visual das planilhas do
+// CC: conta-se no papel e digita-se na coluna "contei" da tela (não há subida).
+async function admExportar(){
+  try{
+    if(!admDados.length) await admInvCarregar();
+    if(!admDados.length){ toast('Sem itens para exportar.','erro'); return; }
+    const hj = new Date();
+    const hdrSaldo = 'SALDO ' + String(hj.getDate()).padStart(2,'0') + '/' + String(hj.getMonth()+1).padStart(2,'0');
+    const HDR = ['CÓDIGO','ITEM','CLASSE','UNIDADE',hdrSaldo,'CONTEI','OBSERVAÇÃO'];
+    const linhas = [HDR];
+    for(const r of admDados){
+      linhas.push([ r.codigo||'', r.material,
+        r.classe==='ADM_IMPRESSOS' ? 'IMPRESSOS' : 'EXPEDIENTE',
+        r.unidade_medida||'unidade', Number(r.saldo)||0, '', '' ]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(linhas);
+    ws['!cols'] = [{wch:12},{wch:46},{wch:12},{wch:12},{wch:10},{wch:10},{wch:26}];
+    ws['!autofilter'] = { ref: ws['!ref'] };
+    const bAll = (t=>({top:t,bottom:t,left:t,right:t}))({style:'thin',color:{rgb:'000000'}});
+    const rng = XLSX.utils.decode_range(ws['!ref']);
+    for(let R=rng.s.r; R<=rng.e.r; R++) for(let C=rng.s.c; C<=rng.e.c; C++){
+      const cel = ws[XLSX.utils.encode_cell({r:R,c:C})]; if(!cel) continue;
+      cel.s = R===0
+        ? { font:{name:'Calibri',sz:10,bold:true}, fill:{patternType:'solid',fgColor:{rgb:'D9D9D9'}},
+            alignment:{horizontal:'center',vertical:'center',wrapText:true}, border:bAll }
+        : { font:{name:'Calibri',sz:10}, alignment:{vertical:'center',wrapText:(C===1)}, border:bAll };
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ADMINISTRATIVO');
+    XLSX.writeFile(wb, 'Inventario_ADM_HOG_' + new Date().toISOString().split('T')[0] + '.xlsx');
+    toast('Planilha do administrativo exportada ✓ — conte no papel e digite na coluna "contei".','sucesso');
+  }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
 }
 
 function admFiltrar(){
