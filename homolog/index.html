@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.52b · planilha do administrativo · sem buraco antes das telas de higiene/adm</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.52c · grupo contado por marca: linha repetida soma no grupo e não mexe no cadastro</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -13312,6 +13312,15 @@ async function ivSubirLocal(localId, file){
     const iQtd =[1,2,3].map(k=>cab.indexOf('QTD '+k));
     const iDesc=cab.indexOf('DESCRIÇÃO NF'), iMarca=cab.indexOf('MARCA');
     const regs=[]; let ignoradas=0, naoReconhecidas=[];
+    // v4.52c — GRUPO CONTADO POR MARCA: o mesmo ID aparece em VÁRIAS linhas, uma
+    // por marca (regra da gestão: conta-se por marca, confere-se pelo total).
+    // Nessas linhas a MARCA é a marca CONTADA — nunca correção de cadastro.
+    // Correção de marca/descrição só vale para ID que aparece UMA vez na planilha.
+    const vezesId={};
+    for(let i=1;i<linhas.length;i++){
+      const r0=linhas[i]||[]; const v0=r0[iId];
+      if(v0!==undefined && v0!=='') vezesId[Number(v0)]=(vezesId[Number(v0)]||0)+1;
+    }
     // cadastro atual, para saber o que ela mudou na planilha
     const cadastroDesc={}, cadastroMarca={};
     if(iDesc>=0 || iMarca>=0){
@@ -13348,7 +13357,8 @@ async function ivSubirLocal(localId, file){
                   lotes: lotes.length?lotes:null });
       // v4.8 — a planilha traz DESCRIÇÃO NF e MARCA, e ela corrige a nomenclatura
       // ali. Antes essas colunas eram lidas e descartadas: o trabalho se perdia.
-      if(iDesc>=0 || iMarca>=0){
+      // v4.52c — só para ID de linha única (grupo por marca fica de fora, ver acima).
+      if((vezesId[mid]||0)<=1 && (iDesc>=0 || iMarca>=0)){
         const dNovo = iDesc>=0 ? String(r[iDesc]??'').trim() : null;
         const mNovo = iMarca>=0 ? String(r[iMarca]??'').trim() : null;
         const cad = catalogoMateriais.find(x=>x.id===mid) || {};
@@ -13395,6 +13405,10 @@ async function ivApurar(){
     // contados no inventário do estoque: apareciam como "não contado" indevidamente.
     let remessaSet=new Set();
     try{ const rr=await sbFetch('materiais?select=id&controla_remessa=eq.true&limit=500'); remessaSet=new Set((rr||[]).map(x=>x.id)); }catch(e){}
+    // v4.52b — itens do ADMINISTRATIVO têm contagem própria (tela do módulo):
+    // não entram como "não contado" no inventário do CC.
+    let admSet=new Set();
+    try{ const aa=await sbFetch('materiais?select=id&classe_compra=in.(ADM_IMPRESSOS,ADM_EXPEDIENTE)&limit=500'); admSet=new Set((aa||[]).map(x=>x.id)); }catch(e){}
 
     // saídas lançadas DEPOIS que o item foi contado — divergência legítima, não erro de contagem
     const movDepois={};
@@ -13438,6 +13452,7 @@ async function ivApurar(){
       const mid=Number(midStr);
       if(cont[mid]) continue;
       if(remessaSet.has(mid)) continue;   // v4.8 — vive no livro de remessas
+      if(admSet.has(mid)) continue;       // v4.52b — contagem própria do administrativo
       const sis=saldo[mid];
       if(sis===0) continue;
       linhas.push({ mid, nome:nome(mid), contado:null, sistema:sis, dif:null,
@@ -13583,11 +13598,19 @@ async function ivConfirmar(){
   try{
     const geralId=await getEstoqueGeralId();
     const agora=new Date().toISOString();
-    // 1) foto de alocação por local
+    // 1) foto de alocação por local — v4.52c: linhas por MARCA do mesmo item no
+    // mesmo local SOMAM na foto (antes a última linha sobrescrevia as outras)
+    const fotoPorChave = {};
     for(const it of ivItens){
-      const e=await sbFetch(`estoque?select=id&material_id=eq.${it.material_id}&local_id=eq.${it.local_id}&limit=1`);
-      if(e&&e.length) await sbFetch(`estoque?id=eq.${e[0].id}`,'PATCH',{ saldo: it.qtd_contada });
-      else await sbFetch('estoque','POST',{ material_id:it.material_id, local_id:it.local_id, saldo:it.qtd_contada });
+      const k = it.material_id + '_' + it.local_id;
+      fotoPorChave[k] = (fotoPorChave[k]||0) + (Number(it.qtd_contada)||0);
+    }
+    for(const k of Object.keys(fotoPorChave)){
+      const par = k.split('_');
+      const matId = Number(par[0]), locId = Number(par[1]);
+      const e=await sbFetch(`estoque?select=id&material_id=eq.${matId}&local_id=eq.${locId}&limit=1`);
+      if(e&&e.length) await sbFetch(`estoque?id=eq.${e[0].id}`,'PATCH',{ saldo: fotoPorChave[k] });
+      else await sbFetch('estoque','POST',{ material_id:matId, local_id:locId, saldo:fotoPorChave[k] });
     }
     // 2) ajustes no Estoque Geral
     for(const l of ajustar){
