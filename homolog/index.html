@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.54 · dash de volta — moldura fechava no meio do Inventário</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.55 · conferência da baixa: reprovada, observação e total</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15142,12 +15142,14 @@ function rmRenderFora(){
         <td>${rmEsc(rmBem(i.bem_id))}</td>
         <td style="text-align:center;font-weight:700;color:#6f42c1">${rmNum(i.qtd_enviada)}</td>
         <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-dev-${i.id}" value="${rmNum(i.qtd_enviada)}"></td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" min="0" id="rm-rep-${i.id}" value="0" title="Voltou, mas o fornecedor reprovou (RNC): não entra em casa — sai do livro com o motivo"></td>
+        <td><input type="text" id="rm-obs-${i.id}" placeholder="motivo · nº do RNC…" style="width:100%;min-width:150px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)"></td>
       </tr>`).join('');
     return `<div class="rm-card">
       <div class="rm-head roxo"><span>${rmRemessaTitulo(r)}</span>
         <span class="rm-count">enviada ${rmData(r.data_envio)}${dias!==null?` · ${dias} dia(s) fora`:''}</span></div>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou quanto?</th></tr></thead>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou quanto?</th><th style="text-align:center" title="Voltou, mas o fornecedor reprovou (RNC) — sai do livro">Reprovada</th><th>Observação</th></tr></thead>
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
@@ -15654,32 +15656,58 @@ async function rmRegistrarRetorno(remessaId){
   for(const i of itens){
     const el = document.getElementById('rm-dev-'+i.id);
     const dev = el ? parseFloat(el.value) : 0;
+    // v4.55 — "reprovada": voltou fisicamente, mas o fornecedor recusou o
+    // reprocessamento (RNC). Não entra em casa: sai do livro como PERDA com o
+    // motivo. A observação acompanha o item até o movimento e a pendência —
+    // é lá que alguém vai ler "por que não voltou" daqui a três semanas.
+    const elR = document.getElementById('rm-rep-'+i.id);
+    const rep = (elR && elR.value!=='') ? parseFloat(elR.value) : 0;
+    const elO = document.getElementById('rm-obs-'+i.id);
+    const obs = elO ? String(elO.value||'').trim() : '';
+    const env = rmNum(i.qtd_enviada);
     if(isNaN(dev) || dev<0){ toast('Quantidade inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
-    if(dev > rmNum(i.qtd_enviada)){ toast('"'+rmBem(i.bem_id)+'": voltou mais do que saiu. Confira.','erro'); return; }
-    dados.push({ item:i, dev, falta: rmNum(i.qtd_enviada)-dev });
+    if(isNaN(rep) || rep<0){ toast('Quantidade reprovada inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
+    if(dev+rep > env){ toast('"'+rmBem(i.bem_id)+'": voltou '+dev+' + reprovada '+rep+' passa do que saiu ('+env+'). Confira.','erro'); return; }
+    if(rep>0 && !obs){ toast('"'+rmBem(i.bem_id)+'": peça reprovada precisa do motivo na observação — o código ou o nº do RNC.','erro'); return; }
+    dados.push({ item:i, dev, rep, obs, falta: env-dev-rep });
   }
   // ═══ v4.24 — BAIXA DIDÁTICA: antes de gravar, a tela mostra exatamente o
   // que vai acontecer com cada item e como reverter. Nada de OK às cegas.
   const faltantes = dados.filter(d=>d.falta>0);
+  const reprovadas = dados.filter(d=>d.rep>0);
+  const td=(v,x)=>'<td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2);'+(x||'')+'">'+v+'</td>';
+  const th=(v,x)=>'<th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);'+(x||'text-align:center')+'">'+v+'</th>';
   let linhas='';
   dados.forEach(function(d){
-    linhas+='<tr><td style="padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmEsc(rmBem(d.item.bem_id))+'</td>'
-      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2)">'+rmNum(d.item.qtd_enviada)+'</td>'
-      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);color:var(--verde);font-weight:700">'+d.dev+'</td>'
-      +'<td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--cinza-2);'+(d.falta>0?'color:var(--vermelho);font-weight:800':'color:var(--cinza-3)')+'">'+(d.falta>0?d.falta:'—')+'</td></tr>';
+    linhas+='<tr>'+td(rmEsc(rmBem(d.item.bem_id)))
+      +td(rmNum(d.item.qtd_enviada),'text-align:center')
+      +td(d.dev,'text-align:center;color:var(--verde);font-weight:700')
+      +td(d.rep>0?d.rep:'—','text-align:center;'+(d.rep>0?'color:#B9770E;font-weight:800':'color:var(--cinza-3)'))
+      +td(d.falta>0?d.falta:'—','text-align:center;'+(d.falta>0?'color:var(--vermelho);font-weight:800':'color:var(--cinza-3)'))
+      +td(d.obs?rmEsc(d.obs):'<span style="color:var(--cinza-3)">—</span>','font-size:12px;color:var(--cinza-5)')
+      +'</tr>';
   });
+  // v4.55 — total: a soma é a conferência mais rápida contra o papel do fornecedor
+  const soma=k=>dados.reduce((s,d)=>s+(Number(d[k])||0),0);
+  const somaEnv=dados.reduce((s,d)=>s+rmNum(d.item.qtd_enviada),0);
+  const tt=(v,x)=>'<td style="padding:8px 10px;font-weight:800;background:var(--cinza-1);border-top:2px solid var(--cinza-3);'+(x||'')+'">'+v+'</td>';
+  const totais='<tr>'+tt('Total de peças')+tt(somaEnv,'text-align:center')+tt(soma('dev'),'text-align:center;color:var(--verde)')
+    +tt(soma('rep')||'—','text-align:center;color:#B9770E')+tt(soma('falta')||'—','text-align:center;color:var(--vermelho)')+tt('')+'</tr>';
   let ov=document.getElementById('rm-ret-modal');
   if(!ov){ ov=document.createElement('div'); ov.id='rm-ret-modal'; document.body.appendChild(ov); }
   window._rmRetPreview={remessaId:remessaId, dados:dados};
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
-  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:820px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
     +'<div class="rm-head azul"><span>📥 Conferência da baixa — remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</span><button class="rm-b claro" onclick="rmRetFechar()">✕</button></div>'
     +'<div style="padding:16px">'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-    +'<thead><tr><th style="text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Item</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Saiu</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Voltou</th><th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Vai faltar</th></tr></thead>'
-    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<thead><tr>'+th('Item','text-align:left')+th('Saiu')+th('Voltou')+th('Reprovada')+th('Vai faltar')+th('Observação','text-align:left')+'</tr></thead>'
+    +'<tbody>'+linhas+'</tbody><tfoot>'+totais+'</tfoot></table></div>'
     +'<div style="margin-top:12px;font-size:12.5px;line-height:1.7;color:var(--cinza-5)">'
     +'<div>✅ O que voltou <b>entra em EM CASA</b> agora.</div>'
+    +(reprovadas.length
+      ?'<div style="color:#B9770E">⛔ <b>Reprovada</b> pelo fornecedor <b>não entra em casa</b>: sai do livro como <b>perda</b>, com o motivo gravado. A caixa voltou, mas a peça não pode mais ser usada.</div>'
+      :'')
     +(faltantes.length
       ?('<div style="color:var(--vermelho)">⚠️ O que faltou <b>NÃO some</b>: vira <b>pendência</b> e fica listado em "Pendências de remessa" <b>até o fechamento do mês</b> — quando todas as saídas estiverem computadas, você lança o que sobrou no <b>custo do CC</b>.</div>'
         +'<div>↩️ Se a peça aparecer depois, o botão <b>"voltou depois"</b> na pendência devolve ao saldo — dá para reverter a qualquer momento.</div>')
@@ -15700,15 +15728,23 @@ async function rmRetornoExecutar(){
   const faltantes = dados.filter(d=>d.falta>0);
   const hoje = new Date().toISOString().slice(0,10);
   try{
-    for(const {item,dev,falta} of dados){
+    for(const {item,dev,rep,obs,falta} of dados){
       await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_devolvida:dev });
+      const sufixo = obs ? ' — '+obs : '';
       if(dev>0){
         await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'RETORNO', d_fora:-dev, d_casa:dev, remessa_id:remessaId,
-          data:hoje, registrado_por:rmQuem(), observacao:'Retorno da remessa '+(r.numero_bloco||'#'+remessaId) });
+          data:hoje, registrado_por:rmQuem(), observacao:'Retorno da remessa '+(r.numero_bloco||'#'+remessaId)+sufixo });
+      }
+      if(rep>0){
+        // v4.55 — reprovada no reprocessamento (RNC): voltou, mas sai do livro.
+        // Mesmo movimento da perda (d_fora negativo, sem d_casa): a peça deixa
+        // de estar fora e não entra em casa. O motivo vai na observação.
+        await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'PERDA', d_fora:-(rep||0), remessa_id:remessaId,
+          data:hoje, registrado_por:rmQuem(), observacao:'REPROVADA pelo fornecedor — remessa '+(r.numero_bloco||'#'+remessaId)+sufixo });
       }
       if(falta>0){
         await sbFetch('remessa_pendencias','POST',{ remessa_id:remessaId, remessa_item_id:item.id, bem_id:item.bem_id,
-          qtd:falta, status:'ABERTA', observacao:'Saiu na remessa '+(r.numero_bloco||'#'+remessaId)+' e não voltou' });
+          qtd:falta, status:'ABERTA', observacao:'Saiu na remessa '+(r.numero_bloco||'#'+remessaId)+' e não voltou'+sufixo });
       }
     }
     // A lavanderia cobra valor fixo por mês, não por remessa: o ciclo físico
