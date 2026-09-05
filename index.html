@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.53</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.54 · dash de volta — moldura fechava no meio do Inventário</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1618,7 +1618,6 @@ details[open] summary { margin-bottom: 6px; }
   </div>
 
 
-</div>
 
 <!-- MODAL REVISÃO -->
 <div class="modal-overlay" id="modal-revisao">
@@ -4407,11 +4406,14 @@ function trocarAba(aba) {
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
-  // v4.52b — essas abas moram fora da moldura do menu lateral: recolhe a
-  // moldura vazia (min-height de tela inteira) para não sobrar buraco em branco
-  { const fora = ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'].includes(aba);
-    const shell = document.querySelector('.hog-shell');
-    if(shell) shell.classList.toggle('encolhida', fora); }
+  // v4.54 — o "encolhida" da v4.52b remendava um sintoma: um </div> sobrando no
+  // fim do Inventário CC fechava a moldura no meio do arquivo e jogava painel,
+  // ocorrências, usuários, higiene e administrativo para fora dela (o painel
+  // aparecia abaixo da dobra — "sumiu o dash"). O </div> foi removido; agora
+  // TODAS as abas moram dentro da moldura, e encolher a moldura esconderia
+  // a própria aba (.encolhida oculta o .hog-main). Fica sempre desligado.
+  { const shell = document.querySelector('.hog-shell');
+    if(shell) shell.classList.remove('encolhida'); }
   if (aba==='adm_inv')  { admInvCarregar(); }
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
@@ -15726,8 +15728,13 @@ function rmRemessaPDF(remessaId){
   const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
   const itens=(r.remessa_itens||[]);
   const forn = r.fornecedor_id ? ((coFornecedores||[]).find(f=>f.id===r.fornecedor_id)||{}).nome : null;
-  const linhas=itens.map((i,ix)=>'<tr><td style="text-align:center">'+(ix+1)+'</td><td>'+rmEsc(rmBem(i.bem_id))+'</td><td style="text-align:center">'+rmNum(i.qtd_enviada)+'</td><td></td></tr>').join('');
-  const tot=itens.reduce((s,i)=>s+rmNum(i.qtd_enviada),0);
+  // v4.54 — o romaneio lia qtd_enviada do banco enquanto o botão Enviar lê o
+  // campo da tela (o campo não grava até o envio). Com a remessa em montagem,
+  // o papel saía com 1/2/87 e a caixa ia com 3/7/57. Agora o PDF lê o MESMO
+  // campo que o envio; quando o campo não existe (remessa já enviada), vale o banco.
+  const qtdDe=i=>{ const el=document.getElementById('rm-mi-'+i.id); const v=el?parseFloat(el.value):NaN; return isNaN(v)?rmNum(i.qtd_enviada):v; };
+  const linhas=itens.map((i,ix)=>'<tr><td style="text-align:center">'+(ix+1)+'</td><td>'+rmEsc(rmBem(i.bem_id))+'</td><td style="text-align:center">'+qtdDe(i)+'</td><td></td></tr>').join('');
+  const tot=itens.reduce((s,i)=>s+qtdDe(i),0);
   hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
     +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin-bottom:2px}'
     +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left}'
