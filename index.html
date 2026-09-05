@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.55 · conferência da baixa: reprovada, observação e total</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.56 · painel: valor comprado no mês no lugar de compra × consumo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11668,13 +11668,13 @@ function pnCustos(){
       </div>
       <div style="font-size:11px;color:var(--cinza-4);border-top:1px solid var(--cinza-2);margin-top:10px;padding-top:8px;line-height:1.6">
         📌 <b>O que entra nestas barras:</b> o <b>consumo</b> do mês — material que <b>saiu</b> para cirurgia, para os consultórios e as saídas diversas, valorado pelo último preço pago
-        (reprocessados entram pelo valor da remessa). <b>Não entram</b>: compras/notas do mês (isso é o card "Compra vs consumo"), lavanderia, esterilização e manutenção — esses aparecem
+        (reprocessados entram pelo valor da remessa). <b>Não entram</b>: compras/notas do mês (isso é o card "Compras do mês"), lavanderia, esterilização e manutenção — esses aparecem
         separados em <b>💼 Custos gerais</b>, cada um no seu bloco.
       </div>
     </div>
     <div class="pn-kpis">
       <div class="pn-kpi ama"><div class="pn-kl">Preços subindo</div><div class="pn-kv" style="color:var(--amarelo)">${subindo.length}</div><div class="pn-ks">itens c/ última compra +10% mais cara</div><div class="pn-kq">"O que renegociar este mês?"</div></div>
-      <div class="pn-kpi verd"><div class="pn-kl">Compra vs consumo — ${pnMesLabel(mes)}</div><div class="pn-kv" style="color:var(--verde)">${razao===null?'—':razao.toFixed(2)+'×'}</div><div class="pn-ks">comprou ${pnMoney0(compraMes)} · consumiu ${pnMoney0(consumoMes)}</div><div class="pn-kq">"Estou inflando ou queimando estoque?"</div></div>
+      <div class="pn-kpi verd"><div class="pn-kl">Compras do mês — ${pnMesLabel(mes)}</div><div class="pn-kv" style="color:var(--verde)">${pnMoney0(compraMes)}</div><div class="pn-ks">${nfsMes.length} nota(s) recebida(s) no mês</div><div class="pn-kq">"Quanto entrou de compra este mês?"</div></div>
     </div>
     <details class="pn-card" ${pnPerAberto?'open':''} ontoggle="pnPerAberto=this.open">
       <summary class="pn-ct" style="cursor:pointer;list-style:none"><span>▸ Custo por PERÍODO — o número-mãe</span>
