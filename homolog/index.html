@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.56 · painel: valor comprado no mês no lugar de compra × consumo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.57 · estoque por setor no Painel · higiene grava preço por unidade</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8764,7 +8764,10 @@ async function rcGravarNF(chave, confirmar){
       } else {
         movArr = await sbFetch('movimentacoes','POST', Object.assign({tipo:'ENTRADA_COMPRA'}, movBase));
         // compra real atualiza o preço de referência do item (custo de reposição)
-        try{ await sbFetch(`materiais?id=eq.${ordem.material_id}`,'PATCH',{ ultimo_valor_pago: val }); }catch(e){}
+        // v4.57 — grava o preço POR UNIDADE (valMov), não o da caixa (val).
+        // Gravar `val` inflava o valor em estoque de higiene por qtd_kit vezes:
+        // 40 cápsulas a R$ 26,99 "cada" quando a caixa de 10 custou R$ 26,99.
+        try{ await sbFetch(`materiais?id=eq.${ordem.material_id}`,'PATCH',{ ultimo_valor_pago: valMov }); }catch(e){}
       }
       const movId = movArr && movArr[0] && movArr[0].id;
       // Só a mudança de aprovado (via UPDATE) dispara o gatilho que soma o estoque.
@@ -10979,6 +10982,19 @@ function pnCirAbrir(k){ pnCirAberto = (pnCirAberto === k) ? null : k; pnCirurgia
 // ── SALDO & PREÇO — o que o Financeiro e a Diretoria enxergam ──
 // Sem cobertura, sem projeção, sem média: só o que é fato hoje.
 let pnSaldoBusca='';
+// v4.57 — TRÊS ESTOQUES, TRÊS VALORES. A chave já existia no banco
+// (materiais.classe_compra: LIMPEZA/COPA = Higiene, ADM_* = Administrativo,
+// o resto = Centro Cirúrgico) e as abas de Higiene e Inventário já a usavam;
+// só o Painel somava tudo junto — e o saco de lixo aparecia no valor do CC.
+let pnSaldoSetor='CC';
+const PN_SETORES=[ ['CC','🏥 Centro Cirúrgico'], ['HIG','🧼 Higiene / Copa'], ['ADM','🗂️ Administrativo'], ['TODOS','Σ Todos'] ];
+function pnSetorDe(mid){
+  const m=(typeof pnMatFull!=='undefined')&&pnMatFull[mid]; const c=(m&&m.classe_compra)||'';
+  if(c==='LIMPEZA'||c==='COPA') return 'HIG';
+  if(/^ADM_/.test(c)) return 'ADM';
+  return 'CC';
+}
+function pnSaldoSetorIr(s){ pnSaldoSetor=s; pnSaldos(); }
 function pnSaldos(){
   const el=document.getElementById('pn-sec-saldos'); if(!el) return;
   const linhas=(ccDados||[]).map(r=>{
@@ -10986,20 +11002,29 @@ function pnSaldos(){
     const uvp=(pnUvp[mid]&&pnUvp[mid].uvp)||0;
     const saldo=Number(r.saldo)||0;
     return { mid, nome:r.material||((pnUvp[mid]&&pnUvp[mid].nome)||('#'+mid)),
-             un:r.unidade_medida||'', saldo, uvp, valor:saldo*uvp };
+             un:r.unidade_medida||'', saldo, uvp, valor:saldo*uvp, setor:pnSetorDe(mid) };
   }).filter(x=>x.saldo!==0 || x.uvp>0);
+  const porSetor={CC:0,HIG:0,ADM:0,TODOS:0};
+  linhas.forEach(x=>{ porSetor[x.setor]+=x.valor; porSetor.TODOS+=x.valor; });
+  const doSetor = pnSaldoSetor==='TODOS' ? linhas : linhas.filter(x=>x.setor===pnSaldoSetor);
   const termo=(pnSaldoBusca||'').trim().toUpperCase();
-  const vis=termo?linhas.filter(x=>(x.nome||'').toUpperCase().indexOf(termo)>=0):linhas;
+  const vis=termo?doSetor.filter(x=>(x.nome||'').toUpperCase().indexOf(termo)>=0):doSetor;
   vis.sort((a,b)=>b.valor-a.valor);
   const total=vis.reduce((s,x)=>s+x.valor,0);
   const semPreco=vis.filter(x=>!(x.uvp>0)).length;
+  const rotSetor=(PN_SETORES.find(s=>s[0]===pnSaldoSetor)||['','—'])[1];
+  const chips=PN_SETORES.map(([k,rot])=>`<button onclick="pnSaldoSetorIr('${k}')"
+      style="border:1.5px solid ${k===pnSaldoSetor?'var(--azul-medio)':'var(--cinza-2)'};background:${k===pnSaldoSetor?'var(--azul-medio)':'#fff'};color:${k===pnSaldoSetor?'#fff':'var(--cinza-5)'};border-radius:20px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--fonte);display:flex;flex-direction:column;align-items:center;gap:2px;min-width:150px">
+      <span>${rot}</span><span style="font-size:14px;font-weight:800">${pnMoney(porSetor[k])}</span></button>`).join('');
   el.innerHTML=`
     <div class="pn-card" style="padding:12px 16px;font-size:12px;color:var(--cinza-4)">
       📦 <b>Saldo atual e último valor pago</b> — foto de hoje, item a item.
       Não há projeção nem média de consumo aqui: são os dois números que não dependem de estimativa.
+      <b>Cada estoque tem o seu valor</b> — clique no setor para ver os itens dele.
     </div>
+    <div class="pn-card" style="padding:12px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap">${chips}</div></div>
     <div class="pn-duo">
-      <div class="pn-card"><div class="pn-ct"><span>💵 Valor em estoque</span><span class="pn-funcao">saldo × último valor pago</span></div>
+      <div class="pn-card"><div class="pn-ct"><span>💵 Valor em estoque — ${rotSetor}</span><span class="pn-funcao">saldo × último valor pago</span></div>
         <div style="font-size:26px;font-weight:800;color:var(--azul);padding:6px 2px">${pnMoney(total)}</div>
         <div class="pn-nota">${vis.length} item(ns)${semPreco?` · ⚠️ ${semPreco} sem valor de compra, contam como zero`:''}</div>
       </div>
@@ -18211,7 +18236,8 @@ async function hgNovoSalvar(){
     const dup=await sbFetch('materiais?select=id,nome,classe_compra,ativo&nome=ilike.'+encodeURIComponent(nome)+'&limit=1');
     if(dup&&dup.length){ toast('Já existe um material com esse nome exato (id '+dup[0].id+', classe '+(dup[0].classe_compra||'—')+'). Use outro nome ou me chame para reativar/reclassificar.','erro'); return; }
     const ins=await sbFetch('materiais','POST',{ nome:nome, codigo:cod, marca:marca, unidade_medida:unid, qtd_kit:kit,
-      ultimo_valor_pago:(preco&&preco>0)?preco:null, exibir_dashboard:false, classe_compra:'LIMPEZA',
+      // v4.57 — o preço da cotação é da CAIXA; o cadastro guarda o da unidade (÷ qtd_kit)
+      ultimo_valor_pago:(preco&&preco>0)?((Number(kit)>1)?Math.round(preco/Number(kit)*100)/100:preco):null, exibir_dashboard:false, classe_compra:'LIMPEZA',
       classe_confirmada:true, fornecedor_padrao_id:fid });
     const mid=ins&&ins[0]&&ins[0].id;
     if(!mid) throw new Error('o banco não retornou o produto criado (RLS?)');
