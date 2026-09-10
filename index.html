@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.58 · avisos de saída fora do comum · Comprar organizado por consumo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.59 · compra pela régua única: consumo real dos procedimentos</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4555,6 +4555,7 @@ let ccVista = 'consumo';
 let ccReprocSet = new Set(), ccDuravelSet = new Set();
 function ccSetVista(v){ ccVista = v; ccRender(); }
 let ccPrevisao = null;   // pacientes previstos no mês (editável)
+let ccPrevisaoBase = null; // média histórica de pacientes/mês — a previsão editada vira multiplicador sobre ela
 let ccFiltroClasse = ''; // '' = todas
 let ccModoTriagem = false;
 let acResultados = [];
@@ -4574,11 +4575,11 @@ let ccIncluidoManual = {};   // material_id -> true
 
 const CC_INFO = {
   RECORRENTE:       { emoji:'🔁', nome:'Recorrentes',            grad:'linear-gradient(135deg,var(--azul),var(--azul-medio))', cor:'var(--azul-medio)', chip:'cc-azul',
-                      gat:'Consumo todo mês. Gatilho: cobertura < 1,5 mês' },
+                      gat:'Régua única: compra quando cobre < 1 mês de procedimentos' },
   POR_PROCEDIMENTO: { emoji:'🎯', nome:'Por procedimento',       grad:'linear-gradient(135deg,#4b2e91,#6f42c1)', cor:'#6f42c1', chip:'cc-roxo',
-                      gat:'Sai por paciente. Gatilho: projeção de cirurgias' },
+                      gat:'Mesma régua, pelo consumo real; a agenda multiplica' },
   CRITICO:          { emoji:'🚑', nome:'Críticos de segurança',  grad:'linear-gradient(135deg,#7B241C,var(--vermelho))', cor:'var(--vermelho)', chip:'cc-verm',
-                      gat:'Nunca abaixo do mínimo nem perto de vencer' },
+                      gat:'Régua + piso clínico: nunca abaixo do mínimo' },
   ESPORADICO:       { emoji:'💤', nome:'Esporádicos',            grad:'linear-gradient(135deg,#5D6D7E,#7F8C8D)', cor:'var(--cinza-4)', chip:'cc-cz',
                       gat:'Sem consumo regular — sob demanda, sem gatilho' },
 };
@@ -4622,8 +4623,9 @@ async function acCarregar(){
       try{
         const prev = await sbFetch('vw_previsao_cirurgias?select=*');
         const soma = (prev||[]).reduce((a,b)=>a+Number(b.media_mensal||0),0);
-        ccPrevisao = Math.max(1, Math.round(soma)) || 120;
-      }catch(e){ ccPrevisao = 120; }
+        ccPrevisaoBase = Math.max(1, Math.round(soma)) || 120;
+        ccPrevisao = ccPrevisaoBase;
+      }catch(e){ ccPrevisao = 120; ccPrevisaoBase = 120; }
     }
     ccRender();
   }catch(e){
@@ -4684,31 +4686,44 @@ const CC_PRIO = {
   ATENCAO:{ rot:'🟡 ATENÇÃO', chip:'cc-ama' },
   OK:{ rot:'✓ ok', chip:'cc-verd' },
 };
+// v4.59 — CONSUMO RECORRENTE: saiu em 2+ dos últimos 5 meses. Para TODOS eles vale
+// UMA régua só, em cima do consumo real dos procedimentos (o consumo médio mensal),
+// independente da classe. O antigo "consumo por paciente × previsão total" superestimava
+// 5–12× itens que não entram em toda cirurgia (bisturi 15 com 45 meses de estoque pedia
+// compra). A previsão de pacientes virou multiplicador: agenda 150 com média 123 ⇒ ×1,22.
+const CC_FORA_CC = ['LIMPEZA','ADM_EXPEDIENTE','ADM_IMPRESSOS'];
+function ccFator(){ return (ccPrevisao && ccPrevisaoBase) ? ccPrevisao/ccPrevisaoBase : 1; }
+function ccRecorrente(r){
+  if(CC_FORA_CC.includes(r.classe_compra)) return false;
+  return (Number(r.meses_com_consumo)||0) >= 2 && (Number(r.consumo_medio_mensal)||0) > 0;
+}
+function ccNecMes(r){ // necessidade p/ 1 mês de procedimentos, escalada pela agenda
+  return (Number(r.consumo_medio_mensal)||0) * ccFator();
+}
 function ccPrioridade(r){
   const gt = ccGatilho(r);
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
-  const cob = (r.cobertura_meses==null)?null:Number(r.cobertura_meses);
   const venc60 = Number(r.qtd_vencendo_60d)||0;
   const vencido = r.proxima_validade && r.proxima_validade < ccHoje();
-  if(gt.compra){
-    if(saldo<=0 || vencido) return 'URGENTE';
-    if(cob!==null && cob<=0.5 && (Number(r.consumo_medio_mensal)||0)>0) return 'URGENTE';
-    if(r.classe_compra==='CRITICO' && min>0 && (saldo-venc60) <= min*0.5) return 'URGENTE';
-    return 'COMPRAR';
+  const disp = saldo - venc60; // o que não está vencendo em 60 dias
+  if(ccRecorrente(r)){
+    const nec = ccNecMes(r);
+    const cob = nec>0 ? disp/nec : null;
+    if(vencido || disp<=0) return 'URGENTE';
+    if(cob!==null && cob<=0.5) return 'URGENTE';       // menos de 2 semanas
+    if(gt.compra) return 'COMPRAR';                    // menos de 1 mês (ou piso clínico)
+    if(cob!==null && cob<2) return 'ATENCAO';          // menos de 2 meses
+    if(r.classe_compra==='CRITICO' && min>0 && disp < min*1.2) return 'ATENCAO';
+    return 'OK';
   }
-  switch(r.classe_compra){
-    case 'RECORRENTE':
-      if(cob!==null && cob<2 && (Number(r.consumo_medio_mensal)||0)>0) return 'ATENCAO';
-      break;
-    case 'CRITICO':
-      if(venc60>0) return 'ATENCAO';
-      if(min>0 && (saldo-venc60) < min*1.2) return 'ATENCAO';
-      break;
-    case 'POR_PROCEDIMENTO': {
-      const cpp = (r.consumo_por_paciente==null)?null:Number(r.consumo_por_paciente);
-      if(cpp && cpp>0 && ccPrevisao && saldo < Math.ceil(cpp*ccPrevisao)*1.2) return 'ATENCAO';
-      break;
+  if(r.classe_compra==='CRITICO'){                     // sem consumo: só o piso clínico segura
+    if(gt.compra){
+      if(vencido || saldo<=0) return 'URGENTE';
+      if(min>0 && disp <= min*0.5) return 'URGENTE';
+      return 'COMPRAR';
     }
+    if(venc60>0) return 'ATENCAO';
+    if(min>0 && disp < min*1.2) return 'ATENCAO';
   }
   return 'OK';
 }
@@ -4718,48 +4733,44 @@ function ccPrioChip(r){
   return `<span class="cc-chip ${CC_PRIO[p].chip}" style="margin-left:6px">${CC_PRIO[p].rot}</span>`;
 }
 
-// gatilho por classe — retorna {compra, motivo, sugestao, chip}
+// gatilho — retorna {compra, motivo, sugestao, chip, nec}
+// Régua única (v4.59): cobertura = (saldo − vencendo 60d) ÷ necessidade do mês.
+// Compra quando cobre menos de 1 mês; sugestão repõe para 2 meses. CRITICO tem,
+// além da régua, o piso clínico (mínimo) — remédio de emergência não pode faltar.
 function ccGatilho(r){
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
-  const cm = Number(r.consumo_medio_mensal)||0;
-  const cob = (r.cobertura_meses===null||r.cobertura_meses===undefined) ? null : Number(r.cobertura_meses);
-  const cpp = (r.consumo_por_paciente===null||r.consumo_por_paciente===undefined) ? null : Number(r.consumo_por_paciente);
   const venc60 = Number(r.qtd_vencendo_60d)||0;
   const vencido = r.proxima_validade && r.proxima_validade < ccHoje();
-  switch(r.classe_compra){
-    case 'RECORRENTE': {
-      if(cm > 0 && cob !== null && cob < 1.5){
-        const sug = Math.max(0, Math.ceil(cm*2 - saldo));
-        return { compra: sug>0, motivo:`cobertura ${Math.round(cob*30)} dias`, sugestao:sug,
-                 chip: cob<=0?'cc-verm':(cob<1?'cc-lar':'cc-ama') };
-      }
-      return { compra:false };
+  const disp = saldo - venc60;
+  if(ccRecorrente(r)){
+    const nec = ccNecMes(r);
+    const cob = nec>0 ? disp/nec : null;
+    const alvo = Math.ceil(nec*2);
+    if(vencido) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor',
+                         sugestao:Math.max(0, alvo - Math.max(0,disp)), nec:Math.ceil(nec), chip:'cc-verm' };
+    if(cob !== null && cob < 1){
+      const motivo = venc60>0
+        ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(disp)} · cobre ${Math.max(0,Math.round(cob*30))} dias`
+        : `cobre ${Math.max(0,Math.round(cob*30))} dias de procedimentos`;
+      return { compra:true, motivo, sugestao:Math.max(0, alvo - Math.max(0,disp)), nec:Math.ceil(nec),
+               chip: cob<=0.5?'cc-verm':'cc-lar' };
     }
-    case 'POR_PROCEDIMENTO': {
-      if(cpp && cpp > 0 && ccPrevisao){
-        const nec = Math.ceil(cpp * ccPrevisao);
-        const falta = nec - saldo;
-        return { compra: falta>0, motivo:`necessidade ${nec} p/ ${ccPrevisao} pacientes`, sugestao:Math.max(0,falta),
-                 nec, chip: falta>0?'cc-verm':(saldo < nec*2 ? 'cc-ama' : 'cc-verd') };
-      }
-      if(cm > 0 && cob !== null && cob < 1){
-        return { compra:true, motivo:`sem histórico p/ paciente · cobertura ${Math.round(cob*30)} dias`,
-                 sugestao:Math.max(0, Math.ceil(cm*1.5 - saldo)), chip:'cc-lar' };
-      }
-      return { compra:false };
+    if(r.classe_compra==='CRITICO' && min>0 && disp < min){
+      return { compra:true, motivo:`piso clínico: ${acN0(disp)} < mín ${acN0(min)}`,
+               sugestao:Math.max(0, Math.ceil(min*2 - disp)), nec:Math.ceil(nec), chip:'cc-ama' };
     }
-    case 'CRITICO': {
-      const sobrev = saldo - venc60;
-      if(vencido) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor', sugestao:Math.max(0, min - sobrev), chip:'cc-verm' };
-      if(min > 0 && sobrev < min){
-        const motivo = venc60 > 0 ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(sobrev)} < mín ${acN0(min)}`
-                                  : `saldo ${acN0(saldo)} < mín ${acN0(min)}`;
-        return { compra:true, motivo, sugestao:Math.max(0, Math.ceil(min*2 - sobrev)), chip: saldo<=min*0.5?'cc-verm':'cc-ama' };
-      }
-      return { compra:false };
-    }
-    default: return { compra:false };
+    return { compra:false, nec:Math.ceil(nec) };
   }
+  if(r.classe_compra==='CRITICO'){
+    if(vencido) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor', sugestao:Math.max(0, min - disp), chip:'cc-verm' };
+    if(min > 0 && disp < min){
+      const motivo = venc60 > 0 ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(disp)} < mín ${acN0(min)}`
+                                : `saldo ${acN0(saldo)} < mín ${acN0(min)}`;
+      return { compra:true, motivo, sugestao:Math.max(0, Math.ceil(min*2 - disp)), chip: saldo<=min*0.5?'cc-verm':'cc-ama' };
+    }
+    return { compra:false };
+  }
+  return { compra:false };
 }
 
 function ccResumo(){
@@ -4827,7 +4838,13 @@ function ccTagClasse(r){
   </select>`;
 }
 function ccCob(r){
-  const cob = (r.cobertura_meses===null||r.cobertura_meses===undefined)?null:Number(r.cobertura_meses);
+  let cob;
+  if(ccRecorrente(r)){ // v4.59 — mesma conta da régua: desconta o que vence em 60d e escala pela agenda
+    const nec = ccNecMes(r);
+    cob = nec>0 ? ((Number(r.saldo)||0) - (Number(r.qtd_vencendo_60d)||0)) / nec : null;
+  } else {
+    cob = (r.cobertura_meses===null||r.cobertura_meses===undefined)?null:Number(r.cobertura_meses);
+  }
   if(cob===null) return '—';
   const pct = Math.max(2, Math.min(100, cob/3*100));
   const cor = cob<=0?'var(--vermelho)':(cob<1?'#D35400':(cob<1.5?'#B7950B':(cob<3?'var(--azul-medio)':'var(--verde)')));
@@ -5039,7 +5056,7 @@ function ccVistaConsumoHtml(dados){
 function ccPrevBox(){
   return `<div class="cc-prev">📅 <b>Pacientes previstos no mês:</b>
     <input type="number" min="1" value="${ccPrevisao}" onchange="ccSetPrevisao(this.value)">
-    <span class="cc-chip cc-roxo">sugerido pela média dos últimos meses ✎ editável — a lista recalcula na hora</span></div>`;
+    <span class="cc-chip cc-roxo">média dos últimos meses: ${ccPrevisaoBase??'—'} ✎ editável — agenda maior ⇒ necessidade sobe na mesma proporção, a lista recalcula na hora</span></div>`;
 }
 function ccSetPrevisao(v){
   const n = parseInt(v); if(!n || n<1){ toast('Valor inválido.','erro'); return; }
@@ -5096,7 +5113,7 @@ function ccTabela(classe, rows, mostrarTodos){
   }
 
   if(classe==='POR_PROCEDIMENTO'){
-    return `<table><thead><tr><th></th><th>Item</th><th class="num">Cons./paciente</th><th class="num">Necessidade</th><th class="num">Saldo</th><th class="num">Falta</th><th>Situação</th>${FONTES_TH}</tr></thead><tbody>` +
+    return `<table><thead><tr><th></th><th>Item</th><th class="num">Cons./paciente</th><th class="num">Necessidade (mês)</th><th class="num">Saldo</th><th class="num">Sugerido (2m)</th><th>Situação</th>${FONTES_TH}</tr></thead><tbody>` +
       visiveis.map(r=>{
         const gt=g(r);
         const cpp = r.consumo_por_paciente!=null ? Number(r.consumo_por_paciente).toFixed(2) : '—';
