@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.57 · estoque por setor no Painel · higiene grava preço por unidade</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.58 · avisos de saída fora do comum · Comprar organizado por consumo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2951,6 +2951,62 @@ async function confirmarEnvio() {
   await enviarAprovacao();
 }
 
+// ═══ v4.58 — GATILHOS DE ATENÇÃO: combinação fora do padrão da casa ══════
+// Caso real (10/09): a técnica lançou outro médico num dia de fellow do
+// Dr Lucas e ninguém percebeu até a aprovação. O padrão vem do PRÓPRIO
+// histórico (120 dias) — nada de cadastro novo para manter — e as regras
+// fortes da agenda (segunda = ensino do Dr Lucas) entram por cima.
+// Nunca trava: no registro pede confirmação, na aprovação marca com ⚠.
+let hogPadraoCache = null;
+async function hogPadraoCarregar(){
+  if (hogPadraoCache) return hogPadraoCache;
+  try{
+    const desde = new Date(Date.now() - 120*86400000).toISOString().slice(0,10);
+    const pers = (await sbFetch(`periodos_cirurgicos?select=data,fellow,qtd_pacientes,medicos(nome)&data=gte.${desde}&limit=1000`)) || [];
+    const porMedico = {};
+    for (const p of pers){
+      const nome = ((p.medicos && p.medicos.nome) || '').toUpperCase(); if(!nome) continue;
+      const dow = new Date(p.data + 'T12:00:00').getDay();
+      const m = porMedico[nome] = porMedico[nome] || { total:0, porDow:{}, fellowDow:{}, maxPac:0 };
+      m.total++; m.porDow[dow] = (m.porDow[dow]||0) + 1;
+      const f = m.fellowDow[dow] = m.fellowDow[dow] || { sim:0, nao:0 };
+      if (p.fellow) f.sim++; else f.nao++;
+      const q = Number(p.qtd_pacientes)||0; if (q > m.maxPac) m.maxPac = q;
+    }
+    hogPadraoCache = { porMedico };
+  }catch(e){ hogPadraoCache = { porMedico: {} }; }
+  return hogPadraoCache;
+}
+const HOG_DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+function hogForaDoPadrao(medicoNome, dataISO, fellow, totalPac){
+  const avisos = [];
+  if (!hogPadraoCache || !medicoNome || !dataISO) return avisos;
+  const nome = String(medicoNome).toUpperCase();
+  const dow = new Date(dataISO + 'T12:00:00').getDay();
+  if (isNaN(dow)) return avisos;
+  const ehLucas = nome.indexOf('LUCAS') >= 0;
+  // regra forte da agenda: segunda-feira é o dia de ensino (fellow) do Dr Lucas
+  if (dow === 1 && fellow && !ehLucas)
+    avisos.push('segunda-feira é o dia de ensino (fellow) do Dr Lucas — aqui está ' + medicoNome);
+  if (dow === 1 && ehLucas && !fellow)
+    avisos.push('segunda do Dr Lucas costuma ser dia de ensino — Fellow está marcado "Não"');
+  const m = hogPadraoCache.porMedico[nome];
+  if (m && m.total >= 6){
+    if (!m.porDow[dow])
+      avisos.push(medicoNome + ' não tem registro de ' + HOG_DIAS_SEMANA[dow] + ' nos últimos meses');
+    const f = m.fellowDow[dow];
+    if (!(ehLucas && dow === 1) && f){
+      if (fellow && f.sim === 0 && f.nao >= 3)
+        avisos.push('fellow "Sim" — ' + medicoNome + ' nunca teve dia de ensino de ' + HOG_DIAS_SEMANA[dow]);
+      if (!fellow && f.nao === 0 && f.sim >= 3)
+        avisos.push(HOG_DIAS_SEMANA[dow] + ' de ' + medicoNome + ' sempre foi com fellow — aqui está "Não"');
+    }
+    if (totalPac > 0 && m.maxPac > 0 && totalPac > m.maxPac * 1.5)
+      avisos.push(totalPac + ' pacientes — o maior registro de ' + medicoNome + ' até hoje foi ' + m.maxPac);
+  }
+  return avisos;
+}
+
 // ── ENVIAR PARA APROVAÇÃO ─────────────────────────────────────
 async function enviarAprovacao() {
   const medico = document.getElementById('sel-medico').value;
@@ -2963,6 +3019,15 @@ async function enviarAprovacao() {
 
   const itens = materiaisTabela.filter(m => m.qtds.some(q => parseFloat(q) > 0));
   if (!itens.length)          { toast('Informe a quantidade de pelo menos um material.', 'erro'); return; }
+
+  // v4.58 — gatilhos de atenção: fora do padrão pede confirmação, não trava
+  try{
+    await hogPadraoCarregar();
+    const fellowSel = document.getElementById('sel-fellow').value === 'true';
+    const totalPac = tipos.reduce((s,t)=>s+(Number(t.pacientes)||0),0);
+    const avisos = hogForaDoPadrao(medico, data, fellowSel, totalPac);
+    if (avisos.length && !confirm('⚠️ FORA DO COMUM — confira antes de enviar:\n\n• ' + avisos.join('\n• ') + '\n\nEnviar mesmo assim?')) return;
+  }catch(e){}
 
   const tiposComProto = tipos.map(t => ({ ...t, protocolosLabel: (t.protocolos||[]).join(' + ') || '—' }));
   const reg = { id: Date.now(), medico, data, fellow: document.getElementById('sel-fellow').value, tipos: tiposComProto, itens, registrado_em: new Date().toLocaleString('pt-BR'), status: 'pendente' };
@@ -3127,6 +3192,7 @@ async function carregarPendentes() {
       g.itens = ordenarMateriais(g.itens);
     }
     atualizarBadge();
+    try{ await hogPadraoCarregar(); }catch(e){}   // v4.58 — padrão p/ os chips ⚠
     renderizarPendentes();
   } catch(e) {}
 }
@@ -3160,6 +3226,10 @@ function apdMeta(p, ehDiversa, tipos, data){
   // num campo que ninguém abre.
   const obsMed = /^Médico externo:/i.test(per.observacao||'') ? String(per.observacao).replace(/^Médico externo:\s*/i,'').trim() : '';
 
+  // v4.58 — combinação fora do padrão chega marcada na aprovação
+  const avisosPadrao = (typeof hogForaDoPadrao === 'function' && per.data)
+    ? hogForaDoPadrao((p.periodo && p.periodo.medicos && p.periodo.medicos.nome) || '', per.data, !!per.fellow, pac)
+    : [];
   const contexto = [
     '📅 ' + (data || '—'),
     obsMed ? `<b style="color:var(--azul)">🩺 ${obsMed}</b>` : '',
@@ -3168,6 +3238,7 @@ function apdMeta(p, ehDiversa, tipos, data){
     per.protocolo  ? '💉 ' + per.protocolo  : null,
     per.modalidade ? '🏷️ ' + per.modalidade : null,
     per.fellow     ? '👨‍⚕️ com fellow'       : null,
+    avisosPadrao.length ? `<b style="color:#B9770E">⚠ fora do comum: ${avisosPadrao.join(' · ')}</b>` : null,
   ].filter(Boolean).join(sep);
 
   const porPac = pac > 0
@@ -4477,6 +4548,12 @@ window.addEventListener('load', () => {
 // ═══ ABA COMPRAS — ETAPA 1 POR CLASSES (v3.1) · lê vw_compras_classes ═══
 let acFornecedores = [];
 let ccDados = [];        // linhas da vw_compras_classes
+// v4.58 — vista por CONSUMO (pedido da gestão 10/09): consumo mensal ·
+// sem consumo · duráveis · reprocessados. Duráveis vêm de materiais.duravel
+// (SQL 81); sem o SQL a seção fica vazia e nada quebra.
+let ccVista = 'consumo';
+let ccReprocSet = new Set(), ccDuravelSet = new Set();
+function ccSetVista(v){ ccVista = v; ccRender(); }
 let ccPrevisao = null;   // pacientes previstos no mês (editável)
 let ccFiltroClasse = ''; // '' = todas
 let ccModoTriagem = false;
@@ -4523,6 +4600,9 @@ async function acCarregar(){
       todosOsMateriais = catalogoMateriais.map(m=>m.nome);
     }
     ccDados = (await sbFetch('vw_compras_classes?select=*&limit=1000')) || [];
+    // v4.58 — lentes da vista por consumo (a view não traz esses dois campos)
+    try{ const rr = await sbFetch('materiais?select=id&controla_remessa=eq.true&limit=500'); ccReprocSet = new Set((rr||[]).map(x=>x.id)); }catch(e){ ccReprocSet = new Set(); }
+    try{ const dd = await sbFetch('materiais?select=id&duravel=eq.true&limit=500'); ccDuravelSet = new Set((dd||[]).map(x=>x.id)); }catch(e){ ccDuravelSet = new Set(); }
     // cadastro complementar (descrição NF, embalagem) — a view não traz
     try{
       const cad = await sbFetch('materiais?select=id,descricao_nf,qtd_kit,unidade_medida,ordem_compra&limit=1000');
@@ -4871,6 +4951,15 @@ function ccRender(){
         ${manuais.map(r=>`<span style="cursor:pointer;color:var(--azul);font-weight:700" onclick="ccTirarIncluido(${r.material_id})">✕ ${r.material}</span>`).join(' · ')}
       </div></div></div>`;
   }
+  // v4.58 — seletor de organização (a vista por consumo é a padrão)
+  html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <b style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4)">Organizar por:</b>
+    <button onclick="ccSetVista('consumo')" style="border:1.5px solid ${ccVista==='consumo'?'var(--azul)':'var(--cinza-2)'};background:${ccVista==='consumo'?'var(--azul-claro)':'var(--branco)'};color:${ccVista==='consumo'?'var(--azul)':'var(--cinza-5)'};border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--fonte)">📈 consumo</button>
+    <button onclick="ccSetVista('classe')" style="border:1.5px solid ${ccVista==='classe'?'var(--azul)':'var(--cinza-2)'};background:${ccVista==='classe'?'var(--azul-claro)':'var(--branco)'};color:${ccVista==='classe'?'var(--azul)':'var(--cinza-5)'};border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--fonte)">🏷️ classe de compra</button>
+  </div>`;
+  if(ccVista==='consumo' && !ccModoTriagem && !ccFiltroClasse){
+    html += ccVistaConsumoHtml(dados);
+  } else
   for(const classe of CC_ORDEM){
     if(ccFiltroClasse && classe!==ccFiltroClasse) continue;
     const i = CC_INFO[classe];
@@ -4902,6 +4991,49 @@ function ccRender(){
     + (html || '<div class="ac-empty">Nada a mostrar com os filtros atuais.</div>');
   ccFiltrar();
   ccAtualizaBotaoSel();
+}
+
+// v4.58 — as quatro seções da vista por consumo. Reprocessado e durável têm
+// precedência; o resto se divide entre "tem consumo" e "não tem". Dentro de
+// cada seção os itens continuam nas tabelas da própria classe (colunas certas).
+function ccVistaConsumoHtml(dados){
+  const secoes = [
+    { rot:'📈 CONSUMO MENSAL — o que a operação usa', grad:'linear-gradient(135deg,#1B4F72,#2E86AB)', aberto:true,  todos:false,
+      f:r => !ccReprocSet.has(r.material_id) && !ccDuravelSet.has(r.material_id) && (Number(r.consumo_medio_mensal)||0) > 0 },
+    { rot:'💤 SEM CONSUMO em 3 meses — só compra consciente', grad:'', aberto:false, todos:true,
+      f:r => !ccReprocSet.has(r.material_id) && !ccDuravelSet.has(r.material_id) && !((Number(r.consumo_medio_mensal)||0) > 0) },
+    { rot:'🔧 DURÁVEIS — equipamento, não consumo', grad:'', aberto:false, todos:true,
+      f:r => ccDuravelSet.has(r.material_id) && !ccReprocSet.has(r.material_id) },
+    { rot:'🔁 REPROCESSADOS — vivem no livro de remessas', grad:'', aberto:false, todos:true,
+      f:r => ccReprocSet.has(r.material_id) },
+  ];
+  let out = '';
+  for(const s of secoes){
+    const rows = dados.filter(s.f);
+    if(!rows.length){
+      if(s.rot.indexOf('DURÁVEIS')>=0 && !ccDuravelSet.size)
+        out += `<div class="cc-bloco"><div style="padding:10px 16px;font-size:12px;color:var(--cinza-4)">🔧 DURÁVEIS — para esta seção funcionar, rode o SQL 81 (marca os equipamentos no cadastro).</div></div>`;
+      continue;
+    }
+    const porClasse = {};
+    for(const r of rows){ const c = r.classe_compra||'ESPORADICO'; (porClasse[c]=porClasse[c]||[]).push(r); }
+    const corpo = CC_ORDEM.filter(c=>porClasse[c]).map(c=>{
+      const i = CC_INFO[c] || CC_INFO.ESPORADICO;
+      return `<div style="padding:6px 10px;font-size:10px;font-weight:800;text-transform:uppercase;color:${i.cor}">${i.emoji} ${i.nome} (${porClasse[c].length})</div>`
+        + (c==='POR_PROCEDIMENTO' ? ccPrevBox() : '')
+        + ccTabela(c, porClasse[c], s.todos);
+    }).join('');
+    const emCompra = rows.filter(r=>ccGatilho(r).compra && !ccAndamento[r.material_id]).length;
+    if(s.aberto){
+      out += `<div class="cc-bloco"><div class="cc-bhead" style="background:${s.grad}">
+        <span>${s.rot} (${rows.length}${emCompra?` · ${emCompra} com gatilho`:''})</span></div>
+        <div class="cc-bbody">${corpo}</div></div>`;
+    } else {
+      out += `<div class="cc-bloco"><details><summary style="cursor:pointer;list-style:none;padding:12px 16px;font-size:13px;font-weight:800;color:var(--cinza-4)">${s.rot} (${rows.length}${emCompra?` · ${emCompra} com gatilho`:''}) ▸</summary>
+        <div class="cc-bbody" style="border-top:1px solid var(--cinza-2)">${corpo}</div></details></div>`;
+    }
+  }
+  return out;
 }
 
 function ccPrevBox(){
