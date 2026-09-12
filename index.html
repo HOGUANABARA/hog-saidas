@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.59 · compra pela régua única: consumo real dos procedimentos</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.60 · crédito abatido fecha a ocorrência sozinho</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8957,7 +8957,7 @@ async function rcGravarNF(chave, confirmar){
     }
 
     if(cred>0 && typeof ocAbaterCreditos==='function'){
-      try{ await ocAbaterCreditos(fid, cred); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
+      try{ await ocAbaterCreditos(fid, cred, numeroNf?('NF '+numeroNf):''); toast('💳 Crédito de '+rcMoney(cred)+' abatido do fornecedor ✓','sucesso'); }
       catch(e){ toast('⚠ NF ok, mas o crédito não foi baixado: '+e.message,'erro'); }
     }
     await rcConcluirPedidoSePronto(pedidoDoGrupo, registrante);
@@ -13070,14 +13070,22 @@ function ocResolver(id){
   let bloco='';
   if(cred){
     const saldo=cred.valor-(cred.valor_utilizado||0);
+    // v4.60 — crédito já resolvido (todo abatido ou cancelado) não tem decisão a tomar:
+    // perguntar "continua em aberto / não vai vir" com saldo R$ 0,00 só confundia.
+    if(cred.status==='CANCELADO'){
+      bloco = `<div style="margin-top:14px;${HGS_OK}">💳 O crédito de <b>${ocMoney(cred.valor)}</b> desta ocorrência foi <b>cancelado</b> — nada a decidir sobre ele, é só dizer como foi resolvida.</div>`;
+    } else if(saldo<=0.001){
+      bloco = `<div style="margin-top:14px;${HGS_OK}">💳 O crédito de <b>${ocMoney(cred.valor)}</b> com ${ocForn(cred.fornecedor_id)} <b>já foi todo abatido</b> ✓ — nada a decidir sobre ele, é só dizer como foi resolvida.</div>`;
+    } else {
     bloco = `<div style="margin-top:14px;${HGS_OK}">💳 Esta ocorrência tem um crédito de <b>${ocMoney(cred.valor)}</b> com ${ocForn(cred.fornecedor_id)}`
       + (cred.valor_utilizado?` — já usados ${ocMoney(cred.valor_utilizado)}, saldo <b>${ocMoney(saldo)}</b>`:` — <b>ainda inteiro</b>`)
       + `.<div style="margin-top:8px;font-weight:400;color:var(--cinza-5);font-size:12.5px">Resolver a ocorrência <b>não mexe no crédito</b>. Diga o que aconteceu com ele:</div>`
       + `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px">`
       + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="MANTER" checked><span><b>Continua em aberto</b> — vou abater numa nota futura deste fornecedor.</span></label>`
-      + (saldo>0.001?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="BAIXAR"><span><b>Já foi usado</b> — dar baixa nos ${ocMoney(saldo)} restantes agora.</span></label>`:'')
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="BAIXAR"><span><b>Já foi usado</b> — dar baixa nos ${ocMoney(saldo)} restantes agora.</span></label>`
       + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-cred-fim" value="CANCELAR"><span><b>Não vai vir</b> — cancelar o crédito (o fornecedor não vai devolver).</span></label>`
       + `</div></div>`;
+    }
   } else if(Number(o.valor)>0){
     bloco = `<div style="margin-top:14px;${HGS_AVISO}">Esta ocorrência tem <b>${ocMoney(o.valor)}</b> registrado e <b>nenhum crédito ligado</b>. `
       + `Se esse valor volta do fornecedor, feche com o botão <b>💳 Gerar crédito</b> antes de resolver — senão o dinheiro sai do controle.</div>`;
@@ -13184,7 +13192,9 @@ async function ocBaixarCredito(id){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 // abate créditos de um fornecedor (FIFO) — usado pela Receber NF
-async function ocAbaterCreditos(fornId, valor){
+// v4.60 — crédito que zera aqui fecha SOZINHO a ocorrência que o gerou:
+// a trava &status=eq.aberta garante que uma resolução manual nunca é sobrescrita.
+async function ocAbaterCreditos(fornId, valor, contexto){
   let resta=valor;
   const abertos=(ocCreditos||[]).filter(c=>c.status==='ABERTO'&&c.fornecedor_id===Number(fornId)).sort((a,b)=>a.id-b.id);
   for(const c of abertos){
@@ -13192,8 +13202,22 @@ async function ocAbaterCreditos(fornId, valor){
     const saldo=c.valor-(c.valor_utilizado||0);
     const usa=Math.min(saldo,resta);
     const novoUsado=(c.valor_utilizado||0)+usa;
-    await sbFetch(`creditos_fornecedor?id=eq.${c.id}`,'PATCH',{ valor_utilizado:novoUsado, status:novoUsado>=c.valor-0.001?'UTILIZADO':'ABERTO' });
-    c.valor_utilizado=novoUsado; resta-=usa;
+    const esgotou = novoUsado>=c.valor-0.001;
+    await sbFetch(`creditos_fornecedor?id=eq.${c.id}`,'PATCH',{ valor_utilizado:novoUsado, status:esgotou?'UTILIZADO':'ABERTO' });
+    c.valor_utilizado=novoUsado; if(esgotou) c.status='UTILIZADO';
+    resta-=usa;
+    if(esgotou && c.ocorrencia_id){
+      try{
+        const oc=await sbFetch(`ocorrencias?select=id,status&id=eq.${c.ocorrencia_id}`);
+        if(oc && oc[0] && oc[0].status==='aberta'){
+          await sbFetch(`ocorrencias?id=eq.${c.ocorrencia_id}&status=eq.aberta`,'PATCH',{
+            status:'resolvida',
+            resolucao:'Crédito de '+ocMoney(c.valor)+' abatido integralmente'+(contexto?(' na '+contexto):'')+' — baixa automática.',
+            resolvido_em:new Date().toISOString() });
+          toast('✔ Ocorrência #'+c.ocorrencia_id+' resolvida sozinha — o crédito dela foi todo abatido.','sucesso');
+        }
+      }catch(e){ console.warn('baixa automática da ocorrência #'+c.ocorrencia_id+':', e); }
+    }
   }
   return valor-resta; // quanto foi de fato abatido
 }
