@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.70 · Orçar no modelo da planilha: um bloco por material, uma linha por fornecedor</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.71 · Orçar: mesma lógica, tela limpa (referências em tooltip, condições recolhidas, ações ao passar o mouse)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1000,6 +1000,19 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-tog{font-size:9.5px;color:var(--cinza-4);cursor:pointer;white-space:nowrap} #aba-cotacao .co-tog input{vertical-align:-1px;margin:0 2px 0 0}
   #aba-cotacao .co-btn-esc{background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:3px 9px;font-size:10px} #aba-cotacao .co-btn-esc.on{background:var(--verde);color:#fff}
   #aba-cotacao .co-dica{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--cinza-2);color:var(--cinza-5);font-size:9px;font-weight:800;text-align:center;line-height:14px;cursor:help;margin-left:3px;text-transform:none}
+  /* v4.71 — tela limpa: o que não é decisão some ou vira tooltip */
+  #aba-cotacao .co-tab input::placeholder{color:var(--cinza-3);font-weight:400}
+  #aba-cotacao .co-tab input{border-color:transparent;background:transparent} #aba-cotacao .co-tab input:hover,#aba-cotacao .co-tab input:focus{border-color:var(--cinza-2);background:#fff}
+  #aba-cotacao .co-tab tr.co-mat td{padding:5px 10px}
+  #aba-cotacao .co-mat-l{gap:10px}
+  #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
+  #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  #aba-cotacao .co-acts{opacity:.18;transition:opacity .15s} #aba-cotacao tr.co-mat:hover .co-acts,#aba-cotacao .co-acts:focus-within{opacity:1}
+  #aba-cotacao .co-tab tr.co-of td.a .co-tog{opacity:.25;transition:opacity .15s} #aba-cotacao .co-tab tr.co-of:hover td.a .co-tog,#aba-cotacao .co-tab tr.co-naotem td.a .co-tog{opacity:1}
+  #aba-cotacao .co-cond{font-size:10.5px;color:var(--cinza-4);cursor:pointer;white-space:nowrap;user-select:none} #aba-cotacao .co-cond.tem{color:var(--cinza-5)} #aba-cotacao .co-cond:hover{color:var(--azul)}
+  #aba-cotacao .co-tab tr.co-cond-row td{background:#fbfcfe;padding:3px 8px 6px 22px;font-size:11px;color:var(--cinza-4)} #aba-cotacao .co-tab tr.co-cond-row input{border-color:var(--cinza-2);background:#fff;width:150px;margin-right:8px}
+  #aba-cotacao .co-resp{font-size:10px;padding:1px 7px;border-radius:10px;background:#FDEDEC;color:var(--vermelho);font-weight:800} #aba-cotacao .co-resp.ok{background:var(--verde-claro);color:var(--verde)}
+  #aba-cotacao .co-tab .w-descnf{width:170px}
   #aba-cotacao .co-empty{text-align:center;padding:34px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
   #aba-cotacao .co-grupo-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;margin:18px 0 8px;background:var(--azul);color:#fff;border-radius:8px;font-size:13px;font-weight:700}
   #aba-cotacao .co-grupo-head:first-child{margin-top:0}
@@ -6295,8 +6308,8 @@ function coDashGrupo(g, idxs, fids){
           +(n?'background:var(--verde-claro);color:var(--verde)':'background:#FDEDEC;color:var(--vermelho)')
           +';font-weight:700">'+coFornNomeById(f)+': '+n+'/'+idxs.length+'</span>'; }).join(' ')
     : '<span style="font-size:10.5px;color:var(--cinza-4)">nenhum fornecedor no grupo</span>';
-  return '<div style="background:var(--cinza-1);border:1px solid var(--cinza-2);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+  return '<div style="display:inline-block">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
     + tile('Fechável agora', escolhidos+'/'+idxs.length, escolhidos?'var(--verde)':'var(--cinza-4)', 'itens com fornecedor escolhido')
     + tile('Total escolhido', coMoney(total), 'var(--azul)',
         detalhe.length ? ('<span title="'+detalhe.map(function(d){ return d.nome+': '+d.qtd+' × … = '+coMoney(d.sub)+(d.n>1?(' ('+d.n+' fornecedores)'):''); }).join(' | ').replace(/"/g,'&quot;')+'" style="cursor:help;border-bottom:1px dotted var(--cinza-3)">de '+detalhe.length+' item(ns) — passe o mouse</span>') : 'o que vira pedido')
@@ -6305,8 +6318,7 @@ function coDashGrupo(g, idxs, fids){
     + (economia>0?tile('Economia', '−'+coMoney(economia), 'var(--verde)', 'vs. último pago'):'')
     + (aumento>0?tile('Aumento', '+'+coMoney(aumento), 'var(--vermelho)', 'vs. último pago'):'')
     +'</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<b style="font-size:9.5px;text-transform:uppercase;color:var(--cinza-4)">Responderam:</b> '+fornResumo+'</div>'
+    +''   // v4.71 — "Responderam" agora é o contador dentro do chip de cada fornecedor
     +(subiram.length
       ? '<div style="margin-top:7px;font-size:11px;color:#9C4221;background:#FDF2E9;border-radius:6px;padding:6px 9px">'
         +'📈 <b>Subiu de preço:</b> '+subiram.slice(0,4).map(s=>s.nome+' +'+s.pct.toFixed(0)+'%').join(' · ')
@@ -6325,39 +6337,55 @@ function coLinhaOferta(i, it, fid){
   const u = coUnit(o); const esc = o.escolhida;
   const q = v=>String(v==null?'':v).replace(/"/g,'&quot;');
   const togs = `<label class="co-tog" title="não incluir este item no WhatsApp deste fornecedor"><input type="checkbox" ${o.nao_pedir?'checked':''} onchange="coSetOp(${i},${fid},'nao_pedir',this.checked);coRender()">não pedir</label> <label class="co-tog" title="fornecedor respondeu que não tem"><input type="checkbox" ${o.nao_tem?'checked':''} onchange="coSetOp(${i},${fid},'nao_tem',this.checked);coRender()">não tem</label>`;
-  if(o.nao_tem) return `<tr class="co-of co-naotem" id="co-op-${i}-${fid}"><td class="f">🏪 ${coFornNomeById(fid)}</td><td colspan="8"><input style="width:100%" placeholder="obs (ex: só volta em setembro)" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)"></td><td class="a">${togs}</td></tr>`;
+  if(o.nao_tem) return `<tr class="co-of co-naotem" id="co-op-${i}-${fid}"><td class="f">🏪 ${coFornNomeById(fid)}</td><td colspan="6"><input style="width:100%" placeholder="obs (ex: só volta em setembro)" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)"></td><td class="a">${togs}</td></tr>`;
+  // v4.71 — pagamento, prazo e observação ficam recolhidos: a linha mostra um resumo e abre ao clicar
+  const temCond = !!(o.condicao_pagamento||o.prazo_entrega||o.observacao);
+  const resumo = temCond ? [o.condicao_pagamento?('💳 '+o.condicao_pagamento):'', o.prazo_entrega?('🚚 '+o.prazo_entrega):'', o.observacao?'📝':''].filter(Boolean).join(' · ') : '+ condições';
+  const aberta = coCondAbertas.has(i+'-'+fid);
   return `<tr class="co-of ${esc?'co-esc':''}" id="co-op-${i}-${fid}">
     <td class="f">🏪 ${coFornNomeById(fid)}</td>
-    <td><input class="w-marca" placeholder="🏷️ marca" value="${q(o.marca)}" oninput="coSetOp(${i},${fid},'marca',this.value)"></td>
-    <td><input class="w-desc" placeholder="descrição / apresentação deste fornecedor (ex: cx 6 fr)" title="como ESTE fornecedor descreve e vende o item" value="${q(o.apresentacao)}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)"></td>
-    <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="qtos?" title="quantos vêm na embalagem deste fornecedor (vem do cadastro quando existe)" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)"></td>
+    <td><input class="w-marca" placeholder="marca" value="${q(o.marca)}" oninput="coSetOp(${i},${fid},'marca',this.value)"></td>
+    <td><input class="w-desc" placeholder="descrição / apresentação" title="como ESTE fornecedor descreve e vende o item (ex: cx 6 fr)" value="${q(o.apresentacao)}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)"></td>
+    <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="vem" title="quantos vêm na embalagem deste fornecedor (vem do cadastro quando existe)" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)"></td>
     <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="R$" title="preço da embalagem" value="${o.preco_total??''}" oninput="coSetOp(${i},${fid},'preco_total',this.value)"></td>
     <td class="n co-unit" title="preço por unidade"><b id="co-unit-${i}-${fid}">${u!=null?coMoney(u):'—'}</b></td>
-    <td><input class="w-cond" placeholder="pagamento" value="${q(o.condicao_pagamento)}" oninput="coSetOp(${i},${fid},'condicao_pagamento',this.value)"></td>
-    <td><input class="w-prazo" placeholder="prazo" value="${q(o.prazo_entrega)}" oninput="coSetOp(${i},${fid},'prazo_entrega',this.value)"></td>
-    <td><input class="w-obs" placeholder="obs" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)"></td>
+    <td><span class="co-cond ${temCond?'tem':''}" title="${q(o.observacao||'pagamento, prazo e observação deste fornecedor')}" onclick="coToggleCond(${i},${fid})">${resumo}</span></td>
     <td class="a"><button class="co-x co-btn-esc ${esc?'on':''}" title="marcar este fornecedor para este item (dá para dividir entre dois)" onclick="coEscolher(${i},${fid})">${esc?'✔ escolhido':'escolher'}</button>
-      ${esc?`<input class="co-nn" type="number" step="any" style="width:58px" title="quantidade deste fornecedor (quebra: escolha dois e divida)" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)">`:''}
+      ${esc?`<input class="co-nn" type="number" step="any" style="width:58px;border-color:var(--cinza-2)" title="quantidade deste fornecedor (quebra: escolha dois e divida)" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)">`:''}
       ${togs}</td>
-  </tr>`;
+  </tr>
+  <tr class="co-cond-row" id="co-cond-${i}-${fid}" style="${aberta?'':'display:none'}"><td></td><td colspan="7">
+    💳 <input placeholder="pagamento (ex: boleto 28d / 3x)" value="${q(o.condicao_pagamento)}" oninput="coSetOp(${i},${fid},'condicao_pagamento',this.value)">
+    🚚 <input placeholder="prazo (ex: 5 dias úteis)" value="${q(o.prazo_entrega)}" oninput="coSetOp(${i},${fid},'prazo_entrega',this.value)">
+    📝 <input placeholder="observação" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)">
+  </td></tr>`;
+}
+const coCondAbertas = new Set();
+function coToggleCond(i, fid){
+  const k=i+'-'+fid, tr=document.getElementById('co-cond-'+k); if(!tr) return;
+  if(coCondAbertas.has(k)){ coCondAbertas.delete(k); tr.style.display='none'; } else { coCondAbertas.add(k); tr.style.display=''; const inp=tr.querySelector('input'); if(inp) inp.focus(); }
 }
 function coLinhasItem(i, it){
   const g = it.grupo||'Orçamento 1';
   const fids = coFornGrupo[g]||[];
   const q = v=>String(v==null?'':v).replace(/"/g,'&quot;');
-  const ref=[]; if(it.saldo!=null) ref.push('saldo <b>'+it.saldo+'</b>'); if(it.minimo!=null) ref.push('mín <b>'+it.minimo+'</b>');
-  if(it.consumo) ref.push('consumo/mês <b>'+Math.round(it.consumo)+'</b>');
-  ref.push(it.qtd_kit ? ('📦 cadastro: <b>'+it.qtd_kit+'</b>'+(it.unidade?' por '+it.unidade:' por embalagem')) : '<span style="color:#D35400">📦 sem embalagem no cadastro</span>');
+  const semTag = h=>String(h||'').replace(/<[^>]+>/g,'');
+  // v4.71 — na linha só o que decide: nome, quantidade, embalagem, saldo/mín. O resto vira tooltip.
+  const ref=[];
+  ref.push(it.qtd_kit ? ('📦 <b>'+it.qtd_kit+'</b>'+(it.unidade?'/'+String(it.unidade).toLowerCase():'')) : '<span style="color:#D35400" title="quantos vêm por embalagem não está no cadastro">📦 ?</span>');
+  if(it.saldo!=null) ref.push('saldo <b>'+it.saldo+'</b>'); if(it.minimo!=null) ref.push('mín <b>'+it.minimo+'</b>');
   const hp = it.material_id ? hpCache['m'+it.material_id] : undefined;
-  if(hp!==undefined) ref.push(hpLinha('m'+it.material_id));
-  else if(it.uc_valor!=null) ref.push('🧾 últ. compra <b>'+coMoney(it.uc_valor)+'</b>/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):''));
+  const hist = (hp!==undefined) ? semTag(hpLinha('m'+it.material_id))
+    : (it.uc_valor!=null ? ('última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):'')) : 'sem histórico de compra');
+  const dicaTxt = [hist, it.consumo?('consumo/mês '+Math.round(it.consumo)):'', it.forn_conhecidos?('fornecedores: '+it.forn_conhecidos):'', it.marcas_conhecidas?('marcas: '+it.marcas_conhecidas):''].filter(Boolean).join(' · ');
   const ja = coJaComprado[it.material_id] ? `<span class="co-ja">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}</span>` : '';
   const cab = `<tr class="co-mat card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}">
-    <td colspan="10"><div class="co-mat-l">
+    <td colspan="8"><div class="co-mat-l">
       <span class="co-inome" title="arraste para outro grupo">⠿ ${it.material_nome}</span>${ja}
-      <span class="co-qtd">qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)"></span>
+      <span class="co-qtd">qtd <input class="co-nn" type="number" step="any" title="quantidade a orçar" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)"></span>
       <span class="co-ref">${ref.join(' · ')}</span>
-      <span class="co-ref">📄 <input class="w-descnf" placeholder="descrição NF padrão (vai no WhatsApp)" title="nome como o fornecedor conhece o produto" value="${q(it.descricao_nf)}" oninput="coSetItem(${i},'descricao_nf',this.value)"></span>
+      <span class="co-ico" title="${q(dicaTxt)}">🧾</span>
+      <span class="co-ref"><input class="w-descnf" placeholder="descrição NF" title="nome como o fornecedor conhece o produto — vai no WhatsApp" value="${q(it.descricao_nf)}" oninput="coSetItem(${i},'descricao_nf',this.value)"></span>
       <span class="co-acts"><select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
           ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
           <option value="__novo__">📁 + novo grupo…</option></select>
@@ -6365,7 +6393,7 @@ function coLinhasItem(i, it){
         <button class="co-x" onclick="coRemoveItem(${i})" title="tirar item">✕ tirar</button></span>
     </div></td></tr>`;
   const ofs = fids.length ? fids.map(fid=>coLinhaOferta(i,it,fid)).join('')
-    : `<tr class="co-of"><td colspan="10" style="font-size:11px;color:var(--cinza-4);padding:6px 22px">Adicione fornecedores ao grupo (acima) para abrir as linhas de oferta.</td></tr>`;
+    : `<tr class="co-of"><td colspan="8" style="font-size:11px;color:var(--cinza-4);padding:6px 22px">Adicione fornecedores ao grupo (acima) para abrir as linhas de oferta.</td></tr>`;
   return cab + ofs;
 }
 // esteira no topo da aba: onde cada item da compra está (lê o mesmo mapa da lista de compras)
@@ -6458,7 +6486,7 @@ function coRender(){
   for(const g of ordem){
     const idxs=porGrupo[g]||[];
     const fids=coFornGrupo[g]||[];
-    const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)}
+    const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)} <span class="co-resp ${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length?'ok':''}" title="itens deste grupo que já têm preço deste fornecedor">${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length}/${idxs.length}</span>
         <u style="cursor:pointer;font-size:10px" onclick="coWhatsGrupo('${g.replace(/'/g,"\\'")}',${fid})">💬</u>
         <span style="cursor:pointer" onclick="coRemFornGrupo('${g.replace(/'/g,"\\'")}',${fid})">✕</span></span>`).join(' ');
     // v4.70 — o grupo se chama pelos fornecedores; o nome gravado vira apelido. Idade e "sem preço" no cabeçalho.
@@ -6476,11 +6504,11 @@ function coRender(){
       <b style="font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Enviar orçamento para (até 3):</b>
       ${chips || '<span style="color:var(--cinza-4);font-size:11px">nenhum fornecedor ainda</span>'}
       ${fids.length<3?`<span style="cursor:pointer;font-size:11px;font-weight:800;color:var(--azul)" onclick="coAddFornGrupo('${g.replace(/'/g,"\\'")}')">+ fornecedor ▾</span>`:''}
+      <span style="margin-left:auto">${coDashGrupo(g, idxs, fids)}</span>
     </div>
-    ${coDashGrupo(g, idxs, fids)}
     ${coTextosDoGrupo(g)}
     <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px;overflow-x:auto">
-      ${idxs.length ? `<table class="co-tab"><thead><tr><th>Fornecedor</th><th>Marca</th><th>Descrição / apresentação <span class="co-dica" title="como o fornecedor descreve e vende o item; vai no WhatsApp e na NF">?</span></th><th class="n">📦 vem <span class="co-dica" title="quantos vêm na embalagem deste fornecedor">?</span></th><th class="n">R$ emb.</th><th class="n">R$/un</th><th>Pagamento</th><th>Prazo</th><th>Obs.</th><th></th></tr></thead><tbody>${idxs.map(i=>coLinhasItem(i, coItens[i])).join('')}</tbody></table>` : '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
+      ${idxs.length ? `<table class="co-tab"><thead><tr><th>Fornecedor</th><th>Marca</th><th>Descrição / apresentação <span class="co-dica" title="como o fornecedor descreve e vende o item; vai no WhatsApp e na NF">?</span></th><th class="n">📦 vem <span class="co-dica" title="quantos vêm na embalagem deste fornecedor">?</span></th><th class="n">R$ emb.</th><th class="n">R$/un</th><th>Condições <span class="co-dica" title="pagamento, prazo e observação — clique no resumo para abrir">?</span></th><th></th></tr></thead><tbody>${idxs.map(i=>coLinhasItem(i, coItens[i])).join('')}</tbody></table>` : '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
     </div>`;
   }
   corpo.innerHTML=html;
