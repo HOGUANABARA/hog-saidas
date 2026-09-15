@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.60 · crédito abatido fecha a ocorrência sozinho</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.61 · notas passadas no livro de remessas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1347,6 +1347,7 @@ details[open] summary { margin-bottom: 6px; }
   <div id="rm-pend-fisica"></div>
   <div id="rm-pend-nf"></div>
   <div id="rm-nf-lavanderia"></div>
+  <div id="rm-historico"></div>
   <div id="rm-saldo"></div>
 
   <!-- ═══ CONTAGEM DO LIVRO DE REMESSAS (v4.29 — mudou do Inventário para cá) ═══
@@ -14148,6 +14149,10 @@ let rmFiltroForn = 'TODOS';   // TODOS | ESTERILIZACAO | LAVANDERIA | MANUTENCAO
 let rmVista = 'LAVANDERIA';   // LAVANDERIA | ESTERILIZACAO
 let rmFiltroSit  = 'TUDO';    // TUDO | FORA | SUJO | NOTA | PENDENCIA
 let rmBusca      = '';
+// v4.61 — remessa CONFERIDA (nota já registrada) saía da tela e não havia como
+// consultar o que veio nas notas passadas. Fica em rmHist, com as notas de
+// reprocessamento em rmHistNf, na seção "📚 Notas passadas".
+let rmHist = [], rmHistNf = [], rmHistErro = null, rmHistAberta = {};
 
 function rmSetFiltro(campo, valor){
   if(campo==='forn') rmFiltroForn = valor;
@@ -14187,9 +14192,17 @@ function rmRemessaPassa(r){
   }
   if(!rmBusca) return true;
   if(rmCasaBusca(r.numero_bloco)) return true;
+  const nfH = rmHistNfDe(r);                                  // v4.61 — acha pelo nº da nota
+  if(nfH && rmCasaBusca(nfH.numero_nf)) return true;
   return (r.remessa_itens||[]).some(i=>rmCasaBusca(rmBem(i.bem_id)));
 }
 function rmMostra(secao){ return rmFiltroSit==='TUDO' || rmFiltroSit===secao; }
+// v4.61 — a nota de uma remessa: pelo nota_fiscal_id gravado na remessa ou,
+// nas antigas, pelo remessa_id gravado na nota
+function rmHistNfDe(r){
+  if(!r) return null;
+  return (r.nota_fiscal_id ? rmHistNf.find(n=>n.id===r.nota_fiscal_id) : null) || rmHistNf.find(n=>n.remessa_id===r.id) || null;
+}
 
 function rmRenderFiltros(){
   const box = document.getElementById('rm-filtros');
@@ -14205,6 +14218,7 @@ function rmRenderFiltros(){
   const nSujo = rmSujos.filter(s=>rmBemPassa(s.bem_id)).length + rmRemessas.filter(r=>naVista(r) && r.status==='MONTAGEM').length;
   const nNota = rmRemessas.filter(r=>naVista(r) && r.status==='RETORNADA').length;
   const nPend = rmPend.length + rmNfPend.length;
+  const nHist = rmHist.filter(r=>naVista(r)).length;   // v4.61
   const filtrando = rmFiltroForn!=='TODOS' || rmFiltroSit!=='TUDO' || rmBusca;
 
   box.innerHTML = `<div class="rm-filtros">
@@ -14220,10 +14234,11 @@ function rmRenderFiltros(){
       ${chip('sit','SUJO','🧺 Esperando envio'+(nSujo?' ('+nSujo+')':''), rmFiltroSit==='SUJO','laranja')}
       ${chip('sit','NOTA','🧾 Aguardando nota'+(nNota?' ('+nNota+')':''), rmFiltroSit==='NOTA','laranja')}
       ${chip('sit','PENDENCIA','⚠️ Com pendência'+(nPend?' ('+nPend+')':''), rmFiltroSit==='PENDENCIA','laranja')}
+      ${chip('sit','HISTORICO','📚 Notas passadas'+(nHist?' ('+nHist+')':''), rmFiltroSit==='HISTORICO')}
     </div>
     <div class="rm-flin">
       <span class="rm-flab">Item</span>
-      <input class="rm-fbusca" placeholder="filtrar por nome do item ou nº do bloco…" value="${rmEsc(rmBusca)}"
+      <input class="rm-fbusca" placeholder="filtrar por nome do item, nº do bloco ou nº da nota…" value="${rmEsc(rmBusca)}"
              oninput="clearTimeout(window._rmT); window._rmT=setTimeout(()=>rmSetBusca(this.value),250)">
       ${filtrando?`<button class="rm-chip" onclick="rmLimparFiltros()">✕ limpar filtros</button>`:''}
     </div>
@@ -14274,6 +14289,15 @@ async function rmCarregar(){
     ]);
     rmSaldo = saldo || []; rmSujos = sujos || []; rmRemessas = remessas || []; rmPend = pend || []; rmNfPend = nfPend || [];
     await rmCarregarDesgaste();
+    // v4.61 — histórico: remessas conferidas + notas de reprocessamento.
+    // Erro aqui não derruba a tela, mas aparece no card (silêncio é pior que erro).
+    try{
+      const [hist, histNf] = await Promise.all([
+        sbFetch('remessas?select=*,remessa_itens(*)&status=eq.CONFERIDA&order=id.desc&limit=300'),
+        sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,data_emissao,status_pagamento,motivo_tratativa,remessa_id&natureza=eq.SERVICO_REPROCESSAMENTO&order=id.desc&limit=300'),
+      ]);
+      rmHist = hist || []; rmHistNf = histNf || []; rmHistErro = null;
+    }catch(e){ rmHist = []; rmHistNf = []; rmHistErro = e.message || String(e); }
     try{ rmNfLav = (await sbFetch('notas_fiscais?select=*&natureza=eq.SERVICO_LAVANDERIA&order=id.desc&limit=14')) || []; }
     catch(e){ rmNfLav = []; }
     if(!(typeof coFornecedores !== 'undefined' && coFornecedores && coFornecedores.length)){
@@ -15267,6 +15291,7 @@ function rmRenderizar(){
   rmRenderPendFisica();
   rmRenderPendNf();
   rmRenderNotaLavanderia();
+  rmRenderHistorico();          // v4.61
   rmRenderSaldo();
 }
 
@@ -15526,6 +15551,107 @@ async function rmLancarNotaLavanderia(){
     toast('Nota da lavanderia de '+mesN+' lançada ✓','sucesso');
     rmCarregar();
   }catch(e){ toast('Erro ao lançar: '+e.message,'erro'); }
+}
+
+// ═══ v4.61 — NOTAS PASSADAS: o que veio em cada remessa já conferida ═══
+// A remessa some das seções de trabalho quando a nota é registrada (status
+// CONFERIDA). Aqui ela continua consultável: bloco, datas, nota, valor e,
+// abrindo a linha, item a item o que foi, o que voltou e o que a nota cobrou.
+function rmHistSitRot(s, env, dev){
+  if(s==='FALTA_COBRADA')     return '<span class="rm-tag falta" title="faltou peça e a nota cobrou mesmo assim">faltou e cobrou</span>';
+  if(s==='FALTA_NAO_COBRADA') return '<span class="rm-tag falta" title="faltou peça; a nota não cobrou">faltaram '+(env-dev)+'</span>';
+  if(s==='COBRADO_A_MAIS')    return '<span class="rm-tag falta" title="a nota cobra mais do que voltou">cobrado a mais</span>';
+  if(s==='OK')                return '<span style="color:var(--verde);font-weight:700">ok ✓</span>';
+  return env>dev ? '<span class="rm-tag falta">faltaram '+(env-dev)+'</span>' : '<span style="color:var(--cinza-4)">—</span>';
+}
+function rmHistPagRot(nf){
+  if(!nf) return '<span style="color:var(--cinza-4)">—</span>';
+  const s = nf.status_pagamento||'';
+  if(s==='PENDENTE_TRATATIVA') return '<span class="rm-tag falta" title="'+rmEsc(nf.motivo_tratativa||'')+'">travada ⚠️</span>';
+  if(s==='LIBERADA') return '<span style="color:var(--verde);font-weight:700">liberada</span>';
+  if(s==='PAGA')     return '<span style="color:var(--verde);font-weight:700">paga ✓</span>';
+  return rmEsc(s.toLowerCase()||'—');
+}
+function rmHistToggle(id){ rmHistAberta[id] = !rmHistAberta[id]; rmRenderHistorico(); }
+function rmHistVerTodas(){ rmFiltroSit = 'HISTORICO'; rmRenderizar(); }
+function rmRenderHistorico(){
+  const box = document.getElementById('rm-historico');
+  if(!box) return;
+  if(!rmMostra('HISTORICO')){ box.innerHTML=''; return; }
+  if(rmHistErro){
+    box.innerHTML = `<div class="rm-card"><div class="rm-head verm"><span>📚 Notas passadas</span></div>
+      <div class="rm-empty">Não consegui ler o histórico de remessas: ${rmEsc(rmHistErro)}</div></div>`;
+    return;
+  }
+  const todas = rmHist.filter(r=>rmRemessaPassa(r));
+  const completo = rmFiltroSit==='HISTORICO' || !!rmBusca;
+  const LIMITE = 8;
+  const lista = completo ? todas : todas.slice(0, LIMITE);
+  const nomeForn = id => { if(typeof rcNomeFornecedor==='function') return rcNomeFornecedor(id); const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:'—'; };
+
+  if(!todas.length){
+    box.innerHTML = `<div class="rm-card"><div class="rm-head azul"><span>📚 Notas passadas — remessas concluídas</span><span class="rm-count">0</span></div>
+      <div class="rm-empty">${rmBusca ? 'Nenhuma remessa concluída bate com a busca.' : 'Nenhuma remessa concluída ainda. Quando a nota de uma remessa for conferida, ela passa a aparecer aqui.'}</div></div>`;
+    return;
+  }
+
+  const linhas = lista.map(r=>{
+    const nf = rmHistNfDe(r);
+    const itens = r.remessa_itens||[];
+    const env = itens.reduce((s,i)=>s+rmNum(i.qtd_enviada),0);
+    const dev = itens.reduce((s,i)=>s+rmNum(i.qtd_devolvida),0);
+    const aberta = !!rmHistAberta[r.id];
+    const valorNf = nf ? rmMoney(nf.valor_total)
+      : (r.tipo==='LAVANDERIA' ? '<span style="color:var(--cinza-4)" title="a lavanderia cobra por mês, no card da nota mensal">mensal</span>' : '—');
+    const cab = `<tr style="cursor:pointer" onclick="rmHistToggle(${r.id})" title="${aberta?'fechar':'ver os itens desta remessa'}">
+      <td style="white-space:nowrap">${aberta?'▾':'▸'} <b>${rmEsc(r.numero_bloco||('#'+r.id))}</b>${r.fornecedor_id?`<div style="font-size:11px;color:var(--cinza-4)">${rmEsc(nomeForn(r.fornecedor_id))}</div>`:''}</td>
+      <td style="white-space:nowrap">${rmData(r.data_envio)}</td>
+      <td style="white-space:nowrap">${rmData(r.data_retorno)}</td>
+      <td style="text-align:center">${itens.length}</td>
+      <td style="text-align:center;white-space:nowrap">${env} → <b>${dev}</b>${env>dev?` <span class="rm-tag falta">−${env-dev}</span>`:''}</td>
+      <td style="white-space:nowrap">${nf?('NF <b>'+rmEsc(nf.numero_nf||'(sem número)')+'</b>'+(nf.data_emissao?`<div style="font-size:11px;color:var(--cinza-4)">emitida ${rmData(nf.data_emissao)}</div>`:'')):'<span style="color:var(--cinza-4)">—</span>'}</td>
+      <td style="text-align:right;font-weight:700;white-space:nowrap">${valorNf}</td>
+      <td>${rmHistPagRot(nf)}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="imprimir o romaneio desta remessa" onclick="event.stopPropagation();rmRemessaPDF(${r.id})">🖨 PDF</button></td>
+    </tr>`;
+    if(!aberta) return cab;
+    const sub = itens.map(i=>{
+      const e=rmNum(i.qtd_enviada), d=rmNum(i.qtd_devolvida);
+      const fat = (i.qtd_faturada===null||i.qtd_faturada===undefined) ? null : rmNum(i.qtd_faturada);
+      const val = (i.valor_unitario===null||i.valor_unitario===undefined||i.valor_unitario==='') ? null : Number(i.valor_unitario);
+      const tot = (fat!==null && val!==null && !isNaN(val)) ? fat*val : null;
+      return `<tr>
+        <td>${rmEsc(rmBem(i.bem_id))}</td>
+        <td style="text-align:center">${e}</td>
+        <td style="text-align:center;font-weight:700">${d}</td>
+        <td style="text-align:center">${fat===null?'—':fat}</td>
+        <td style="text-align:right">${(val===null||isNaN(val))?'—':rmMoney(val)}</td>
+        <td style="text-align:right;font-weight:700">${tot===null?'—':rmMoney(tot)}</td>
+        <td>${rmHistSitRot(i.situacao, e, d)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="rm-empty">Remessa sem itens.</td></tr>';
+    return cab + `<tr><td colspan="9" style="padding:0 0 10px 26px;background:var(--cinza-1)">
+      <table style="width:100%">
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobrou</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead>
+        <tbody>${sub}</tbody></table>
+      ${(r.recebido_por||r.enviado_por)?`<div style="font-size:11px;color:var(--cinza-4);padding:6px 8px 0">${r.enviado_por?'Enviado por '+rmEsc(r.enviado_por):''}${(r.enviado_por&&r.recebido_por)?' · ':''}${r.recebido_por?'recebido por '+rmEsc(r.recebido_por):''}</div>`:''}
+    </td></tr>`;
+  }).join('');
+
+  const totalNf = todas.reduce((s,r)=>{ const nf=rmHistNfDe(r); return s+(nf?rmNum(nf.valor_total):0); },0);
+  const rodape = (completo && todas.length>1)
+    ? `<tfoot><tr><td colspan="6" style="text-align:right;font-weight:700">${todas.length} remessa(s) · notas somam</td><td style="text-align:right;font-weight:700">${rmMoney(totalNf)}</td><td colspan="2"></td></tr></tfoot>` : '';
+  const maisBtn = (!completo && todas.length>LIMITE)
+    ? `<div style="padding:12px 16px"><button class="rm-b claro" onclick="rmHistVerTodas()">📚 Ver todas as ${todas.length} remessas concluídas</button></div>` : '';
+
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head azul"><span>📚 Notas passadas — remessas concluídas</span><span class="rm-count">${completo?todas.length:(lista.length+' de '+todas.length)}</span></div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Cada linha é uma remessa que já voltou e teve a nota conferida. <b>Clique na linha</b> para ver item a item o que foi, o que voltou e o que a nota cobrou. A busca acima acha pelo nº da nota, do bloco ou pelo nome do item.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Remessa</th><th>Enviada</th><th>Voltou</th><th style="text-align:center">Itens</th><th style="text-align:center">Peças (foi → voltou)</th><th>Nota</th><th style="text-align:right">Valor</th><th>Pagamento</th><th></th></tr></thead>
+      <tbody>${linhas}</tbody>${rodape}</table></div>
+    ${maisBtn}
+  </div>`;
 }
 
 function rmRenderSaldo(){
@@ -15959,7 +16085,7 @@ async function rmRetornoExecutar(){
 
 // ═══ v4.24 — PDF/romaneio da remessa (sai junto com o malote) ═══
 function rmRemessaPDF(remessaId){
-  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  const r = rmRemessas.find(x=>x.id===remessaId) || rmHist.find(x=>x.id===remessaId); if(!r) return;   // v4.61 — também das notas passadas
   const itens=(r.remessa_itens||[]);
   const forn = r.fornecedor_id ? ((coFornecedores||[]).find(f=>f.id===r.fornecedor_id)||{}).nome : null;
   // v4.54 — o romaneio lia qtd_enviada do banco enquanto o botão Enviar lê o
