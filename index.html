@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.67 · transbordo para o CME só quando a peça não tem outra linha viva em pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.68 · pedido não volta para orçamento (instrumental e higiene)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7082,7 +7082,7 @@ function deRenderizar(){
           <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
           <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
-        ${(p.origem==='HIGIENE')?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul-medio);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deDevolverOrcamento(${pid})" title="Os itens voltam abertos na janela de orçar para ajustar preço, fornecedor ou incluir itens">↩ Devolver p/ Orçamento</button> `:''}<button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+        <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
       </div>
       <div class="de-addbar">
         <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
@@ -9638,7 +9638,7 @@ function apRenderizar(){
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
         <div style="display:flex;gap:8px">
-          ${(p.origem==='HIGIENE')?`<button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolverOrc(${pid})" title="Os itens voltam abertos na janela de orçar">⏪ Devolver p/ Orçamento</button>`:''}
+          <!-- v4.68 — regra dela: pedido não volta para orçamento (instrumental e higiene). A volta é cancelar ou tirar a linha. -->
           <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
           <button class="ap-btn-rejeitar" style="padding:8px 12px" onclick="apRejeitarPedido(${pid})">🚫 Rejeitar</button>
           <button class="ap-btn-aprovar" style="padding:8px 14px" onclick="apAprovarPedido(${pid})">✔ Aprovar pedido</button>
