@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.72 · Orçar: material em destaque, fornecedor menor e em outra cor</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.73 · Orçar: marca, descrição e embalagem de cada fornecedor voltam da última cotação</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6336,6 +6336,58 @@ function coDashGrupo(g, idxs, fids){
 // descrição NF padrão) e UMA LINHA POR FORNECEDOR (marca · descrição/apresentação dele ·
 // quantos vêm × R$ da embalagem = R$/un · pagamento · prazo · obs · escolher). Os campos
 // gravam nos mesmos lugares de antes (coSetOp / coSetItem); só o desenho mudou.
+// ═══ v4.73 — MEMÓRIA DAS OFERTAS ═══════════════════════════════════════════
+// Pedido dela (16/09): "quando gravar a descrição, salve para as próximas vezes".
+// A descrição NF do material já ia para o cadastro (coGravarDescricoes). O que faltava
+// era a marca, a descrição/apresentação e a embalagem DE CADA FORNECEDOR: ficam nas
+// cotações anteriores (cotacao_opcoes), então a linha vazia de um fornecedor é
+// preenchida com a última oferta dele para o mesmo material — sem tabela nova. Vem
+// marcada com 🧠 para conferir; ao salvar a cotação vira o registro novo.
+let coMemTentados = new Set();   // 'm<material>-f<fid>' já consultados nesta sessão
+let coMemCache = {};             // 'm<material>-f<fid>' -> {marca, apresentacao, qtd_embalagem}
+function coMemPendentes(){
+  const pend=[];
+  coItens.forEach((it,i)=>{
+    if(!it.material_id) return;
+    for(const fid of (coFornGrupo[it.grupo||'Orçamento 1']||[])){
+      const k='m'+it.material_id+'-f'+fid;
+      if(coMemTentados.has(k)) continue;
+      const o=(it.opcoes||[]).find(x=>x.fornecedor_id===fid);
+      if(o && ((o.marca||'').trim() || (o.apresentacao||'').trim())){ coMemTentados.add(k); continue; }
+      pend.push({ i, fid, mid:it.material_id, k });
+    }
+  });
+  return pend;
+}
+async function coPreencherMemoria(){
+  const pend=coMemPendentes(); if(!pend.length) return;
+  pend.forEach(p=>coMemTentados.add(p.k));
+  const mids=[...new Set(pend.map(p=>p.mid))], fids=[...new Set(pend.map(p=>p.fid))];
+  let rows=[];
+  try{
+    rows=(await sbFetch('cotacao_opcoes?select=id,fornecedor_id,marca,apresentacao,qtd_embalagem,cotacao_itens!cotacao_opcoes_cotacao_item_id_fkey!inner(material_id)'
+      +'&fornecedor_id=in.('+fids.join(',')+')&cotacao_itens.material_id=in.('+mids.join(',')+')&order=id.desc&limit=600'))||[];
+  }catch(e){ console.warn('memória de ofertas:', e); return; }
+  for(const r of rows){
+    const mid=r.cotacao_itens && r.cotacao_itens.material_id; if(!mid) continue;
+    const k='m'+mid+'-f'+r.fornecedor_id;
+    if(coMemCache[k]) continue;                                   // a mais recente ganha
+    if(!(r.marca||'').trim() && !(r.apresentacao||'').trim()) continue;
+    coMemCache[k]={ marca:r.marca||'', apresentacao:r.apresentacao||'', qtd_embalagem:r.qtd_embalagem };
+  }
+  let n=0;
+  for(const p of pend){
+    const m=coMemCache[p.k]; if(!m) continue;
+    const it=coItens[p.i]; if(!it) continue;
+    const o=coOpDoFornecedor(it, p.fid);
+    if(!(o.marca||'').trim()) o.marca=m.marca;
+    if(!(o.apresentacao||'').trim()) o.apresentacao=m.apresentacao;
+    if(o.qtd_embalagem==null && m.qtd_embalagem!=null) o.qtd_embalagem=m.qtd_embalagem;
+    o.memoria=true; n++;
+  }
+  if(n){ coRender(); toast('🧠 '+n+' linha(s) vieram preenchidas com a última cotação do mesmo fornecedor — confira e ajuste se mudou.',''); }
+}
+
 function coLinhaOferta(i, it, fid){
   const o = it.opcoes.find(x=>x.fornecedor_id===fid) || coOpVazia(0);
   const u = coUnit(o); const esc = o.escolhida;
@@ -6347,7 +6399,7 @@ function coLinhaOferta(i, it, fid){
   const resumo = temCond ? [o.condicao_pagamento?('💳 '+o.condicao_pagamento):'', o.prazo_entrega?('🚚 '+o.prazo_entrega):'', o.observacao?'📝':''].filter(Boolean).join(' · ') : '+ condições';
   const aberta = coCondAbertas.has(i+'-'+fid);
   return `<tr class="co-of ${esc?'co-esc':''}" id="co-op-${i}-${fid}">
-    <td class="f">🏪 ${coFornNomeById(fid)}</td>
+    <td class="f">🏪 ${coFornNomeById(fid)}${o.memoria?' <span class="co-ico" title="marca, descrição e embalagem vieram da última cotação deste fornecedor para este item — confira">🧠</span>':''}</td>
     <td><input class="w-marca" placeholder="marca" value="${q(o.marca)}" oninput="coSetOp(${i},${fid},'marca',this.value)"></td>
     <td><input class="w-desc" placeholder="descrição / apresentação" title="como ESTE fornecedor descreve e vende o item (ex: cx 6 fr)" value="${q(o.apresentacao)}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)"></td>
     <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="vem" title="quantos vêm na embalagem deste fornecedor (vem do cadastro quando existe)" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)"></td>
@@ -6461,6 +6513,7 @@ function coRender(){
     const hpF=coItens.filter(it=>it.material_id && hpCache['m'+it.material_id]===undefined).map(it=>it.material_id);
     if(hpF.length) setTimeout(()=>hpPreencher(hpF, [], coRender), 80);
   }
+  if(coMemPendentes().length) setTimeout(coPreencherMemoria, 120);   // v4.73 — memória das ofertas
   coAtualizaLabelGrupo();
   coRenderEsteira();   // v4.70
   const head=document.getElementById('co-status');
