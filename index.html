@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.66 · pedido de instrumental: a volta é pelo pedido e transborda para o CME</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.67 · transbordo para o CME só quando a peça não tem outra linha viva em pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7300,9 +7300,13 @@ async function deRemoverItem(ordemId){
       observacao:(ordem.observacao?ordem.observacao+' | ':'')+'Removido do pedido #'+ordem.pedido_id+(motivo?' — '+motivo:''),
     });
     if(instr){
-      await sbFetch('solicitacao_instrumental?id=eq.'+ordem.solicitacao_instr_id+'&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
-        { status:'SOLICITADA', pedido_por:null, pedido_em:null, observacao:'Tirada do pedido #'+ordem.pedido_id+(motivo?' — '+motivo:'') });
-      toast('Item removido ✓ — a peça voltou para "Solicitadas" no CME.','sucesso');
+      // v4.67 — só devolve a peça se ela não ficou com outra linha viva (a linha recomprada, por exemplo)
+      const livres = await siPecasSemLinhaViva([ordem.solicitacao_instr_id], null);
+      if(livres.length){
+        await sbFetch('solicitacao_instrumental?id=eq.'+ordem.solicitacao_instr_id+'&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
+          { status:'SOLICITADA', pedido_por:null, pedido_em:null, observacao:'Tirada do pedido #'+ordem.pedido_id+(motivo?' — '+motivo:'') });
+        toast('Item removido ✓ — a peça voltou para "Solicitadas" no CME.','sucesso');
+      } else toast('Item removido ✓ — a peça continua em pedido pela outra linha.','sucesso');
     } else toast('Item removido do pedido ✓','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -19643,10 +19647,20 @@ async function siDeskRemover(i){
 
 // v4.20b — pedido cancelado/rejeitado no fluxo geral devolve as solicitações
 // de instrumental para "Solicitadas" (senão ficam presas em "Receber NF")
+// v4.67 — caso real (pedido #49): a mesma solicitação tinha DUAS linhas (a cancelada e a
+// recomprada). Tirar a linha velha NÃO pode devolver a peça para "Solicitadas" enquanto
+// a linha nova continua viva num pedido. Só transborda quem ficou sem nenhuma linha.
+async function siPecasSemLinhaViva(ids, pedidoIgnorado){
+  const vivas=(await sbFetch('ordens_compra?select=solicitacao_instr_id,pedido_id&solicitacao_instr_id=in.('+ids.join(',')+')&situacao=eq.PENDENTE&pedido_id=not.is.null&limit=500'))||[];
+  const comLinha=new Set(vivas.filter(function(o){ return String(o.pedido_id)!==String(pedidoIgnorado||''); }).map(function(o){ return o.solicitacao_instr_id; }));
+  return ids.filter(function(id){ return !comLinha.has(id); });
+}
 async function siSoltarDoPedido(pid, motivo){   // v4.66 — motivo vai junto até o CME
   try{
     const ords=(await sbFetch('ordens_compra?select=solicitacao_instr_id&pedido_id=eq.'+pid+'&solicitacao_instr_id=not.is.null&limit=100'))||[];
-    const ids=[...new Set(ords.map(function(o){return o.solicitacao_instr_id;}).filter(Boolean))];
+    const todas=[...new Set(ords.map(function(o){return o.solicitacao_instr_id;}).filter(Boolean))];
+    if(!todas.length) return 0;
+    const ids=await siPecasSemLinhaViva(todas, pid);   // v4.67 — quem tem linha viva em OUTRO pedido fica onde está
     if(!ids.length) return 0;
     await sbFetch('solicitacao_instrumental?id=in.('+ids.join(',')+')&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
       { status:'SOLICITADA', pedido_por:null, pedido_em:null, observacao:'Voltou do pedido #'+pid+(motivo?' — '+motivo:'') });
