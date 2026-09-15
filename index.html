@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.62 · corrigir remessa fechada · quantidade da montagem grava na hora · romaneio em retrato</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.63 · reabrir remessa enviada para ajustes · nº do bloco corrigível em qualquer etapa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15339,6 +15339,7 @@ function rmRenderMontagem(){
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="rm-b claro" onclick="rmAcrescentarItem(${r.id})">➕ Acrescentar item</button>
+        <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
         <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
         <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF da remessa</button>
         <button class="rm-b verde" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
@@ -15376,7 +15377,9 @@ function rmRenderFora(){
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
-        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF</button>
+        <button class="rm-b claro" style="margin-left:auto" title="a remessa volta para a montagem: aí você troca item, quantidade e bloco, e envia de novo" onclick="rmReabrir(${r.id})">↩ Reabrir para ajustes</button>
+        <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
+        <button class="rm-b claro" onclick="rmRemessaPDF(${r.id})">🖨 PDF</button>
         <button class="rm-b verde" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
       </div>
     </div>`;
@@ -15659,7 +15662,32 @@ function rmRenderHistorico(){
 // ═══ v4.62 — CORRIGIR REMESSA FECHADA (nº do bloco · item · quantidade) ═══
 // Vale para remessa CONFERIDA (Notas passadas). Nada é apagado: a correção
 // reaponta ou ajusta e deixa o motivo — na remessa (bloco) ou em remessa_mov.
-function rmHistAcha(remessaId){ return rmHist.find(x=>x.id===remessaId) || null; }
+function rmHistAcha(remessaId){ return rmHist.find(x=>x.id===remessaId) || rmRemessas.find(x=>x.id===remessaId) || null; }   // v4.63 — também as abertas
+
+// v4.63 — remessa ENVIADA com erro (item, quantidade, bloco): volta para a
+// montagem, onde tudo isso já se corrige, e é enviada de novo. O envio anterior
+// é desfeito por AJUSTE (peça deixa de estar fora e volta para sujo) — nada é
+// apagado, o livro guarda ida e volta.
+async function rmReabrir(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
+  if(r.status!=='ENVIADA'){ toast('Só uma remessa enviada, ainda sem baixa, pode ser reaberta.','erro'); return; }
+  const itens = (r.remessa_itens||[]);
+  const total = itens.reduce((s,i)=>s+rmNum(i.qtd_enviada),0);
+  if(!confirm(`Reabrir a remessa ${r.numero_bloco||'#'+r.id} para ajustes?\n\nAs ${total} peça(s) deixam de contar como FORA DE CASA e voltam para a montagem, como sujas esperando envio. Lá você troca item, quantidade e nº do bloco — e envia de novo.\n\nO romaneio anterior deixa de valer.`)) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  try{
+    for(const i of itens){
+      const q = rmNum(i.qtd_enviada); if(!q) continue;
+      await sbFetch('remessa_mov','POST',{ bem_id:i.bem_id, tipo:'AJUSTE', d_fora:-q, d_sujo:q, remessa_id:remessaId, data:hoje,
+        registrado_por:rmQuem(), observacao:'Remessa '+(r.numero_bloco||'#'+remessaId)+' reaberta para ajustes — desfaz o envio de '+rmData(r.data_envio) });
+    }
+    const rastro = 'Reaberta para ajustes em '+rmData(hoje)+' por '+rmQuem()+' (tinha sido enviada em '+rmData(r.data_envio)+')';
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'MONTAGEM', data_envio:null, enviado_por:null,
+      observacao:(r.observacao?r.observacao+' · ':'')+rastro });
+    toast('Remessa reaberta — ela está de novo em "Em montagem". Ajuste e envie.','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao reabrir: '+e.message,'erro'); }
+}
 
 async function rmCorrBloco(remessaId){
   const r = rmHistAcha(remessaId); if(!r) return;
