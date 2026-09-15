@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.69 · uma cotação de insumos só (junta as abertas) · "não veio" conclui o pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.70 · Orçar no modelo da planilha: um bloco por material, uma linha por fornecedor</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -972,6 +972,34 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-unit{font-size:11px;color:var(--cinza-4)} #aba-cotacao .co-unit b{color:var(--verde);font-size:13px}
   #aba-cotacao .co-addop{flex:0 0 auto;align-self:center;background:var(--azul-claro);color:var(--azul);border:none;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-cotacao .co-x{background:none;border:none;color:var(--vermelho);cursor:pointer;font-size:11px;font-weight:700}
+  /* v4.70 — Orçar no modelo da planilha (mockup aprovado 16/09) */
+  #aba-cotacao .co-esteira{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+  #aba-cotacao .co-et{background:#fff;border:1px solid var(--cinza-2);border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:700;color:var(--cinza-5)}
+  #aba-cotacao .co-et b{font-size:13px;margin-left:4px;color:var(--azul)} #aba-cotacao .co-et.on{background:var(--azul);color:#fff;border-color:var(--azul)} #aba-cotacao .co-et.on b{color:#fff}
+  #aba-cotacao .co-et-seta{color:var(--cinza-3)}
+  #aba-cotacao .co-apelido{font-size:10px;opacity:.8;background:rgba(255,255,255,.18);border-radius:10px;padding:1px 8px;margin-left:6px}
+  #aba-cotacao .co-idade{font-size:11px;opacity:.85;margin-left:8px;font-weight:600} #aba-cotacao .co-idade.alerta{background:#D35400;color:#fff;opacity:1;border-radius:20px;padding:2px 9px;font-weight:700}
+  #aba-cotacao table.co-tab{border-collapse:collapse;width:100%;min-width:980px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  #aba-cotacao .co-tab th{background:var(--cinza-1);color:var(--cinza-5);font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:7px 10px;border-bottom:2px solid var(--cinza-2);white-space:nowrap}
+  #aba-cotacao .co-tab td{padding:4px 8px;border-bottom:1px solid var(--cinza-2);vertical-align:middle}
+  #aba-cotacao .co-tab th.n,#aba-cotacao .co-tab td.n{text-align:right;width:78px}
+  #aba-cotacao .co-tab tr.co-mat td{background:var(--cinza-1);border-top:2px solid var(--cinza-2);padding:6px 10px}
+  #aba-cotacao .co-mat-l{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  #aba-cotacao .co-mat-l .co-inome{cursor:grab}
+  #aba-cotacao .co-qtd{font-size:11.5px;color:var(--cinza-5);white-space:nowrap} #aba-cotacao .co-qtd input{width:64px}
+  #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4)} #aba-cotacao .co-ref b{color:var(--cinza-5)}
+  #aba-cotacao .co-acts{margin-left:auto;white-space:nowrap;display:flex;gap:6px;align-items:center}
+  #aba-cotacao .co-ja{font-size:10px;font-weight:700;background:#FDF2E9;color:#D35400;border:1px solid #EDBB99;padding:2px 8px;border-radius:10px}
+  #aba-cotacao .co-tab tr.co-of td.f{font-weight:700;color:var(--azul);white-space:nowrap;padding-left:22px}
+  #aba-cotacao .co-tab tr.co-melhor td{background:var(--verde-claro)} #aba-cotacao .co-tab tr.co-naotem td{opacity:.55}
+  #aba-cotacao .co-tab tr.co-of td.a{white-space:nowrap;text-align:right}
+  #aba-cotacao .co-tab input{border:1px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;font-family:var(--fonte)}
+  #aba-cotacao .co-tab .w-marca{width:120px} #aba-cotacao .co-tab .w-desc{width:100%;min-width:220px} #aba-cotacao .co-tab .w-n{width:66px}
+  #aba-cotacao .co-tab .w-cond{width:96px} #aba-cotacao .co-tab .w-prazo{width:80px} #aba-cotacao .co-tab .w-obs{width:110px} #aba-cotacao .co-tab .w-descnf{width:230px;border-style:dashed}
+  #aba-cotacao .co-tab td.co-unit b{color:var(--verde);font-size:12.5px}
+  #aba-cotacao .co-tog{font-size:9.5px;color:var(--cinza-4);cursor:pointer;white-space:nowrap} #aba-cotacao .co-tog input{vertical-align:-1px;margin:0 2px 0 0}
+  #aba-cotacao .co-btn-esc{background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:3px 9px;font-size:10px} #aba-cotacao .co-btn-esc.on{background:var(--verde);color:#fff}
+  #aba-cotacao .co-dica{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--cinza-2);color:var(--cinza-5);font-size:9px;font-weight:800;text-align:center;line-height:14px;cursor:help;margin-left:3px;text-transform:none}
   #aba-cotacao .co-empty{text-align:center;padding:34px;color:var(--cinza-4);font-size:14px;background:#fff;border-radius:10px}
   #aba-cotacao .co-grupo-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;margin:18px 0 8px;background:var(--azul);color:#fff;border-radius:8px;font-size:13px;font-weight:700}
   #aba-cotacao .co-grupo-head:first-child{margin-top:0}
@@ -1016,6 +1044,7 @@ details[open] summary { margin-bottom: 6px; }
     <div id="fv-corpo" style="margin-top:12px"></div>
   </div>
   <div id="co-textos" style="display:none;margin-bottom:14px"></div>
+  <div id="co-esteira"></div>
   <div id="co-corpo"><div class="co-empty">Carregando…</div></div>
   <div id="co-wa-box" style="margin-top:16px"></div>
 </div>
@@ -5792,8 +5821,9 @@ function coOpVazia(slot){
            condicao_pagamento:'', prazo_entrega:'', nao_tem:false, observacao:'' };
 }
 async function coAbrir(id){
-  const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo&id=eq.${id}&limit=1`);
+  const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo,created_at,criado_por&id=eq.${id}&limit=1`);
   coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
+  coCotInfo = (cab && cab[0]) ? { criado_em:cab[0].created_at, criado_por:cab[0].criado_por } : {};   // v4.70
   await coCarregarJaComprados(id);
   const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&fechado=is.false&order=id.asc`);
   coCotacaoId = id;
@@ -5803,6 +5833,14 @@ async function coAbrir(id){
     grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || '',
     opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
   }));
+  // v4.70 — embalagem do cadastro (quantos vêm) para a linha do material
+  try{ const mids=[...new Set(coItens.map(it=>it.material_id).filter(Boolean))];
+    if(mids.length){ const ms=(await sbFetch('materiais?select=id,qtd_kit,unidade_medida&id=in.('+mids.join(',')+')'))||[];
+      for(const it of coItens){ const m=ms.find(x=>x.id===it.material_id); if(m){ if(it.qtd_kit==null) it.qtd_kit=m.qtd_kit; if(!it.unidade) it.unidade=m.unidade_medida; } } }
+  }catch(e){}
+  // v4.70 — fornecedor que já tem oferta gravada entra no grupo (cotações antigas e juntadas vinham com o grupo vazio e as ofertas escondidas)
+  coItens.forEach(it=>{ const g=it.grupo||'Orçamento 1'; coFornGrupo[g]=coFornGrupo[g]||[];
+    (it.opcoes||[]).forEach(o=>{ if(o.fornecedor_id && !coFornGrupo[g].includes(o.fornecedor_id) && coFornGrupo[g].length<3) coFornGrupo[g].push(o.fornecedor_id); }); });
   coRender(); coAtualizaLabelGrupo();
   toast('Cotação #'+id+' carregada.','sucesso');
 }
@@ -5834,6 +5872,7 @@ function coNova(){
   coAtualizaLabelGrupo(); coRender();
 }
 let coSnapshotUndo = null;
+let coCotInfo = {};   // v4.70 — {criado_em, criado_por} da cotação aberta (idade do grupo)
 async function coPuxarAlerta(){
   try{
     if(!ccDados.length){ await acCarregar(); }
@@ -6248,10 +6287,8 @@ function coDashGrupo(g, idxs, fids){
       else if(dif>0){ aumento += dif; subiram.push({nome:it.material_nome, pct:((unit-ultimo)/ultimo*100)}); }
     }
   });
-  const tile=(rot,val,cor,sub)=>'<div style="flex:1;min-width:118px;background:#fff;border:1px solid var(--cinza-2);border-radius:8px;padding:8px 11px">'
-    +'<div style="font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4)">'+rot+'</div>'
-    +'<div style="font-size:17px;font-weight:800;color:'+cor+';font-variant-numeric:tabular-nums">'+val+'</div>'
-    +(sub?'<div style="font-size:10px;color:var(--cinza-4)">'+sub+'</div>':'')+'</div>';
+  // v4.70 — indicadores numa linha só (mockup aprovado): rótulo · valor; a explicação vai no title
+  const tile=(rot,val,cor,sub)=>'<span style="font-size:11.5px;color:var(--cinza-5);white-space:nowrap;margin-right:6px" title="'+String(sub||'').replace(/<[^>]+>/g,'').replace(/"/g,'&quot;')+'">'+rot+' <b style="font-size:13px;color:'+cor+';font-variant-numeric:tabular-nums">'+val+'</b></span>';
   const fornResumo = fids.length
     ? fids.map(f=>{ const n=respondeu[f]||0;
         return '<span style="font-size:10.5px;padding:2px 8px;border-radius:20px;'
@@ -6276,6 +6313,79 @@ function coDashGrupo(g, idxs, fids){
         +(subiram.length>4?(' · +'+(subiram.length-4)+' item(ns)'):'')+' — vale negociar antes de fechar.</div>'
       : '')
     +'</div>';
+}
+
+// ═══ v4.70 — ORÇAR NO MODELO DA PLANILHA (mockup aprovado por ela em 16/09) ═══
+// Um BLOCO por material (linha-cabeçalho com qtd, saldo, mínimo, embalagem do cadastro,
+// descrição NF padrão) e UMA LINHA POR FORNECEDOR (marca · descrição/apresentação dele ·
+// quantos vêm × R$ da embalagem = R$/un · pagamento · prazo · obs · escolher). Os campos
+// gravam nos mesmos lugares de antes (coSetOp / coSetItem); só o desenho mudou.
+function coLinhaOferta(i, it, fid){
+  const o = it.opcoes.find(x=>x.fornecedor_id===fid) || coOpVazia(0);
+  const u = coUnit(o); const esc = o.escolhida;
+  const q = v=>String(v==null?'':v).replace(/"/g,'&quot;');
+  const togs = `<label class="co-tog" title="não incluir este item no WhatsApp deste fornecedor"><input type="checkbox" ${o.nao_pedir?'checked':''} onchange="coSetOp(${i},${fid},'nao_pedir',this.checked);coRender()">não pedir</label> <label class="co-tog" title="fornecedor respondeu que não tem"><input type="checkbox" ${o.nao_tem?'checked':''} onchange="coSetOp(${i},${fid},'nao_tem',this.checked);coRender()">não tem</label>`;
+  if(o.nao_tem) return `<tr class="co-of co-naotem" id="co-op-${i}-${fid}"><td class="f">🏪 ${coFornNomeById(fid)}</td><td colspan="8"><input style="width:100%" placeholder="obs (ex: só volta em setembro)" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)"></td><td class="a">${togs}</td></tr>`;
+  return `<tr class="co-of ${esc?'co-esc':''}" id="co-op-${i}-${fid}">
+    <td class="f">🏪 ${coFornNomeById(fid)}</td>
+    <td><input class="w-marca" placeholder="🏷️ marca" value="${q(o.marca)}" oninput="coSetOp(${i},${fid},'marca',this.value)"></td>
+    <td><input class="w-desc" placeholder="descrição / apresentação deste fornecedor (ex: cx 6 fr)" title="como ESTE fornecedor descreve e vende o item" value="${q(o.apresentacao)}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)"></td>
+    <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="qtos?" title="quantos vêm na embalagem deste fornecedor (vem do cadastro quando existe)" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)"></td>
+    <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="R$" title="preço da embalagem" value="${o.preco_total??''}" oninput="coSetOp(${i},${fid},'preco_total',this.value)"></td>
+    <td class="n co-unit" title="preço por unidade"><b id="co-unit-${i}-${fid}">${u!=null?coMoney(u):'—'}</b></td>
+    <td><input class="w-cond" placeholder="pagamento" value="${q(o.condicao_pagamento)}" oninput="coSetOp(${i},${fid},'condicao_pagamento',this.value)"></td>
+    <td><input class="w-prazo" placeholder="prazo" value="${q(o.prazo_entrega)}" oninput="coSetOp(${i},${fid},'prazo_entrega',this.value)"></td>
+    <td><input class="w-obs" placeholder="obs" value="${q(o.observacao)}" oninput="coSetOp(${i},${fid},'observacao',this.value)"></td>
+    <td class="a"><button class="co-x co-btn-esc ${esc?'on':''}" title="marcar este fornecedor para este item (dá para dividir entre dois)" onclick="coEscolher(${i},${fid})">${esc?'✔ escolhido':'escolher'}</button>
+      ${esc?`<input class="co-nn" type="number" step="any" style="width:58px" title="quantidade deste fornecedor (quebra: escolha dois e divida)" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)">`:''}
+      ${togs}</td>
+  </tr>`;
+}
+function coLinhasItem(i, it){
+  const g = it.grupo||'Orçamento 1';
+  const fids = coFornGrupo[g]||[];
+  const q = v=>String(v==null?'':v).replace(/"/g,'&quot;');
+  const ref=[]; if(it.saldo!=null) ref.push('saldo <b>'+it.saldo+'</b>'); if(it.minimo!=null) ref.push('mín <b>'+it.minimo+'</b>');
+  if(it.consumo) ref.push('consumo/mês <b>'+Math.round(it.consumo)+'</b>');
+  ref.push(it.qtd_kit ? ('📦 cadastro: <b>'+it.qtd_kit+'</b>'+(it.unidade?' por '+it.unidade:' por embalagem')) : '<span style="color:#D35400">📦 sem embalagem no cadastro</span>');
+  const hp = it.material_id ? hpCache['m'+it.material_id] : undefined;
+  if(hp!==undefined) ref.push(hpLinha('m'+it.material_id));
+  else if(it.uc_valor!=null) ref.push('🧾 últ. compra <b>'+coMoney(it.uc_valor)+'</b>/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):''));
+  const ja = coJaComprado[it.material_id] ? `<span class="co-ja">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}</span>` : '';
+  const cab = `<tr class="co-mat card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}">
+    <td colspan="10"><div class="co-mat-l">
+      <span class="co-inome" title="arraste para outro grupo">⠿ ${it.material_nome}</span>${ja}
+      <span class="co-qtd">qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)"></span>
+      <span class="co-ref">${ref.join(' · ')}</span>
+      <span class="co-ref">📄 <input class="w-descnf" placeholder="descrição NF padrão (vai no WhatsApp)" title="nome como o fornecedor conhece o produto" value="${q(it.descricao_nf)}" oninput="coSetItem(${i},'descricao_nf',this.value)"></span>
+      <span class="co-acts"><select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
+          ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
+          <option value="__novo__">📁 + novo grupo…</option></select>
+        <button class="co-x" style="background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:3px 8px" onclick="coDevolverParaCompras(${i})" title="devolver para a lista de compras">↩ voltar</button>
+        <button class="co-x" onclick="coRemoveItem(${i})" title="tirar item">✕ tirar</button></span>
+    </div></td></tr>`;
+  const ofs = fids.length ? fids.map(fid=>coLinhaOferta(i,it,fid)).join('')
+    : `<tr class="co-of"><td colspan="10" style="font-size:11px;color:var(--cinza-4);padding:6px 22px">Adicione fornecedores ao grupo (acima) para abrir as linhas de oferta.</td></tr>`;
+  return cab + ofs;
+}
+// esteira no topo da aba: onde cada item da compra está (lê o mesmo mapa da lista de compras)
+let _coEsteiraPedida = false;
+function coRenderEsteira(){
+  const el=document.getElementById('co-esteira'); if(!el) return;
+  const and = (typeof ccAndamento==='object' && ccAndamento) ? ccAndamento : {};
+  const vals = Object.values(and);
+  if(!vals.length && !_coEsteiraPedida && typeof ccCarregarAndamento==='function'){
+    _coEsteiraPedida = true;
+    try{ ccCarregarAndamento().then(()=>coRenderEsteira()).catch(()=>{}); }catch(e){}
+  }
+  const n = r=>vals.filter(v=>v===r).length;
+  const chip=(rot,val,on,tit)=>`<span class="co-et ${on?'on':''}" title="${tit}">${rot}<b>${val}</b></span>`;
+  el.innerHTML = '<div class="co-esteira">'
+    + chip('Em cotação', coItens.length, true, 'itens nesta cotação')
+    + '<span class="co-et-seta">›</span>' + chip('Pedido em montagem', n('PEDIDO EM MONTAGEM'), false, 'grupo fechado virou pedido, ainda em montagem')
+    + '<span class="co-et-seta">›</span>' + chip('Aguardando aprovação', n('AGUARDANDO APROVAÇÃO'), false, 'pedido enviado para a gestora aprovar')
+    + '<span class="co-et-seta">›</span>' + chip('Aguardando entrega', n('AGUARDANDO ENTREGA')+n('PEDIDO APROVADO')+n('AGUARDANDO NF')+n('EM CONFERÊNCIA'), false, 'pedido aprovado, esperando a nota chegar')
+    + '</div>';
 }
 
 function coCardItem(i, it){
@@ -6320,6 +6430,7 @@ function coRender(){
     if(hpF.length) setTimeout(()=>hpPreencher(hpF, [], coRender), 80);
   }
   coAtualizaLabelGrupo();
+  coRenderEsteira();   // v4.70
   const head=document.getElementById('co-status');
   // v4.34 — o rascunho vive SÓ no navegador de quem está montando: enquanto não
   // for salvo, mais ninguém da equipe enxerga. Isso agora está dito na cara.
@@ -6339,6 +6450,10 @@ function coRender(){
   const ordem=[]; const porGrupo={};
   coItens.forEach((it,i)=>{ const g=it.grupo||'Orçamento 1'; if(!porGrupo[g]){porGrupo[g]=[];ordem.push(g);} porGrupo[g].push(i); });
   for(const g of Object.keys(coFornGrupo)) if(!ordem.includes(g)){ ordem.push(g); porGrupo[g]=[]; }
+  // v4.70 — grupo sem fornecedor mas com ofertas gravadas (cotações antigas, juntadas ou vindas do rascunho):
+  // os fornecedores das ofertas entram no grupo, senão as ofertas ficam escondidas
+  for(const g of ordem){ coFornGrupo[g]=coFornGrupo[g]||[];
+    for(const i of (porGrupo[g]||[])) for(const o of (coItens[i].opcoes||[])){ if(o.fornecedor_id && !coFornGrupo[g].includes(o.fornecedor_id) && coFornGrupo[g].length<3) coFornGrupo[g].push(o.fornecedor_id); } }
   let html='';
   for(const g of ordem){
     const idxs=porGrupo[g]||[];
@@ -6346,7 +6461,12 @@ function coRender(){
     const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)}
         <u style="cursor:pointer;font-size:10px" onclick="coWhatsGrupo('${g.replace(/'/g,"\\'")}',${fid})">💬</u>
         <span style="cursor:pointer" onclick="coRemFornGrupo('${g.replace(/'/g,"\\'")}',${fid})">✕</span></span>`).join(' ');
-    html += `<div class="co-grupo-head"><span>🗂️ ${g} <span style="font-size:10px;cursor:pointer;opacity:.85" onclick="coRenomearGrupo('${g.replace(/'/g,"\\'")}')">✎</span></span>
+    // v4.70 — o grupo se chama pelos fornecedores; o nome gravado vira apelido. Idade e "sem preço" no cabeçalho.
+    const nomeAuto = fids.length ? fids.map(coFornNomeById).join(' + ') : g;
+    const apelido = (fids.length && nomeAuto!==g) ? `<span class="co-apelido" title="apelido gravado do grupo (✎ para mudar)">${g}</span>` : '';
+    const idadeDias = coCotInfo.criado_em ? Math.round((Date.now()-new Date(coCotInfo.criado_em).getTime())/86400000) : null;
+    const semPrecoG = idxs.filter(i=>!(coItens[i].opcoes||[]).some(o=>!o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length;
+    html += `<div class="co-grupo-head"><span>🗂️ ${nomeAuto} <span style="font-size:10px;cursor:pointer;opacity:.85" onclick="coRenomearGrupo('${g.replace(/'/g,"\\'")}')">✎</span>${apelido}${idadeDias!==null?`<span class="co-idade ${idadeDias>=3?'alerta':''}" title="dias desde a abertura da cotação">aberta há ${idadeDias} dia(s)${semPrecoG?' · '+semPrecoG+' sem preço':''}</span>`:''}</span>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="co-grupo-count">${idxs.length} ${idxs.length===1?'item':'itens'}</span>
         ${idxs.length===0?`<button class="co-b3" style="padding:5px 10px;font-size:11px;background:#FDEDEC;color:var(--vermelho)" onclick="coExcluirGrupo('${g.replace(/'/g,"\\'")}')">🗑 Excluir grupo vazio</button>`:''}
@@ -6359,8 +6479,8 @@ function coRender(){
     </div>
     ${coDashGrupo(g, idxs, fids)}
     ${coTextosDoGrupo(g)}
-    <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px">
-      ${idxs.map(i=>coCardItem(i, coItens[i])).join('') || '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
+    <div class="co-drop" data-grupo="${g.replace(/"/g,'&quot;')}" style="min-height:30px;border-radius:8px;overflow-x:auto">
+      ${idxs.length ? `<table class="co-tab"><thead><tr><th>Fornecedor</th><th>Marca</th><th>Descrição / apresentação <span class="co-dica" title="como o fornecedor descreve e vende o item; vai no WhatsApp e na NF">?</span></th><th class="n">📦 vem <span class="co-dica" title="quantos vêm na embalagem deste fornecedor">?</span></th><th class="n">R$ emb.</th><th class="n">R$/un</th><th>Pagamento</th><th>Prazo</th><th>Obs.</th><th></th></tr></thead><tbody>${idxs.map(i=>coLinhasItem(i, coItens[i])).join('')}</tbody></table>` : '<div style="text-align:center;font-size:11px;color:var(--cinza-4);padding:10px;border:2px dashed var(--cinza-2);border-radius:8px">arraste itens para cá</div>'}
     </div>`;
   }
   corpo.innerHTML=html;
