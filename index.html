@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.64 · cadastro dos bens do livro: renomear, acertar quantidade e imprimir a lista com saldo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.65 · romaneio e lista do livro no padrão de impressão do HOG</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15341,7 +15341,7 @@ function rmRenderMontagem(){
         <button class="rm-b claro" onclick="rmAcrescentarItem(${r.id})">➕ Acrescentar item</button>
         <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
         <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
-        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 PDF da remessa</button>
+        <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button>
         <button class="rm-b verde" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
         <button class="rm-b perigo" onclick="rmDesfazerMontagem(${r.id})">🗑 Desfazer</button>
       </div>
@@ -15379,7 +15379,7 @@ function rmRenderFora(){
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
         <button class="rm-b claro" style="margin-left:auto" title="a remessa volta para a montagem: aí você troca item, quantidade e bloco, e envia de novo" onclick="rmReabrir(${r.id})">↩ Reabrir para ajustes</button>
         <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
-        <button class="rm-b claro" onclick="rmRemessaPDF(${r.id})">🖨 PDF</button>
+        <button class="rm-b claro" onclick="rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button>
         <button class="rm-b verde" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
       </div>
     </div>`;
@@ -15615,7 +15615,7 @@ function rmRenderHistorico(){
       <td style="white-space:nowrap">${nf?('NF <b>'+rmEsc(nf.numero_nf||'(sem número)')+'</b>'+(nf.data_emissao?`<div style="font-size:11px;color:var(--cinza-4)">emitida ${rmData(nf.data_emissao)}</div>`:'')):'<span style="color:var(--cinza-4)">—</span>'}</td>
       <td style="text-align:right;font-weight:700;white-space:nowrap">${valorNf}</td>
       <td>${rmHistPagRot(nf)}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="imprimir o romaneio desta remessa" onclick="event.stopPropagation();rmRemessaPDF(${r.id})">🖨 PDF</button></td>
+      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="imprimir o romaneio desta remessa" onclick="event.stopPropagation();rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button></td>
     </tr>`;
     if(!aberta) return cab;
     const sub = itens.map(i=>{
@@ -15859,17 +15859,15 @@ function rmSaldoImprimir(){
   if(!lista.length){ toast('Nada para imprimir com esse filtro.','erro'); return; }
   const hoje = rmData(new Date().toISOString().slice(0,10));
   const tit = 'Livro de remessas — '+rmTipo(rmVista||'').curto;
-  const linhas = lista.map((b,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(b.nome)+'</td><td class="q">'+rmNum(b.em_casa)+'</td><td class="q">'+rmNum(b.sujo)+'</td><td class="q">'+rmNum(b.fora)+'</td><td class="q t">'+rmNum(b.total)+'</td><td class="c"></td></tr>').join('');
+  const linhas = lista.map((b,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(b.nome)+'</td><td class="q" style="font-size:13px;color:#222;font-weight:normal">'+rmNum(b.em_casa)+'</td><td class="q" style="font-size:13px;color:#222;font-weight:normal">'+rmNum(b.sujo)+'</td><td class="q" style="font-size:13px;color:#222;font-weight:normal">'+rmNum(b.fora)+'</td><td class="q">'+rmNum(b.total)+'</td><td class="c"></td></tr>').join('');
   const tot = k=>lista.reduce((s,b)=>s+rmNum(b[k]),0);
-  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+rmEsc(tit)+'</title>'
-    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}h1{font-size:17px;margin-bottom:2px}.meta{color:#555;font-size:12px}'
-    +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:5px 7px;font-size:12px;text-align:left;vertical-align:middle}th{background:#eee;font-size:11px;text-transform:uppercase}'
-    +'td.n{text-align:center;color:#666;width:22px}td.q,th.q{text-align:center;width:52px}td.t{font-weight:bold}td.c,th.c{width:70px}tfoot td{font-weight:bold;background:#f5f5f5}'
-    +'</style></head><body>'
-    +'<h1>🏥 HOG — '+rmEsc(tit)+'</h1><div class="meta">Saldo em '+hoje+' · '+lista.length+' bem(ns) · emitido por '+rmEsc(rmQuem()||'—')+'</div>'
-    +'<table><thead><tr><th>#</th><th>Bem</th><th class="q">Em casa</th><th class="q">Sujo</th><th class="q">Fora</th><th class="q">Total</th><th class="c">Contagem</th></tr></thead>'
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+rmEsc(tit)+'</title>'+rmCssImpressao()+'</head><body>'
+    +rmTopoImpressao(rmTipo(rmVista||'').curto, 'Saldo do livro', lista.length+' bens', 'Saldo em '+hoje)
+    +'<table style="width:100%"><thead><tr><th>#</th><th>Bem</th><th class="q">Em casa</th><th class="q">Sujo</th><th class="q">Fora</th><th class="q">Total</th><th class="c">Contagem</th></tr></thead>'
     +'<tbody>'+linhas+'</tbody>'
     +'<tfoot><tr><td></td><td style="text-align:right">Totais</td><td class="q">'+tot('em_casa')+'</td><td class="q">'+tot('sujo')+'</td><td class="q">'+tot('fora')+'</td><td class="q">'+tot('total')+'</td><td></td></tr></tfoot></table>'
+    +'<div class="ass"><div>Contado por</div><div>Conferido por</div></div>'
+    +'<div class="rodape">HOG Saídas · lista do livro de remessas · emitida por '+rmEsc(rmQuem()||'—')+' em '+hoje+'</div>'
     +'</body></html>');
 }
 
@@ -16298,6 +16296,28 @@ async function rmRetornoExecutar(){
 }
 
 // ═══ v4.24 — PDF/romaneio da remessa (sai junto com o malote) ═══
+// v4.65 — padrão de impressão do HOG (o mesmo do pedido de compra): cabeçalho do
+// hospital, número grande em azul, blocos, tabela com cabeçalho azul-claro, assinaturas.
+function rmCssImpressao(){
+  return '<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}'
+    +'h1{font-size:18px;margin:0 0 2px;color:#1B4F72}.sub{color:#555;font-size:11.5px}'
+    +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
+    +'.num{text-align:right;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px}.num b{display:block;font-size:22px;color:#1B4F72;letter-spacing:0;text-transform:none}'
+    +'.blocos{display:flex;gap:12px;margin-bottom:14px}.bloco{flex:1;border:1px solid #ccc;border-radius:6px;padding:8px 12px}'
+    +'.bloco h2{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;margin:0 0 4px}.bloco div{font-size:12px;line-height:1.6}'
+    +'table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #ccc;padding:6px 9px;font-size:12px;text-align:left;vertical-align:middle}'
+    +'th{background:#EEF3F8;text-transform:uppercase;font-size:9.5px;letter-spacing:.4px;color:#333}'
+    +'td.n{text-align:center;color:#888;width:22px}td.q,th.q{text-align:center;width:46px}td.q{font-weight:bold;font-size:16px;color:#1B4F72}'
+    +'td.c,th.c{width:78px;text-align:center}td.c{font-size:16px;color:#999}td.t{font-weight:bold}'
+    +'tfoot td{font-weight:bold;background:#F5F7FA}'
+    +'.ass{margin-top:30px;display:flex;gap:30px}.ass div{flex:1;border-top:1px solid #999;padding-top:5px;font-size:10.5px;color:#555;text-align:center}'
+    +'.rodape{margin-top:14px;font-size:10px;color:#888}@media print{button{display:none}}</style>';
+}
+function rmTopoImpressao(sub, rotulo, numero, linha){
+  return '<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1><div class="sub">Centro Cirúrgico · Livro de remessas · '+rmEsc(sub)+'</div></div>'
+    +'<div class="num">'+rmEsc(rotulo)+'<b>'+rmEsc(numero)+'</b>'+rmEsc(linha)+'</div></div>';
+}
+
 function rmRemessaPDF(remessaId){
   const r = rmRemessas.find(x=>x.id===remessaId) || rmHist.find(x=>x.id===remessaId); if(!r) return;   // v4.61 — também das notas passadas
   const itens=(r.remessa_itens||[]);
@@ -16307,19 +16327,21 @@ function rmRemessaPDF(remessaId){
   // o papel saía com 1/2/87 e a caixa ia com 3/7/57. Agora o PDF lê o MESMO
   // campo que o envio; quando o campo não existe (remessa já enviada), vale o banco.
   const qtdDe=i=>{ const el=document.getElementById('rm-mi-'+i.id); const v=el?parseFloat(el.value):NaN; return isNaN(v)?rmNum(i.qtd_enviada):v; };
-  const linhas=itens.map((i,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(rmBem(i.bem_id))+'</td><td class="q">'+qtdDe(i)+'</td><td class="c"></td></tr>').join('');
+  const linhas=itens.map((i,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(rmBem(i.bem_id))+'</td><td class="q">'+qtdDe(i)+'</td><td class="c">☐</td></tr>').join('');
   const tot=itens.reduce((s,i)=>s+qtdDe(i),0);
-  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
-    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}h1{font-size:17px;margin-bottom:2px}'
-    // v4.62 — retrato; a tabela não estica: a quantidade fica colada no nome, em negrito e maior, para conferir na mão
-    +'table{width:auto;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:13px;text-align:left;vertical-align:middle}'
-    +'td.i{max-width:105mm}td.q,th.q{text-align:center;font-weight:bold;font-size:16px;min-width:38px}td.c,th.c{min-width:70px}td.n{text-align:center;color:#666}'
-    +'.meta{color:#555;font-size:12px}.ass{margin-top:44px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}</style></head><body>'
-    +'<h1>🏥 HOG — Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · '+rmEsc(rmTipo(r.tipo).curto||r.tipo)+'</h1>'
-    +'<div class="meta">'+(forn?('Fornecedor: <b>'+rmEsc(forn)+'</b> · '):'')+'Data: '+rmData(r.data_envio||new Date().toISOString().slice(0,10))+' · Emitido por: '+rmEsc(rmQuem()||'—')+'</div>'
+  const hoje=new Date().toISOString().slice(0,10);
+  const enviada = r.status!=='MONTAGEM' && r.data_envio;
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'+rmCssImpressao()+'</head><body>'
+    +rmTopoImpressao(rmTipo(r.tipo).curto||r.tipo, 'Remessa · bloco', r.numero_bloco||('#'+r.id), (enviada?'Enviada em ':'Montada em ')+rmData(r.data_envio||hoje))
+    +'<div class="blocos">'
+    +'<div class="bloco"><h2>Fornecedor</h2><div><b>'+rmEsc(forn||'—')+'</b></div></div>'
+    +'<div class="bloco"><h2>Envio</h2><div>'+itens.length+' item(ns) · <b>'+tot+' peça(s)</b><br><span style="font-size:11px;color:#555">Emitido por '+rmEsc(rmQuem()||'—')+' em '+rmData(hoje)+'</span></div></div>'
+    +'<div class="bloco"><h2>Conferência</h2><div>Recebido em ____/____/______<br><span style="font-size:11px;color:#555">Marque ☐ item a item ao conferir</span></div></div>'
+    +'</div>'
     +'<table><thead><tr><th>#</th><th>Item</th><th class="q">Qtd</th><th class="c">Conferido</th></tr></thead>'
-    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right;font-weight:bold">Total de peças</td><td class="q">'+tot+'</td><td></td></tr></tfoot></table>'
-    +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte/fornecedor)</div></div>'
+    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right">Total de peças</td><td class="q">'+tot+'</td><td></td></tr></tfoot></table>'
+    +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte / fornecedor)</div></div>'
+    +'<div class="rodape">HOG Saídas · romaneio da remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · impresso em '+rmData(hoje)+'</div>'
     +'</body></html>');
 }
 
