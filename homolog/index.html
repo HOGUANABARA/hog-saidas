@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.61 · notas passadas no livro de remessas</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.62 · corrigir remessa fechada · quantidade da montagem grava na hora · romaneio em retrato</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15329,7 +15329,7 @@ function rmRenderMontagem(){
     const itens = (r.remessa_itens||[]);
     const linhas = itens.map(i=>`<tr>
         <td>${rmEsc(rmBem(i.bem_id))}</td>
-        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-mi-${i.id}" value="${rmNum(i.qtd_enviada)}"></td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-mi-${i.id}" value="${rmNum(i.qtd_enviada)}" onchange="rmQtdMontagem(${i.id}, this.value)" title="grava ao sair do campo"></td>
         <td style="text-align:right"><button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmTirarItem(${i.id})">✕</button></td>
       </tr>`).join('') || '<tr><td colspan="3" class="rm-empty">Remessa vazia — acrescente itens.</td></tr>';
     return `<div class="rm-card">
@@ -15628,12 +15628,14 @@ function rmRenderHistorico(){
         <td style="text-align:right">${(val===null||isNaN(val))?'—':rmMoney(val)}</td>
         <td style="text-align:right;font-weight:700">${tot===null?'—':rmMoney(tot)}</td>
         <td>${rmHistSitRot(i.situacao, e, d)}</td>
+        <td style="white-space:nowrap;text-align:right"><button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="era outro item" onclick="rmCorrItem(${r.id},${i.id})">✏️ item</button> <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="foi outra quantidade" onclick="rmCorrQtd(${r.id},${i.id})">✏️ qtd</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="7" class="rm-empty">Remessa sem itens.</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="rm-empty">Remessa sem itens.</td></tr>';
     return cab + `<tr><td colspan="9" style="padding:0 0 10px 26px;background:var(--cinza-1)">
       <table style="width:100%">
-        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobrou</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobrou</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th><th>Situação</th><th></th></tr></thead>
         <tbody>${sub}</tbody></table>
+      <div style="padding:8px 8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" onclick="rmCorrBloco(${r.id})">✏️ Corrigir nº do bloco</button><span style="font-size:11px;color:var(--cinza-4)">Correção não apaga nada: reaponta ou ajusta e deixa o motivo no livro.</span></div>
       ${(r.recebido_por||r.enviado_por)?`<div style="font-size:11px;color:var(--cinza-4);padding:6px 8px 0">${r.enviado_por?'Enviado por '+rmEsc(r.enviado_por):''}${(r.enviado_por&&r.recebido_por)?' · ':''}${r.recebido_por?'recebido por '+rmEsc(r.recebido_por):''}</div>`:''}
     </td></tr>`;
   }).join('');
@@ -15652,6 +15654,93 @@ function rmRenderHistorico(){
       <tbody>${linhas}</tbody>${rodape}</table></div>
     ${maisBtn}
   </div>`;
+}
+
+// ═══ v4.62 — CORRIGIR REMESSA FECHADA (nº do bloco · item · quantidade) ═══
+// Vale para remessa CONFERIDA (Notas passadas). Nada é apagado: a correção
+// reaponta ou ajusta e deixa o motivo — na remessa (bloco) ou em remessa_mov.
+function rmHistAcha(remessaId){ return rmHist.find(x=>x.id===remessaId) || null; }
+
+async function rmCorrBloco(remessaId){
+  const r = rmHistAcha(remessaId); if(!r) return;
+  const resp = await hogPergunta({ titulo:'Corrigir número do bloco',
+    texto:'Remessa '+(r.numero_bloco||'#'+r.id)+' · enviada '+rmData(r.data_envio)+'.',
+    campos:[{ id:'bloco', rot:'Número do bloco', valor:r.numero_bloco||'', obrigatorio:true }], ok:'Corrigir' });
+  const novo = resp && resp.bloco ? String(resp.bloco).trim() : '';
+  if(!novo || novo===r.numero_bloco) return;
+  if(!confirm('Trocar o número do bloco de "'+(r.numero_bloco||'—')+'" para "'+novo+'"?')) return;
+  try{
+    const rastro = 'Bloco corrigido de '+(r.numero_bloco||'—')+' para '+novo+' em '+rmData(new Date().toISOString().slice(0,10))+' por '+rmQuem();
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ numero_bloco:novo, observacao:(r.observacao?r.observacao+' · ':'')+rastro });
+    toast('Bloco corrigido ✓','sucesso'); rmCarregar();
+  }catch(e){ toast('Erro ao corrigir o bloco: '+e.message,'erro'); }
+}
+
+async function rmCorrQtd(remessaId, itemId){
+  const r = rmHistAcha(remessaId); if(!r) return;
+  const item = (r.remessa_itens||[]).find(i=>i.id===itemId); if(!item) return;
+  const atual = rmNum(item.qtd_enviada);
+  if(atual !== rmNum(item.qtd_devolvida)){ toast('Este item teve falta (enviado ≠ voltou). Resolva a pendência antes de corrigir a quantidade.','erro'); return; }
+  const resp = await hogPergunta({ titulo:'Corrigir quantidade',
+    texto:rmBem(item.bem_id)+' · remessa '+(r.numero_bloco||'#'+r.id)+' · hoje: '+atual+' peça(s) foram e voltaram.',
+    campos:[{ id:'q', rot:'Quantidade que de fato foi e voltou', valor:atual, obrigatorio:true }], ok:'Corrigir' });
+  if(!resp) return;
+  const q = parseFloat(resp.q);
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); return; }
+  const dif = q - atual; if(dif===0) return;
+  const efeito = dif>0
+    ? `As ${dif} peça(s) a mais saem de "sujo" e entram em casa (foram e voltaram).`
+    : `As ${-dif} peça(s) a menos voltam para "sujo" (não foram).`;
+  if(!confirm(`Corrigir "${rmBem(item.bem_id)}" de ${atual} para ${q} na remessa ${r.numero_bloco||'#'+r.id}?\n\n${efeito}\nA nota não muda: se ela cobrou outra quantidade, a diferença aparece na situação do item.`)) return;
+  try{
+    const fat = (item.qtd_faturada===null||item.qtd_faturada===undefined) ? null : rmNum(item.qtd_faturada);
+    const patch = { qtd_enviada:q, qtd_devolvida:q };
+    if(fat!==null) patch.situacao = fat>q ? 'COBRADO_A_MAIS' : 'OK';
+    await sbFetch(`remessa_itens?id=eq.${itemId}`,'PATCH',patch);
+    await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'AJUSTE', d_sujo:-dif, d_casa:dif, remessa_id:remessaId,
+      registrado_por:rmQuem(), observacao:'Correção de quantidade na remessa '+(r.numero_bloco||'#'+remessaId)+': '+atual+' → '+q });
+    toast('Quantidade corrigida ✓','sucesso'); rmCarregar();
+  }catch(e){ toast('Erro ao corrigir a quantidade: '+e.message,'erro'); }
+}
+
+async function rmCorrItem(remessaId, itemId){
+  const r = rmHistAcha(remessaId); if(!r) return;
+  const item = (r.remessa_itens||[]).find(i=>i.id===itemId); if(!item) return;
+  const velho = rmBens.find(b=>b.id===item.bem_id) || { id:item.bem_id, nome:rmBem(item.bem_id), material_id:null };
+  const novo = await rmEscolherBem('"'+velho.nome+'" era, na verdade:', b=>b.tipo===r.tipo && b.id!==item.bem_id);
+  if(!novo) return;
+  if((r.remessa_itens||[]).some(i=>i.bem_id===novo.id)){ toast('"'+novo.nome+'" já está nesta remessa. Corrija a quantidade dele.','erro'); return; }
+  const q = rmNum(item.qtd_enviada);
+  if(!confirm(`Trocar "${velho.nome}" por "${novo.nome}" na remessa ${r.numero_bloco||'#'+r.id} (${q} peça(s))?\n\nO que acontece:\n• envio, retorno e custo desta remessa passam para "${novo.nome}";\n• as ${q} peça(s) de "${velho.nome}" deixam de contar como enviadas — voltam para onde estavam antes da remessa;\n• "${novo.nome}" recebe o uso correspondente (saiu de casa → sujo → foi → voltou);\n• o valor de referência de cada peça é refeito pela última nota de cada uma.`)) return;
+  try{
+    const hoje = new Date().toISOString().slice(0,10);
+    const motivo = 'Correção de item na remessa '+(r.numero_bloco||'#'+remessaId)+': era "'+velho.nome+'", é "'+novo.nome+'"';
+    await sbFetch(`remessa_itens?id=eq.${itemId}`,'PATCH',{ bem_id:novo.id, observacao:(item.observacao?item.observacao+' — ':'')+motivo });
+    await sbFetch(`remessa_mov?remessa_id=eq.${remessaId}&bem_id=eq.${velho.id}`,'PATCH',{ bem_id:novo.id });
+    // sujos do bem velho que tinham sido consumidos por esta remessa voltam para a fila
+    await sbFetch(`remessa_sujos?remessa_id=eq.${remessaId}&bem_id=eq.${velho.id}`,'PATCH',{ remessa_id:null });
+    // o bem novo não passou pela saída cirúrgica com esse nome: entra o uso, como no "acrescentar item"
+    await sbFetch('remessa_mov','POST',{ bem_id:novo.id, tipo:'USO', d_casa:-q, d_sujo:q, remessa_id:remessaId, data:r.data_envio||hoje,
+      registrado_por:rmQuem(), observacao:motivo });
+    await rmRefazerValor(velho, novo, item.valor_unitario);
+    toast('Item corrigido ✓ — confira o saldo dos dois bens na tabela.','sucesso'); rmCarregar();
+  }catch(e){ toast('Erro ao corrigir o item: '+e.message,'erro'); }
+}
+
+// Regra da v4.26: o valor cobrado na nota vira o valor de referência da peça.
+// Depois de trocar o item, o velho volta para a última nota que sobrou dele e
+// o novo recebe o valor desta nota (só quando o bem está amarrado a um material).
+async function rmRefazerValor(velho, novo, valorNota){
+  try{
+    if(velho.material_id){
+      const ult = await sbFetch(`remessa_mov?bem_id=eq.${velho.id}&tipo=eq.CUSTO_SERVICO&valor_unitario=not.is.null&order=id.desc&limit=1`);
+      const v = ult && ult[0] ? Number(ult[0].valor_unitario) : 0;
+      if(v>0) await sbFetch('materiais?id=eq.'+velho.material_id,'PATCH',{ ultimo_valor_pago:v });
+    }
+    if(novo.material_id && valorNota!=null && Number(valorNota)>0){
+      await sbFetch('materiais?id=eq.'+novo.material_id,'PATCH',{ ultimo_valor_pago:Number(valorNota) });
+    }
+  }catch(e){ toast('Item corrigido, mas não consegui refazer o valor de referência: '+e.message,'erro'); }
 }
 
 function rmRenderSaldo(){
@@ -15915,6 +16004,31 @@ async function rmAcrescentarItem(remessaId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
+// v4.62 — a quantidade digitada na montagem só era gravada no Enviar: qualquer
+// atualização da página voltava ao valor que veio da fila de sujos. Agora grava
+// ao sair do campo, com o mesmo AJUSTE que o envio fazia (a diferença sai de
+// casa e entra em sujo). O Enviar continua conferindo — e acha diferença zero.
+async function rmQtdMontagem(itemId, valor){
+  let alvo=null, dono=null;
+  for(const r of rmRemessas){ const i=(r.remessa_itens||[]).find(x=>x.id===itemId); if(i){ alvo=i; dono=r; break; } }
+  if(!alvo) return;
+  const q = parseFloat(valor);
+  if(!q || q<=0){
+    toast('Quantidade inválida em "'+rmBem(alvo.bem_id)+'" — não gravei.','erro');
+    const el=document.getElementById('rm-mi-'+itemId); if(el) el.value=rmNum(alvo.qtd_enviada);
+    return;
+  }
+  const antes = rmNum(alvo.qtd_enviada), dif = q - antes;
+  if(dif===0) return;
+  try{
+    await sbFetch(`remessa_itens?id=eq.${itemId}`,'PATCH',{ qtd_enviada:q });
+    await sbFetch('remessa_mov','POST',{ bem_id:alvo.bem_id, tipo:'AJUSTE', d_casa:-dif, d_sujo:dif, remessa_id:dono.id,
+      registrado_por:rmQuem(), observacao:'Ajuste de quantidade na montagem da remessa '+(dono.numero_bloco||'#'+dono.id)+': '+antes+' → '+q });
+    alvo.qtd_enviada = q;
+    toast('Quantidade de "'+rmBem(alvo.bem_id)+'" gravada: '+q+' ✓','sucesso');
+  }catch(e){ toast('Erro ao gravar a quantidade: '+e.message,'erro'); }
+}
+
 async function rmTirarItem(itemId){
   let alvo=null, dono=null;
   for(const r of rmRemessas){ const i=(r.remessa_itens||[]).find(x=>x.id===itemId); if(i){ alvo=i; dono=r; break; } }
@@ -16093,16 +16207,18 @@ function rmRemessaPDF(remessaId){
   // o papel saía com 1/2/87 e a caixa ia com 3/7/57. Agora o PDF lê o MESMO
   // campo que o envio; quando o campo não existe (remessa já enviada), vale o banco.
   const qtdDe=i=>{ const el=document.getElementById('rm-mi-'+i.id); const v=el?parseFloat(el.value):NaN; return isNaN(v)?rmNum(i.qtd_enviada):v; };
-  const linhas=itens.map((i,ix)=>'<tr><td style="text-align:center">'+(ix+1)+'</td><td>'+rmEsc(rmBem(i.bem_id))+'</td><td style="text-align:center">'+qtdDe(i)+'</td><td></td></tr>').join('');
+  const linhas=itens.map((i,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(rmBem(i.bem_id))+'</td><td class="q">'+qtdDe(i)+'</td><td class="c"></td></tr>').join('');
   const tot=itens.reduce((s,i)=>s+qtdDe(i),0);
   hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
-    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin-bottom:2px}'
-    +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left}'
+    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}h1{font-size:17px;margin-bottom:2px}'
+    // v4.62 — retrato; a tabela não estica: a quantidade fica colada no nome, em negrito e maior, para conferir na mão
+    +'table{width:auto;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px 8px;font-size:13px;text-align:left;vertical-align:middle}'
+    +'td.i{max-width:105mm}td.q,th.q{text-align:center;font-weight:bold;font-size:16px;min-width:38px}td.c,th.c{min-width:70px}td.n{text-align:center;color:#666}'
     +'.meta{color:#555;font-size:12px}.ass{margin-top:44px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}</style></head><body>'
     +'<h1>🏥 HOG — Remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · '+rmEsc(rmTipo(r.tipo).curto||r.tipo)+'</h1>'
     +'<div class="meta">'+(forn?('Fornecedor: <b>'+rmEsc(forn)+'</b> · '):'')+'Data: '+rmData(r.data_envio||new Date().toISOString().slice(0,10))+' · Emitido por: '+rmEsc(rmQuem()||'—')+'</div>'
-    +'<table><thead><tr><th style="width:34px">#</th><th>Item</th><th style="width:70px">Qtd</th><th style="width:130px">Conferido</th></tr></thead>'
-    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right;font-weight:bold">Total de peças</td><td style="text-align:center;font-weight:bold">'+tot+'</td><td></td></tr></tfoot></table>'
+    +'<table><thead><tr><th>#</th><th>Item</th><th class="q">Qtd</th><th class="c">Conferido</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right;font-weight:bold">Total de peças</td><td class="q">'+tot+'</td><td></td></tr></tfoot></table>'
     +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte/fornecedor)</div></div>'
     +'</body></html>');
 }
