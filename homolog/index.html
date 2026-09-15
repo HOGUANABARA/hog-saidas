@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.63 · reabrir remessa enviada para ajustes · nº do bloco corrigível em qualquer etapa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.64 · cadastro dos bens do livro: renomear, acertar quantidade e imprimir a lista com saldo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15789,6 +15789,7 @@ function rmRenderSaldo(){
       <td style="text-align:center;color:#E67E22">${rmNum(b.sujo)}</td>
       <td style="text-align:center;color:#6f42c1;font-weight:700">${rmNum(b.fora)}</td>
       <td style="text-align:center;font-weight:700">${rmNum(b.total)}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="corrigir o nome deste bem no livro" onclick="rmBemRenomear(${b.bem_id})">✏️ nome</button> <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="acertar a quantidade em casa (vira ajuste com data e motivo)" onclick="rmBemQtd(${b.bem_id})">✏️ qtd</button></td>
     </tr>`).join('');
   box.innerHTML = `<div class="rm-card">
     <div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">${saldoVis.length===rmSaldo.length ? rmSaldo.length+' bem(ns)' : saldoVis.length+' de '+rmSaldo.length}</span></div>
@@ -15796,9 +15797,80 @@ function rmRenderSaldo(){
       A diferença entre o que saiu e o que voltou aparece aqui como perda — visível, em vez de virar ajuste sem explicação.
       Para o pijama cirúrgico, é este saldo que diz quando comprar mais.</div>
     <div style="overflow-x:auto"><table>
-      <thead><tr><th>Bem</th><th>Tipo</th><th style="text-align:center">Em casa</th><th style="text-align:center">Sujo</th><th style="text-align:center">Fora</th><th style="text-align:center">Total</th></tr></thead>
+      <thead><tr><th>Bem</th><th>Tipo</th><th style="text-align:center">Em casa</th><th style="text-align:center">Sujo</th><th style="text-align:center">Fora</th><th style="text-align:center">Total</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div>
-    <div style="padding:10px 16px"><button class="rm-b claro" onclick="rmNovoBem()">➕ Cadastrar um bem novo no livro</button></div></div>`;
+    <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="rm-b claro" onclick="rmNovoBem()">➕ Cadastrar um bem novo no livro</button>
+      <button class="rm-b claro" style="margin-left:auto" title="lista dos bens desta vista com o saldo de hoje e coluna para contar à mão" onclick="rmSaldoImprimir()">🖨 Imprimir lista com saldo</button></div></div>`;
+}
+
+// ═══ v4.64 — CADASTRO DOS BENS DO LIVRO: renomear · acertar quantidade · imprimir ═══
+// O bem é referenciado por id em tudo (itens, movimentos, sujos, pendências), então
+// renomear é seguro: o histórico inteiro passa a mostrar o nome novo. Quando o bem está
+// amarrado a um material do catálogo, o nome do CATÁLOGO não muda — nome é chave do
+// histórico de saídas (lição do CLAUDE.md) — só o nome do livro.
+async function rmBemRenomear(bemId){
+  const b = rmBens.find(x=>x.id===Number(bemId)); if(!b) return;
+  const resp = await hogPergunta({ titulo:'Corrigir o nome do bem',
+    texto: b.material_id
+      ? 'Este bem está amarrado ao material "'+b.nome+'" do catálogo. O nome do catálogo (estoque, saída cirúrgica, histórico de compras) não muda — só o nome que aparece no livro de remessas.'
+      : 'Bem que só existe no livro de remessas.',
+    campos:[{ id:'nome', rot:'Nome no livro', valor:b.nome, obrigatorio:true }], ok:'Renomear' });
+  const novo = resp && resp.nome ? String(resp.nome).trim().toUpperCase() : '';
+  if(!novo || novo===b.nome) return;
+  const norm = (typeof pkNorm==='function') ? pkNorm : (t=>(''+t).toUpperCase().replace(/[^A-Z0-9]/g,''));
+  const igual = rmBens.find(x=>x.id!==b.id && norm(x.nome)===norm(novo));
+  if(igual){ toast('"'+igual.nome+'" já está no livro — dois cadastros dividem o saldo. Se é a mesma coisa, use o que existe.','erro'); return; }
+  if(!confirm('Renomear "'+b.nome+'" para "'+novo+'"?\n\nO histórico inteiro (remessas, notas, saldo) passa a mostrar o nome novo — o bem é o mesmo.')) return;
+  try{
+    await sbFetch('remessa_bens?id=eq.'+b.id,'PATCH',{ nome:novo });
+    toast('Renomeado para "'+novo+'" ✓','sucesso');
+    try{ if(typeof carregarBensRemessa==='function') await carregarBensRemessa(); }catch(e){}
+    rmCarregar();
+  }catch(e){ toast('Erro ao renomear: '+e.message,'erro'); }
+}
+
+// Acerto de UMA quantidade em casa (para todos de uma vez existe o 🏁 Estoque inicial).
+// Sujo e fora não se editam: seguem as remessas. A diferença vira AJUSTE com motivo.
+async function rmBemQtd(bemId){
+  const b = rmBens.find(x=>x.id===Number(bemId)); if(!b) return;
+  const sd = rmSaldo.find(x=>Number(x.bem_id)===b.id) || {};
+  const atual = rmNum(sd.em_casa);
+  const resp = await hogPergunta({ titulo:'Acertar a quantidade em casa',
+    texto: b.nome+' · hoje: '+atual+' em casa · '+rmNum(sd.sujo)+' sujo · '+rmNum(sd.fora)+' fora. Sujo e fora não se editam aqui — seguem as remessas.',
+    campos:[{ id:'q', rot:'Quantidade EM CASA (contada)', valor:atual, obrigatorio:true },
+            { id:'motivo', rot:'Motivo', valor:'Acerto de cadastro' }], ok:'Gravar' });
+  if(!resp) return;
+  const q = parseFloat(resp.q);
+  if(isNaN(q) || q<0){ toast('Quantidade inválida.','erro'); return; }
+  const delta = q - atual; if(!delta) return;
+  if(!confirm('Acertar "'+b.nome+'" de '+atual+' para '+q+' em casa?\n\nA diferença ('+(delta>0?'+':'')+delta+') entra como ajuste com a data de hoje e o motivo.')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:b.id, tipo:'AJUSTE', d_casa:delta, registrado_por:rmQuem(),
+      observacao:(resp.motivo||'Acerto de cadastro')+' — de '+atual+' para '+q });
+    toast('Quantidade acertada ✓','sucesso'); rmCarregar();
+  }catch(e){ toast('Erro ao acertar: '+e.message,'erro'); }
+}
+
+// Lista impressa da vista atual (respeita fornecedor e busca), em retrato, com
+// coluna em branco para contar à mão — é o papel da contagem do livro.
+function rmSaldoImprimir(){
+  const lista = rmSaldo.filter(b=>rmBemPassa(b.bem_id) && rmCasaBusca(b.nome))
+    .slice().sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
+  if(!lista.length){ toast('Nada para imprimir com esse filtro.','erro'); return; }
+  const hoje = rmData(new Date().toISOString().slice(0,10));
+  const tit = 'Livro de remessas — '+rmTipo(rmVista||'').curto;
+  const linhas = lista.map((b,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i">'+rmEsc(b.nome)+'</td><td class="q">'+rmNum(b.em_casa)+'</td><td class="q">'+rmNum(b.sujo)+'</td><td class="q">'+rmNum(b.fora)+'</td><td class="q t">'+rmNum(b.total)+'</td><td class="c"></td></tr>').join('');
+  const tot = k=>lista.reduce((s,b)=>s+rmNum(b[k]),0);
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+rmEsc(tit)+'</title>'
+    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}h1{font-size:17px;margin-bottom:2px}.meta{color:#555;font-size:12px}'
+    +'table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:5px 7px;font-size:12px;text-align:left;vertical-align:middle}th{background:#eee;font-size:11px;text-transform:uppercase}'
+    +'td.n{text-align:center;color:#666;width:22px}td.q,th.q{text-align:center;width:52px}td.t{font-weight:bold}td.c,th.c{width:70px}tfoot td{font-weight:bold;background:#f5f5f5}'
+    +'</style></head><body>'
+    +'<h1>🏥 HOG — '+rmEsc(tit)+'</h1><div class="meta">Saldo em '+hoje+' · '+lista.length+' bem(ns) · emitido por '+rmEsc(rmQuem()||'—')+'</div>'
+    +'<table><thead><tr><th>#</th><th>Bem</th><th class="q">Em casa</th><th class="q">Sujo</th><th class="q">Fora</th><th class="q">Total</th><th class="c">Contagem</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody>'
+    +'<tfoot><tr><td></td><td style="text-align:right">Totais</td><td class="q">'+tot('em_casa')+'</td><td class="q">'+tot('sujo')+'</td><td class="q">'+tot('fora')+'</td><td class="q">'+tot('total')+'</td><td></td></tr></tfoot></table>'
+    +'</body></html>');
 }
 
 // ── AÇÕES ──────────────────────────────────────────────────────────────────
