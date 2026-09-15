@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.65 · romaneio e lista do livro no padrão de impressão do HOG</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.66 · pedido de instrumental: a volta é pelo pedido e transborda para o CME</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7082,7 +7082,7 @@ function deRenderizar(){
           <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
           <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
-        ${(p.origem==='HIGIENE'||p.origem==='INSTRUMENTAL')?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul-medio);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deDevolverOrcamento(${pid})" title="Os itens voltam abertos na janela de orçar para ajustar preço, fornecedor ou incluir itens">↩ Devolver p/ Orçamento</button> `:''}<button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+        ${(p.origem==='HIGIENE')?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul-medio);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deDevolverOrcamento(${pid})" title="Os itens voltam abertos na janela de orçar para ajustar preço, fornecedor ou incluir itens">↩ Devolver p/ Orçamento</button> `:''}<button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
       </div>
       <div class="de-addbar">
         <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
@@ -7286,13 +7286,24 @@ async function deConfirmar(pid){
 async function deRemoverItem(ordemId){
   let ordem=null; for(const b of deBoards){ ordem = b.itens.find(o=>o.id===ordemId) || ordem; }
   if(!ordem){ toast('Item não encontrado.','erro'); return; }
-  if(!confirm(`Tirar "${deNomeMat(ordem.material_id,ordem)}" deste pedido?\n\nO item sai do pedido (não volta sozinho para a cotação).`)) return;
+  // v4.66 — regra dela (15/09): depois que o orçamento virou pedido, o caminho de
+  // volta é pelo PEDIDO e transborda para o CME — a peça de instrumental volta para
+  // "Solicitadas" com o motivo. "Devolver para o orçamento" deixou de existir.
+  const instr = ordem.origem==='INSTRUMENTAL' && ordem.solicitacao_instr_id;
+  if(!confirm(`Tirar "${deNomeMat(ordem.material_id,ordem)}" deste pedido?\n\n`+(instr
+    ? 'A peça volta para "Solicitadas" no CME, com o motivo, para ser orçada de novo.'
+    : 'O item sai do pedido (não volta sozinho para a cotação).'))) return;
+  const motivo = instr ? (prompt('Motivo (ex.: fornecedor cancelou, preço errado):')||'') : '';
   try{
     await sbFetch(`ordens_compra?id=eq.${ordemId}`,'PATCH',{
       pedido_id: null, situacao:'NAO COMPRAR AGORA',
-      observacao:(ordem.observacao?ordem.observacao+' | ':'')+'Removido do pedido em montagem',
+      observacao:(ordem.observacao?ordem.observacao+' | ':'')+'Removido do pedido #'+ordem.pedido_id+(motivo?' — '+motivo:''),
     });
-    toast('Item removido do pedido ✓','sucesso');
+    if(instr){
+      await sbFetch('solicitacao_instrumental?id=eq.'+ordem.solicitacao_instr_id+'&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
+        { status:'SOLICITADA', pedido_por:null, pedido_em:null, observacao:'Tirada do pedido #'+ordem.pedido_id+(motivo?' — '+motivo:'') });
+      toast('Item removido ✓ — a peça voltou para "Solicitadas" no CME.','sucesso');
+    } else toast('Item removido do pedido ✓','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
@@ -7335,7 +7346,7 @@ async function deCancelarPedido(pid){
     await ccSoltarDaCotacao(b.itens.map(i=>i.material_id));
     // v4.20b — pedido de instrumental cancelado devolve a solicitação para
     // "Solicitadas" (senão ela fica presa em "Receber NF" na aba do CME)
-    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
+    if(typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid, motivo);
     toast('Pedido #'+pid+' cancelado — os itens estão livres na lista de compras.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
@@ -9623,7 +9634,7 @@ function apRenderizar(){
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
         <div style="display:flex;gap:8px">
-          ${(p.origem==='HIGIENE'||p.origem==='INSTRUMENTAL')?`<button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolverOrc(${pid})" title="Os itens voltam abertos na janela de orçar">⏪ Devolver p/ Orçamento</button>`:''}
+          ${(p.origem==='HIGIENE')?`<button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolverOrc(${pid})" title="Os itens voltam abertos na janela de orçar">⏪ Devolver p/ Orçamento</button>`:''}
           <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
           <button class="ap-btn-rejeitar" style="padding:8px 12px" onclick="apRejeitarPedido(${pid})">🚫 Rejeitar</button>
           <button class="ap-btn-aprovar" style="padding:8px 14px" onclick="apAprovarPedido(${pid})">✔ Aprovar pedido</button>
@@ -19195,8 +19206,11 @@ function siRender(){
       if(st.k==='AGUARDANDO_APROVACAO' && siPodeAprovar()) acao='<button class="rm-b verde" onclick="siAprovar('+s.id+')">✅ Aprovar</button> <button class="rm-b perigo" onclick="siReprovar('+s.id+')">✕ Reprovar</button>';
       if(st.k==='APROVADA' && siPodeCotar())              acao='<button class="rm-b laranja" onclick="siPedido('+s.id+')">📦 Emitir pedido</button>';
       if(st.k==='PEDIDO' && siPodeNF())                   acao='<button class="rm-b laranja" onclick="siReceberNF('+s.id+')">📥 Receber NF</button>';
-      if((st.k==='AGUARDANDO_APROVACAO'||st.k==='APROVADA'||st.k==='PEDIDO') && siPodeCotar())
-        acao+=' <button class="rm-b perigo" onclick="siVoltarSolicitada('+s.id+')" title="Pedido cancelado ou orçamento a refazer? Devolve para Solicitadas.">↩</button>';
+      if((st.k==='AGUARDANDO_APROVACAO'||st.k==='APROVADA') && siPodeCotar())
+        acao+=' <button class="rm-b perigo" onclick="siVoltarSolicitada('+s.id+')" title="Orçamento a refazer? Devolve para Solicitadas.">↩ Devolver</button>';
+      // v4.66 — virou pedido: a volta é pelo pedido (cancelar ou tirar a linha), que transborda para cá
+      if(st.k==='PEDIDO' && siPodeCotar())
+        acao+=' <span class="rm-tag dinheiro" title="Fornecedor cancelou ou preço errado? Vá em Comprar › Pedidos e tire a linha da peça (ou cancele o pedido). Ela volta para Solicitadas sozinha, com o motivo.">↩ pelo pedido</span>';
       let destino='';
       if(st.k==='RECEBIDA'){
         let opts='<option value="">Escolher caixa / reserva…</option>';
@@ -19629,13 +19643,13 @@ async function siDeskRemover(i){
 
 // v4.20b — pedido cancelado/rejeitado no fluxo geral devolve as solicitações
 // de instrumental para "Solicitadas" (senão ficam presas em "Receber NF")
-async function siSoltarDoPedido(pid){
+async function siSoltarDoPedido(pid, motivo){   // v4.66 — motivo vai junto até o CME
   try{
     const ords=(await sbFetch('ordens_compra?select=solicitacao_instr_id&pedido_id=eq.'+pid+'&solicitacao_instr_id=not.is.null&limit=100'))||[];
     const ids=[...new Set(ords.map(function(o){return o.solicitacao_instr_id;}).filter(Boolean))];
     if(!ids.length) return 0;
     await sbFetch('solicitacao_instrumental?id=in.('+ids.join(',')+')&status=in.(AGUARDANDO_APROVACAO,APROVADA,PEDIDO)','PATCH',
-      { status:'SOLICITADA', pedido_por:null, pedido_em:null });
+      { status:'SOLICITADA', pedido_por:null, pedido_em:null, observacao:'Voltou do pedido #'+pid+(motivo?' — '+motivo:'') });
     toast('🔩 '+ids.length+' solicitação(ões) de instrumental voltaram para "Solicitadas".','sucesso');
     return ids.length;
   }catch(e){ return 0; }
