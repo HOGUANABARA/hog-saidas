@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.68 · pedido não volta para orçamento (instrumental e higiene)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.69 · uma cotação de insumos só (junta as abertas) · "não veio" conclui o pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5748,14 +5748,30 @@ async function coCarregar(){
     if(coCotacaoId===null && !coItens.length){
       // v4.24c — rascunho não salvo (F5 no meio da montagem) volta primeiro
       const draft=coDraftLer();
-      if(draft){
+      // v4.69 — caso real (15/09): duas cotações abertas (#31 de 10/09 e #32 de 15/09) e a
+      // janela só abria a mais nova — LÂMINA 11, SERINGA 1 ML e COMPRESSA ficaram com a
+      // etiqueta "em cotação" sem aparecer em lugar nenhum. Regra: só existe UMA cotação
+      // de insumos aberta; se houver mais, as antigas são juntadas na mais nova (grupos
+      // marcados com o nº de origem). Rascunho sem cotação entra na aberta, não cria outra.
+      const abertas = (await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=10')) || [];
+      if(abertas.length>1) await coJuntarAbertas(abertas);
+      if(draft && (draft.cot || !abertas.length)){
         coCotacaoId=draft.cot||null; coItens=draft.itens||[]; coFornGrupo=draft.forn||{}; coGrupoAtual=draft.grupo||'Orçamento 1';
         coRender(); coAtualizaLabelGrupo();
         toast('📝 Recuperei o orçamento que você estava montando (não estava salvo). Confira e clique em 💾 Salvar cotação.','sucesso');
         return;
       }
-      const abertas = await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=1');
-      if(abertas && abertas.length){ await coAbrir(abertas[0].id); return; }
+      if(abertas.length){
+        await coAbrir(abertas[0].id);
+        if(draft){
+          let n=0;
+          for(const it of (draft.itens||[])){ if(!coItens.some(x=>x.material_id===it.material_id)){ coItens.push(it); n++; } }
+          coFornGrupo = Object.assign({}, coFornGrupo, draft.forn||{});
+          coDraftLimpar();
+          if(n){ coRender(); toast('📝 '+n+' item(ns) do rascunho entraram na cotação #'+abertas[0].id+' — clique em 💾 Salvar cotação.','sucesso'); }
+        }
+        return;
+      }
     }
     coRender();
   }catch(e){
@@ -5789,6 +5805,28 @@ async function coAbrir(id){
   }));
   coRender(); coAtualizaLabelGrupo();
   toast('Cotação #'+id+' carregada.','sucesso');
+}
+// v4.69 — junta as cotações de insumos abertas na mais nova: itens abertos mudam de
+// cotação, o grupo ganha o sufixo ' · #<origem>' (para não misturar fornecedores) e a
+// cotação antiga, vazia, é fechada. Nada é apagado.
+async function coJuntarAbertas(abertas){
+  const alvo = abertas[0];
+  const fg = Object.assign({}, alvo.fornecedores_grupo||{});
+  let n=0; const velhas=[];
+  for(const c of abertas.slice(1)){
+    const its = (await sbFetch(`cotacao_itens?select=id,grupo&cotacao_id=eq.${c.id}&fechado=is.false&limit=500`))||[];
+    const fgc = c.fornecedores_grupo||{};
+    for(const it of its){
+      const g0 = it.grupo||'Orçamento 1', g = g0+' · #'+c.id;
+      if(!(g in fg)) fg[g] = fgc[g0]||[];
+      await sbFetch(`cotacao_itens?id=eq.${it.id}`,'PATCH',{ cotacao_id:alvo.id, grupo:g });
+      n++;
+    }
+    await sbFetch(`cotacoes?id=eq.${c.id}`,'PATCH',{ status:'fechada' });
+    velhas.push('#'+c.id);
+  }
+  await sbFetch(`cotacoes?id=eq.${alvo.id}`,'PATCH',{ fornecedores_grupo:fg });
+  toast(`Havia ${abertas.length} cotações abertas — juntei ${n} item(ns) de ${velhas.join(', ')} na #${alvo.id} (grupos marcados com o nº de origem).`,'sucesso');
 }
 function coNova(){
   if(coItens.length && !confirm('Isto limpa a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
@@ -6442,9 +6480,21 @@ async function coSalvar(silencioso){
   try{
     if(coCotacaoId===null){
       const nome=(document.getElementById('co-criado-por')||{}).value||'';
-      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome, fornecedores_grupo: coFornGrupo});
-      if(!c||!c.length) throw new Error('não retornou a cotação criada');
-      coCotacaoId=c[0].id;
+      // v4.69 — se já existe cotação de insumos aberta, este salvamento entra NELA
+      // (os itens dela são carregados antes, para o regravar não apagá-los)
+      const ja = (await sbFetch('cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=1'))||[];
+      if(ja.length){
+        const meus = coItens.slice(), fgMeus = Object.assign({}, coFornGrupo);
+        await coAbrir(ja[0].id);
+        for(const it of meus){ if(!coItens.some(x=>x.material_id===it.material_id)) coItens.push(it); }
+        coFornGrupo = Object.assign({}, coFornGrupo, fgMeus);
+        await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
+        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
+      } else {
+        const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome, fornecedores_grupo: coFornGrupo});
+        if(!c||!c.length) throw new Error('não retornou a cotação criada');
+        coCotacaoId=c[0].id;
+      }
     } else {
       await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
       // v4.11 — ⚠️ salvar regrava a cotação apagando e reinserindo. Restringir
@@ -8316,7 +8366,7 @@ function rcRenderizar(){
         <td><input type="number" class="rc-qtd" id="rc-qtd-${o.id}" value="${qtdPadrao}" placeholder="qtd" oninput="rcAtualizaTotais('${chave}')"></td>
         <td><input type="number" step="0.01" class="rc-val" id="rc-val-${o.id}" value="${semCusto?0:valPadrao}" placeholder="R$/un" ${semCusto?'readonly title="entrada sem custo" style="background:#EAF7EE;color:var(--verde);font-weight:700"':''} oninput="rcAtualizaTotais('${chave}')"></td>
         <td style="text-align:right;font-weight:700;white-space:nowrap" id="rc-tot-${o.id}">—</td>
-        <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Fornecedor não entregou / cancelar este pedido">🚫</button>
+        <td><button class="rc-btn-problema" onclick="rcMarcarProblema(${o.id})" title="Não vai chegar, ou já veio por outra nota: tira esta linha do pedido, com o motivo. Se não sobrar linha pendente, o pedido é concluído.">🚫 Não veio</button>
         <button class="rc-btn-editar" onclick="ordemEditarQtd(${o.id}, rcCarregar)" title="Ajustar quantidade/valor combinado com o fornecedor">✎</button>
         <button class="rc-btn-editar" onclick="rcTrocarMaterial(${o.id})" title="Veio outro produto (nome parecido)? Apontar o material certo ANTES de dar entrada">↔</button></td>
       </tr>
@@ -8658,7 +8708,7 @@ function rcAtualizaTotais(chave){
 }
 
 async function rcMarcarProblema(ordemId){
-  const motivo = prompt('Motivo (ex: fornecedor não entregou, cancelado, item descontinuado):');
+  const motivo = prompt('Motivo (ex: fornecedor não entregou, cancelado, veio por outra nota):');
   if(motivo === null) return;
   if(!motivo.trim()){ toast('Informe um motivo.','erro'); return; }
   try{
@@ -8666,7 +8716,10 @@ async function rcMarcarProblema(ordemId){
       situacao: 'NAO COMPRAR AGORA',
       observacao: motivo.trim(),
     });
-    toast('Pedido marcado e removido da lista de pendentes.','sucesso');
+    toast('Linha marcada e removida da lista de pendentes.','sucesso');
+    // v4.69 — se era a última linha pendente, o pedido conclui (antes ficava preso em "aguardando entrega")
+    const oq=(rcOrdens||[]).find(x=>x.id===ordemId);
+    if(oq && oq.pedido_id) await rcConcluirPedidoSePronto(oq.pedido_id);
     rcCarregar();
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
