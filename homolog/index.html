@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.73 · Orçar: marca, descrição e embalagem de cada fornecedor voltam da última cotação</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.74 · lote vencido com estoque bom pede baixa, não compra</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4756,9 +4756,13 @@ function ccPrioridade(r){
   if(ccRecorrente(r)){
     const nec = ccNecMes(r);
     const cob = nec>0 ? disp/nec : null;
-    if(vencido || disp<=0) return 'URGENTE';
+    // v4.74 — caso do SORO 0,9% 100 ML: 5 un "SEM LOTE" vencidas em 31/08 e 87 boas (21 meses).
+    // Lote vencido com estoque que cobre não é compra: é baixa. Só vira URGENTE se o que sobra não cobre.
+    if(disp<=0) return 'URGENTE';
+    if(vencido && (cob===null || cob<1)) return 'URGENTE';
     if(cob!==null && cob<=0.5) return 'URGENTE';       // menos de 2 semanas
     if(gt.compra) return 'COMPRAR';                    // menos de 1 mês (ou piso clínico)
+    if(vencido) return 'ATENCAO';                      // vencido, mas coberto: dar baixa do lote
     if(cob!==null && cob<2) return 'ATENCAO';          // menos de 2 meses
     if(r.classe_compra==='CRITICO' && min>0 && disp < min*1.2) return 'ATENCAO';
     return 'OK';
@@ -4793,8 +4797,9 @@ function ccGatilho(r){
     const nec = ccNecMes(r);
     const cob = nec>0 ? disp/nec : null;
     const alvo = Math.ceil(nec*2);
-    if(vencido) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor',
+    if(vencido && (cob===null || cob<1)) return { compra:true, motivo:'lote VENCIDO — dar baixa + repor',
                          sugestao:Math.max(0, alvo - Math.max(0,disp)), nec:Math.ceil(nec), chip:'cc-verm' };
+    // v4.74 — vencido mas coberto (o que sobra dá ≥ 1 mês): não entra na compra; a coluna de validade já mostra ⛔ para a baixa
     if(cob !== null && cob < 1){
       const motivo = venc60>0
         ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(disp)} · cobre ${Math.max(0,Math.round(cob*30))} dias`
