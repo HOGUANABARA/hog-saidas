@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.77 · a cotação grava sozinha (sem depender do Salvar)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.78 · etiqueta de etapa só pela linha pendente · "⏸ esperar" no lugar certo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -859,6 +859,8 @@ details[open] summary { margin-bottom: 6px; }
   #aba-comprar .cc-classe .n{font-size:12.5px;font-weight:800}
   #aba-comprar .cc-classe .g{font-size:10px;color:var(--cinza-4);margin-top:2px;line-height:1.4}
   #aba-comprar .cc-classe .c{font-size:22px;font-weight:800;margin-top:6px}
+  #aba-comprar .cc-esperar{background:none;border:1px dashed var(--cinza-3);color:var(--cinza-4);border-radius:10px;padding:1px 7px;font-size:10px;cursor:pointer;margin-left:6px;font-family:var(--fonte);vertical-align:middle}
+  #aba-comprar .cc-esperar:hover{color:var(--azul);border-color:var(--azul)}
   #aba-comprar .cc-classe .s{font-size:10px;font-weight:700}
   #aba-comprar .cc-bloco{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
   #aba-comprar .cc-bhead{padding:10px 16px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;font-weight:800}
@@ -4615,7 +4617,7 @@ let ccFiltroClasse = ''; // '' = todas
 let ccModoTriagem = false;
 let acResultados = [];
 let ccFontes = {};      // NOME (maiúsculo) -> {marcas, fornecedores} das compras passadas
-let ccAndamento = {};   // material_id -> rótulo da etapa em andamento (cotação/pedido)
+let ccAndamento = {}, ccAndamentoOk = false;   // v4.78 — Ok = mapa carregado (aí a etiqueta antiga da view não vale)   // material_id -> rótulo da etapa em andamento (cotação/pedido)
 let ccSel = new Set();  // itens marcados ☑ para orçar
 let ccOculto = {};      // material_id -> true (tirado da lista pela gestora)
 let ccCadastro = {};    // material_id -> {descricao_nf, qtd_kit, unidade_medida}
@@ -4717,6 +4719,7 @@ async function ccCarregarAndamento(){
       const cits = (await sbFetch(`cotacao_itens?select=material_id&cotacao_id=in.(${cots.map(c=>c.id).join(',')})&fechado=is.false&limit=1000`)) || [];
       for(const it of cits) if(!ccAndamento[it.material_id]) ccAndamento[it.material_id] = 'EM COTAÇÃO';
     }
+    ccAndamentoOk = true;   // v4.78
   }catch(e){}
 }
 
@@ -4930,12 +4933,16 @@ function ccUc(r){
   return `<span style="font-size:11px">${acData(r.uc_data)} · <b style="color:var(--verde)">${acMoney(r.uc_valor_unitario)}/un</b></span>`;
 }
 function ccEtapa(r){
-  const rot = ccAndamento[r.material_id] || r.etapa_status;
-  if(!rot) return '';
+  // v4.78 — a view traz o status do PEDIDO inteiro (etapa_status); item já entregue num pedido que
+  // ainda espera outra linha aparecia "aguardando entrega". Com o mapa carregado, vale só a linha dele.
+  const rot = ccAndamento[r.material_id] || (ccAndamentoOk ? '' : r.etapa_status);
+  const esperarBtn = (typeof ccEsperando==='function' && ccEsperando(r)) ? '' :
+    `<button class="cc-esperar" title="Só comprar este item quando OUTRO acabar (ex.: Avastin 0,015 espera o 0,010). Volta sozinho quando o outro zerar." onclick="ccEsperar(${r.material_id})">⏸ esperar</button>`;
+  if(!rot) return esperarBtn;
   // a tag é clicável: se ela ficou presa (cotação abandonada, pedido cancelado
   // por fora), dá para soltar o item sem precisar mexer no banco
   return `<span class="ac-etapa" style="cursor:pointer" title="Clique para destravar este item, se a etapa já terminou"
-      onclick="ccDestravar(${r.material_id})">🔄 ${rot} <b style="opacity:.65">✕</b></span>`;
+      onclick="ccDestravar(${r.material_id})">🔄 ${rot} <b style="opacity:.65">✕</b></span>`+esperarBtn;
 }
 
 // tira o material das cotações ABERTAS — usado no cancelamento de pedido e no
@@ -5148,8 +5155,7 @@ function ccChk(r){
               : naFila ? 'já pedido para '+naFila.grupo+' por '+(naFila.pedido_por||'—') : '';
   return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${trava?'disabled title="'+trava.replace(/"/g,'&quot;')+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
     ${naFila?`<span title="${('em espera · '+naFila.grupo).replace(/"/g,'&quot;')}" style="font-size:10px">🕐</span>`:
-    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>
-    <button class="cc-hide" title="Só comprar este item quando OUTRO acabar (ex.: Avastin 0,015 espera o 0,010 terminar). Volta sozinho quando o outro zerar." onclick="ccEsperar(${r.material_id})">⏸ esperar</button>`}</td>`;
+    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>`}</td>`;
 }
 
 function ccTabela(classe, rows, mostrarTodos){
