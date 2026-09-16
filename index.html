@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.79 · kit lacrado aberto entra no livro como as peças que ele contém</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.80 · saída diversa deixa de virar "custo do consultório": cada destino no seu lugar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11627,7 +11627,7 @@ async function pnCarregar(){
     document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
     pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,fellow,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
     const perMap={}; for(const p of pnPeriodos) perMap[p.id]=p;
-    const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
+    const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por,destino_saida_geral&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
     pnMovs=[];
     for(const mv of movs){
       if((mv.registrado_por||'')==='MIGRAÇÃO') continue; // só dados vivos
@@ -11638,6 +11638,7 @@ async function pnCarregar(){
         periodoId:mv.periodo_cirurgico_id||null,
         medico:per&&per.medicos?per.medicos.nome:null,
         tipoCir:per&&per.tipos_cirurgia?hogTipoCir(per,null):(mv.tipo==='SAIDA_GERAL'?'(diversas)':null),   // v4.49 — mesma função dos relatórios
+        destino:(mv.tipo==='SAIDA_GERAL'?(mv.destino_saida_geral||null):null),   // v4.80
         custo:pnCusto(mv.material_id,mv.qtd,dia.slice(0,7)) });
     }
     // ═══ v4.26 — REPROCESSADOS entram no CUSTO: a saída deles vive no livro
@@ -12085,19 +12086,42 @@ function pnPerImprimir(){
     +'</body></html>');
 }
 
+// ═══ v4.80 — CADA DESTINO NO SEU LUGAR ════════════════════════════════════
+// Caso dela (16/09): a saída por VENCIMENTO de 10/09 (14 amiodarona + 6 captopril,
+// pela Talita) estava entrando no "custo do consultório". Toda SAIDA_GERAL virava
+// `tipoCir='(diversas)'` e caía num balde só, chamado 🩺 consultórios — que na
+// verdade juntava USO CC (72 lançamentos), USO CME (23), consultórios (65), copa,
+// recepção, autorrefrator, perda e vencimento. Agora cada destino tem o seu lugar.
+const PN_DESTINO_GRUPO = {
+  'CONSULTÓRIOS':'consultorio',
+  'USO CC':'interno', 'USO CME':'interno', 'USO RPA':'interno', 'AUTORREFRATOR':'interno',
+  'COPA':'setores', 'RECEPÇÃO':'setores', 'ADMINISTRATIVO':'setores',
+  'PERDA':'perda', 'VENCIMENTO':'perda', 'DESCARTE':'perda',
+  'EMPRESTIMO':'emprestimo',
+};
+const PN_GRUPO_ROT = {
+  cirurgia:'🏥 cirurgias', consultorio:'🩺 consultórios', interno:'🏨 uso interno (CC · CME · RPA)',
+  setores:'🏢 outros setores', perda:'🗑 perdas e vencimentos', emprestimo:'🤝 empréstimo',
+  diversas:'📦 diversas (sem destino)',
+};
+function pnGrupoCusto(m){
+  if(m.tipoCir !== '(diversas)') return 'cirurgia';
+  return PN_DESTINO_GRUPO[(m.destino||'').toUpperCase()] || 'diversas';
+}
 // v4.33 — de que é feito o custo de cada mês (a barra deixa de ser um número solto)
 function pnComposicaoMes(mes){
   const movs = pnMovs.filter(m=>m.mes===mes);
-  const c = { planilha:0, planilhaPer:0, cirurgia:0, consultorio:0, reproc:0, pac:0, itens:movs.length };
+  const c = { planilha:0, planilhaPer:0, cirurgia:0, consultorio:0, interno:0, setores:0,
+              perda:0, emprestimo:0, diversas:0, reproc:0, pac:0, itens:movs.length };
   for(const m of movs){
     if(m.reprocessado) c.reproc += m.custo;
-    if(m.tipoCir==='(diversas)') c.consultorio += m.custo; else c.cirurgia += m.custo;
+    c[pnGrupoCusto(m)] += m.custo;   // v4.80 — cada destino no seu lugar
   }
   for(const h of pnHistPer){ if(h.mes===mes){ c.planilha += Number(h.custo)||0; c.planilhaPer++; c.pac += Number(h.pac)||0; } }
   for(const p of (typeof pnPeriodos!=='undefined'?pnPeriodos:[])){
     if(((p.data||'')+'').slice(0,7)===mes) c.pac += Number(p.qtd_pacientes)||0;
   }
-  c.app = c.cirurgia + c.consultorio;
+  c.app = c.cirurgia + c.consultorio + c.interno + c.setores + c.perda + c.emprestimo + c.diversas;
   return c;
 }
 function pnCompLinhas(x){
@@ -12106,8 +12130,8 @@ function pnCompLinhas(x){
   else if(c.planilha>0) l.push('📄 só planilha');
   else if(c.app>0) l.push('📲 só app');
   const p2=[];
-  if(c.cirurgia>0) p2.push('🏥 cirurgias '+pnMoney0(c.cirurgia));
-  if(c.consultorio>0) p2.push('🩺 consultórios '+pnMoney0(c.consultorio));
+  for(const g of ['cirurgia','consultorio','interno','setores','perda','emprestimo','diversas'])
+    if(c[g]>0) p2.push(PN_GRUPO_ROT[g]+' '+pnMoney0(c[g]));   // v4.80
   if(p2.length) l.push(p2.join(' · '));
   if(c.reproc>0) l.push('♻️ reprocessados '+pnMoney0(c.reproc));
   if(c.pac>0) l.push('👥 '+c.pac+' pac · '+pnMoney0(x.v/c.pac)+'/pac');
@@ -12118,7 +12142,8 @@ function pnCompTitulo(x){
   return ('Mês '+pnMesLabel(x.mes)+'/26 — total '+pnMoney0(x.v)
     +'\nPlanilha (jun/jul até 20/07): '+pnMoney0(c.planilha)+' em '+c.planilhaPer+' período(s)'
     +'\nApp (dados vivos): '+pnMoney0(c.app)+' em '+c.itens+' lançamento(s)'
-    +'\n  · cirurgias '+pnMoney0(c.cirurgia)+'  · consultórios/diversas '+pnMoney0(c.consultorio)
+    +['cirurgia','consultorio','interno','setores','perda','emprestimo','diversas']
+        .filter(g=>c[g]>0).map(g=>'\n  · '+PN_GRUPO_ROT[g].replace(/^\S+\s/,'')+' '+pnMoney0(c[g])).join('')
     +'\n  · destes, reprocessados: '+pnMoney0(c.reproc)
     +'\nPacientes no mês: '+c.pac+(c.pac?('  → '+pnMoney0(x.v/c.pac)+' por paciente'):'')
     +'\nNão inclui compras, lavanderia, esterilização nem manutenção.').replace(/"/g,'&quot;');
@@ -12428,8 +12453,9 @@ async function pnCG_Render(){
   const okMat=m=>!pnCGf.mat||pnN((pnUvp[m.material_id]||{}).nome||'').includes(pnN(pnCGf.mat));
   const okPer=m=>!pnCGf.per||String(m.periodoId)===String(pnCGf.per);   // v4.27 — filtro por PERÍODO cirúrgico
   const movs=pnMovs.filter(m=>m.mes===mes&&okMed(m)&&okMat(m)&&okPer(m));
-  const cirur=movs.filter(m=>m.tipoCir!=='(diversas)');
-  const consult=movs.filter(m=>m.tipoCir==='(diversas)');
+  const cirur=movs.filter(m=>pnGrupoCusto(m)==='cirurgia');
+  const perdas=movs.filter(m=>pnGrupoCusto(m)==='perda');            // v4.80
+  const consult=movs.filter(m=>{ const g=pnGrupoCusto(m); return g!=='cirurgia' && g!=='perda'; });
   const soma=a=>a.reduce((s,m)=>s+m.custo,0);
   // v4.26c — jun/jul vêm da PLANILHA (pnHistPer): entram no bloco cirúrgico
   // junto com os dados vivos (o filtro de material só alcança os vivos)
@@ -12567,7 +12593,8 @@ async function pnCG_Render(){
   mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por tipo',k,Math.round(v.q),v.c.toFixed(2)]));
   mergeHist(agrupa(cirur,m=>m.medico),'medico').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por médico',k,Math.round(v.q),v.c.toFixed(2)]));
   Object.entries(porTipoPac).forEach(([t,v])=>pnCGultimoCsv.push(['R$/paciente — '+t,(v.p+' pacientes'),'',(v.p?(v.c/v.p):0).toFixed(2)]));
-  agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Consultórios — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas diversas — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(perdas,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Perdas e vencimentos — itens',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.80
   lav.forEach(n=>pnCGultimoCsv.push(['Lavanderia','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   ester.forEach(n=>pnCGultimoCsv.push(['Esterilização','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   manut.forEach(n=>pnCGultimoCsv.push(['Manutenção','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
