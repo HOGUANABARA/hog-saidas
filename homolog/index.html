@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.76 · item em cotação/pedido não fica "urgente" · "⏸ esperar acabar outro item"</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.77 · a cotação grava sozinha (sem depender do Salvar)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1044,7 +1044,7 @@ details[open] summary { margin-bottom: 6px; }
     <button class="co-b2" onclick="coNovoFornecedor()">🏪➕ Novo fornecedor</button>
     <button class="co-b2" id="co-btn-limpar" style="display:none;background:#FDF2E9;color:#D35400" onclick="coLimparJaComprados()">🧹 Tirar os que já viraram pedido</button>
     <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
-    <button class="co-b3" onclick="coSalvar()">💾 Salvar cotação</button>
+    <button class="co-b3" onclick="coSalvar()" title="a cotação grava sozinha a cada mudança; este botão só força a gravação agora">💾 Salvar agora</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
   </div>
   <div class="co-search">
@@ -5900,6 +5900,7 @@ async function coAbrir(id){
   await coCarregarJaComprados(id);
   const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&fechado=is.false&order=id.asc`);
   coCotacaoId = id;
+  coAutoTxt = ''; coUltimoSalvo = null;   // v4.77 — baseline é definida logo abaixo, depois de montar coItens
   coItens = (its||[]).map(it=>({
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
     qtd_desejada: it.qtd_desejada, saldo: it.saldo_no_momento, minimo: it.estoque_minimo,
@@ -5914,6 +5915,7 @@ async function coAbrir(id){
   // v4.70 — fornecedor que já tem oferta gravada entra no grupo (cotações antigas e juntadas vinham com o grupo vazio e as ofertas escondidas)
   coItens.forEach(it=>{ const g=it.grupo||'Orçamento 1'; coFornGrupo[g]=coFornGrupo[g]||[];
     (it.opcoes||[]).forEach(o=>{ if(o.fornecedor_id && !coFornGrupo[g].includes(o.fornecedor_id) && coFornGrupo[g].length<3) coFornGrupo[g].push(o.fornecedor_id); }); });
+  coUltimoSalvo = coFingerprint();   // v4.77 — o que está no banco
   coRender(); coAtualizaLabelGrupo();
   toast('Cotação #'+id+' carregada.','sucesso');
 }
@@ -6224,7 +6226,36 @@ function coAbrirWhats(id){
 // não pesar): antes, só mexidas estruturais salvavam — preço/qtd/descrição
 // digitados depois da última renderização ficavam de fora da recuperação.
 let _coDraftTimer=null;
-function coDraftAgendar(){ clearTimeout(_coDraftTimer); _coDraftTimer=setTimeout(coDraftSalvar, 500); }
+function coDraftAgendar(){ clearTimeout(_coDraftTimer); _coDraftTimer=setTimeout(coDraftSalvar, 500); coAutoAgendar(); }
+// ═══ v4.77 — GRAVAÇÃO AUTOMÁTICA ═══════════════════════════════════════════
+// Caso real (16/09): a cotação da fenilefrina "existia" na tela dela e não estava no
+// banco — ficou no rascunho do navegador sem o Salvar. A lista Comprar seguia marcando
+// urgente e a equipe não via. Agora toda mudança grava sozinha 1,5 s depois de parar de
+// mexer (mesmo coSalvar de sempre, em modo silencioso). O rascunho local continua como
+// rede de segurança para quando a gravação falha.
+let _coAutoTimer = null, coAutoEmCurso = false, coAutoPendente = false, coUltimoSalvo = null, coAutoTxt = '';
+function coFingerprint(){
+  // ids mudam a cada regravação (apaga e reinsere) — ficam fora, senão gravaria em círculo
+  return JSON.stringify({ c:coCotacaoId, i:coItens, f:coFornGrupo }, (k,v)=>(k==='id'||k==='memoria')?undefined:v);
+}
+function coAutoAgendar(){ clearTimeout(_coAutoTimer); _coAutoTimer = setTimeout(coAutoSalvar, 1500); }
+function coAutoStatus(txt){
+  coAutoTxt = txt;
+  const head=document.getElementById('co-status'); if(!head) return;
+  if(coCotacaoId){ head.textContent = 'Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)'+(txt?' · '+txt:''); head.style.cssText=''; }
+}
+async function coAutoSalvar(){
+  if(!coItens.length) return;                      // cotação vazia só encerra pelo botão
+  if(coFingerprint()===coUltimoSalvo) return;      // nada mudou desde a última gravação
+  if(coAutoEmCurso){ coAutoPendente = true; return; }
+  coAutoEmCurso = true; coAutoStatus('⏳ gravando…');
+  let ok = false;
+  try{ ok = await coSalvar(true); }catch(e){ ok = false; }
+  coAutoEmCurso = false;
+  if(ok){ coUltimoSalvo = coFingerprint(); coAutoStatus('💾 salvo '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})); }
+  else coAutoStatus('⚠ não salvo — clique em 💾 Salvar agora');
+  if(coAutoPendente){ coAutoPendente = false; coAutoAgendar(); }
+}
 
 function coSetItem(i, campo, val){
   if(campo==='qtd_desejada') coItens[i].qtd_desejada = coNum(val);
@@ -6564,6 +6595,7 @@ function coCardItem(i, it){
 }
 function coRender(){
   coDraftSalvar();   // v4.24c — cada mudança fica guardada no navegador (anti-F5)
+  if(coItens.length && coFingerprint()!==coUltimoSalvo) coAutoAgendar();   // v4.77 — grava sozinho
   if(coItens.some(function(it){ return it.saldo==null && it.material_id; })) setTimeout(coPreencherSaldos, 60);   // v4.24d
   { // v4.28 — busca o histórico (últ. compra + fornecedor) dos itens novos e re-renderiza
     const hpF=coItens.filter(it=>it.material_id && hpCache['m'+it.material_id]===undefined).map(it=>it.material_id);
@@ -6577,11 +6609,10 @@ function coRender(){
   // for salvo, mais ninguém da equipe enxerga. Isso agora está dito na cara.
   if(head){
     if(coCotacaoId){
-      head.textContent = 'Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)';
+      head.textContent = 'Cotação #'+coCotacaoId+' · '+coItens.length+' item(ns)'+(coAutoTxt?' · '+coAutoTxt:'');
       head.style.cssText = '';
     }else{
-      head.innerHTML = '📝 Rascunho só no SEU navegador · '+coItens.length+' item(ns)'
-        + (coItens.length ? ' — <b>clique em 💾 Salvar cotação</b> para a equipe ver' : '');
+      head.innerHTML = '📝 '+coItens.length+' item(ns)'+(coItens.length ? ' — grava sozinho em instantes' : '');   // v4.77
       head.style.cssText = 'background:#FDF2E9;color:#A04000;border:1.5px solid #E8B48B;'
         + 'border-radius:8px;padding:5px 10px;font-weight:700';
     }
@@ -6782,7 +6813,8 @@ async function coSalvar(silencioso){
       if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
     try{ await coGravarDescricoes(!!silencioso); }catch(e){ console.warn('descrição p/ cadastro:', e); }
-    if(!silencioso){ coRender(); toast('Cotação #'+coCotacaoId+' salva ✓','sucesso'); }
+    coUltimoSalvo = coFingerprint();   // v4.77
+    if(!silencioso){ coAutoStatus('💾 salvo '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})); coRender(); toast('Cotação #'+coCotacaoId+' salva ✓','sucesso'); }
     return true;
   }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
 }
