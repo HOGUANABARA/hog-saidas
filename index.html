@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.78 · etiqueta de etapa só pela linha pendente · "⏸ esperar" no lugar certo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.79 · kit lacrado aberto entra no livro como as peças que ele contém</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2247,6 +2247,7 @@ let matRemessa = {};
 // A ligação é por ID (coluna `vira_sujo_bem_id`), não por nome: hoje aprendemos
 // três vezes que renomear quebra casamento por nome em silêncio.
 let matViraSujo = {};
+let matKitComp = {};   // v4.79 — material do kit lacrado -> [{bem_id, qtd}] das peças que ele contém
 
 async function carregarBensRemessa(){
   try{
@@ -2263,6 +2264,15 @@ async function carregarBensRemessa(){
   }catch(e){
     matViraSujo = {};  // coluna ainda não existe — a saída da nova segue como antes
   }
+  // v4.79 — KIT LACRADO: 1 caixa nova vira N peças no livro (SQL 84).
+  // Sem a tabela, matKitComp fica vazio e a ponte volta a ser 1→1 — nada quebra.
+  try{
+    const kc = (await sbFetch('kit_componentes?select=kit_material_id,bem_id,qtd&kit_material_id=not.is.null&limit=500')) || [];
+    matKitComp = {};
+    for(const c of kc) (matKitComp[c.kit_material_id] = matKitComp[c.kit_material_id] || []).push(c);
+  }catch(e){
+    matKitComp = {};
+  }
 }
 
 // Peça nova usada na cirurgia entra suja na fila do bem.
@@ -2271,27 +2281,42 @@ async function carregarBensRemessa(){
 // agora, vinda do estoque de novas.
 // Falha aqui NUNCA derruba a saída: a baixa é o que não pode se perder.
 async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
-  const bemId = matViraSujo ? matViraSujo[mat.id] : null;
-  if(!bemId) return false;
-  try{
-    await sbFetch('remessa_sujos','POST',{
-      bem_id: bemId, qtd: qtd, origem: 'SAIDA_NOVA',
-      periodo_cirurgico_id: periodoId || null, registrado_por: quem });
-    const obs = 'Peça nova usada na cirurgia ("'+mat.nome+'") — entrou no ciclo de reprocessamento';
+  // v4.79 — KIT LACRADO (regra dela, 16/09): o Pak CONSTELLATION vem fechado e, ao ser
+  // aberto na cirurgia, vira VÁRIAS peças reprocessáveis (cassete, sonda, endoiluminador,
+  // trocater, kit verde, equipo, extensão de ar). Cada uma entra suja no seu próprio bem.
+  // Antes a ponte era 1→1 e o livro nunca via essas peças chegarem.
+  const comps = (matKitComp && matKitComp[mat.id] && matKitComp[mat.id].length)
+    ? matKitComp[mat.id].map(c=>({ bem_id:c.bem_id, qtd:(Number(c.qtd)||1)*qtd }))
+    : (matViraSujo && matViraSujo[mat.id] ? [{ bem_id:matViraSujo[mat.id], qtd:qtd }] : []);
+  if(!comps.length) return false;
+  const kit = comps.length > 1;
+  const obs = kit
+    ? 'Kit "'+mat.nome+'" aberto na cirurgia — peça entrou no ciclo de reprocessamento'
+    : 'Peça nova usada na cirurgia ("'+mat.nome+'") — entrou no ciclo de reprocessamento';
+  let n = 0;
+  for(const c of comps){
     try{
-      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'USO_NOVA', d_sujo: qtd,
-        registrado_por: quem, observacao: obs });
+      await sbFetch('remessa_sujos','POST',{
+        bem_id: c.bem_id, qtd: c.qtd, origem: 'SAIDA_NOVA',
+        periodo_cirurgico_id: periodoId || null, registrado_por: quem });
+      try{
+        await sbFetch('remessa_mov','POST',{ bem_id: c.bem_id, tipo: 'USO_NOVA', d_sujo: c.qtd,
+          registrado_por: quem, observacao: obs });
+      }catch(e){
+        // `remessa_mov.tipo` pode ser enum e recusar valor novo. O movimento é o
+        // que importa; o rótulo é secundário. Cai para um tipo que já existe.
+        await sbFetch('remessa_mov','POST',{ bem_id: c.bem_id, tipo: 'AJUSTE', d_sujo: c.qtd,
+          registrado_por: quem, observacao: obs + ' [entrada de peça nova]' });
+      }
+      n++;
     }catch(e){
-      // `remessa_mov.tipo` pode ser enum e recusar valor novo. O movimento é o
-      // que importa; o rótulo é secundário. Cai para um tipo que já existe.
-      await sbFetch('remessa_mov','POST',{ bem_id: bemId, tipo: 'AJUSTE', d_sujo: qtd,
-        registrado_por: quem, observacao: obs + ' [entrada de peça nova]' });
+      console.warn('ponte nova→sujo (bem '+c.bem_id+'):', e);
     }
-    return true;
-  }catch(e){
-    console.warn('ponte nova→sujo:', e);
-    return false;
   }
+  if(n && kit && typeof toast==='function'){
+    toast('🧩 Kit aberto: '+n+' peça(s) entraram na fila de sujos do livro de remessas.','');
+  }
+  return n > 0;
 }
 
 // ── ESTOQUE GERAL — local virtual único onde vive o saldo ─────
