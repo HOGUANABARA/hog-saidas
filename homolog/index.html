@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.75 · durável não entra na régua de compra por saldo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.76 · item em cotação/pedido não fica "urgente" · "⏸ esperar acabar outro item"</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4600,6 +4600,14 @@ let ccDados = [];        // linhas da vw_compras_classes
 // (SQL 81); sem o SQL a seção fica vazia e nada quebra.
 let ccVista = 'consumo';
 let ccReprocSet = new Set(), ccDuravelSet = new Set();
+let ccEspera = {};   // v4.76 — material_id -> material que precisa acabar antes de comprar este
+// o item esperado ainda tem saldo? (aí este não compra)
+function ccEsperando(r){
+  const alvo = ccEspera[r.material_id]; if(!alvo) return null;
+  const outro = ccDados.find(x=>x.material_id===alvo);
+  if(!outro) return null;
+  return (Number(outro.saldo)||0) > 0 ? outro : null;
+}
 function ccSetVista(v){ ccVista = v; ccRender(); }
 let ccPrevisao = null;   // pacientes previstos no mês (editável)
 let ccPrevisaoBase = null; // média histórica de pacientes/mês — a previsão editada vira multiplicador sobre ela
@@ -4665,6 +4673,11 @@ async function acCarregar(){
       const oc = await sbFetch('materiais?select=id&ocultar_compra=eq.true&limit=500');
       ccOculto = {}; for(const x of (oc||[])) ccOculto[x.id] = true;
     }catch(e){ ccOculto = {}; }
+    // v4.76 — "⏸ esperar acabar outro item" (materiais.comprar_apos_material_id, SQL 83)
+    try{
+      const es = await sbFetch('materiais?select=id,comprar_apos_material_id&comprar_apos_material_id=not.is.null&limit=500');
+      ccEspera = {}; for(const x of (es||[])) ccEspera[x.id] = x.comprar_apos_material_id;
+    }catch(e){ ccEspera = {}; }
     await ccCarregarAndamento();
     if(ccPrevisao === null){
       try{
@@ -4751,6 +4764,9 @@ function ccPrioridade(r){
   // v4.75 — durável (balão, laringoscópio, guedel…) não é estoque de consumo: não entra na régua
   // por saldo/mínimo. Ele já tem a seção própria 🔧 na tela Comprar (v4.58).
   if(typeof ccDuravelSet!=='undefined' && ccDuravelSet && ccDuravelSet.has(r.material_id)) return 'OK';
+  // v4.76 — já está em cotação/pedido/entrega: a etiqueta da etapa fala por ele, não a urgência
+  if(typeof ccAndamento==='object' && ccAndamento && ccAndamento[r.material_id]) return 'OK';
+  if(ccEsperando(r)) return 'OK';   // v4.76 — só compra quando acabar o outro item
   const gt = ccGatilho(r);
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
   const venc60 = Number(r.qtd_vencendo_60d)||0;
@@ -4782,6 +4798,8 @@ function ccPrioridade(r){
   return 'OK';
 }
 function ccPrioChip(r){
+  const esp = ccEsperando(r);
+  if(esp) return `<span class="cc-chip cc-ama" style="margin-left:6px" title="não compra enquanto o outro item tiver saldo; volta sozinho quando ele acabar">⏸ só depois de acabar ${String(esp.material).replace(/</g,'&lt;')} (saldo ${acN0(esp.saldo)}) <span style="cursor:pointer;margin-left:4px" title="desfazer a espera" onclick="event.stopPropagation();ccEsperarLimpar(${r.material_id})">✕</span></span>`;
   const p = ccPrioridade(r);
   if(p==='OK') return '';
   return `<span class="cc-chip ${CC_PRIO[p].chip}" style="margin-left:6px">${CC_PRIO[p].rot}</span>`;
@@ -4793,6 +4811,7 @@ function ccPrioChip(r){
 // além da régua, o piso clínico (mínimo) — remédio de emergência não pode faltar.
 function ccGatilho(r){
   if(typeof ccDuravelSet!=='undefined' && ccDuravelSet && ccDuravelSet.has(r.material_id)) return { compra:false };   // v4.75
+  if(ccEsperando(r)) return { compra:false, esperando:true };   // v4.76
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
   const venc60 = Number(r.qtd_vencendo_60d)||0;
   const vencido = r.proxima_validade && r.proxima_validade < ccHoje();
@@ -5129,7 +5148,8 @@ function ccChk(r){
               : naFila ? 'já pedido para '+naFila.grupo+' por '+(naFila.pedido_por||'—') : '';
   return `<td class="cc-c-chk"><input type="checkbox" class="cc-chk" ${ccSel.has(r.material_id)?'checked':''} ${trava?'disabled title="'+trava.replace(/"/g,'&quot;')+'"':''} onchange="ccToggleSel(${r.material_id}, this.checked)">
     ${naFila?`<span title="${('em espera · '+naFila.grupo).replace(/"/g,'&quot;')}" style="font-size:10px">🕐</span>`:
-    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>`}</td>`;
+    `<button class="cc-hide" title="Tirar da lista de compras (não dispara mais alerta; volta pelo chip 🚫 fora da lista)" onclick="ccOcultar(${r.material_id})">🚫</button>
+    <button class="cc-hide" title="Só comprar este item quando OUTRO acabar (ex.: Avastin 0,015 espera o 0,010 terminar). Volta sozinho quando o outro zerar." onclick="ccEsperar(${r.material_id})">⏸ esperar</button>`}</td>`;
 }
 
 function ccTabela(classe, rows, mostrarTodos){
@@ -5266,6 +5286,33 @@ async function ccOcultar(materialId){
     if((e.message||'').includes('ocultar_compra')) toast('⚠ Rode o prioridade_ocultar.sql no Supabase (coluna nova).','erro');
     else toast('Erro: '+e.message,'erro');
   }
+}
+// v4.76 — "⏸ esperar acabar outro item": grava materiais.comprar_apos_material_id (SQL 83)
+async function ccEsperar(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  const esc = await pkEscolher({ titulo:'"'+r.material+'" só compra quando acabar:',
+    subtitulo:'Escolha o item que precisa terminar primeiro. Enquanto ele tiver saldo, este não dispara compra; quando zerar, volta sozinho.',
+    itens: ccDados.filter(x=>x.material_id!==materialId).map(x=>({ id:x.material_id, nome:x.material, meta:'saldo '+acN0(x.saldo) })) });
+  if(!esc) return;
+  if(!confirm('"'+r.material+'" vai esperar "'+esc.nome+'" acabar?\n\nEnquanto "'+esc.nome+'" tiver saldo, "'+r.material+'" não entra na compra.')) return;
+  try{
+    const res = await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ comprar_apos_material_id: esc.id });
+    if(!res || !res.length){ toast('⚠ Sem permissão para gravar (RLS).','erro'); return; }
+    ccEspera[materialId] = esc.id;
+    toast('⏸ '+r.material+' espera '+esc.nome+' acabar.','sucesso');
+    ccRender();
+  }catch(e){
+    if((e.message||'').includes('comprar_apos_material_id')) toast('⚠ Rode o 83_comprar_apos.sql no Supabase (coluna nova).','erro');
+    else toast('Erro: '+e.message,'erro');
+  }
+}
+async function ccEsperarLimpar(materialId){
+  const r = ccDados.find(x=>x.material_id===materialId); if(!r) return;
+  if(!confirm('Desfazer a espera de "'+r.material+'"? Ele volta a seguir a régua normal.')) return;
+  try{
+    await sbFetch(`materiais?id=eq.${materialId}`,'PATCH',{ comprar_apos_material_id: null });
+    delete ccEspera[materialId]; toast('Espera desfeita.',''); ccRender();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 async function ccRestaurar(materialId){
   try{
