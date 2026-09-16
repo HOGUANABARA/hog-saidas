@@ -6,13 +6,17 @@
 <title>HOG — Registro de Saídas Cirúrgicas</title>
 <style>
 :root {
-  --azul:       #1B4F72;
+  /* v4.85 — paleta do HOG TOTAL (skill tela-hog) */
+  --azul:       #0F4C81;   /* azul da marca */
   --azul-medio: #2E86AB;
   --azul-claro: #D6EAF8;
-  --verde:      #1E8449;
+  --acao:       #0d6efd;   /* azul de ação */
+  --verde:      #198754;
+  --ok:         #198754;
   --verde-claro:#D5F5E3;
   --laranja:    #D35400;
-  --vermelho:   #922B21;
+  --vermelho:   #dc3545;
+  --erro:       #dc3545;
   --cinza-1:    #F4F6F9;
   --cinza-2:    #E8ECF0;
   --cinza-3:    #BDC3C7;
@@ -116,6 +120,19 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .tabela-materiais th.col-tipo-3 { color: #8E44AD; }
 .tabela-materiais td { padding: 9px 10px; border-bottom: 1px solid var(--cinza-2); font-size: 13px; vertical-align: middle; }
 .tabela-materiais tr:last-child td { border-bottom: none; }
+/* v4.85 — o nome ficava longe da quantidade e dava para errar a linha.
+   A coluna do nome gruda na esquerda, a linha inteira acende ao passar o mouse
+   ou ao clicar num campo dela, e as linhas alternam de fundo. */
+.tabela-materiais tbody tr:nth-child(even) td { background: #FBFCFD; }
+.tabela-materiais th:first-child, .tabela-materiais td:first-child {
+  position: sticky; left: 0; z-index: 2; background: var(--branco);
+  box-shadow: 1px 0 0 var(--cinza-2); }
+.tabela-materiais thead th:first-child { z-index: 3; background: var(--cinza-1); }
+.tabela-materiais tbody tr:nth-child(even) td:first-child { background: #FBFCFD; }
+.tabela-materiais tbody tr:hover td, .tabela-materiais tbody tr:hover td:first-child { background: #EAF2FB; }
+.tabela-materiais tbody tr:focus-within td, .tabela-materiais tbody tr:focus-within td:first-child { background: var(--azul-claro); }
+.tabela-materiais tbody tr:focus-within td:first-child { box-shadow: inset 4px 0 0 var(--acao), 1px 0 0 var(--cinza-2); font-weight: 700; color: var(--azul); }
+.tabela-materiais tbody tr:focus-within .input-qtd { border-color: var(--acao); }
 .tabela-materiais tr:hover td { background: var(--cinza-1); }
 
 .input-qtd { width: 72px; border: 1.5px solid var(--cinza-2); border-radius: 6px; padding: 6px 8px; font-size: 14px; text-align: center; outline: none; font-family: var(--fonte); }
@@ -409,7 +426,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.84 · TODOS os reprocessados na seção do óxido de etileno</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.85 · ficha de saída: linha destacada, sem tela dentro de tela, janela própria e rascunho</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -680,7 +697,8 @@ details[open] summary { margin-bottom: 6px; }
       </div>
       <div id="resultado-busca"></div>
 
-      <div style="overflow-x:auto; overflow-y:auto; max-height:480px; border:1.5px solid var(--cinza-2); border-radius:var(--radius);">
+      <!-- v4.85 — sem rolagem interna: a página inteira rola, o cabeçalho da tabela gruda no topo -->
+      <div style="overflow-x:auto; border:1.5px solid var(--cinza-2); border-radius:var(--radius);">
         <table class="tabela-materiais" id="tabela-mat">
           <thead id="thead-mat"></thead>
           <tbody id="tbody-mat"></tbody>
@@ -690,6 +708,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="rodape-form">
         <div class="resumo-qtd"><strong id="cnt-preen">0</strong> itens com quantidade informada</div>
         <div style="display:flex;gap:10px">
+          <button class="btn btn-secundario" onclick="saidaAbrirJanela()" title="Abre a saída numa janela só dela. Você pode parar, mexer em outra coisa e voltar — o que já foi digitado fica guardado.">🗗 Abrir em janela</button>
           <button class="btn btn-secundario" onclick="limparForm()">Cancelar</button>
           <button class="btn btn-verde" onclick="abrirRevisao()">Revisar e Enviar →</button>
         </div>
@@ -2756,12 +2775,86 @@ function renderizarTabela() {
   atualizarContador();
 }
 
+// ═══ v4.85 — FICHA DE SAÍDA EM JANELA PRÓPRIA, COM RASCUNHO ═══════════════
+// Pedido dela (16/09): "seria muito legal se abrisse uma janela e a pessoa pudesse
+// navegar em outras coisas, pq ela pode precisar parar de lançar e continuar depois".
+// A janela resolve o navegar; o rascunho resolve o parar e voltar — o que foi digitado
+// fica no navegador e volta sozinho, como já acontece no orçamento.
+const SAIDA_DRAFT = 'hog_saida_draft';
+let _saidaDraftT = null;
+function saidaDraftEstado(){
+  const g = id => (document.getElementById(id)||{}).value || '';
+  return { t: Date.now(), data:g('inp-data'), medico:g('sel-medico'), fellow:g('sel-fellow'),
+           registrante:g('sel-registrante'),
+           tipos: (typeof tiposCirurgia!=='undefined' ? tiposCirurgia : []),
+           materiais: (typeof materiaisTabela!=='undefined' ? materiaisTabela : []) };
+}
+function saidaDraftTemConteudo(e){
+  if(!e) return false;
+  const comQtd = (e.materiais||[]).some(m => (m && m.qtds||[]).some(q => parseFloat(q) > 0));
+  const comTipo = (e.tipos||[]).some(t => t && t.tipo);
+  return !!(comQtd || comTipo);
+}
+function saidaDraftSalvar(){
+  try{
+    const e = saidaDraftEstado();
+    if(saidaDraftTemConteudo(e)) localStorage.setItem(SAIDA_DRAFT, JSON.stringify(e));
+    else localStorage.removeItem(SAIDA_DRAFT);
+  }catch(e){}
+}
+function saidaDraftAgendar(){ clearTimeout(_saidaDraftT); _saidaDraftT = setTimeout(saidaDraftSalvar, 600); }
+function saidaDraftLimpar(){ try{ localStorage.removeItem(SAIDA_DRAFT); }catch(e){} }
+function saidaDraftRecuperar(){
+  let d = null;
+  try{ d = JSON.parse(localStorage.getItem(SAIDA_DRAFT) || 'null'); }catch(e){}
+  if(!saidaDraftTemConteudo(d)) return false;
+  if(Date.now() - (d.t||0) > 3*86400000){ saidaDraftLimpar(); return false; }   // rascunho de 3 dias
+  if(saidaDraftTemConteudo(saidaDraftEstado())) return false;                    // já tem coisa na tela
+  const s = (id,v) => { const el = document.getElementById(id); if(el && v) el.value = v; };
+  s('inp-data', d.data); s('sel-medico', d.medico); s('sel-fellow', d.fellow); s('sel-registrante', d.registrante);
+  if(Array.isArray(d.tipos) && d.tipos.length && typeof tiposCirurgia !== 'undefined') tiposCirurgia = d.tipos;
+  if(Array.isArray(d.materiais) && typeof materiaisTabela !== 'undefined') materiaisTabela = d.materiais;
+  try{ renderizarTipos(); }catch(e){}
+  try{ renderizarTabela(); }catch(e){}
+  try{ toast('📝 Recuperei o lançamento que você tinha começado. Confira antes de enviar.','sucesso'); }catch(e){}
+  return true;
+}
+function saidaAbrirJanela(){
+  saidaDraftSalvar();
+  const w = window.open(location.pathname + '?tela=registro', 'hog-saida-cirurgica',
+                        'width=1180,height=820,scrollbars=yes,resizable=yes');
+  if(!w) toast('O navegador bloqueou a janela — libere os pop-ups deste site.','erro');
+  else toast('Abri a saída numa janela só dela. Aqui você continua navegando.','');
+}
+document.addEventListener('DOMContentLoaded', function(){
+  const aba = document.getElementById('aba-registro');
+  if(aba){
+    aba.addEventListener('input',  saidaDraftAgendar);
+    aba.addEventListener('change', saidaDraftAgendar);
+  }
+  // enviar ou cancelar encerra o rascunho
+  try{
+    if(typeof limparForm === 'function'){
+      const _lf = limparForm;
+      limparForm = function(){ saidaDraftLimpar(); return _lf.apply(this, arguments); };
+    }
+  }catch(e){}
+  setTimeout(function(){
+    try{
+      const p = new URLSearchParams(location.search).get('tela');
+      if(p && typeof SESSAO !== 'undefined' && SESSAO) trocarAba(p);
+    }catch(e){}
+    try{ saidaDraftRecuperar(); }catch(e){}
+  }, 2500);
+});
+
 function atualizarQtd(i, j, val) {
   if (!materiaisTabela[i]) return;
   materiaisTabela[i].qtds[j] = val;
   const inp = document.getElementById(`qtd-${i}-${j}`);
   if (inp) inp.classList.toggle('preenchido', parseFloat(val) > 0);
   atualizarContador();
+  try{ saidaDraftAgendar(); }catch(e){}   // v4.85
 }
 
 function removerMaterial(i) {
