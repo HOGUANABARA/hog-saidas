@@ -409,7 +409,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.74 · lote vencido com estoque bom pede baixa, não compra</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.75 · durável não entra na régua de compra por saldo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4748,6 +4748,9 @@ function ccNecMes(r){ // necessidade p/ 1 mês de procedimentos, escalada pela a
   return (Number(r.consumo_medio_mensal)||0) * ccFator();
 }
 function ccPrioridade(r){
+  // v4.75 — durável (balão, laringoscópio, guedel…) não é estoque de consumo: não entra na régua
+  // por saldo/mínimo. Ele já tem a seção própria 🔧 na tela Comprar (v4.58).
+  if(typeof ccDuravelSet!=='undefined' && ccDuravelSet && ccDuravelSet.has(r.material_id)) return 'OK';
   const gt = ccGatilho(r);
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
   const venc60 = Number(r.qtd_vencendo_60d)||0;
@@ -4789,6 +4792,7 @@ function ccPrioChip(r){
 // Compra quando cobre menos de 1 mês; sugestão repõe para 2 meses. CRITICO tem,
 // além da régua, o piso clínico (mínimo) — remédio de emergência não pode faltar.
 function ccGatilho(r){
+  if(typeof ccDuravelSet!=='undefined' && ccDuravelSet && ccDuravelSet.has(r.material_id)) return { compra:false };   // v4.75
   const saldo = Number(r.saldo)||0, min = Number(r.estoque_minimo)||0;
   const venc60 = Number(r.qtd_vencendo_60d)||0;
   const vencido = r.proxima_validade && r.proxima_validade < ccHoje();
