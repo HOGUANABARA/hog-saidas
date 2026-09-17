@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.88 · cada orçamento na sua janela, sem misturar; comparativo fica preso ao pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.89 · folha de contagem do administrativo sai impressa, no papel do livro de remessas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -18459,6 +18459,7 @@ async function alIgnorar(id){
       </select>
       <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="adm-so-contados" onchange="admInvRender()"> só o que eu já preenchi</label>
       <span style="flex:1"></span>
+      <button onclick="admImprimir()" title="Folha de contagem no papel, com o saldo de hoje e a coluna em branco para escrever à mão" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">🖨 Imprimir contagem</button>
       <button onclick="admExportar()" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">📄 Baixar planilha</button>
       <button id="adm-btn-gravar" onclick="admContagemRevisar()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">✔ Conferir e gravar contagem</button>
     </div>
@@ -19364,6 +19365,52 @@ async function admExportar(){
     XLSX.writeFile(wb, 'Inventario_ADM_HOG_' + new Date().toISOString().split('T')[0] + '.xlsx');
     toast('Planilha do administrativo exportada ✓ — conte no papel e digite na coluna "contei".','sucesso');
   }catch(e){ toast('Erro ao exportar: '+e.message,'erro'); }
+}
+
+// v4.89 — folha de contagem no papel (pedido dela: "põe o botão de imprimir").
+// Mesmo papel do livro de remessas (rmCssImpressao) — não se inventa um segundo
+// visual de impressão. Sai o que está NA TELA: o filtro de classe e a busca
+// valem para o papel também, então dá para imprimir só os impressos ou só o
+// expediente. A coluna "Contei" vai em branco, larga, para escrever à mão.
+function admImprimir(){
+  const dados = admFiltrar();
+  if(!dados.length){ toast('Nada para imprimir com esse filtro.','erro'); return; }
+  const hoje = rmData(new Date().toISOString().slice(0,10));
+  const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : '—';
+  const classeSel = document.getElementById('adm-classe').value;
+  const escopo = classeSel==='ADM_IMPRESSOS' ? 'Impressos da gráfica'
+               : classeSel==='ADM_EXPEDIENTE' ? 'Expediente'
+               : 'Impressos e expediente';
+
+  let linhas='', classeAtual=null, ix=0;
+  dados.forEach(function(r){
+    if(r.classe!==classeAtual){
+      classeAtual = r.classe;
+      const rot = classeAtual==='ADM_IMPRESSOS' ? 'IMPRESSOS — formulários da gráfica'
+                                                : 'EXPEDIENTE — papelaria e suprimentos';
+      linhas += '<tr><td colspan="6" style="background:#EEF3F8;font-weight:bold;font-size:10px;letter-spacing:.5px">'+rot+'</td></tr>';
+    }
+    ix++;
+    linhas += '<tr><td class="n">'+ix+'</td>'
+            + '<td style="width:66px;font-size:10.5px;color:#666">'+rmEsc(r.codigo||'')+'</td>'
+            + '<td class="t">'+rmEsc(r.material)+'</td>'
+            + '<td style="width:74px;font-size:10.5px;color:#666">'+rmEsc((r.unidade_medida||'unidade').toLowerCase())+'</td>'
+            + '<td class="q" style="font-size:13px;color:#222;font-weight:normal">'+(Number(r.saldo)||0)+'</td>'
+            + '<td class="c"></td></tr>';
+  });
+
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+    +'<title>Inventário administrativo — '+rmEsc(escopo)+'</title>'+rmCssImpressao()+'</head><body>'
+    +'<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+      +'<div class="sub">Administrativo · Folha de contagem · '+rmEsc(escopo)+'</div></div>'
+      +'<div class="num">ITENS<b>'+dados.length+'</b>Saldo em '+hoje+'</div></div>'
+    +'<table style="width:100%"><thead><tr><th>#</th><th>Código</th><th>Item</th><th>Unidade</th>'
+      +'<th class="q">Saldo hoje</th><th class="c">Contei</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table>'
+    +'<div class="ass"><div>Contado por</div><div>Conferido por</div></div>'
+    +'<div class="rodape">HOG Saídas · folha de contagem do administrativo · emitida por '+rmEsc(quem)+' em '+hoje
+      +' · depois de contar, digite na coluna <b>contei</b> da tela e clique em <b>Conferir e gravar contagem</b>.</div>'
+    +'</body></html>');
 }
 
 function admFiltrar(){
