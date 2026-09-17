@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.87 · ficha em duas colunas, sem a coluna Origem, e o último preço pago de volta no orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.88 · cada orçamento na sua janela, sem misturar; comparativo fica preso ao pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1037,6 +1037,9 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-mat-l{gap:10px}
   #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
   #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  /* v4.88 — janela presa a um orçamento */
+  #aba-cotacao .co-foco-aviso{background:#EDE7F6;border:1.5px solid #B39DDB;color:#4527A0;
+    border-radius:8px;padding:9px 14px;font-size:12.5px;line-height:1.5;margin-bottom:12px}
   /* v4.87 — a referência da negociação volta para a linha (na v4.71 ela tinha virado tooltip) */
   #aba-cotacao .co-ult{font-size:10.5px;color:var(--cinza-5);background:#F4F8F4;border:1px solid #DCEBDC;
     border-radius:5px;padding:2px 7px;white-space:nowrap}
@@ -1074,12 +1077,12 @@ details[open] summary { margin-bottom: 6px; }
       </select>
     </span>
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
-    <button class="co-b4" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
+    <button class="co-b4" id="co-btn-novogrupo" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
     <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
     <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
     <button class="co-b2" onclick="coNovoFornecedor()">🏪➕ Novo fornecedor</button>
     <button class="co-b2" id="co-btn-limpar" style="display:none;background:#FDF2E9;color:#D35400" onclick="coLimparJaComprados()">🧹 Tirar os que já viraram pedido</button>
-    <button class="co-b4" onclick="coNova()">＋ Nova cotação</button>
+    <button class="co-b4" id="co-btn-novacot" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()" title="a cotação grava sozinha a cada mudança; este botão só força a gravação agora">💾 Salvar agora</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
   </div>
@@ -5962,14 +5965,82 @@ let coGrupoAtual = 'Orçamento 1';
 // ele volta sozinho. Some quando a cotação é salva de verdade.
 function coDraftSalvar(){
   try{
-    if(coItens.length) localStorage.setItem('hog_co_draft', JSON.stringify({ t:Date.now(), cot:coCotacaoId, itens:coItens, forn:coFornGrupo, grupo:coGrupoAtual }));
-    else localStorage.removeItem('hog_co_draft');
+    if(coItens.length) localStorage.setItem(coDraftChave(), JSON.stringify({ t:Date.now(), cot:coCotacaoId, itens:coItens, forn:coFornGrupo, grupo:coGrupoAtual }));
+    else localStorage.removeItem(coDraftChave());
   }catch(e){}
 }
-function coDraftLimpar(){ try{ localStorage.removeItem('hog_co_draft'); }catch(e){} }
+// ═══ v4.88 — VÁRIOS ORÇAMENTOS AO MESMO TEMPO ════════════════════════════
+// Pedido dela (17/09): "preciso da opção abrir tela para ter acesso exclusivo ao
+// orçamento que estou trabalhando e deixar as janelas abertas até fechar a
+// negociação, sem ter que carregar toda hora e ficar procurando na lista" e
+// "precisamos de uma solução definitiva para trabalhar simultaneamente com
+// vários orçamentos".
+//
+// O que atrapalhava: a aba Orçar sempre mostrou a cotação INTEIRA e o salvar
+// regravava a cotação inteira (apaga e reinsere). Com duas janelas abertas, a
+// última a gravar levava o trabalho da outra.
+//
+// Agora a janela pode ficar PRESA a um orçamento (`?orc=<nome do grupo>`):
+//   • só aquele orçamento aparece na tela;
+//   • o salvar regrava SÓ as linhas daquele orçamento (`grupo=eq.<g>`);
+//   • o cabeçalho da cotação é mesclado, não sobrescrito;
+//   • o rascunho local tem chave própria, para uma janela não ler a da outra;
+//   • a junção automática de cotações abertas não roda aqui (ela renomeia grupos).
+// Sem `?orc=`, tudo funciona exatamente como antes.
+let coOrcFoco = (function(){
+  try{ const v = new URLSearchParams(location.search).get('orc'); return (v && v.trim()) ? v.trim() : null; }
+  catch(e){ return null; }
+})();
+
+if(coOrcFoco){ try{ document.title = coOrcFoco + ' — HOG Orçar'; }catch(e){} }
+
+function coDraftChave(){ return 'hog_co_draft' + (coOrcFoco ? ':'+coOrcFoco : ''); }
+
+// filtro das linhas que ESTA janela pode regravar. `pedido_id=is.null` é a trava
+// nova: linha que já virou pedido é histórico e nenhum salvamento a apaga.
+function coFiltroRegravar(){
+  const base = 'cotacao_id=eq.'+coCotacaoId+'&fechado=is.false&pedido_id=is.null';
+  return coOrcFoco ? (base + '&grupo=eq.' + encodeURIComponent(coOrcFoco)) : base;
+}
+
+// o cabeçalho guarda os fornecedores de TODOS os grupos; a janela presa a um
+// orçamento só conhece o dela, então mescla com o que está no banco
+async function coSalvarCabecalho(){
+  let fg = coFornGrupo;
+  if(coOrcFoco){
+    try{
+      const cab = await sbFetch('cotacoes?select=fornecedores_grupo&id=eq.'+coCotacaoId+'&limit=1');
+      const atual = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
+      fg = Object.assign({}, atual);
+      fg[coOrcFoco] = coFornGrupo[coOrcFoco] || [];
+    }catch(e){ fg = coFornGrupo; }
+  }
+  await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ fornecedores_grupo: fg });
+}
+
+function coAbrirJanela(g){
+  const alvo = 'hog-orc-' + String(g).replace(/[^A-Za-z0-9]/g,'');
+  const w = window.open(location.pathname + '?tela=cotacao&orc=' + encodeURIComponent(g), alvo,
+                        'width=1280,height=880,scrollbars=yes,resizable=yes');
+  if(!w){ toast('O navegador bloqueou a janela — libere os pop-ups deste site.','erro'); return; }
+  try{ w.focus(); }catch(e){}
+  toast('Abri "'+g+'" numa janela só dele. Pode deixar aberta até fechar a negociação.','sucesso');
+}
+
+// aviso no topo da aba, para ninguém se perder entre janelas iguais
+function coFocoBanner(){
+  if(!coOrcFoco) return '';
+  return '<div class="co-foco-aviso">🗗 Esta janela está trabalhando <b>só no orçamento '
+       + coEsc(coOrcFoco) + '</b>. Os outros orçamentos continuam na janela principal e '
+       + 'nada do que você fizer aqui mexe neles.</div>';
+}
+function coEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function coDraftLimpar(){ try{ localStorage.removeItem(coDraftChave()); }catch(e){} }
+
 function coDraftLer(){
   try{
-    const d=JSON.parse(localStorage.getItem('hog_co_draft')||'null');
+    const d=JSON.parse(localStorage.getItem(coDraftChave())||'null');
     if(d && d.itens && d.itens.length && (Date.now()-(d.t||0)) < 86400000) return d;
   }catch(e){}
   return null;
@@ -5984,7 +6055,15 @@ function coGruposDistintos(){
   for(const g of Object.keys(coFornGrupo)) if(!l.includes(g)) l.push(g);
   return l.length?l:['Orçamento 1'];
 }
-function coAtualizaLabelGrupo(){ const el=document.getElementById('co-grupo-atual-label'); if(el) el.textContent=coGrupoAtual; }
+function coAtualizaLabelGrupo(){
+  // v4.88 — janela presa a um orçamento: item novo cai NESTE orçamento, e criar
+  // grupo ou cotação é coisa da janela principal.
+  if(coOrcFoco){
+    coGrupoAtual = coOrcFoco;
+    ['co-btn-novogrupo','co-btn-novacot'].forEach(function(id){ const b=document.getElementById(id); if(b) b.style.display='none'; });
+  }
+  const el=document.getElementById('co-grupo-atual-label'); if(el) el.textContent=coGrupoAtual;
+}
 function coNovoGrupo(){
   const nome = prompt('Nome do novo grupo de orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
   if(!nome||!nome.trim()) return;
@@ -6016,7 +6095,8 @@ async function coCarregar(){
       // de insumos aberta; se houver mais, as antigas são juntadas na mais nova (grupos
       // marcados com o nº de origem). Rascunho sem cotação entra na aberta, não cria outra.
       const abertas = (await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=10')) || [];
-      if(abertas.length>1) await coJuntarAbertas(abertas);
+      // v4.88 — a junção renomeia grupos; numa janela presa a um orçamento isso puxaria o tapete
+      if(abertas.length>1 && !coOrcFoco) await coJuntarAbertas(abertas);
       if(draft && (draft.cot || !abertas.length)){
         coCotacaoId=draft.cot||null; coItens=draft.itens||[]; coFornGrupo=draft.forn||{}; coGrupoAtual=draft.grupo||'Orçamento 1';
         coRender(); coAtualizaLabelGrupo();
@@ -6067,6 +6147,19 @@ async function coAbrir(id){
     grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || '',
     opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
   }));
+  // v4.88 — resto de um salvamento que falhou no meio: se o mesmo material aparece
+  // duas vezes no mesmo orçamento, vale a linha mais nova (id maior). Antes isso
+  // não acontecia porque o salvar apagava primeiro — e era justamente aí que se
+  // perdia tudo quando a gravação falhava.
+  const _ult = {};
+  coItens.forEach(function(it,ix){ _ult[(it.grupo||'Orçamento 1')+'|'+it.material_id] = ix; });
+  coItens = coItens.filter(function(it,ix){ return _ult[(it.grupo||'Orçamento 1')+'|'+it.material_id] === ix; });
+  // v4.88 — janela presa a um orçamento: só as linhas dele entram na memória,
+  // e é por isso que o salvar desta janela não alcança os outros orçamentos.
+  if(coOrcFoco){
+    coItens = coItens.filter(it=>(it.grupo||'Orçamento 1')===coOrcFoco);
+    try{ document.title = coOrcFoco + ' — HOG Orçar'; }catch(e){}
+  }
   // v4.70 — embalagem do cadastro (quantos vêm) para a linha do material
   try{ const mids=[...new Set(coItens.map(it=>it.material_id).filter(Boolean))];
     if(mids.length){ const ms=(await sbFetch('materiais?select=id,qtd_kit,unidade_medida&id=in.('+mids.join(',')+')'))||[];
@@ -6806,6 +6899,7 @@ function coRender(){
   }
   const corpo=document.getElementById('co-corpo');
   if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use "Puxar itens da Etapa 1" ou a busca acima.</div>'; return; }
+  const avisoFoco = coFocoBanner();
   const ordem=[]; const porGrupo={};
   coItens.forEach((it,i)=>{ const g=it.grupo||'Orçamento 1'; if(!porGrupo[g]){porGrupo[g]=[];ordem.push(g);} porGrupo[g].push(i); });
   for(const g of Object.keys(coFornGrupo)) if(!ordem.includes(g)){ ordem.push(g); porGrupo[g]=[]; }
@@ -6813,8 +6907,15 @@ function coRender(){
   // os fornecedores das ofertas entram no grupo, senão as ofertas ficam escondidas
   for(const g of ordem){ coFornGrupo[g]=coFornGrupo[g]||[];
     for(const i of (porGrupo[g]||[])) for(const o of (coItens[i].opcoes||[])){ if(o.fornecedor_id && !coFornGrupo[g].includes(o.fornecedor_id) && coFornGrupo[g].length<3) coFornGrupo[g].push(o.fornecedor_id); } }
-  let html='';
-  for(const g of ordem){
+  // v4.88 — janela presa: aparece só o orçamento dela (o resto continua na principal)
+  const ordemVis = coOrcFoco ? ordem.filter(x=>x===coOrcFoco) : ordem;
+  let html=avisoFoco;
+  if(coOrcFoco && !ordemVis.length){
+    corpo.innerHTML = avisoFoco + '<div class="co-empty">O orçamento <b>'+coEsc(coOrcFoco)+'</b> não está mais aberto — '
+      + 'ou virou pedido, ou foi renomeado. Feche esta janela e abra pela principal.</div>';
+    return;
+  }
+  for(const g of ordemVis){
     const idxs=porGrupo[g]||[];
     const fids=coFornGrupo[g]||[];
     const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)} <span class="co-resp ${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length?'ok':''}" title="itens deste grupo que já têm preço deste fornecedor">${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length}/${idxs.length}</span>
@@ -6829,6 +6930,7 @@ function coRender(){
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="co-grupo-count">${idxs.length} ${idxs.length===1?'item':'itens'}</span>
         ${idxs.length===0?`<button class="co-b3" style="padding:5px 10px;font-size:11px;background:#FDEDEC;color:var(--vermelho)" onclick="coExcluirGrupo('${g.replace(/'/g,"\\'")}')">🗑 Excluir grupo vazio</button>`:''}
+        ${coOrcFoco ? '' : `<button class="co-b3" style="padding:5px 10px;font-size:11px;background:#EDE7F6;color:#5E35B1" title="abre SÓ este orçamento numa janela própria — dá para deixar aberta até fechar a negociação e mexer nos outros ao mesmo tempo" onclick="coAbrirJanela('${g.replace(/'/g,"\\'")}')">🗗 Abrir em janela</button>`}
         <button class="co-b3" style="padding:5px 10px;font-size:11px" onclick="coFecharGrupo('${g.replace(/'/g,"\\'")}')">🔒 Fechar grupo → Pedidos</button>
       </span></div>
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:10px 14px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
@@ -6944,10 +7046,20 @@ async function coSalvar(silencioso){
   // pedido (ou foram tirados), as linhas antigas continuavam no banco e a
   // cotação seguia 'aberta' — então o item aparecia travado na lista de
   // compras para sempre, mesmo depois de o pedido ser cancelado.
+  // v4.88 — numa janela presa, ficar sem item significa que ESTE orçamento
+  // esvaziou; a cotação continua aberta por causa dos outros.
+  if(!coItens.length && coOrcFoco){
+    if(coCotacaoId!==null){
+      try{ await coApagarItens(coFiltroRegravar()); }
+      catch(e){ toast('Erro ao limpar o orçamento: '+e.message,'erro'); return false; }
+    }
+    if(!silencioso) toast('Este orçamento ficou sem itens.','');
+    return true;
+  }
   if(!coItens.length){
     if(coCotacaoId!==null){
       try{
-        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
+        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false&pedido_id=is.null`);
         await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ status:'fechada' });
         coCotacaoId = null;
         if(typeof ccCarregarAndamento==='function'){ await ccCarregarAndamento(); if(typeof ccRender==='function') ccRender(); }
@@ -6968,25 +7080,35 @@ async function coSalvar(silencioso){
         for(const it of meus){ if(!coItens.some(x=>x.material_id===it.material_id)) coItens.push(it); }
         coFornGrupo = Object.assign({}, coFornGrupo, fgMeus);
         await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
-        await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
       } else {
         const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:nome, fornecedores_grupo: coFornGrupo});
         if(!c||!c.length) throw new Error('não retornou a cotação criada');
         coCotacaoId=c[0].id;
       }
     } else {
-      await sbFetch(`cotacoes?id=eq.${coCotacaoId}`,'PATCH',{ fornecedores_grupo: coFornGrupo });
-      // v4.11 — ⚠️ salvar regrava a cotação apagando e reinserindo. Restringir
-      // a `fechado=is.false` é o que impede o histórico de ser apagado aqui —
-      // era por onde o problema voltaria pela porta dos fundos.
-      await coApagarItens(`cotacao_id=eq.${coCotacaoId}&fechado=is.false`);
+      await coSalvarCabecalho();
     }
+
+    // ═══ v4.88 — GRAVA PRIMEIRO, APAGA DEPOIS ═════════════════════════════
+    // Até aqui o salvar APAGAVA as linhas e só então reinseria. Se a reinserção
+    // falhasse no meio — rede, um 4xx, a janela fechando — o orçamento ficava
+    // VAZIO no banco e o trabalho da negociação se perdia sem aviso. Em 17/09 a
+    // cotação #32 amanheceu sem os 8 itens que tinha na véspera.
+    // Agora as linhas novas entram primeiro; as velhas só saem depois que tudo
+    // gravou. Se falhar no meio, o pior caso é linha repetida — e linha repetida
+    // a gente conserta; linha perdida, não.
+    // O filtro `coFiltroRegravar()` guarda duas travas: `pedido_id=is.null`
+    // (o que virou pedido é histórico) e, na janela presa, o grupo dela.
+    const velhas = (await sbFetch('cotacao_itens?select=id&' + coFiltroRegravar() + '&limit=2000')) || [];
+    const novos = [];
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
         qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo,
         grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || null });
       const itemId=ins&&ins[0]&&ins[0].id;
+      if(!itemId) throw new Error('o banco não devolveu o id da linha de "'+(it.material_nome||'item')+'"');
+      novos.push(itemId);
       coDescPendentes.push({ material_id: it.material_id, nome: it.material_nome,
                              desc: (it.descricao_nf||'').trim() }); it.id=itemId;
       const ops=it.opcoes
@@ -6999,11 +7121,22 @@ async function coSalvar(silencioso){
           nao_tem:o.nao_tem, observacao:o.observacao||null }));
       if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
+    // tudo gravado: agora as linhas antigas podem sair
+    const idsVelhos = velhas.map(x=>x.id).filter(id=>novos.indexOf(id)<0);
+    if(idsVelhos.length){
+      const lista = idsVelhos.join(',');
+      try{ await sbFetch(`cotacao_opcoes?cotacao_item_id=in.(${lista})`,'DELETE'); }
+      catch(e){ console.warn('limpeza das ofertas antigas:', e); }
+      try{ await sbFetch(`cotacao_itens?id=in.(${lista})`,'DELETE'); }
+      catch(e){ console.warn('limpeza das linhas antigas:', e);
+        toast('Gravei tudo, mas não consegui apagar a versão anterior — pode aparecer item repetido na próxima abertura.','erro'); }
+    }
+
     try{ await coGravarDescricoes(!!silencioso); }catch(e){ console.warn('descrição p/ cadastro:', e); }
     coUltimoSalvo = coFingerprint();   // v4.77
     if(!silencioso){ coAutoStatus('💾 salvo '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})); coRender(); toast('Cotação #'+coCotacaoId+' salva ✓','sucesso'); }
     return true;
-  }catch(e){ toast('Erro ao salvar: '+e.message,'erro'); return false; }
+  }catch(e){ toast('Erro ao salvar: '+e.message+' — o que já estava gravado continua no banco.','erro'); return false; }
 }
 
 // ── FECHAR GRUPO → monta os PEDIDOS por fornecedor ──
@@ -7027,6 +7160,12 @@ async function coFecharGrupo(g){
     for(const {it, escs} of prontos){
       for(const o of escs){ (porForn[o.fornecedor_id]=porForn[o.fornecedor_id]||[]).push({it,o}); }
     }
+    // v4.88 — qual pedido ficou com quais materiais. Antes existia UMA variável
+    // `pedidoId` reaproveitada no laço, e o carimbo no fim marcava TODOS os itens
+    // com o pedido do ÚLTIMO fornecedor: com dois fornecedores no mesmo grupo, o
+    // comparativo de um dos pedidos nascia vazio e caía no "mostrando a cotação
+    // inteira" — que é a mistura que ela viu.
+    const matsPorPedido = {};
     let nPed=0, nItens=0;
     for(const fidStr of Object.keys(porForn)){
       const fid = Number(fidStr);
@@ -7071,7 +7210,29 @@ async function coFecharGrupo(g){
           observacao: 'Cotação #'+coCotacaoId+' — grupo '+g + (o.apresentacao?(' — '+o.apresentacao):''),
         });
         nItens++;
+        if(pedidoId){
+          const mp = matsPorPedido[pedidoId] = matsPorPedido[pedidoId] || { mats:new Set(), itens:[] };
+          if(!mp.mats.has(it.material_id)){ mp.mats.add(it.material_id); mp.itens.push(it); }
+        }
       }
+    }
+    // v4.88 — A FOTO DO COMPARATIVO VAI PARA DENTRO DO PEDIDO (SQL 86).
+    // O comparativo da aprovação deixa de ser remontado a partir da cotação —
+    // que continua viva, recebendo outros orçamentos, e que já perdeu linhas.
+    // Aqui ele vira um retrato do que estava na mesa quando se decidiu.
+    for(const pidStr of Object.keys(matsPorPedido)){
+      const foto = matsPorPedido[pidStr].itens.map(it=>({
+        material_id: it.material_id, material_nome: it.material_nome, qtd_desejada: it.qtd_desejada,
+        ofertas: (it.opcoes||[])
+          .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null||o.nao_tem)
+          .map(o=>({ fornecedor_id:o.fornecedor_id||null, fornecedor_nome:o.fornecedor_nome||coFornNomeById(o.fornecedor_id)||null,
+                     marca:o.marca||null, apresentacao:o.apresentacao||null, qtd_embalagem:o.qtd_embalagem??null,
+                     preco_total:o.preco_total??null, preco_unitario:coUnit(o), escolhida:!!o.escolhida,
+                     qtd_escolhida:o.qtd_escolhida??null, condicao_pagamento:o.condicao_pagamento||null,
+                     prazo_entrega:o.prazo_entrega||null, nao_tem:!!o.nao_tem, observacao:o.observacao||null }))
+      }));
+      try{ await sbFetch('pedidos?id=eq.'+pidStr,'PATCH',{ comparativo: foto }); }
+      catch(e){ console.warn('foto do comparativo (rode o SQL 86):', e); }
     }
     // remove da tela os itens fechados (e marca como já comprados, para não voltarem)
     for(const {it} of prontos) coJaComprado[it.material_id]={pedido:'novo',status:'EM_MONTAGEM',temNf:false};
@@ -7092,25 +7253,26 @@ async function coFecharGrupo(g){
       // ofertas (chave em cascata) e a descrição de NF digitada aqui: o
       // comparativo do pedido abria vazio e o cadastro voltava a ficar
       // incompleto. Fechado sai da fila de trabalho e FICA no histórico.
-      try{
-        const marcados = await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})&fechado=is.false`,
-          'PATCH', { fechado:true, fechado_em:new Date().toISOString(), pedido_id: pedidoId||null });
-        // v4.35 — se as ofertas não ficarem carimbadas com o pedido, o
-        // comparativo da aprovação abre sem elas. Isso não pode passar calado.
-        const n = (marcados||[]).length;
-        if(n < idsFechados.size){
-          toast('⚠ Atenção: '+n+' de '+idsFechados.size+' item(ns) tiveram as ofertas ligadas ao pedido. '
-            +'O comparativo deste pedido pode sair incompleto — me avise se acontecer.','erro');
-          console.warn('coFecharGrupo: itens marcados', n, 'de', idsFechados.size, [...idsFechados]);
-        }
-      }catch(e){
-        // banco ainda sem as colunas da v4.11 — mantém o comportamento antigo
+      // v4.88 — um carimbo POR PEDIDO, com o pedido certo.
+      let marcadosTotal = 0;
+      for(const pidStr of Object.keys(matsPorPedido)){
+        const mids = [...matsPorPedido[pidStr].mats];
+        if(!mids.length) continue;
         try{
-          await coApagarItens(`cotacao_id=eq.${coCotacaoId}&material_id=in.(${[...idsFechados].join(',')})`);
-          toast('⚠ Rode o SQL v411_cotacao_nao_apaga.sql — sem ele o comparativo desta cotação se perde.','erro');
-        }catch(e2){
-          toast('⚠ O pedido foi criado, mas o item não saiu da cotação: '+e2.message+' — use o ✕ da tag na lista de compras.','erro');
+          const marcados = await sbFetch(`cotacao_itens?cotacao_id=eq.${coCotacaoId}&material_id=in.(${mids.join(',')})&fechado=is.false`,
+            'PATCH', { fechado:true, fechado_em:new Date().toISOString(), pedido_id: Number(pidStr) });
+          marcadosTotal += (marcados||[]).length;
+        }catch(e){
+          // v4.88 — antes, falhar aqui caía num APAGAR os itens; era assim que as
+          // ofertas do pedido sumiam de vez. Agora não se apaga nada: a linha fica
+          // na cotação e a foto do comparativo já está gravada no pedido.
+          console.warn('carimbo do pedido '+pidStr+':', e);
+          toast('O pedido foi criado, mas não consegui marcar o item como fechado na cotação. '
+              + 'Ele pode reaparecer na lista — use o ✕ da etiqueta para soltar.','erro');
         }
+      }
+      if(marcadosTotal < idsFechados.size){
+        console.warn('coFecharGrupo: marcados', marcadosTotal, 'de', idsFechados.size, [...idsFechados]);
       }
     }
     await coSalvar(true);
@@ -10169,7 +10331,12 @@ function apRenderizar(){
         <textarea id="ap-just-${pid}" rows="2" placeholder="ex: menor preço no conjunto; fornecedor B só para os fios porque A não tinha" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical"></textarea>
       </div>
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-        <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
+        <div style="display:flex;gap:8px">
+          <button class="ap-btn-editar" style="padding:8px 12px" onclick="apGerarPDF(${pid})">📄 Gerar PDF do comparativo</button>
+          <!-- v4.88 — pedido dela: o pedido impresso também aqui, e sem o "últ. pago (+x%)".
+               É o mesmo documento da montagem e do Receber NF: o que vai ao fornecedor. -->
+          <button class="ap-btn-editar" style="padding:8px 12px" title="o documento do pedido, sem comparação de preço — é o que vai ao fornecedor" onclick="dePedidoPDF(${pid})">🖨 Pedido de compra</button>
+        </div>
         <div style="display:flex;gap:8px">
           <!-- v4.68 — regra dela: pedido não volta para orçamento (instrumental e higiene). A volta é cancelar ou tirar a linha. -->
           <button class="ap-btn-editar" style="padding:8px 12px" onclick="apDevolver(${pid})">↩ Devolver p/ montagem</button>
@@ -10241,6 +10408,20 @@ function apHistHtml(its){
 // vários grupos/pedidos — misturar orçamentos no PDF confundia a aprovação).
 // Cotações antigas sem pedido_id gravado caem no comportamento antigo.
 async function apHistDoPedido(pid, cid){
+  // v4.88 — primeiro a FOTO gravada no próprio pedido (SQL 86). Ela é do pedido,
+  // é imutável e não mistura com os orçamentos que continuaram abertos. Só quando
+  // não existe (pedido antigo, ou coluna ainda não criada) é que remontamos pela
+  // cotação, com os avisos de sempre.
+  try{
+    const ps = await sbFetch('pedidos?select=comparativo&id=eq.'+pid+'&limit=1');
+    const foto = ps && ps[0] && ps[0].comparativo;
+    if(Array.isArray(foto) && foto.length){
+      return foto.map(function(s){
+        return { material_id:s.material_id, material_nome:s.material_nome,
+                 qtd_desejada:s.qtd_desejada, cotacao_opcoes:s.ofertas||[] };
+      });
+    }
+  }catch(e){ /* coluna ainda não existe — segue pelo caminho antigo */ }
   const its = await apCarregarHist(cid);
   const doPedido = (its||[]).filter(it=>Number(it.pedido_id)===Number(pid));
   if(doPedido.length) return doPedido;
