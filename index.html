@@ -127,7 +127,19 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .tabela-materiais th:first-child, .tabela-materiais td:first-child {
   position: sticky; left: 0; z-index: 2; background: var(--branco);
   box-shadow: 1px 0 0 var(--cinza-2); }
-.tabela-materiais thead th:first-child { z-index: 3; background: var(--cinza-1); }
+.tabela-materiais thead th:first-child { z-index: 11; background: var(--cinza-1); }
+/* v4.87 — a ficha se parte em duas colunas quando a tela dá conta. Metade da altura,
+   metade da rolagem, e a conferência impressa cabe numa página só.
+   Quando não dá largura, o grid volta sozinho para uma coluna — nunca rolagem lateral. */
+.mat-grid { display: grid; gap: 14px; align-items: start; }
+.mat-grid > .mat-bloco { border: 1.5px solid var(--cinza-2); border-radius: var(--radius); overflow-x: auto; }
+.tabela-materiais td.mat-nome { font-weight: 600; color: var(--cinza-6, #2c3e50); }
+.tabela-materiais tr.mat-cat td { background: var(--cinza-1); padding: 6px 10px; font-size: 10px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--cinza-4);
+  border-bottom: 1px solid var(--cinza-2); }
+.comp-grid { display: grid; gap: 10px; align-items: start; }
+.comp-tabela tr.comp-cat td { background: #EBF5FB; padding: 5px 10px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.6px; color: #1B4F72; }
 .tabela-materiais tbody tr:nth-child(even) td:first-child { background: #FBFCFD; }
 .tabela-materiais tbody tr:hover td, .tabela-materiais tbody tr:hover td:first-child { background: #EAF2FB; }
 .tabela-materiais tbody tr:focus-within td, .tabela-materiais tbody tr:focus-within td:first-child { background: var(--azul-claro); }
@@ -426,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.86 · livro de remessas: juntar peças em kit e abrir kit em peças</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.87 · ficha em duas colunas, sem a coluna Origem, e o último preço pago de volta no orçamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -697,13 +709,10 @@ details[open] summary { margin-bottom: 6px; }
       </div>
       <div id="resultado-busca"></div>
 
-      <!-- v4.85 — sem rolagem interna: a página inteira rola, o cabeçalho da tabela gruda no topo -->
-      <div style="overflow-x:auto; border:1.5px solid var(--cinza-2); border-radius:var(--radius);">
-        <table class="tabela-materiais" id="tabela-mat">
-          <thead id="thead-mat"></thead>
-          <tbody id="tbody-mat"></tbody>
-        </table>
-      </div>
+      <!-- v4.87 — a lista vira DUAS tabelas lado a lado quando a tela comporta (pedido dela:
+           "duas colunas de lançamento, material-quant / material-quant"). Cada metade tem o seu
+           cabeçalho. Sem rolagem interna (v4.85) e sem rolagem lateral. -->
+      <div id="mat-grid" class="mat-grid"></div>
 
       <div class="rodape-form">
         <div class="resumo-qtd"><strong id="cnt-preen">0</strong> itens com quantidade informada</div>
@@ -1028,6 +1037,12 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-mat-l{gap:10px}
   #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
   #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  /* v4.87 — a referência da negociação volta para a linha (na v4.71 ela tinha virado tooltip) */
+  #aba-cotacao .co-ult{font-size:10.5px;color:var(--cinza-5);background:#F4F8F4;border:1px solid #DCEBDC;
+    border-radius:5px;padding:2px 7px;white-space:nowrap}
+  #aba-cotacao .co-ult b{color:var(--verde);font-weight:800}
+  #aba-cotacao .co-ult i{font-style:normal;color:var(--azul-medio);font-weight:700;font-size:10px;text-transform:uppercase}
+  #aba-cotacao .co-ult.vazio{background:var(--cinza-1);border-color:var(--cinza-2);color:var(--cinza-4)}
   #aba-cotacao .co-acts{opacity:.18;transition:opacity .15s} #aba-cotacao tr.co-mat:hover .co-acts,#aba-cotacao .co-acts:focus-within{opacity:1}
   #aba-cotacao .co-tab tr.co-of td.a .co-tog{opacity:.25;transition:opacity .15s} #aba-cotacao .co-tab tr.co-of:hover td.a .co-tog,#aba-cotacao .co-tab tr.co-naotem td.a .co-tog{opacity:1}
   #aba-cotacao .co-cond{font-size:10.5px;color:var(--cinza-4);cursor:pointer;white-space:nowrap;user-select:none} #aba-cotacao .co-cond.tem{color:var(--cinza-5)} #aba-cotacao .co-cond:hover{color:var(--azul)}
@@ -1715,10 +1730,8 @@ details[open] summary { margin-bottom: 6px; }
 
       <!-- Materiais -->
       <div class="comp-secao-titulo">Materiais Utilizados</div>
-      <table class="comp-tabela" id="comp-tabela-mat">
-        <thead id="comp-thead-mat"></thead>
-        <tbody id="comp-tbody-mat"></tbody>
-      </table>
+      <!-- v4.87 — duas colunas quando tem linha o bastante: a conferência impressa cabe numa página -->
+      <div id="comp-mat-grid" class="comp-grid"></div>
 
       <!-- Saídas gerais -->
       <div id="comp-gerais-secao" style="display:none">
@@ -2613,8 +2626,8 @@ async function carregarTodosOsMateriais() {
   if (!medico || !data || !tipos.length) return;
 
   document.getElementById('secao-materiais').classList.add('visivel');
-  document.getElementById('tbody-mat').innerHTML =
-    '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--cinza-4)">⏳ Carregando histórico...</td></tr>';
+  document.getElementById('mat-grid').innerHTML =
+    '<div class="mat-bloco" style="text-align:center;padding:20px;color:var(--cinza-4)">⏳ Carregando histórico...</div>';
 
   // Calcular data limite (2 meses atrás)
   const dl = new Date(data);
@@ -2716,62 +2729,77 @@ function getDemoMateriais(medico, tipo) {
   return CONSUMO_REAL[tipo] ? [...CONSUMO_REAL[tipo]] : [...ITENS_BASE];
 }
 
+// v4.87 — DUAS MUDANÇAS PEDIDAS POR ELA NA FICHA DO PERÍODO CIRÚRGICO:
+//   "tira a coluna origem e cola o nome na quantidade"  → a coluna Origem saiu. O nome
+//      encosta no primeiro campo de quantidade; item acrescentado à mão ganha a etiqueta
+//      "Extra" ao lado do nome (era a única informação que a coluna dava — "Histórico"
+//      aparecia em quase toda linha e não decidia nada).
+//   "pode colocar duas colunas de lançamento, material-quant / material-quant"  → a lista
+//      se parte em duas tabelas lado a lado. Metade da altura, metade da rolagem, e a
+//      conferência impressa cabe numa página. Quando a janela é estreita, o grid volta
+//      sozinho para uma coluna: rolagem lateral, nunca.
 function renderizarTabela() {
-  const tipos = tiposCirurgia.filter(t => t.tipo);
-  const labels = ['1º','2º','3º'];
+  const tipos   = tiposCirurgia.filter(t => t.tipo);
+  const labels  = ['1º','2º','3º'];
   const coresTh = ['col-tipo-1','col-tipo-2','col-tipo-3'];
+  const grid    = document.getElementById('mat-grid');
+  if (!grid) return;
+  const nCols = 2 + tipos.length;                       // material + tipos + ✕
 
-  // Cabeçalho
-  document.getElementById('thead-mat').innerHTML = `
-    <tr>
-      <th style="min-width:220px">Material</th>
-      <th>Origem</th>
+  const thead = `<thead><tr>
+      <th style="min-width:190px">Material</th>
       ${tipos.map((t,i) => {
         const protos = (t.protocolos||[]).join(' + ') || '—';
-        return `<th class="${coresTh[i]}" style="text-align:center;min-width:100px;line-height:1.4">
+        return `<th class="${coresTh[i]}" style="text-align:center;min-width:84px;line-height:1.4" title="Protocolo: ${protos}">
           <div>${labels[i]} — ${t.tipo}</div>
           <div style="font-weight:400;font-size:10px;margin-top:2px">${t.pacientes} pac.</div>
-          <div style="font-weight:400;font-size:10px;opacity:0.8">${protos}</div>
         </th>`;
       }).join('')}
-      <th></th>
-    </tr>`;
+      <th style="width:30px"></th>
+    </tr></thead>`;
 
   if (!materiaisTabela.length) {
-    document.getElementById('tbody-mat').innerHTML =
-      `<tr><td colspan="${3+tipos.length}" style="text-align:center;padding:24px;color:var(--cinza-4)">Nenhum material no histórico. Use a busca para adicionar.</td></tr>`;
+    grid.style.gridTemplateColumns = '1fr';
+    grid.innerHTML = `<div class="mat-bloco"><table class="tabela-materiais">${thead}<tbody>
+      <tr><td colspan="${nCols}" style="text-align:center;padding:24px;color:var(--cinza-4)">Nenhum material no histórico. Use a busca para adicionar.</td></tr>
+      </tbody></table></div>`;
     atualizarContador(); return;
   }
 
-  // Renderizar com separadores de categoria
+  const nrm = s => String(s).toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim();
   const ordemCat = {};
-  let catPos = 0;
-  for (const cat of CATEGORIAS_ORDEM) {
-    for (const item of cat.itens) ordemCat[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
-    catPos++;
-  }
+  for (const cat of CATEGORIAS_ORDEM) for (const item of cat.itens) ordemCat[nrm(item)] = cat.label;
 
-  let ultimaCat = null;
-  let rows = '';
-  for (let i = 0; i < materiaisTabela.length; i++) {
-    const m = materiaisTabela[i];
-    const cat = ordemCat[m.nome.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
-    if (cat !== ultimaCat) {
-      rows += `<tr><td colspan="${2 + tipos.length}" style="background:var(--cinza-1);padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--cinza-4);border-bottom:1px solid var(--cinza-2)">## ${cat}</td></tr>`;
-      ultimaCat = cat;
-    }
-    rows += `<tr>
-      <td>${m.nome}</td>
-      <td><span class="tag tag-${m.origem==='historico'?'hist':'extra'}">${m.origem==='historico'?'Histórico':'Extra'}</span></td>
+  const lista = materiaisTabela.map((m,i) => ({ i, m, cat: ordemCat[nrm(m.nome)] || 'EXTRAS' }));
+
+  const linhaCat = cat => `<tr class="mat-cat"><td colspan="${nCols}">## ${cat}</td></tr>`;
+  const linhaMat = (m,i) => `<tr>
+      <td class="mat-nome">${m.nome}${m.origem === 'historico' ? '' : ' <span class="tag tag-extra" title="acrescentado à mão nesta ficha">Extra</span>'}</td>
       ${tipos.map((_,j) => `
         <td style="text-align:center">
           <input type="number" class="input-qtd" min="0" value="${m.qtds[j]||''}"
-            id="qtd-${i}-${j}" onchange="atualizarQtd(${i},${j},this.value)" oninput="atualizarQtd(${i},${j},this.value)" />
+            id="qtd-${i}-${j}" title="${m.nome}" onchange="atualizarQtd(${i},${j},this.value)" oninput="atualizarQtd(${i},${j},this.value)" />
         </td>`).join('')}
-      <td style="text-align:center"><button class="btn-rem-mat" onclick="removerMaterial(${i})">✕</button></td>
+      <td style="text-align:center"><button class="btn-rem-mat" title="tirar ${m.nome} da ficha" onclick="removerMaterial(${i})">✕</button></td>
     </tr>`;
-  }
-  document.getElementById('tbody-mat').innerHTML = rows;
+
+  // duas colunas só quando vale a pena; a largura mínima de cada metade cresce com o
+  // número de tipos de cirurgia, então numa tela estreita ela volta a ser uma coluna só
+  const duas   = lista.length >= 14;
+  const minCol = 250 + 84 * Math.max(1, tipos.length);
+  const corte  = duas ? Math.ceil(lista.length/2) : lista.length;
+  const partes = duas ? [lista.slice(0,corte), lista.slice(corte)] : [lista];
+
+  grid.style.gridTemplateColumns = duas ? `repeat(auto-fit, minmax(${minCol}px, 1fr))` : '1fr';
+  grid.innerHTML = partes.map(parte => {
+    let ultimaCat = null, rows = '';
+    for (const x of parte) {
+      if (x.cat !== ultimaCat) { rows += linhaCat(x.cat); ultimaCat = x.cat; }   // a 2ª metade repete a categoria em que começa
+      rows += linhaMat(x.m, x.i);
+    }
+    return `<div class="mat-bloco"><table class="tabela-materiais">${thead}<tbody>${rows}</tbody></table></div>`;
+  }).join('');
+
   atualizarContador();
 }
 
@@ -3020,6 +3048,26 @@ function setSaidaGeral(mat, key, val) {
 }
 
 // ── REVISÃO / COMPROVANTE ─────────────────────────────────────
+// v4.87 — UM desenhista para a ficha de conferência, usado pelo registro e pela aprovação.
+// Duas colunas quando tem linha o bastante; a categoria em que a segunda metade começa é
+// repetida no topo dela, senão a coluna da direita nasce sem dizer do que se trata.
+function compRenderMateriais(theadHtml, lista, nCols){
+  const grid = document.getElementById('comp-mat-grid');
+  if(!grid) return;
+  const duas   = lista.length >= 16;
+  const corte  = duas ? Math.ceil(lista.length/2) : lista.length;
+  const partes = duas ? [lista.slice(0,corte), lista.slice(corte)] : [lista];
+  grid.style.gridTemplateColumns = duas ? '1fr 1fr' : '1fr';
+  grid.innerHTML = partes.map(function(parte){
+    let ultima = null, rows = '';
+    for(const x of parte){
+      if(x.cat !== ultima){ rows += '<tr class="comp-cat"><td colspan="'+nCols+'">## '+x.cat+'</td></tr>'; ultima = x.cat; }
+      rows += x.html;
+    }
+    return '<table class="comp-tabela">'+theadHtml+'<tbody>'+rows+'</tbody></table>';
+  }).join('');
+}
+
 function abrirRevisao() {
   const medico = document.getElementById('sel-medico').value;
   const data   = document.getElementById('inp-data').value;
@@ -3053,11 +3101,12 @@ function abrirRevisao() {
       <td>${(t.protocolos||[]).join(' + ') || '—'}</td>
     </tr>`).join('');
 
-  // Cabeçalho tabela materiais
-  document.getElementById('comp-thead-mat').innerHTML = `<tr>
-    <th style="min-width:200px">Material</th>
+  // v4.87 — a conferência também sai em duas colunas (mesmo motivo: caber numa página)
+  document.getElementById('comp-mat-grid').setAttribute('data-n', String(itens.length));
+  const theadComp = `<thead><tr>
+    <th style="min-width:170px">Material</th>
     ${tipos.map((t,i) => `<th class="centro ${coresTipo[i]}">${t.tipo}<br><span style="font-weight:400;font-size:10px">${t.pacientes} pac.</span></th>`).join('')}
-  </tr>`;
+  </tr></thead>`;
 
   // Corpo tabela materiais com separadores de categoria (ordenado pelo padrão do formulário)
   itens = ordenarMateriais(itens);
@@ -3065,20 +3114,13 @@ function abrirRevisao() {
   for (const cat of CATEGORIAS_ORDEM) {
     for (const item of cat.itens) ordemCatComp[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
   }
-  let ultimaCatComp = null;
-  let rowsComp = '';
-  for (const m of itens) {
-    const cat = ordemCatComp[m.nome.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
-    if (cat !== ultimaCatComp) {
-      rowsComp += `<tr><td colspan="${1+tipos.length}" style="background:#EBF5FB;padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
-      ultimaCatComp = cat;
-    }
-    rowsComp += `<tr>
+  const listaComp = itens.map(m => ({
+    cat: ordemCatComp[m.nome.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS',
+    html: `<tr>
       <td>${m.nome}</td>
       ${tipos.map((_,j) => `<td class="centro">${parseFloat(m.qtds[j]) > 0 ? m.qtds[j] : '—'}</td>`).join('')}
-    </tr>`;
-  }
-  document.getElementById('comp-tbody-mat').innerHTML = rowsComp;
+    </tr>` }));
+  compRenderMateriais(theadComp, listaComp, 1 + tipos.length);
 
   // Saídas gerais
   const geraisComDados = [];
@@ -4371,25 +4413,19 @@ function imprimirGrupo(i) {
       </tr>`;
   }
 
-  document.getElementById('comp-thead-mat').innerHTML = `<tr>
-    <th style="min-width:220px">Material</th>
+  const theadApr = `<thead><tr>
+    <th style="min-width:180px">Material</th>
     <th class="centro">Quantidade</th>
-  </tr>`;
+  </tr></thead>`;
 
   const ordemCatComp2 = {};
   for (const cat of CATEGORIAS_ORDEM) {
     for (const item of cat.itens) ordemCatComp2[item.toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] = cat.label;
   }
-  let ultimaCat = null, rows = '';
-  for (const it of p.itens) {
-    const cat = ordemCatComp2[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
-    if (cat !== ultimaCat) {
-      rows += `<tr><td colspan="2" style="background:#EBF5FB;padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
-      ultimaCat = cat;
-    }
-    rows += `<tr><td>${it.nome}</td><td class="centro">${it.qtd}</td></tr>`;
-  }
-  document.getElementById('comp-tbody-mat').innerHTML = rows;
+  const listaApr = p.itens.map(it => ({
+    cat: ordemCatComp2[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS',
+    html: `<tr><td>${it.nome}</td><td class="centro">${it.qtd}</td></tr>` }));
+  compRenderMateriais(theadApr, listaApr, 2);
 
   document.getElementById('comp-gerais-secao').style.display = 'none';
   document.getElementById('btn-confirmar-envio').style.display = 'none';
@@ -6632,6 +6668,32 @@ function coToggleCond(i, fid){
   const k=i+'-'+fid, tr=document.getElementById('co-cond-'+k); if(!tr) return;
   if(coCondAbertas.has(k)){ coCondAbertas.delete(k); tr.style.display='none'; } else { coCondAbertas.add(k); tr.style.display=''; const inp=tr.querySelector('input'); if(inp) inp.focus(); }
 }
+// v4.87 — pedido dela: "no orçamento saía o último fornecedor que compramos e o último
+// valor pago, para ter uma referência na negociação". Na limpeza da v4.71 isso virou
+// tooltip do 🧾 e sumiu da vista. Volta para a linha, que é onde ela negocia — o tooltip
+// continua com o resto (consumo, fornecedores e marcas conhecidos).
+function coUltCompra(it){
+  const c = it.material_id ? hpCache['m'+it.material_id] : undefined;
+  const esc = v => String(v==null?'':v).replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  if(c === undefined && it.uc_valor == null)
+    return '<span class="co-ult vazio" title="ainda buscando o histórico de compra">🧾 …</span>';
+  const valor = (c && c.valor != null) ? c.valor : (it.uc_valor != null ? it.uc_valor : null);
+  const forn  = (c && c.forn) ? c.forn : '';
+  const data  = (c && c.data) ? c.data : (it.uc_data || '');
+  if(valor == null && !forn)
+    return '<span class="co-ult vazio" title="primeira compra deste item — não há preço anterior para comparar">🧾 1ª compra</span>';
+  const p10 = data ? String(data).slice(0,10).split('-') : null;
+  const dataFmt = p10 ? p10[2]+'/'+p10[1] : '';                      // dia/mês na linha; o ano fica no tooltip
+  const dataCheia = p10 ? p10[2]+'/'+p10[1]+'/'+p10[0] : '';
+  const tit = 'última compra' + (dataCheia ? ' em '+dataCheia : '')
+            + (forn ? ' — de '+forn : '') + '. Use como piso da negociação.'
+            + ((c && c.pedido) ? ' (valor do último pedido; a NF ainda não entrou)' : '');
+  return '<span class="co-ult" title="'+esc(tit)+'">🧾 '
+       + (valor != null ? '<b>'+coMoney(valor)+'</b>/un' : 'sem preço')
+       + (forn ? ' · <i>'+esc(forn)+'</i>' : '')
+       + (dataFmt ? ' · '+dataFmt : '') + '</span>';
+}
+
 function coLinhasItem(i, it){
   const g = it.grupo||'Orçamento 1';
   const fids = coFornGrupo[g]||[];
@@ -6644,14 +6706,15 @@ function coLinhasItem(i, it){
   const hp = it.material_id ? hpCache['m'+it.material_id] : undefined;
   const hist = (hp!==undefined) ? semTag(hpLinha('m'+it.material_id))
     : (it.uc_valor!=null ? ('última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):'')) : 'sem histórico de compra');
-  const dicaTxt = [hist, it.consumo?('consumo/mês '+Math.round(it.consumo)):'', it.forn_conhecidos?('fornecedores: '+it.forn_conhecidos):'', it.marcas_conhecidas?('marcas: '+it.marcas_conhecidas):''].filter(Boolean).join(' · ');
+  const dicaTxt = [it.consumo?('consumo/mês '+Math.round(it.consumo)):'', it.forn_conhecidos?('fornecedores: '+it.forn_conhecidos):'', it.marcas_conhecidas?('marcas: '+it.marcas_conhecidas):''].filter(Boolean).join(' · ') || 'sem consumo, fornecedores ou marcas registrados';
   const ja = coJaComprado[it.material_id] ? `<span class="co-ja">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}</span>` : '';
   const cab = `<tr class="co-mat card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}">
     <td colspan="8"><div class="co-mat-l">
       <span class="co-inome" title="arraste para outro grupo">⠿ ${it.material_nome}</span>${ja}
       <span class="co-qtd">qtd <input class="co-nn" type="number" step="any" title="quantidade a orçar" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)"></span>
       <span class="co-ref">${ref.join(' · ')}</span>
-      <span class="co-ico" title="${q(dicaTxt)}">🧾</span>
+      ${coUltCompra(it)}
+      <span class="co-ico" title="${q(dicaTxt)}">📊</span>
       <span class="co-ref"><input class="w-descnf" placeholder="descrição NF" title="nome como o fornecedor conhece o produto — vai no WhatsApp" value="${q(it.descricao_nf)}" oninput="coSetItem(${i},'descricao_nf',this.value)"></span>
       <span class="co-acts"><select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
           ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
