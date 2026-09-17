@@ -426,7 +426,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.85 · ficha de saída: linha destacada, sem tela dentro de tela, janela própria e rascunho</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.86 · livro de remessas: juntar peças em kit e abrir kit em peças</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14801,6 +14801,7 @@ async function rmCarregar(){
     ]);
     rmSaldo = saldo || []; rmSujos = sujos || []; rmRemessas = remessas || []; rmPend = pend || []; rmNfPend = nfPend || [];
     await rmCarregarDesgaste();
+    await rmKitCarregar();   // v4.86 — o que tem dentro de cada kit que circula
     // v4.61 — histórico: remessas conferidas + notas de reprocessamento.
     // Erro aqui não derruba a tela, mas aparece no card (silêncio é pior que erro).
     try{
@@ -16295,13 +16296,13 @@ function rmRenderSaldo(){
     return;
   }
   const linhas = saldoVis.map(b=>`<tr>
-      <td>${rmEsc(b.nome)}${b.material_id?'':' <span class="rm-tag dinheiro">só no livro</span>'}</td>
+      <td>${rmEsc(b.nome)}${b.material_id?'':' <span class="rm-tag dinheiro">só no livro</span>'}${rmKitTag(b.bem_id)}</td>
       <td style="font-size:11px;color:var(--cinza-4)">${b.tipo==='LAVANDERIA'?'🧺 lavanderia':'♻️ esterilização'}</td>
       <td style="text-align:center;color:var(--verde);font-weight:700">${rmNum(b.em_casa)}</td>
       <td style="text-align:center;color:#E67E22">${rmNum(b.sujo)}</td>
       <td style="text-align:center;color:#6f42c1;font-weight:700">${rmNum(b.fora)}</td>
       <td style="text-align:center;font-weight:700">${rmNum(b.total)}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="corrigir o nome deste bem no livro" onclick="rmBemRenomear(${b.bem_id})">✏️ nome</button> <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="acertar a quantidade em casa (vira ajuste com data e motivo)" onclick="rmBemQtd(${b.bem_id})">✏️ qtd</button></td>
+      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="corrigir o nome deste bem no livro" onclick="rmBemRenomear(${b.bem_id})">✏️ nome</button> <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="acertar a quantidade em casa (vira ajuste com data e motivo)" onclick="rmBemQtd(${b.bem_id})">✏️ qtd</button>${rmKitBotoes(b.bem_id)}</td>
     </tr>`).join('');
   box.innerHTML = `<div class="rm-card">
     <div class="rm-head cinza"><span>📚 Saldo do livro</span><span class="rm-count">${saldoVis.length===rmSaldo.length ? rmSaldo.length+' bem(ns)' : saldoVis.length+' de '+rmSaldo.length}</span></div>
@@ -16312,7 +16313,238 @@ function rmRenderSaldo(){
       <thead><tr><th>Bem</th><th>Tipo</th><th style="text-align:center">Em casa</th><th style="text-align:center">Sujo</th><th style="text-align:center">Fora</th><th style="text-align:center">Total</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div>
     <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="rm-b claro" onclick="rmNovoBem()">➕ Cadastrar um bem novo no livro</button>
+      <button class="rm-b claro" title="dizer quais peças formam um kit — depois dá para juntar e abrir sem sair do livro" onclick="rmKitEscolherParaCompor()">🧩 O que vem dentro de um kit</button>
       <button class="rm-b claro" style="margin-left:auto" title="lista dos bens desta vista com o saldo de hoje e coluna para contar à mão" onclick="rmSaldoImprimir()">🖨 Imprimir lista com saldo</button></div></div>`;
+}
+
+// ═══ v4.86 — KIT NO LIVRO DE REMESSAS: JUNTAR E ABRIR ═════════════════════
+//
+// Regra dela (16/09): "a cobrança depende da forma de envio — se enviada como kit
+// volta como kit, se enviada peça avulsa volta como peça avulsa."
+//
+// Ou seja: o kit não é só embalagem de compra, é também uma FORMA DE CIRCULAR.
+// O mesmo conjunto de peças viaja de dois jeitos e o livro precisa saber de qual
+// se trata, porque a nota do fornecedor vem assim. Sem estas duas operações o
+// livro nunca fecha: a peça sai como componente e volta como kit.
+//
+//   🧩 Juntar em kit → consome 1 de cada peça e cria 1 kit, no MESMO estado.
+//   📂 Abrir kit     → 1 kit vira 1 de cada peça, no MESMO estado.
+//
+// Estado nunca muda na operação: o que estava em casa continua em casa, o que
+// estava sujo continua sujo. Juntar é o que ela faz antes de montar a remessa
+// (decidiu mandar como kit); abrir é o que acontece quando o kit volta e a
+// equipe passa a usar as peças separadas.
+//
+// A composição mora em `kit_componentes` (SQL 84), nível `kit_bem_id` — o kit que
+// circula. O outro nível (`kit_material_id`) é a caixa lacrada de compra e já é
+// usado por `bridgeNovaParaSujo`. Sem a tabela, nada aqui aparece e o resto da
+// tela funciona igual.
+let rmKitComp = {};
+
+async function rmKitCarregar(){
+  try{
+    const kc = (await sbFetch('kit_componentes?select=id,kit_bem_id,bem_id,qtd,observacao&kit_bem_id=not.is.null&order=id.asc&limit=500')) || [];
+    rmKitComp = {};
+    for(const c of kc) (rmKitComp[c.kit_bem_id] = rmKitComp[c.kit_bem_id] || []).push(c);
+  }catch(e){ rmKitComp = {}; }   // tabela ainda não existe — some sem quebrar
+}
+
+function rmKitTem(bemId){ const l = rmKitComp[Number(bemId)]; return (l && l.length) ? l : null; }
+function rmKitSaldoDe(bemId){ return rmSaldo.find(x=>Number(x.bem_id)===Number(bemId)) || {}; }
+function rmKitResumo(bemId){
+  const l = rmKitTem(bemId); if(!l) return '';
+  return l.map(c=>rmNum(c.qtd)+'× '+rmBem(c.bem_id)).join(' · ');
+}
+function rmKitTag(bemId){
+  const l = rmKitTem(bemId); if(!l) return '';
+  return ' <span class="rm-tag" style="cursor:pointer;background:#EDE7F6;color:#5E35B1" title="Dentro do kit: '
+       + rmEsc(rmKitResumo(bemId)) + ' — clique para mudar" onclick="rmKitCompor(' + Number(bemId) + ')">🧩 kit de '
+       + l.length + ' peça(s)</span>';
+}
+// Quantos kits cabem na operação, por estado. Abrir depende de quantos kits existem;
+// juntar depende da peça que tem menos — é ela que limita.
+function rmKitCabe(bemId, modo, estado){
+  const campo = estado==='SUJO' ? 'sujo' : 'em_casa';
+  if(modo==='ABRIR') return Math.floor(rmNum(rmKitSaldoDe(bemId)[campo]));
+  const l = rmKitTem(bemId); if(!l) return 0;
+  return l.reduce((m,c)=>Math.min(m, Math.floor(rmNum(rmKitSaldoDe(c.bem_id)[campo]) / (rmNum(c.qtd)||1))), Infinity);
+}
+function rmKitBotoes(bemId){
+  if(!rmKitTem(bemId)) return '';
+  const b = (modo,ico,rot,tit) => ' <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="'
+    + tit + '" onclick="rmKitOperar(' + Number(bemId) + ',\'' + modo + '\')">' + ico + ' ' + rot + '</button>';
+  return b('JUNTAR','🧩','juntar','juntar as peças num kit só — use quando for ENVIAR como kit (a nota volta como kit)')
+       + b('ABRIR','📂','abrir','abrir o kit e passar a contar cada peça sozinha — use quando as peças forem usadas avulsas');
+}
+
+// Tira da FILA DE SUJOS a quantidade que deixou de existir. A fila (`remessa_sujos`)
+// e o saldo (`remessa_mov`) precisam concordar: a montagem da remessa lê a fila, e a
+// conta do livro lê o saldo. Consome as linhas mais antigas primeiro; a última pode
+// ficar partida. Devolve quanto realmente saiu da fila.
+async function rmSujoConsumir(bemId, qtd){
+  let falta = rmNum(qtd);
+  const linhas = rmSujos.filter(x=>Number(x.bem_id)===Number(bemId) && !x.remessa_id)
+                        .slice().sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
+  for(const l of linhas){
+    if(falta<=0) break;
+    const tem = rmNum(l.qtd);
+    if(tem<=falta){ await sbFetch('remessa_sujos?id=eq.'+l.id,'DELETE'); falta -= tem; }
+    else { await sbFetch('remessa_sujos?id=eq.'+l.id,'PATCH',{ qtd: tem-falta }); falta = 0; }
+  }
+  return rmNum(qtd) - falta;
+}
+
+async function rmKitOperar(bemId, modo){
+  const comps = rmKitTem(bemId); if(!comps) return;
+  const kit = rmBens.find(b=>b.id===Number(bemId)); if(!kit) return;
+  const abrir = (modo==='ABRIR');
+  const cabeCasa = rmKitCabe(bemId,modo,'CASA'), cabeSujo = rmKitCabe(bemId,modo,'SUJO');
+  if(!cabeCasa && !cabeSujo){
+    toast(abrir ? 'Não há kit de "'+kit.nome+'" no livro para abrir.'
+                : 'Falta peça para montar um kit de "'+kit.nome+'" — veja quem está zerado: '+rmKitResumo(bemId), 'erro');
+    return;
+  }
+  const r = await hogPergunta({
+    titulo: (abrir?'📂 Abrir kit — ':'🧩 Juntar em kit — ') + kit.nome,
+    texto: (abrir
+        ? 'O kit sai da conta e cada peça passa a contar sozinha: '
+        : 'As peças saem da conta e passam a contar como um kit só: ')
+      + rmKitResumo(bemId)
+      + '. O estado não muda — o que está em casa continua em casa, o que está sujo continua sujo. '
+      + 'Vale a sua regra: enviado como kit volta como kit; enviado avulso volta avulso. '
+      + 'Para desfazer, é só fazer a operação contrária.',
+    campos: [
+      { id:'estado', rot:'Onde estão as peças', tipo:'lista', valor: abrir?'CASA':'SUJO', opcoes:[
+          { v:'CASA', r:'🏠 em casa (limpo, no arsenal) — dá para '+cabeCasa },
+          { v:'SUJO', r:'🧴 sujo (esperando ir para fora) — dá para '+cabeSujo } ] },
+      { id:'q', rot: abrir?'Quantos kits abrir':'Quantos kits montar', tipo:'numero', valor:1, obrigatorio:true },
+    ], ok: abrir?'Abrir':'Juntar' });
+  if(!r) return;
+  const estado = (r.estado==='SUJO') ? 'SUJO' : 'CASA';
+  const q = parseFloat(String(r.q).replace(",","."));   // vírgula do teclado pt-BR
+  if(!q || q<=0 || q!==Math.floor(q)){ toast('Quantidade inválida — kit é peça inteira.','erro'); return; }
+  const cabe = estado==='SUJO' ? cabeSujo : cabeCasa;
+  if(q > cabe){
+    toast(abrir ? ('Só há '+cabe+' kit(s) '+(estado==='SUJO'?'sujo(s)':'em casa')+'.')
+                : ('Dá para montar '+cabe+' — falta peça. Confira: '+rmKitResumo(bemId)), 'erro');
+    return;
+  }
+  const ondeRot = estado==='SUJO' ? 'sujo' : 'em casa';
+  const linhas = [];
+  if(abrir){
+    linhas.push('−'+q+'  '+kit.nome);
+    comps.forEach(c=>linhas.push('+'+(q*(rmNum(c.qtd)||1))+'  '+rmBem(c.bem_id)));
+  }else{
+    comps.forEach(c=>linhas.push('−'+(q*(rmNum(c.qtd)||1))+'  '+rmBem(c.bem_id)));
+    linhas.push('+'+q+'  '+kit.nome);
+  }
+  if(!confirm((abrir?'Abrir ':'Montar ')+q+' kit(s) de "'+kit.nome+'" — tudo '+ondeRot+':\n\n'
+      +linhas.join('\n')+'\n\nO total de peças em circulação não muda; muda como elas são contadas.')) return;
+
+  const campo = estado==='SUJO' ? 'd_sujo' : 'd_casa';
+  const marca = abrir ? ('Kit "'+kit.nome+'" aberto em peças ('+q+' kit(s), '+ondeRot+')')
+                      : ('Peças juntadas no kit "'+kit.nome+'" ('+q+' kit(s), '+ondeRot+')');
+  const mov = async (bem, delta) => {
+    const corpo = { bem_id:Number(bem), tipo:'AJUSTE', registrado_por:rmQuem(), observacao:marca };
+    corpo[campo] = delta;
+    await sbFetch('remessa_mov','POST',corpo);
+  };
+  try{
+    // 1) a fila de sujos primeiro: se faltar linha, nada foi movido ainda
+    if(estado==='SUJO'){
+      if(abrir) await rmSujoConsumir(bemId, q);
+      else for(const c of comps) await rmSujoConsumir(c.bem_id, q*(rmNum(c.qtd)||1));
+    }
+    // 2) o saldo
+    if(abrir){
+      await mov(bemId, -q);
+      for(const c of comps) await mov(c.bem_id, q*(rmNum(c.qtd)||1));
+    }else{
+      for(const c of comps) await mov(c.bem_id, -q*(rmNum(c.qtd)||1));
+      await mov(bemId, q);
+    }
+    // 3) a fila de sujos ganha o que passou a existir
+    if(estado==='SUJO'){
+      const novo = async (bem,qt) => { await sbFetch('remessa_sujos','POST',{ bem_id:Number(bem), qtd:qt, origem:'MANUAL', registrado_por:rmQuem() }); };
+      if(abrir){ for(const c of comps) await novo(c.bem_id, q*(rmNum(c.qtd)||1)); }
+      else await novo(bemId, q);
+    }
+    toast(abrir ? ('📂 '+q+' kit(s) aberto(s) — '+comps.length+' peça(s) passaram a contar sozinhas ✓')
+                : ('🧩 '+q+' kit(s) montado(s) ✓'), 'sucesso');
+    rmCarregar();
+  }catch(e){
+    toast('Erro na operação do kit: '+e.message+' — confira o saldo antes de repetir.','erro');
+    rmCarregar();
+  }
+}
+
+// ── COMPOSIÇÃO DO KIT ─────────────────────────────────────────────────────
+// Sem isto ela dependeria de SQL meu a cada kit novo. A composição é por ID
+// (nunca por nome — renomear já quebrou casamento por nome três vezes aqui).
+async function rmKitEscolherParaCompor(){
+  const b = await rmEscolherBem('De que kit você quer ver ou mudar o conteúdo?');
+  if(b) rmKitCompor(b.id);
+}
+function rmKitFecharCompor(){ const ov=document.getElementById('rm-kit-modal'); if(ov) ov.remove(); }
+function rmKitCompor(bemId){
+  const kit = rmBens.find(b=>b.id===Number(bemId)); if(!kit) return;
+  const comps = rmKitComp[kit.id] || [];
+  const linhas = comps.length ? comps.map(c=>'<tr>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2)">'+rmEsc(rmBem(c.bem_id))+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2);text-align:center;font-weight:700">'+rmNum(c.qtd)+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2);font-size:12px;color:var(--cinza-5)">'+rmEsc(c.observacao||'')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid var(--cinza-2);text-align:right"><button class="rm-b claro" style="padding:2px 7px;font-size:11px" onclick="rmKitTirarPeca('+c.id+','+kit.id+')">✕ tirar</button></td>'
+      +'</tr>').join('')
+    : '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--cinza-4);font-size:13px">Este bem ainda não é um kit. Acrescente as peças que vêm dentro dele.</td></tr>';
+  let ov=document.getElementById('rm-kit-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='rm-kit-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div class="rm-head azul"><span>🧩 O que vem dentro de '+rmEsc(kit.nome)+'</span><button class="rm-b claro" onclick="rmKitFecharCompor()">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<div style="font-size:12.5px;color:var(--cinza-5);line-height:1.6;margin-bottom:10px">'
+    +'Com a lista preenchida, a linha deste bem no saldo ganha <b>🧩 juntar</b> e <b>📂 abrir</b>. '
+    +'Cada peça precisa estar cadastrada no livro — só assim a conta fecha quando o conjunto viaja como kit.</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr>'
+    +'<th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);text-align:left">Peça</th>'
+    +'<th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1)">Quantas</th>'
+    +'<th style="padding:7px 10px;font-size:10px;text-transform:uppercase;color:var(--cinza-4);background:var(--cinza-1);text-align:left">Observação</th>'
+    +'<th style="background:var(--cinza-1)"></th>'
+    +'</tr></thead><tbody>'+linhas+'</tbody></table>'
+    +'<div style="display:flex;justify-content:space-between;gap:8px;margin-top:14px">'
+    +'<button class="rm-b claro" onclick="rmKitAddPeca('+kit.id+')">➕ Acrescentar peça</button>'
+    +'<button class="rm-b roxo" onclick="rmKitFecharCompor()">Pronto</button>'
+    +'</div></div></div>';
+}
+async function rmKitAddPeca(bemId){
+  const kit = rmBens.find(b=>b.id===Number(bemId)); if(!kit) return;
+  const jaTem = (rmKitComp[kit.id]||[]).map(c=>Number(c.bem_id));
+  rmKitFecharCompor();
+  const p = await rmEscolherBem('Que peça vem dentro de "'+kit.nome+'"?',
+                                b=>b.id!==kit.id && !jaTem.includes(b.id));
+  if(!p){ rmKitCompor(kit.id); return; }
+  const q = parseFloat(prompt('Quantas "'+p.nome+'" vêm em UM kit?','1'));
+  if(!q || q<=0){ toast('Quantidade inválida.','erro'); rmKitCompor(kit.id); return; }
+  try{
+    await sbFetch('kit_componentes','POST',{ kit_bem_id:kit.id, bem_id:p.id, qtd:q });
+    await rmKitCarregar();
+    toast('"'+p.nome+'" entrou na composição de "'+kit.nome+'" ✓','sucesso');
+    rmRenderizar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+  rmKitCompor(kit.id);
+}
+async function rmKitTirarPeca(compId, bemId){
+  const kit = rmBens.find(b=>b.id===Number(bemId));
+  const c = (rmKitComp[Number(bemId)]||[]).find(x=>x.id===Number(compId));
+  if(!c) return;
+  if(!confirm('Tirar "'+rmBem(c.bem_id)+'" da composição de "'+(kit?kit.nome:'kit')+'"?\n\nO saldo do livro não muda — só a lista do que forma o kit.')) return;
+  try{
+    await sbFetch('kit_componentes?id=eq.'+Number(compId),'DELETE');
+    await rmKitCarregar();
+    rmRenderizar();
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+  rmKitCompor(Number(bemId));
 }
 
 // ═══ v4.64 — CADASTRO DOS BENS DO LIVRO: renomear · acertar quantidade · imprimir ═══
