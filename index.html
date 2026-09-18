@@ -68,6 +68,10 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .tipo-row.tipo-1 { border-left: 4px solid #2E86AB; }
 .tipo-row.tipo-2 { border-left: 4px solid #E67E22; }
 .tipo-row.tipo-3 { border-left: 4px solid #8E44AD; }
+/* v4.94 — do 4º ao 6º tipo */
+.tipo-row.tipo-4 { border-left: 4px solid #1E8449; }
+.tipo-row.tipo-5 { border-left: 4px solid #C0392B; }
+.tipo-row.tipo-6 { border-left: 4px solid #16A085; }
 .tipo-label {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.6px; margin-bottom: 10px;
@@ -75,6 +79,9 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .tipo-1 .tipo-label { color: #2E86AB; }
 .tipo-2 .tipo-label { color: #E67E22; }
 .tipo-3 .tipo-label { color: #8E44AD; }
+.tipo-4 .tipo-label { color: #1E8449; }
+.tipo-5 .tipo-label { color: #C0392B; }
+.tipo-6 .tipo-label { color: #16A085; }
 .btn-remover-tipo { position: absolute; top: 10px; right: 10px; background: none; border: none; color: var(--cinza-3); cursor: pointer; font-size: 18px; line-height: 1; transition: color 0.2s; }
 .btn-remover-tipo:hover { color: var(--vermelho); }
 
@@ -118,6 +125,9 @@ header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 .tabela-materiais th.col-tipo-1 { color: #2E86AB; }
 .tabela-materiais th.col-tipo-2 { color: #E67E22; }
 .tabela-materiais th.col-tipo-3 { color: #8E44AD; }
+.tabela-materiais th.col-tipo-4 { color: #1E8449; }
+.tabela-materiais th.col-tipo-5 { color: #C0392B; }
+.tabela-materiais th.col-tipo-6 { color: #16A085; }
 .tabela-materiais td { padding: 9px 10px; border-bottom: 1px solid var(--cinza-2); font-size: 13px; vertical-align: middle; }
 .tabela-materiais tr:last-child td { border-bottom: none; }
 /* v4.85 — o nome ficava longe da quantidade e dava para errar a linha.
@@ -281,6 +291,9 @@ details[open] summary { margin-bottom: 6px; }
 .comp-tabela .col-tipo-1 { color: #2E86AB; font-weight: 700; }
 .comp-tabela .col-tipo-2 { color: #E67E22; font-weight: 700; }
 .comp-tabela .col-tipo-3 { color: #8E44AD; font-weight: 700; }
+.comp-tabela .col-tipo-4 { color: #1E8449; font-weight: 700; }
+.comp-tabela .col-tipo-5 { color: #C0392B; font-weight: 700; }
+.comp-tabela .col-tipo-6 { color: #16A085; font-weight: 700; }
 
 .comp-gerais-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px;
@@ -438,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.93 · comparativo com a embalagem à vista e justificativa item a item</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.94 · até 6 tipos de cirurgia no mesmo período</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -692,7 +705,7 @@ details[open] summary { margin-bottom: 6px; }
 
     <!-- TIPOS DE CIRURGIA -->
     <div class="card">
-      <div class="card-titulo">2. Tipos de Cirurgia no Período <span style="font-weight:400;color:var(--cinza-4)">(máx. 3)</span></div>
+      <div class="card-titulo">2. Tipos de Cirurgia no Período <span style="font-weight:400;color:var(--cinza-4)">(até 6)</span></div>
       <div class="tipos-container" id="tipos-container"></div>
       <div style="margin-top:12px">
         <button class="btn-add-tipo" id="btn-add-tipo" onclick="adicionarTipo()">+ Adicionar tipo de cirurgia</button>
@@ -2518,7 +2531,7 @@ function onDataChange() {
 
 // ── TIPOS DE CIRURGIA ─────────────────────────────────────────
 function adicionarTipo() {
-  if (tiposCirurgia.length >= 3) { toast('Máximo de 3 tipos por período.', ''); return; }
+  if (tiposCirurgia.length >= MAX_TIPOS) { toast('Máximo de '+MAX_TIPOS+' tipos no mesmo período.', ''); return; }
   tiposCirurgia.push({ tipo: '', modalidade: null, pacientes: 1, protocolos: [] });
   renderizarTipos();
 }
@@ -2552,10 +2565,17 @@ function gerarOpcoesTipo(t){
   return html;
 }
 
+// v4.94 — o teto era 3 e na segunda-feira (15/09) o mesmo médico fez QUATRO tipos
+// diferentes no mesmo período. O banco nunca limitou: cada tipo vira um
+// `periodos_cirurgicos` próprio (data + médico + tipo + modalidade), então o 3 só
+// existia no formulário. Agora são 6, e as cores/rótulos são gerados pelo índice —
+// mexer neste número não exige mexer em mais nada.
+const MAX_TIPOS = 6;
+
 function renderizarTipos() {
   const cont = document.getElementById('tipos-container');
-  const cores = ['tipo-1','tipo-2','tipo-3'];
-  const labels = ['1º Tipo','2º Tipo','3º Tipo'];
+  const cores = tiposCirurgia.map((_,i)=>'tipo-'+(i+1));
+  const labels = tiposCirurgia.map((_,i)=>(i+1)+'º Tipo');
 
   cont.innerHTML = tiposCirurgia.map((t, i) => `
     <div class="tipo-row ${cores[i]}">
@@ -2590,7 +2610,7 @@ function renderizarTipos() {
   `).join('');
 
   // Fellow — só mostrar se há pelo menos 1 tipo
-  document.getElementById('btn-add-tipo').style.display = tiposCirurgia.length >= 3 ? 'none' : '';
+  document.getElementById('btn-add-tipo').style.display = tiposCirurgia.length >= MAX_TIPOS ? 'none' : '';
 
   if (tiposCirurgia.length === 0) {
     cont.innerHTML = '<div style="text-align:center;padding:20px;color:var(--cinza-4);font-size:13px">Clique em "+ Adicionar tipo de cirurgia" para começar.</div>';
@@ -2766,8 +2786,8 @@ function getDemoMateriais(medico, tipo) {
 //      sozinho para uma coluna: rolagem lateral, nunca.
 function renderizarTabela() {
   const tipos   = tiposCirurgia.filter(t => t.tipo);
-  const labels  = ['1º','2º','3º'];
-  const coresTh = ['col-tipo-1','col-tipo-2','col-tipo-3'];
+  const labels  = tipos.map((_,i)=>(i+1)+'º');
+  const coresTh = tipos.map((_,i)=>'col-tipo-'+(i+1));
   const grid    = document.getElementById('mat-grid');
   if (!grid) return;
   const nCols = 2 + tipos.length;                       // material + tipos + ✕
@@ -3118,7 +3138,7 @@ function abrirRevisao() {
     <div><div class="comp-campo-label">Fellow</div><div class="comp-campo-valor">${document.getElementById('sel-fellow')?.value === 'true' ? 'Sim' : 'Não'}</div></div>`;
 
   // Tipos
-  const coresTipo = ['col-tipo-1','col-tipo-2','col-tipo-3'];
+  const coresTipo = tipos.map((_,i)=>'col-tipo-'+(i+1));
   document.getElementById('comp-tipos').innerHTML = tipos.map((t,i) => `
     <tr>
       <td class="${coresTipo[i]}">${t.tipo}</td>
