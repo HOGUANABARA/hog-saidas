@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.95 · contagem da limpeza: o consumo do período vira custo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.96 · contagem grava de verdade, com limpeza e copa separadas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1074,6 +1074,8 @@ details[open] summary { margin-bottom: 6px; }
     font-family:var(--fonte);text-align:right}
   .hg-ct-inp:focus{outline:none;border-color:var(--acao);background:var(--branco)}
   .hg-ct-inp.preenchido{border-color:var(--verde);background:var(--verde-claro);font-weight:700}
+  .hg-tab tr.hg-ct-secao td{background:var(--cinza-1);font-size:10.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.7px;color:var(--cinza-5);padding:7px 10px;border-bottom:1.5px solid var(--cinza-2)}
   .hg-ct-outra{background:transparent;color:var(--cinza-4);border:1px dashed var(--cinza-2);border-radius:6px;
     padding:3px 8px;font-size:10.5px;cursor:pointer;font-family:var(--fonte);white-space:nowrap}
   .hg-ct-outra:hover{color:var(--azul);border-color:var(--azul)}
@@ -19490,7 +19492,25 @@ function hgInvRender(){
     +'<th></th>'
     +'</tr></thead><tbody>';
   if(!dados.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
-  dados.forEach(function(r){
+  // v4.96 — ela: "limpeza precisa estar separado da copa na contagem". Quem decide é a
+  // classe do cadastro (LIMPEZA | COPA), que é a mesma que manda na linha de custo.
+  // Os 35 itens nasceram todos LIMPEZA, então o botão ☕/🧼 da linha move um para o outro.
+  const ordenados = dados.slice().sort(function(a,b){
+    const ca=hgCtEhCopa(a.material_id)?1:0, cb=hgCtEhCopa(b.material_id)?1:0;
+    if(ca!==cb) return ca-cb;
+    return String(a.material||'').localeCompare(String(b.material||''));
+  });
+  let secaoAtual = null;
+  ordenados.forEach(function(r){
+    const secao = hgCtEhCopa(r.material_id) ? 'COPA' : 'LIMPEZA';
+    if(secao!==secaoAtual){
+      const n = ordenados.filter(function(x){ return (hgCtEhCopa(x.material_id)?'COPA':'LIMPEZA')===secao; }).length;
+      h+='<tr class="hg-ct-secao"><td colspan="8">'
+        + (secao==='COPA' ? '☕ COPA' : '🧼 LIMPEZA')
+        + ' <span style="font-weight:400;opacity:.75">· '+n+' item(ns) · entra na linha de custo '
+        + (secao==='COPA' ? '☕ copa' : '🧼 limpeza') + '</span></td></tr>';
+      secaoAtual = secao;
+    }
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
     const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
     const sub = [ hgEsc(r.unidade_medida||''), (r.qtd_kit>1?(r.qtd_kit+'/caixa'):''),
@@ -19506,12 +19526,17 @@ function hgInvRender(){
         +' title="'+hgEsc(r.material)+'" oninput="hgCtSet('+r.material_id+',this.value)"></td>'
       +'<td class="hg-num" id="hg-ct-cons-'+r.material_id+'"><span style="color:var(--cinza-3)">—</span></td>'
       +'<td class="hg-num" id="hg-ct-sug-'+r.material_id+'" title="repõe o que foi consumido no período, na embalagem de compra"><span style="color:var(--cinza-3)">—</span></td>'
-      +'<td style="text-align:right"><button onclick="hgSaidaAbrir('+r.material_id+')" title="perda, vencimento, descarte ou item que foi para outro setor — o consumo normal da limpeza sai pela contagem" class="hg-ct-outra">outra saída</button></td>'
+      +'<td style="text-align:right;white-space:nowrap">'
+        +'<button onclick="hgCtTrocarClasse('+r.material_id+')" class="hg-ct-outra" title="'
+          +(hgCtEhCopa(r.material_id)?'passar para 🧼 limpeza':'passar para ☕ copa')
+          +' — é isso que decide em qual linha de custo o consumo dele entra">'
+          +(hgCtEhCopa(r.material_id)?'🧼':'☕')+'</button> '
+        +'<button onclick="hgSaidaAbrir('+r.material_id+')" title="perda, vencimento, descarte ou item que foi para outro setor — o consumo normal sai pela contagem" class="hg-ct-outra">outra saída</button></td>'
       +'</tr>';
   });
   h+='</tbody></table>';
   document.getElementById('hg-inv-tabela').innerHTML=h;
-  dados.forEach(function(r){ hgCtAtualizarLinha(r.material_id); });
+  ordenados.forEach(function(r){ hgCtAtualizarLinha(r.material_id); });
   hgCtResumo();
 }
 
@@ -20060,6 +20085,7 @@ const HG_MARCA_CONTAGEM = 'CONTAGEM HIGIENE/COPA';
 const HG_CT_DRAFT = 'hog_hg_contagem';
 let hgContado = {};          // material_id -> quantidade contada (string do campo)
 let hgCtAnterior = null;     // { data_contagem, id } da última contagem fechada
+let hgCtContagens = [];      // v4.96 — todas as contagens fechadas, para achar a da MESMA data
 let hgClasse = {};           // material_id -> classe_compra (LIMPEZA | COPA | …)
 
 function hgCtNum(v){ const n = parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?null:n; }
@@ -20082,10 +20108,33 @@ function hgCtDraftLimpar(){ try{ localStorage.removeItem(HG_CT_DRAFT); }catch(e)
 // a última contagem fechada é o começo do período; sem ela, o período é "desde sempre"
 async function hgCtCarregarAnterior(){
   try{
-    const inv=(await sbFetch('inventarios?select=id,data_contagem,mes_referencia,fechado_em&status=eq.fechado'
-             +'&observacao=eq.'+encodeURIComponent(HG_MARCA_CONTAGEM)+'&order=data_contagem.desc&limit=1'))||[];
-    hgCtAnterior = inv[0]||null;
-  }catch(e){ hgCtAnterior = null; }
+    hgCtContagens=(await sbFetch('inventarios?select=id,data_contagem,mes_referencia,fechado_em&status=eq.fechado'
+             +'&observacao=eq.'+encodeURIComponent(HG_MARCA_CONTAGEM)+'&order=data_contagem.desc&limit=50'))||[];
+    hgCtAnterior = hgCtContagens[0]||null;
+  }catch(e){ hgCtContagens=[]; hgCtAnterior = null; }
+}
+// v4.96 — o período começa na última contagem ANTES da data escolhida (não na mais
+// recente): senão, refazer uma contagem do mesmo dia mostrava período negativo.
+function hgCtDe(data){
+  const d=String(data).slice(0,10);
+  return { anterior: hgCtContagens.find(x=>String(x.data_contagem).slice(0,10) <  d) || null,
+           mesma:    hgCtContagens.find(x=>String(x.data_contagem).slice(0,10) === d) || null,
+           depois:   hgCtContagens.filter(x=>String(x.data_contagem).slice(0,10) >  d).pop() || null };
+}
+// v4.96 — limpeza e copa são contas diferentes; a classe do cadastro é quem diz.
+// Como todos os 35 nasceram LIMPEZA, o botão da linha move o item de uma para a outra.
+function hgCtEhCopa(mid){ return hgClasse[mid]==='COPA'; }
+async function hgCtTrocarClasse(mid){
+  const r=hgDados.find(x=>x.material_id===mid); if(!r) return;
+  const nova = hgCtEhCopa(mid) ? 'LIMPEZA' : 'COPA';
+  if(!confirm('Passar "'+r.material+'" para '+(nova==='COPA'?'☕ COPA':'🧼 LIMPEZA')+'?\n\n'
+      +'É isso que decide em qual linha de custo o consumo dele entra.')) return;
+  try{
+    await sbFetch('materiais?id=eq.'+mid,'PATCH',{ classe_compra: nova });
+    hgClasse[mid]=nova;
+    toast('"'+r.material+'" agora é '+(nova==='COPA'?'copa':'limpeza')+' ✓','sucesso');
+    hgInvRender();
+  }catch(e){ toast('Não consegui mudar a classe: '+(e.message||e),'erro'); }
 }
 async function hgCtCarregarClasses(){
   try{
@@ -20136,17 +20185,21 @@ function hgCtAtualizarLinha(mid){
 
 function hgCtResumo(){
   const el=document.getElementById('hg-ct-resumo'); if(!el) return;
-  let contados=0, custo=0, sobras=0;
-  for(const r of hgDados){ const L=hgCtLinha(r); if(L.contado!==null){ contados++; custo+=L.custo; if(L.sobra>0) sobras++; } }
-  const desde = hgCtAnterior && hgCtAnterior.data_contagem ? hgCtDataBr(hgCtAnterior.data_contagem) : null;
-  const dias = (hgCtAnterior && hgCtAnterior.data_contagem)
-    ? Math.max(1, Math.round((new Date(hgCtData()) - new Date(hgCtAnterior.data_contagem))/86400000)) : null;
+  let contados=0, custo=0, sobras=0, custoLimp=0, custoCopa=0;
+  for(const r of hgDados){ const L=hgCtLinha(r); if(L.contado!==null){ contados++; custo+=L.custo; if(L.sobra>0) sobras++;
+    if(hgCtEhCopa(r.material_id)) custoCopa+=L.custo; else custoLimp+=L.custo; } }
+  const ctx = hgCtDe(hgCtData());
+  const ant = ctx.anterior;
+  const desde = ant && ant.data_contagem ? hgCtDataBr(ant.data_contagem) : null;
+  const dias = (ant && ant.data_contagem)
+    ? Math.max(1, Math.round((new Date(hgCtData()) - new Date(ant.data_contagem))/86400000)) : null;
   el.innerHTML =
      '<span class="hg-ct-k"><span class="rot">Período</span><b>'
       + (desde ? (desde+' → '+hgCtDataBr(hgCtData())+' · '+dias+' dias') : ('primeira contagem — até '+hgCtDataBr(hgCtData())))
       + '</b></span>'
     +'<span class="hg-ct-k"><span class="rot">Contados</span><b>'+contados+' de '+hgDados.length+'</b></span>'
-    +'<span class="hg-ct-k"><span class="rot">Consumo do período</span><b style="color:var(--azul)">'+hgMoeda(custo)+'</b></span>'
+    +'<span class="hg-ct-k"><span class="rot">🧼 Limpeza</span><b style="color:var(--azul)">'+hgMoeda(custoLimp)+'</b></span>'
+    +'<span class="hg-ct-k"><span class="rot">☕ Copa</span><b style="color:#7D6608">'+hgMoeda(custoCopa)+'</b></span>'
     + (sobras? ('<span class="hg-ct-k"><span class="rot">Apareceu a mais</span><b style="color:#B9770E">'+sobras+' item(ns)</b></span>') : '');
   const btn=document.getElementById('hg-ct-fechar');
   if(btn){ btn.disabled = contados===0; btn.style.opacity = contados===0?.5:1; }
@@ -20156,8 +20209,9 @@ function hgCtResumo(){
 async function hgCtFechar(){
   const data = hgCtData();
   if(data > hgCtHoje()){ toast('A data da contagem não pode ser no futuro.','erro'); return; }
-  if(hgCtAnterior && hgCtAnterior.data_contagem && data <= String(hgCtAnterior.data_contagem).slice(0,10)){
-    toast('Já existe contagem fechada em '+hgCtDataBr(hgCtAnterior.data_contagem)+'. A nova precisa ser depois dessa.','erro'); return;
+  const ctx = hgCtDe(data);
+  if(ctx.depois){
+    toast('Já existe contagem fechada em '+hgCtDataBr(ctx.depois.data_contagem)+', depois desta data. Apague-a antes de refazer este período.','erro'); return;
   }
   const linhas=[];
   for(const r of hgDados){ const L=hgCtLinha(r); if(L.contado!==null) linhas.push({ r, L }); }
@@ -20174,6 +20228,7 @@ async function hgCtFechar(){
     + '• '+comConsumo.length+' com consumo no período → '+hgMoeda(custo)+' vão para o custo de limpeza/copa.\n'
     + (comSobra.length ? ('• '+comSobra.length+' apareceram a mais que o sistema sabia → entram como acerto de entrada.\n') : '')
     + (naoContados ? ('• '+naoContados+' item(ns) SEM contagem ficam como estão — não entram nesta apuração.\n') : '')
+    + (ctx.mesma ? ('\n⚠ Já existe uma contagem gravada nesta data — ela será REFEITA com estes números.\n') : '')
     + '\nDepois disso o período novo começa em '+hgCtDataBr(data)+'.';
   if(!confirm(aviso)) return;
 
@@ -20181,33 +20236,43 @@ async function hgCtFechar(){
   if(btn){ btn.disabled=true; btn.textContent='fechando…'; }
   try{
     const localId = await getEstoqueGeralId();
-    // 1) a contagem em si — o mesmo par de tabelas do inventário do CC
-    const invArr = await sbFetch('inventarios','POST',{
-      mes_referencia: data, data_contagem: data, status:'fechado',
-      criado_por: quem, fechado_por: quem, fechado_em: new Date().toISOString(),
-      observacao: HG_MARCA_CONTAGEM });
-    const invId = Array.isArray(invArr) ? (invArr[0]||{}).id : (invArr||{}).id;
+    // 1) a contagem em si — o mesmo par de tabelas do inventário do CC.
+    // v4.96 — se já existe contagem nesta data (por exemplo porque a gravação falhou
+    // no meio da primeira tentativa), ela é REAPROVEITADA em vez de duplicada. Foi o
+    // que aconteceu em 18/09: o lote de movimentos deu PGRST102 depois de a contagem
+    // já estar gravada, e cada clique novo criava outra.
+    let invId;
+    if(ctx.mesma){
+      invId = ctx.mesma.id;
+      await sbFetch('inventario_itens?inventario_id=eq.'+invId,'DELETE');
+      await sbFetch('inventarios?id=eq.'+invId,'PATCH',{ fechado_por: quem, fechado_em: new Date().toISOString() });
+    }else{
+      const invArr = await sbFetch('inventarios','POST',{
+        mes_referencia: data, data_contagem: data, status:'fechado',
+        criado_por: quem, fechado_por: quem, fechado_em: new Date().toISOString(),
+        observacao: HG_MARCA_CONTAGEM });
+      invId = Array.isArray(invArr) ? (invArr[0]||{}).id : (invArr||{}).id;
+    }
     if(!invId) throw new Error('o banco não devolveu o id da contagem');
 
     await sbFetch('inventario_itens','POST', linhas.map(x=>({
       inventario_id: invId, material_id: x.r.material_id, local_id: localId,
       qtd_contada: x.L.contado, contado_por: quem, contado_em: new Date().toISOString() })));
 
-    // 2) o consumo do período, que é o custo
-    const movs=[];
-    for(const x of comConsumo){
-      movs.push({ tipo:'SAIDA_GERAL', material_id:x.r.material_id, local_id:localId,
-        qtd: -Math.abs(x.L.consumo), destino_saida_geral: hgCtDestino(x.r.material_id),
-        aprovado:true, registrado_por:quem,
-        observacao:'Consumo apurado na contagem de '+hgCtDataBr(data)
-                 + (hgCtAnterior&&hgCtAnterior.data_contagem?(' (desde '+hgCtDataBr(hgCtAnterior.data_contagem)+')'):' (primeira contagem)') });
-    }
-    // 3) o que apareceu a mais não é consumo: é acerto de entrada
-    for(const x of comSobra){
-      movs.push({ tipo:'AJUSTE_INVENTARIO', material_id:x.r.material_id, local_id:localId,
-        qtd: Math.abs(x.L.sobra), aprovado:true, registrado_por:quem,
-        observacao:'Contagem de '+hgCtDataBr(data)+' achou '+hgN(x.L.sobra)+' a mais do que o sistema tinha' });
-    }
+    // 2) o consumo do período, que é o custo — e 3) o que apareceu a mais, que é
+    // acerto de entrada. Vão no MESMO lote, e é por isso que todos os objetos
+    // precisam ter EXATAMENTE as mesmas chaves: o PostgREST recusa um array de
+    // formatos diferentes com PGRST102 "All object keys must match" — foi o erro
+    // que ela levou em 18/09, quando 3 itens apareceram a mais.
+    const desde = ctx.anterior && ctx.anterior.data_contagem
+      ? (' (desde '+hgCtDataBr(ctx.anterior.data_contagem)+')') : ' (primeira contagem)';
+    const mov = (tipo, mid, qtd, dest, obs) => ({
+      tipo: tipo, material_id: mid, local_id: localId, qtd: qtd,
+      destino_saida_geral: dest, aprovado: true, registrado_por: quem, observacao: obs });
+    const movs = comConsumo.map(x => mov('SAIDA_GERAL', x.r.material_id, -Math.abs(x.L.consumo),
+        hgCtDestino(x.r.material_id), 'Consumo apurado na contagem de '+hgCtDataBr(data)+desde))
+      .concat(comSobra.map(x => mov('AJUSTE_INVENTARIO', x.r.material_id, Math.abs(x.L.sobra),
+        null, 'Contagem de '+hgCtDataBr(data)+' achou '+hgN(x.L.sobra)+' a mais do que o sistema tinha')));
     if(movs.length) await sbFetch('movimentacoes','POST',movs);
 
     hgContado={}; hgCtDraftLimpar();
