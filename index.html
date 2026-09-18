@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.98 · o que já está em cotação ou pedido não entra de novo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.99 · higiene: caixa com preço de caixa, e o pedido sem observação técnica</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7672,6 +7672,20 @@ let deBoards = []; // [{pedido, itens:[ordens_compra]}]
 // O item avulso fica MARCADO — sem isso o comparativo daria a entender que
 // aquele preço foi disputado entre fornecedores, e não foi.
 const DE_MARCA_AVULSO = 'Incluído na montagem';
+// v4.99 — o que aparece embaixo da linha do pedido é só o que alguém ESCREVEU.
+// O rastro automático ("Cotação #32 — grupo …", "Higiene — cotação #36 — … qtd em
+// CAIXAS", "Ajustado:" vazio) sai da vista e vai para o title da linha — nada se perde.
+function obsLimpa(t){
+  if(!t) return '';
+  return String(t).split(' | ').map(function(x){ return x.trim(); }).filter(function(x){
+    if(!x) return false;
+    if(/^Higiene — cotação #\d+/i.test(x)) return false;
+    if(/^Cotação #\d+/i.test(x)) return false;
+    if(/^Ajustado:\s*$/i.test(x)) return false;
+    return true;
+  }).join(' · ');
+}
+function obsTitle(t){ return t ? String(t).replace(/"/g,'&quot;') : ''; }
 function deAvulso(o){ return String(o && o.observacao || '').indexOf(DE_MARCA_AVULSO) === 0; }
 
 function deAbrirAdd(pid){
@@ -7917,7 +7931,7 @@ function deRenderizar(){
     const _dup = o => (_cont[o.material_id||('n:'+(o.item_nome||''))]||0) > 1;
     const nDup = b.itens.filter(_dup).length;
     const linhas = b.itens.map(o=>`<tr${_dup(o)?' style="background:#FDEDEC"':(deAvulso(o)?' style="background:#F2FBF5"':'')}>
-      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${_dup(o)?' <span class="de-tag-dup" title="este material aparece mais de uma vez neste pedido — confira as quantidades e tire a linha que sobra no 🗑">⚠ repetido</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${_dup(o)?' <span class="de-tag-dup" title="este material aparece mais de uma vez neste pedido — confira as quantidades e tire a linha que sobra no 🗑">⚠ repetido</span>':''}${obsLimpa(o.observacao)?`<span style="font-size:10px;color:var(--cinza-4);display:block">${obsLimpa(o.observacao)}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
@@ -8051,7 +8065,7 @@ async function dePedidoPDF(pid){
     const desc=(o.descricao_nf||'').trim();
     return '<tr>'
       +'<td>'+deNomeMat(o.material_id,o)+(desc?('<div style="font-size:9.5px;color:#666">'+desc+'</div>'):'')
-        +(o.observacao?('<div style="font-size:9.5px;color:#666">'+o.observacao+'</div>'):'')+'</td>'
+        +(obsLimpa(o.observacao)?('<div style="font-size:9.5px;color:#666">'+obsLimpa(o.observacao)+'</div>'):'')+'</td>'
       +'<td>'+(o.marca_escolhida||'—')+'</td>'
       +'<td>'+(o.codigo_escolhido||'—')+'</td>'
       +'<td style="text-align:center">'+(qtd||'—')+'</td>'
@@ -9399,7 +9413,7 @@ function rcHtmlOrfas(){
   const linhas = rcOrfas.map(o=>{
     const dd = dias(o.created_at);
     return `<tr>
-      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${obsLimpa(o.observacao)?`<span class="ap-obs" style="font-size:10px;color:var(--cinza-4);display:block">${obsLimpa(o.observacao)}</span>`:''}</td>
       <td>${rcNomeFornecedor(o.fornecedor_compra_id || o.fornecedor_id)}</td>
       <td style="text-align:center">${o.qtd_a_comprar ?? o.qtd_comprada ?? '—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}</td>
@@ -10548,7 +10562,7 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${obsLimpa(o.observacao)?`<span class="ap-obs">${obsLimpa(o.observacao)}</span>`:''}
         <!-- v4.93 — "justificativa em cada item é melhor" -->
         <input class="ap-just-item" id="ap-ji-${o.id}" value="${(o.justificativa||'').replace(/"/g,'&quot;')}"
           placeholder="por que este fornecedor para este item?"
@@ -10759,7 +10773,7 @@ async function apGerarPDF(pid){
     if(u!=null && v){ const d=((v-u)/u)*100; ref='últ. pago '+rcMoney(u)+' ('+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%)'; }
     else if(u!=null){ ref='últ. pago '+rcMoney(u); }
     const sub=Math.max(0,((o.qtd_a_comprar||0)*v)-(Number(o.desconto)||0));
-    return `<tr><td>${rcNomeMaterial(o.material_id,o)}${o.observacao?`<div style="font-size:9.5px;color:#777">${o.observacao}</div>`:''}${o.justificativa?`<div style="font-size:10px;color:#1B4F72;margin-top:2px"><b>Por quê:</b> ${o.justificativa}</div>`:''}</td>
+    return `<tr><td>${rcNomeMaterial(o.material_id,o)}${obsLimpa(o.observacao)?`<div style="font-size:9.5px;color:#777">${obsLimpa(o.observacao)}</div>`:''}${o.justificativa?`<div style="font-size:10px;color:#1B4F72;margin-top:2px"><b>Por quê:</b> ${o.justificativa}</div>`:''}</td>
       <td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}<div style="font-size:9.5px;color:#777">${ref}</div></td>
       <td style="text-align:right">${rcMoney(sub)}${Number(o.desconto)>0?`<div style="font-size:9.5px;color:#1E8449">−${rcMoney(o.desconto)} desc.</div>`:''}</td></tr>`;
@@ -19532,7 +19546,7 @@ function hgInvRender(){
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
     const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
     const sub = [ hgEsc(r.unidade_medida||''), (r.qtd_kit>1?(r.qtd_kit+'/caixa'):''),
-                  (semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':(hgMoeda(r.valor_unid)+'/un')) ]
+                  (semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':(hgMoeda(hgPrecoUn(r))+'/'+hgUnRot(r)+(Number(r.qtd_kit)>1?(' · caixa '+hgMoeda(hgPrecoCaixa(r))):''))) ]
                 .filter(Boolean).join(' · ');
     h+='<tr>'
       +'<td>'+cod+'</td>'
@@ -20106,6 +20120,17 @@ let hgCtAnterior = null;     // { data_contagem, id } da última contagem fechad
 let hgCtContagens = [];      // v4.96 — todas as contagens fechadas, para achar a da MESMA data
 let hgClasse = {};           // material_id -> classe_compra (LIMPEZA | COPA | …)
 
+// v4.99 — preço da UNIDADE DE CONSUMO (pacote, rolo, frasco). É o valor_compra da view,
+// que é o materiais.ultimo_valor_pago — por unidade desde a v4.57. O `valor_unid` da
+// view divide por qtd_kit de novo e deixava os itens de caixa 6 a 18 vezes mais baratos:
+// a contagem de 14/09 mostrou R$ 1.079,16 de consumo quando o certo é R$ 2.478,68.
+// (O custo gravado nunca esteve errado — o Painel calcula por ultimo_valor_pago.)
+function hgPrecoUn(r){ const v=Number(r && r.valor_compra); return v>0 ? v : 0; }
+// preço da CAIXA de compra — é assim que a HYGIBRAS cobra e é assim que o pedido de
+// higiene anda (a entrada da NF converte: qtd × kit e preço ÷ kit, v4.19)
+function hgPrecoCaixa(r){ const k=Number(r && r.qtd_kit)||1; return hgPrecoUn(r)*(k>1?k:1); }
+function hgUnRot(r){ return String((r && r.unidade_medida)||'un').toLowerCase(); }
+
 function hgCtNum(v){ const n = parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?null:n; }
 function hgCtHoje(){ return new Date().toISOString().slice(0,10); }
 function hgCtData(){ const el=document.getElementById('hg-ct-data'); return (el&&el.value)||hgCtHoje(); }
@@ -20179,7 +20204,7 @@ function hgCtLinha(r){
   const cont=hgCtNum(hgContado[r.material_id]);
   if(cont===null) return { contado:null, consumo:null, custo:0, sobra:0 };
   const dif=saldo-cont;
-  return { contado:cont, consumo: dif>0?dif:0, custo: (dif>0?dif:0)*(Number(r.valor_unid)||0), sobra: dif<0?(-dif):0 };
+  return { contado:cont, consumo: dif>0?dif:0, custo: (dif>0?dif:0)*hgPrecoUn(r), sobra: dif<0?(-dif):0 };
 }
 
 function hgCtAtualizarLinha(mid){
@@ -20443,7 +20468,7 @@ async function hgCompCarregar(){
         +'<button style="'+HG_BTN+'" onclick="hgCompEnviar(\''+L.chave+'\',\''+L.grupo+'\')">📤 Enviar p/ Orçar</button>'
       +'</div>'
       +'<table class="hg-tab"><thead><tr><th></th><th>Produto</th><th class="hg-num">Consumo do período</th>'
-        +'<th class="hg-num">Tem hoje</th><th class="hg-num">Comprar</th><th class="hg-num">Valor/unid</th><th></th></tr></thead><tbody>';
+        +'<th class="hg-num">Tem hoje</th><th class="hg-num">Comprar</th><th class="hg-num">Preço da compra</th><th></th></tr></thead><tbody>';
     if(!L.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:16px">Nenhum item nesta lista.</td></tr>';
     L.itens.slice().sort(function(a,b){ return hgComprar(b).caixas-hgComprar(a).caixas || String(a.material||'').localeCompare(String(b.material||'')); })
       .forEach(function(r){
@@ -20461,7 +20486,7 @@ async function hgCompCarregar(){
         +'<td class="hg-num">'+(S.caixas>0
             ? ('<b style="color:var(--azul);font-size:14px">'+S.caixas+'</b><span style="font-size:10px;color:var(--cinza-4)"> '+(kit>1?('cx de '+kit):'un')+'</span>')
             : '<span style="color:var(--verde)" title="o que sobrou cobre o consumo do período">tem de sobra</span>')+'</td>'
-        +'<td class="hg-num">'+hgMoeda(r.valor_unid)+'</td>'
+        +'<td class="hg-num" title="'+hgMoeda(hgPrecoUn(r))+' por '+hgUnRot(r)+'">'+hgMoeda(hgPrecoCaixa(r))+(kit>1?'<span style="font-size:10px;color:var(--cinza-4)"> /cx</span>':'')+'</td>'
         +'<td style="text-align:right"><button class="hg-ct-outra" onclick="hgTrocarLista('+r.material_id+')" title="'
           +(hgEhFixo(r.material_id)?'passar para 🛒 cotar no supermercado':'passar para 🏭 compra fixa da HYGIBRAS')+'">'
           +(hgEhFixo(r.material_id)?'🛒':'🏭')+'</button></td>'
@@ -20491,7 +20516,7 @@ async function hgCompEnviar(chave, grupoSugerido){
     if(!r || hgOrcTemItem(mid)) return;
     if(hgAndamento[mid]){ pulados.push(r.material+' ('+hgAndamento[mid]+')'); return; }   // v4.98
     // v4.23 — o cadastro alimenta o orçamento: marca e último preço vêm prontos, só corrige o que mudou
-    const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
+    const mCad=(r.marca||'').trim()||null, pCad=(hgPrecoCaixa(r)>0?hgPrecoCaixa(r):null);   // v4.99 — caixa, não pacote
     // v4.97 — a quantidade já vai preenchida com a sugestão da contagem
     const S=hgComprar(r);
     hgOrcGrupos[g].itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
@@ -20508,16 +20533,16 @@ async function hgCompEnviar(chave, grupoSugerido){
 async function hgRelCarregar(){
   if(!hgDados.length) await hgCarregarDados();
   let totalEstoque=0, comPreco=0;
-  hgDados.forEach(function(r){ if(r.valor_unid!=null && r.saldo!=null){ totalEstoque += Number(r.valor_unid)*Number(r.saldo); } if(r.valor_compra!=null&&Number(r.valor_compra)>0) comPreco++; });
+  hgDados.forEach(function(r){ if(r.saldo!=null){ totalEstoque += hgPrecoUn(r)*Number(r.saldo); } if(r.valor_compra!=null&&Number(r.valor_compra)>0) comPreco++; });
   let h='<div class="hg-kpis">'
     +'<div class="hg-kpi"><div class="rot">Valor em estoque (higiene)</div><div class="val">'+hgMoeda(totalEstoque)+'</div></div>'
     +'<div class="hg-kpi"><div class="rot">Itens com preço</div><div class="val">'+comPreco+' <small style="font-size:12px;color:var(--cinza-4)">/'+hgDados.length+'</small></div></div>'
     +'</div>';
   h+='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Valor em estoque</th></tr></thead><tbody>';
-  hgDados.slice().sort(function(a,b){ return (Number(b.valor_unid||0)*Number(b.saldo||0))-(Number(a.valor_unid||0)*Number(a.saldo||0)); }).forEach(function(r){
-    const val = (r.valor_unid!=null&&r.saldo!=null)?Number(r.valor_unid)*Number(r.saldo):null;
+  hgDados.slice().sort(function(a,b){ return (hgPrecoUn(b)*Number(b.saldo||0))-(hgPrecoUn(a)*Number(a.saldo||0)); }).forEach(function(r){
+    const val = (r.saldo!=null)?hgPrecoUn(r)*Number(r.saldo):null;
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
-    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num">'+hgMoeda(val)+'</td></tr>';
+    h+='<tr><td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(hgPrecoUn(r))+'</td><td class="hg-num">'+hgMoeda(val)+'</td></tr>';
   });
   h+='</tbody></table>';
   document.getElementById('hg-rel-box').innerHTML=h;
@@ -20782,7 +20807,7 @@ function hgOrcBuscar(){
 }
 function hgOrcAddId(mid){
   const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
-  const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
+  const mCad=(r.marca||'').trim()||null, pCad=(hgPrecoCaixa(r)>0?hgPrecoCaixa(r):null);   // v4.99 — caixa, não pacote
   hgOrcG().itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
     qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
   hgOrcRender();
@@ -20908,7 +20933,10 @@ async function hgOrcFechar(){
           status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
           qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
           marca_escolhida:(it.marcas&&it.marcas[it.escolhido])||null,
-          observacao:'Higiene — cotação #'+hgOrcCotId+' — grupo '+gnome+' — qtd em CAIXAS'+(it.qtd_kit>1?(' ('+it.qtd_kit+' un/cx)'):'')+(it.just?(' | Justificativa: '+it.just):'') });
+          // v4.99 — ela: "tem muita observação abaixo das linhas, isso suja o pedido".
+          // O rastro (cotação, grupo, "qtd em CAIXAS") não diz nada a quem lê o pedido —
+          // a cotação já está no cabeçalho. A justificativa vai para a coluna própria (SQL 87).
+          observacao: null, justificativa: it.just || null });
         nItens++;
       }
       const ids=porForn[fidStr].map(function(it){return it.material_id;});
