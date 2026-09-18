@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.89 · folha de contagem do administrativo sai impressa, no papel do livro de remessas</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.90 · resumo do orçamento por fornecedor e volta do pedido em montagem para o orçamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1037,6 +1037,13 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-mat-l{gap:10px}
   #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
   #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  /* v4.89 — resumo por fornecedor: o que vira pedido para cada um */
+  #aba-cotacao .co-ped-linha{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  #aba-cotacao .co-ped-rot{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);font-weight:700;cursor:help}
+  #aba-cotacao .co-ped-forn{font-size:11.5px;background:#EAF2FB;color:var(--azul);border:1px solid #CBDDF2;
+    border-radius:20px;padding:3px 10px;white-space:nowrap;cursor:help}
+  #aba-cotacao .co-ped-forn b{font-variant-numeric:tabular-nums}
+  #aba-cotacao .co-ped-forn.vazio{background:var(--cinza-1);color:var(--cinza-4);border-color:var(--cinza-2)}
   /* v4.88 — janela presa a um orçamento */
   #aba-cotacao .co-foco-aviso{background:#EDE7F6;border:1.5px solid #B39DDB;color:#4527A0;
     border-radius:8px;padding:9px 14px;font-size:12.5px;line-height:1.5;margin-bottom:12px}
@@ -6616,6 +6623,10 @@ async function coPreencherSaldos(){
 function coDashGrupo(g, idxs, fids){
   if(!idxs.length) return '';
   let escolhidos=0, semPreco=0, semEscolha=0, total=0, economia=0, aumento=0;
+  // v4.89 — pedido dela: "o resumo precisa ser por fornecedor". Fechar o grupo cria
+  // UM pedido POR FORNECEDOR, então a soma do grupo não decide nada: o que decide é
+  // quanto vai para cada um (pedido mínimo, frete, o que ainda dá para negociar).
+  const porForn = {};
   const subiram=[], respondeu={}, detalhe=[];
   fids.forEach(f=>respondeu[f]=0);
   idxs.forEach(i=>{
@@ -6632,6 +6643,11 @@ function coDashGrupo(g, idxs, fids){
     escs.forEach(function(o){
       const u=Number(coUnit(o))||0, q=Number(o.qtd_escolhida)||0;
       subtotal += u*q; qtd += q; unit = u;   // unit do último para a comparação de preço
+      // v4.89 — o mesmo item pode estar dividido entre dois fornecedores; cada pedaço
+      // vai para o pedido do seu fornecedor.
+      const pf = porForn[o.fornecedor_id] = porForn[o.fornecedor_id] || { n:0, total:0, itens:[] };
+      pf.n++; pf.total += u*q;
+      pf.itens.push(it.material_nome+': '+q+' × '+coMoney(u)+' = '+coMoney(u*q));
     });
     total += subtotal;
     detalhe.push({ nome:it.material_nome, qtd:qtd, sub:subtotal, n:escs.length });
@@ -6662,6 +6678,24 @@ function coDashGrupo(g, idxs, fids){
     + (economia>0?tile('Economia', '−'+coMoney(economia), 'var(--verde)', 'vs. último pago'):'')
     + (aumento>0?tile('Aumento', '+'+coMoney(aumento), 'var(--vermelho)', 'vs. último pago'):'')
     +'</div>'
+    // v4.89 — O QUE VIRA PEDIDO PARA CADA FORNECEDOR. Fornecedor sem nada escolhido
+    // aparece apagado: é o aviso de que ele não vira pedido nenhum.
+    + (function(){
+        const ids = fids.slice();
+        for(const k of Object.keys(porForn)){ const id=Number(k); if(ids.indexOf(id)<0) ids.push(id); }
+        if(!ids.length) return '';
+        const chips = ids.map(function(fi){
+          const pf = porForn[fi];
+          if(!pf || !pf.n)
+            return '<span class="co-ped-forn vazio" title="nenhum item escolhido deste fornecedor — ele não vira pedido">🏪 '
+                 + coFornNomeById(fi) + ' · nada escolhido</span>';
+          return '<span class="co-ped-forn" title="' + pf.itens.join(' | ').replace(/"/g,'&quot;') + '">🏪 '
+               + coFornNomeById(fi) + ' · <b>' + pf.n + '</b> ' + (pf.n===1?'item':'itens')
+               + ' · <b>' + coMoney(pf.total) + '</b></span>';
+        }).join('');
+        return '<div class="co-ped-linha"><span class="co-ped-rot" title="fechar o grupo cria um pedido por fornecedor — é este o valor de cada um">Vira pedido para</span>'
+             + chips + '</div>';
+      })()
     +''   // v4.71 — "Responderam" agora é o contador dentro do chip de cada fornecedor
     +(subiram.length
       ? '<div style="margin-top:7px;font-size:11px;color:#9C4221;background:#FDF2E9;border-radius:6px;padding:6px 9px">'
@@ -7774,7 +7808,11 @@ function deRenderizar(){
           <div class="de-inome">🏪 ${deNomeForn(p.fornecedor_id)} <span style="font-size:11px;color:var(--cinza-4);font-weight:600">· Pedido #${pid}${p.cotacao_id?` · Cotação #${p.cotacao_id}`:''}</span></div>
           <div class="de-iref"><span>${b.itens.length} item(ns)</span><span>Total itens: <b>${deMoney(totItens)}</b></span>${(typeof ocSaldoCredito==='function'&&ocCreditos&&ocSaldoCredito(p.fornecedor_id)>0)?`<span style="color:var(--azul);font-weight:800">💳 crédito disponível: ${deMoney(ocSaldoCredito(p.fornecedor_id))}</span>`:''}</div>
         </div>
-        <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <!-- v4.90 — pedido dela: "gerei o pedido, preciso voltar para orçamento, vou mudar o fornecedor" -->
+          ${p.cotacao_id?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" title="devolve os itens para a cotação com as ofertas que já estavam lá, para escolher outro fornecedor. Só vale enquanto o pedido está em montagem." onclick="deVoltarParaOrcamento(${pid})">↩ Voltar para o orçamento</button>`:``}
+          <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
+        </div>
       </div>
       <div class="de-addbar">
         <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
@@ -8027,6 +8065,75 @@ async function deDevolverOrcamento(pid){
     toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar ('+(orig==='HIGIENE'?'Higiene':'CME → Compras')+') para ajustar.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro ao devolver: '+e.message,'erro'); }
+}
+
+// ═══ v4.90 — PEDIDO EM MONTAGEM VOLTA PARA O ORÇAMENTO ════════════════════
+// Pedido dela (17/09): "gerei o pedido, preciso voltar para orçamento, vou mudar
+// o fornecedor".
+//
+// A regra dela de 15/09 continua valendo: **pedido não volta para orçamento**, o
+// caminho reverso é pelo pedido (cancelar / tirar a linha / devolver ao CME). Essa
+// regra fala do pedido que JÁ SAIU — aprovado, enviado, comprado.
+// Aqui é outra coisa: o pedido ainda está EM MONTAGEM, não foi para aprovação
+// nenhuma, não saiu do hospital. Desfazer um passo que ainda não aconteceu não é
+// estorno. Por isso o botão só existe em montagem — depois do "Enviar para
+// Aprovação" ele some, e o caminho volta a ser cancelar.
+//
+// O que muda em relação a cancelar: cancelar solta os itens na LISTA DE COMPRAS e
+// as ofertas digitadas ficam para trás. Aqui as linhas da cotação são reabertas
+// (fechado=false, pedido_id=null) — os preços, marcas e apresentações de todos os
+// fornecedores voltam como estavam, e ela só troca o escolhido e fecha de novo.
+async function deVoltarParaOrcamento(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  const p=b.pedido;
+  if(p.status!=='EM_MONTAGEM'){
+    toast('Este pedido já saiu da montagem. Depois de enviado para aprovação o caminho de volta é cancelar o pedido — sua regra de 15/09.','erro');
+    return;
+  }
+  if(!p.cotacao_id){
+    toast('Este pedido não veio de um orçamento (foi montado à mão). Use "🚫 Cancelar pedido".','erro');
+    return;
+  }
+  // as linhas da cotação que este pedido levou; o carimbo por pedido é da v4.88,
+  // então pedido antigo cai no casamento por material
+  let linhas=[];
+  try{ linhas=(await sbFetch('cotacao_itens?select=id,material_nome&pedido_id=eq.'+pid+'&limit=200'))||[]; }catch(e){}
+  if(!linhas.length){
+    const mids=[...new Set((b.itens||[]).map(i=>i.material_id).filter(Boolean))];
+    if(mids.length){
+      try{ linhas=(await sbFetch('cotacao_itens?select=id,material_nome&cotacao_id=eq.'+p.cotacao_id
+            +'&material_id=in.('+mids.join(',')+')&fechado=is.true&limit=200'))||[]; }catch(e){}
+    }
+  }
+  const msg = 'Voltar o pedido #'+pid+' ('+deNomeForn(p.fornecedor_id)+') para o orçamento #'+p.cotacao_id+'?\n\n'
+    + (linhas.length
+        ? (linhas.length+' item(ns) voltam para a cotação COM as ofertas que já estavam lá — é só marcar outro fornecedor e fechar de novo.')
+        : 'Não achei as linhas na cotação (pedido antigo). Os itens voltam para a lista de compras e o orçamento terá de ser refeito.')
+    + '\n\nO pedido #'+pid+' é cancelado. Isso só vale porque ele ainda está EM MONTAGEM.';
+  if(!confirm(msg)) return;
+  try{
+    await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','PATCH',{ situacao:'NAO COMPRAR AGORA' });
+    await sbFetch('pedidos?id=eq.'+pid,'PATCH',{ status:'CANCELADO',
+      observacao:((p.observacao||'')+' | Voltou para o orçamento #'+p.cotacao_id+' para trocar de fornecedor').trim() });
+    if(linhas.length){
+      await sbFetch('cotacao_itens?id=in.('+linhas.map(x=>x.id).join(',')+')','PATCH',
+        { fechado:false, fechado_em:null, pedido_id:null });
+      await sbFetch('cotacoes?id=eq.'+p.cotacao_id,'PATCH',{ status:'aberta' });
+    }else{
+      await ccSoltarDaCotacao((b.itens||[]).map(i=>i.material_id));
+    }
+    // sem isto o item volta para a tela do Orçar com a etiqueta "já virou pedido"
+    try{ if(typeof coJaComprado==='object' && coJaComprado)
+      for(const i of (b.itens||[])) delete coJaComprado[i.material_id]; }catch(e){}
+    // se a aba Orçar já estava carregada com esta cotação, recarrega ANTES de
+    // qualquer gravação automática — a memória velha não pode apagar o que voltou
+    try{ if(typeof coCotacaoId!=='undefined' && coCotacaoId===p.cotacao_id && typeof coAbrir==='function')
+      await coAbrir(p.cotacao_id); }catch(e){}
+    toast(linhas.length
+      ? ('↩ '+linhas.length+' item(ns) de volta no orçamento #'+p.cotacao_id+' — abra Orçar & Pagar › Orçamentos e escolha o outro fornecedor.')
+      : 'Pedido cancelado — os itens estão livres na lista de compras.','sucesso');
+    deCarregar();
+  }catch(e){ toast('Erro ao voltar para o orçamento: '+e.message,'erro'); }
 }
 
 async function deCancelarPedido(pid){
