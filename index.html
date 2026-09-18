@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.97 · a compra da limpeza sai da contagem, em duas listas</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.98 · o que já está em cotação ou pedido não entra de novo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1075,6 +1075,11 @@ details[open] summary { margin-bottom: 6px; }
   .hg-ct-inp:focus{outline:none;border-color:var(--acao);background:var(--branco)}
   .hg-ct-inp.preenchido{border-color:var(--verde);background:var(--verde-claro);font-weight:700}
   /* v4.97 — as duas listas de compra */
+  .hg-etapa{display:block;color:#B9770E;font-weight:700;font-size:10.5px;margin-top:2px}
+  .de-tag-dup{background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:5px;
+    padding:1px 6px;font-size:10px;font-weight:800;white-space:nowrap}
+  .de-aviso-dup{background:#FDEDEC;border-left:4px solid var(--vermelho);color:#922B21;border-radius:0 8px 8px 0;
+    padding:9px 14px;margin:0 0 10px;font-size:12.5px;line-height:1.5}
   .hg-lista{border:1.5px solid var(--cinza-2);border-radius:10px;overflow:hidden;margin-bottom:14px}
   .hg-lista-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--cinza-1);
     padding:9px 14px;border-bottom:1.5px solid var(--cinza-2);font-size:13px;font-weight:800;color:var(--cinza-5)}
@@ -7905,8 +7910,14 @@ function deRenderizar(){
   }
   corpo.innerHTML = deBoards.map(b=>{
     const p=b.pedido, pid=p.id;
-    const linhas = b.itens.map(o=>`<tr${deAvulso(o)?' style="background:#F2FBF5"':''}>
-      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
+    // v4.98 — o mesmo material entrando duas vezes no pedido é o sintoma de duas
+    // cotações que pediram a mesma coisa (caso do #59 em 18/09). O pedido ainda está
+    // em montagem, então dá para arrumar aqui — mas alguém precisa VER.
+    const _cont={}; b.itens.forEach(function(o){ const k=o.material_id||('n:'+(o.item_nome||'')); _cont[k]=(_cont[k]||0)+1; });
+    const _dup = o => (_cont[o.material_id||('n:'+(o.item_nome||''))]||0) > 1;
+    const nDup = b.itens.filter(_dup).length;
+    const linhas = b.itens.map(o=>`<tr${_dup(o)?' style="background:#FDEDEC"':(deAvulso(o)?' style="background:#F2FBF5"':'')}>
+      <td>${deNomeMat(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${_dup(o)?' <span class="de-tag-dup" title="este material aparece mais de uma vez neste pedido — confira as quantidades e tire a linha que sobra no 🗑">⚠ repetido</span>':''}${o.observacao?`<span style="font-size:10px;color:var(--cinza-4);display:block">${o.observacao}</span>`:''}</td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar??'—'}</td>
@@ -7930,6 +7941,7 @@ function deRenderizar(){
           <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
         </div>
       </div>
+      ${nDup?`<div class="de-aviso-dup">⚠️ <b>${nDup} linha(s) com material repetido.</b> Duas cotações pediram a mesma coisa. Confira as quantidades e tire a linha que sobra no 🗑 — o pedido ainda está em montagem.</div>`:''}
       <div class="de-addbar">
         <button class="de-btn-add" onclick="deAbrirAdd(${pid})">➕ Incluir item neste pedido</button>
         <span style="font-size:11.5px;color:var(--cinza-4);margin-left:8px">para o que faltou na cotação, ou o que o fornecedor ofereceu depois</span>
@@ -20314,6 +20326,13 @@ async function hgCtFechar(){
 // "Fornecedor padrão" — e não o fornecedor da última nota. O botão da linha move
 // o item de uma lista para a outra e a escolha fica gravada.
 const HG_FORN_FIXO = 47;      // HYGIBRAS
+// v4.98 — caso dela (18/09): a lista da HYGIBRAS foi enviada para Orçar e o pedido
+// #59 ficou com 6 materiais REPETIDOS — uma linha da cotação #36 (de manhã) e outra
+// da #37 (da contagem). O `hgOrcTemItem` só olhava o orçamento de higiene que estava
+// na memória da tela; não via cotação gravada nem pedido em andamento. E o fechamento
+// do grupo reaproveita o pedido EM_MONTAGEM do mesmo fornecedor — então as linhas
+// novas entraram no mesmo pedido, em cima das que já estavam lá.
+let hgAndamento = {};   // material_id -> etapa em que o item já está
 let hgConsumo = {};           // material_id -> consumo do último período
 let hgFornPadrao = {};        // material_id -> fornecedor_padrao_id
 let hgUltimaContagem = null;
@@ -20342,6 +20361,39 @@ async function hgCompCarregarBase(){
       hgFornPadrao={}; ms.forEach(function(m){ hgFornPadrao[m.id]=m.fornecedor_padrao_id||null; });
     }
   }catch(e){ hgFornPadrao={}; }
+  await hgCarregarAndamento();
+}
+
+// v4.98 — em que etapa cada item já está: cotação de higiene aberta, ou pedido vivo.
+// Mesma régua da lista de compras do CC (`ccCarregarAndamento`), restrita aos itens
+// de higiene. Pedido cancelado ou concluído não conta — o item está livre de novo.
+async function hgCarregarAndamento(){
+  hgAndamento={};
+  const ids=hgDados.map(r=>r.material_id).filter(Boolean);
+  if(!ids.length) return;
+  try{
+    const ords=(await sbFetch('ordens_compra?select=material_id,pedido_id&situacao=eq.PENDENTE&material_id=in.('+ids.join(',')+')&limit=500'))||[];
+    const pids=[...new Set(ords.map(o=>o.pedido_id).filter(Boolean))];
+    const pmap={};
+    if(pids.length){
+      const ps=(await sbFetch('pedidos?select=id,status&id=in.('+pids.join(',')+')'))||[];
+      ps.forEach(function(p){ pmap[p.id]=p.status; });
+    }
+    const ROT={ EM_MONTAGEM:'pedido em montagem', AGUARDANDO_APROVACAO:'aguardando aprovação',
+                APROVADO:'pedido aprovado', AGUARDANDO_ENTREGA:'aguardando entrega', EM_CONFERENCIA:'em conferência' };
+    ords.forEach(function(o){
+      const st=o.pedido_id?pmap[o.pedido_id]:null;
+      if(st==='CANCELADO'||st==='CONCLUIDO') return;
+      hgAndamento[o.material_id]= st ? (ROT[st]||String(st).toLowerCase()) : 'aguardando NF';
+    });
+    const filtro='cotacoes?select=id&status=eq.aberta'+((await origemPronta())?'&origem=eq.HIGIENE':'')+'&limit=20';
+    const cots=(await sbFetch(filtro))||[];
+    if(cots.length){
+      const cits=(await sbFetch('cotacao_itens?select=material_id&cotacao_id=in.('+cots.map(c=>c.id).join(',')+')'
+                +'&fechado=is.false&material_id=in.('+ids.join(',')+')&limit=500'))||[];
+      cits.forEach(function(it){ if(!hgAndamento[it.material_id]) hgAndamento[it.material_id]='em cotação'; });
+    }
+  }catch(e){ hgAndamento={}; }
 }
 
 function hgEhFixo(mid){ return Number(hgFornPadrao[mid])===HG_FORN_FIXO; }
@@ -20382,7 +20434,7 @@ async function hgCompCarregar(){
   ];
 
   listas.forEach(function(L){
-    const aComprar=L.itens.filter(function(r){ return hgComprar(r).caixas>0; }).length;
+    const aComprar=L.itens.filter(function(r){ return hgComprar(r).caixas>0 && !hgAndamento[r.material_id]; }).length;
     h+='<div class="hg-lista">'
       +'<div class="hg-lista-cab"><span>'+L.rot+'</span>'
         +'<span class="hg-lista-n">'+L.itens.length+' item(ns) · '+aComprar+' a comprar</span>'
@@ -20396,12 +20448,14 @@ async function hgCompCarregar(){
     L.itens.slice().sort(function(a,b){ return hgComprar(b).caixas-hgComprar(a).caixas || String(a.material||'').localeCompare(String(b.material||'')); })
       .forEach(function(r){
       const S=hgComprar(r);
-      const ja=hgOrcTemItem(r.material_id);
+      const etapa=hgAndamento[r.material_id]||null;
+      const ja=hgOrcTemItem(r.material_id)||!!etapa;
       const kit=Number(r.qtd_kit)||1;
       h+='<tr'+(S.caixas>0?'':' style="opacity:.62"')+'>'
-        +'<td>'+(ja?'<span title="já está no Orçar" style="font-size:11px">🧾</span>'
+        +'<td>'+(ja?'<span title="'+(etapa?('já está em '+etapa+' — não entra de novo'):'já está no Orçar')+'" style="font-size:11px">🧾</span>'
                   :'<input type="checkbox" class="hg-comp-chk hg-chk-'+L.chave+'" data-mid="'+r.material_id+'"'+(S.caixas>0?'':' data-vazio="1"')+'>')+'</td>'
-        +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(kit>1?(' · '+kit+'/caixa'):'')+'</span></td>'
+        +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(kit>1?(' · '+kit+'/caixa'):'')
+          +(etapa?('<span class="hg-etapa">⏳ '+hgEsc(etapa)+'</span>'):'')+'</span></td>'
         +'<td class="hg-num">'+(S.cons?hgN(S.cons):'<span style="color:var(--cinza-3)">—</span>')+'</td>'
         +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
         +'<td class="hg-num">'+(S.caixas>0
@@ -20430,11 +20484,12 @@ async function hgCompEnviar(chave, grupoSugerido){
   if(!marcados.length){ toast('Marque ao menos um item desta lista.','erro'); return; }
   const g=(grupoSugerido||'Orçamento 1');
   if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
-  let n=0;
+  let n=0; const pulados=[];
   marcados.forEach(function(c){
     const mid=parseInt(c.dataset.mid,10);
     const r=hgDados.find(function(x){return x.material_id===mid;});
     if(!r || hgOrcTemItem(mid)) return;
+    if(hgAndamento[mid]){ pulados.push(r.material+' ('+hgAndamento[mid]+')'); return; }   // v4.98
     // v4.23 — o cadastro alimenta o orçamento: marca e último preço vêm prontos, só corrige o que mudou
     const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
     // v4.97 — a quantidade já vai preenchida com a sugestão da contagem
@@ -20444,6 +20499,8 @@ async function hgCompEnviar(chave, grupoSugerido){
     n++;
   });
   hgOrcAtivo=g;
+  if(pulados.length) toast('⚠ '+pulados.length+' item(ns) ficaram de fora porque já estão em andamento: '+pulados.slice(0,3).join(', ')+(pulados.length>3?'…':''),'erro');
+  if(!n){ toast('Nada a enviar — os marcados já estavam em cotação ou pedido.','erro'); return; }
   toast(n+' item(ns) enviados para o grupo "'+g+'" — abrindo o Orçar…','sucesso');
   trocarAba('hig_orc');
 }
