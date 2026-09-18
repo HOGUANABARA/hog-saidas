@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.90 · resumo do orçamento por fornecedor e volta do pedido em montagem para o orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.91 · o "vem" do cadastro passa a valer de verdade e verde = escolhido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1021,7 +1021,16 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-acts{margin-left:auto;white-space:nowrap;display:flex;gap:6px;align-items:center}
   #aba-cotacao .co-ja{font-size:10px;font-weight:700;background:#FDF2E9;color:#D35400;border:1px solid #EDBB99;padding:2px 8px;border-radius:10px}
   #aba-cotacao .co-tab tr.co-of td.f{font-weight:700;color:var(--azul);white-space:nowrap;padding-left:22px}
-  #aba-cotacao .co-tab tr.co-melhor td{background:var(--verde-claro)} #aba-cotacao .co-tab tr.co-naotem td{opacity:.55}
+  /* v4.91 — dois significados não podem ser a mesma cor. Ela: "seleciono o item mais
+     caro, da marca que compramos, e não fica verde a linha". VERDE = ESCOLHIDO (a
+     decisão dela). O menor preço continua marcado, mas em AZUL — é informação, não
+     decisão: às vezes o mais barato é de uma marca que não se usa. */
+  #aba-cotacao .co-tab tr.co-melhor td{background:#EAF2FB}
+  #aba-cotacao .co-tab tr.co-melhor td.co-unit b{color:var(--acao)}
+  #aba-cotacao .co-tab tr.co-esc td{background:var(--verde-claro)}
+  #aba-cotacao .co-tab tr.co-esc td.f{box-shadow:inset 4px 0 0 var(--verde);font-weight:800;color:var(--verde)}
+  #aba-cotacao .co-tab tr.co-esc td.co-unit b{color:var(--verde)}
+  #aba-cotacao .co-tab tr.co-naotem td{opacity:.55}
   #aba-cotacao .co-tab tr.co-of td.a{white-space:nowrap;text-align:right}
   #aba-cotacao .co-tab input{border:1px solid var(--cinza-2);border-radius:6px;padding:4px 6px;font-size:12px;font-family:var(--fonte)}
   #aba-cotacao .co-tab .w-marca{width:120px} #aba-cotacao .co-tab .w-desc{width:100%;min-width:220px} #aba-cotacao .co-tab .w-n{width:66px}
@@ -6537,6 +6546,9 @@ function coSetOp(i, fid, campo, val){
   else if(campo==='nao_tem') o.nao_tem = !!val;
   else if(campo==='nao_pedir') o.nao_pedir = !!val;
   else o[campo]=val;
+  // v4.91 — digitou o preço e deixou a embalagem em branco: adota a do cadastro,
+  // que é o número que o campo já estava mostrando
+  if(campo==='preco_total') coAdotarEmbalagem(coItens[i], o);
   if(campo==='qtd_embalagem'||campo==='preco_total') coAtualizaUnit(i);
   coDraftAgendar();   // v4.24d — preço/marca/condição digitados entram no rascunho
 }
@@ -6545,10 +6557,40 @@ function coEscolher(i, fid){
   const o = coOpDoFornecedor(it, fid);
   if(o.nao_tem){ toast('Este fornecedor está marcado como "não tem".','erro'); return; }
   o.escolhida = !o.escolhida;
-  if(o.escolhida && o.qtd_escolhida==null) o.qtd_escolhida = it.qtd_desejada;
+  if(o.escolhida){
+    // v4.91 — sem embalagem o preço por peça não existe e o pedido nasceria sem
+    // valor unitário; a do cadastro é a que a linha já mostrava
+    coAdotarEmbalagem(it, o);
+    if(o.qtd_escolhida==null) o.qtd_escolhida = it.qtd_desejada;
+    if(coUnit(o)==null && o.preco_total==null)
+      toast('Escolhido — falta o preço da embalagem deste fornecedor para fechar o grupo.','');
+  }
   coRender();
 }
 function coUnit(o){ return (o.preco_total!=null && o.qtd_embalagem) ? o.preco_total/o.qtd_embalagem : null; }
+// ═══ v4.91 — O "VEM" DO CADASTRO PASSA A VALER DE VERDADE ═════════════════
+// Caso dela (18/09): LÂMINA 11, cadastro "100/caixa". A coluna 📦 vem mostrava 100
+// (vindo do cadastro), ela digitava R$ 220 na embalagem — e o R$/un ficava "—", a
+// linha não ficava verde e o grupo dizia "falta preço". Motivo: o 100 estava só no
+// `value` do campo; `o.qtd_embalagem` continuava vazio, e `coUnit` divide por ele.
+// Ou seja, a tela mostrava um número que o sistema não tinha.
+// Agora, quando há preço e a embalagem está em branco, a oferta ADOTA o que o
+// cadastro diz — o mesmo número que já estava à vista. O que ela digita continua
+// mandando: valor digitado nunca é sobrescrito.
+function coAdotarEmbalagem(it, o){
+  if(!o || o.nao_tem) return false;
+  if(o.qtd_embalagem!=null && o.qtd_embalagem!=='') return false;
+  const k = Number(it && it.qtd_kit);
+  if(!k || k<=0) return false;
+  if(o.preco_total==null && !o.escolhida) return false;   // sem preço não há o que calcular
+  o.qtd_embalagem = k;
+  return true;
+}
+function coNormalizarEmbalagens(){
+  let n=0;
+  for(const it of (coItens||[])) for(const o of (it.opcoes||[])) if(coAdotarEmbalagem(it,o)) n++;
+  return n;
+}
 function coAtualizaUnit(i){
   const it = coItens[i];
   let melhor=Infinity, melhorFid=null;
@@ -6778,7 +6820,7 @@ function coLinhaOferta(i, it, fid){
     <td><input class="w-desc" placeholder="descrição / apresentação" title="como ESTE fornecedor descreve e vende o item (ex: cx 6 fr)" value="${q(o.apresentacao)}" oninput="coSetOp(${i},${fid},'apresentacao',this.value)"></td>
     <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="vem" title="quantos vêm na embalagem deste fornecedor (vem do cadastro quando existe)" value="${o.qtd_embalagem ?? it.qtd_kit ?? ''}" oninput="coSetOp(${i},${fid},'qtd_embalagem',this.value)"></td>
     <td class="n"><input class="co-nn w-n" type="number" step="any" placeholder="R$" title="preço da embalagem" value="${o.preco_total??''}" oninput="coSetOp(${i},${fid},'preco_total',this.value)"></td>
-    <td class="n co-unit" title="preço por unidade"><b id="co-unit-${i}-${fid}">${u!=null?coMoney(u):'—'}</b></td>
+    <td class="n co-unit" title="${(o.qtd_embalagem==null && it.qtd_kit) ? 'preço por unidade — dividido por '+it.qtd_kit+' do cadastro; digite no 📦 vem se este fornecedor vender em outra embalagem' : 'preço por unidade'}"><b id="co-unit-${i}-${fid}">${u!=null?coMoney(u):'—'}</b></td>
     <td><span class="co-cond ${temCond?'tem':''}" title="${q(o.observacao||'pagamento, prazo e observação deste fornecedor')}" onclick="coToggleCond(${i},${fid})">${resumo}</span></td>
     <td class="a"><button class="co-x co-btn-esc ${esc?'on':''}" title="marcar este fornecedor para este item (dá para dividir entre dois)" onclick="coEscolher(${i},${fid})">${esc?'✔ escolhido':'escolher'}</button>
       ${esc?`<input class="co-nn" type="number" step="any" style="width:58px;border-color:var(--cinza-2)" title="quantidade deste fornecedor (quebra: escolha dois e divida)" value="${o.qtd_escolhida??''}" oninput="coSetOp(${i},${fid},'qtd_escolhida',this.value)">`:''}
@@ -6933,6 +6975,7 @@ function coRender(){
   }
   const corpo=document.getElementById('co-corpo');
   if(!coItens.length){ corpo.innerHTML='<div class="co-empty">Nenhum item. Use "Puxar itens da Etapa 1" ou a busca acima.</div>'; return; }
+  coNormalizarEmbalagens();   // v4.91 — conserta as ofertas antigas que ficaram sem o "vem"
   const avisoFoco = coFocoBanner();
   const ordem=[]; const porGrupo={};
   coItens.forEach((it,i)=>{ const g=it.grupo||'Orçamento 1'; if(!porGrupo[g]){porGrupo[g]=[];ordem.push(g);} porGrupo[g].push(i); });
