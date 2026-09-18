@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.99 · higiene: caixa com preço de caixa, e o pedido sem observação técnica</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.100 · o "últ. pago" da higiene compara caixa com caixa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7764,13 +7764,16 @@ function deNomeMat(id, o){
 // Quem aprova precisa de referência, não só da escolha do comprador.
 // Material → materiais.ultimo_valor_pago (só compras reais, regra de custo).
 // Peça de instrumental → última solicitação RECEBIDA/DESTINADA da mesma peça.
+// v4.100 — quantos vêm na caixa, para comparar caixa com caixa no pedido de higiene
+let ultPagoKit = {};      // material_id -> qtd_kit
 let ultPagoCache = {};   // 'm<id>' -> valor | 'n<nome>' -> valor | null = nunca comprado
 async function ultPagoCarregar(ordens){
   const mids=[...new Set((ordens||[]).map(o=>o.material_id).filter(Boolean))].filter(id=>ultPagoCache['m'+id]===undefined);
   if(mids.length){
     try{
-      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago&id=in.('+mids.join(',')+')'))||[];
-      ms.forEach(m=>{ ultPagoCache['m'+m.id]=(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)?Number(m.ultimo_valor_pago):null; });
+      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago,qtd_kit&id=in.('+mids.join(',')+')'))||[];
+      ms.forEach(m=>{ ultPagoCache['m'+m.id]=(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)?Number(m.ultimo_valor_pago):null;
+                      ultPagoKit[m.id]=Number(m.qtd_kit)||1; });
       mids.forEach(id=>{ if(ultPagoCache['m'+id]===undefined) ultPagoCache['m'+id]=null; });
     }catch(e){}
   }
@@ -7782,7 +7785,17 @@ async function ultPagoCarregar(ordens){
     }catch(e){ ultPagoCache['n'+n]=null; }
   }
 }
-function ultPagoDe(o){ return o.material_id?ultPagoCache['m'+o.material_id]:(o.item_nome?ultPagoCache['n'+o.item_nome]:null); }
+// v4.100 — ela: "veja que a referência ficou errada". O último valor pago do cadastro é por
+// UNIDADE de consumo (pacote, rolo, frasco — v4.57), mas o pedido de HIGIENE é em CAIXA (v4.19).
+// Comparar R$ 222,00 a caixa com R$ 37,00 o frasco dava "+500%" — falso. Na higiene a
+// referência vira preço de caixa: último pago × qtd_kit. Nos outros pedidos nada muda.
+function ultPagoDe(o){
+  if(!o.material_id) return o.item_nome?ultPagoCache['n'+o.item_nome]:null;
+  const u=ultPagoCache['m'+o.material_id];
+  if(u==null) return u;
+  const k=Number(ultPagoKit[o.material_id])||1;
+  return (o.origem==='HIGIENE' && k>1) ? u*k : u;
+}
 function ultPagoTag(o){
   const u=ultPagoDe(o), v=Number(o.valor_unitario);
   if(u==null) return '<span style="font-size:10px;color:var(--cinza-3);display:block;font-weight:400">1ª compra — sem referência</span>';
