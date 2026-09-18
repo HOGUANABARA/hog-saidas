@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.91 · o "vem" do cadastro passa a valer de verdade e verde = escolhido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.92 · pedido cancelado não vira referência de preço e a ficha mostra as últimas compras</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6856,7 +6856,9 @@ function coUltCompra(it){
   const dataCheia = p10 ? p10[2]+'/'+p10[1]+'/'+p10[0] : '';
   const tit = 'última compra' + (dataCheia ? ' em '+dataCheia : '')
             + (forn ? ' — de '+forn : '') + '. Use como piso da negociação.'
-            + ((c && c.pedido) ? ' (valor do último pedido; a NF ainda não entrou)' : '');
+            + ((c && c.pedido) ? ' (valor do último PEDIDO; a nota ainda não entrou)' : '')
+            + ((c && c.planilha) ? ' (veio da planilha antiga)' : '')
+            + ((c && c.cadastro) ? ' (último valor pago do cadastro — não há nota lançada no app para este item)' : '');
   return '<span class="co-ult" title="'+esc(tit)+'">🧾 '
        + (valor != null ? '<b>'+coMoney(valor)+'</b>/un' : 'sem preço')
        + (forn ? ' · <i>'+esc(forn)+'</i>' : '')
@@ -7744,7 +7746,11 @@ async function hpCarregar(mids, nomes){
     try{ // 2) pedido emitido (item comprado mas NF ainda não entrou)
       const faltam=mids.filter(id=>!melhor[id]);
       if(faltam.length){
-        const ords=(await sbFetch(`ordens_compra?select=material_id,valor_unitario,fornecedor_compra_id,fornecedor_id,data_pedido,created_at&material_id=in.(${faltam.join(',')})&order=id.desc&limit=800`))||[];
+        // v4.92 — linha CANCELADA ("NAO COMPRAR AGORA") não é compra e não pode virar
+        // referência. Caso dela (18/09): a LÂMINA 11 não tem NF nenhuma, e o orçamento
+        // passou a mostrar "R$ 0,45 · AA CIRURGICA" — o preço de um pedido que ela mesma
+        // havia desfeito, de um produto inferior, contra os R$ 2,85 do cadastro.
+        const ords=(await sbFetch(`ordens_compra?select=material_id,valor_unitario,fornecedor_compra_id,fornecedor_id,data_pedido,created_at&material_id=in.(${faltam.join(',')})&situacao=not.in.("NAO COMPRAR AGORA")&order=id.desc&limit=800`))||[];
         ords.forEach(o=>{ const d=((o.data_pedido||o.created_at||'')+'').slice(0,10);
           const c=melhor[o.material_id];
           if(!c || d>(c.data||'')) melhor[o.material_id]={data:d, valor:(o.valor_unitario!=null?Number(o.valor_unitario):null), forn:fNome(o.fornecedor_compra_id||o.fornecedor_id), pedido:true}; });
@@ -7758,8 +7764,19 @@ async function hpCarregar(mids, nomes){
           melhor[id]={data:(r.uc_data||'').slice(0,10), valor:(r.uc_valor_unitario!=null?Number(r.uc_valor_unitario):null), forn:(src&&src.fornecedores)||null, planilha:true};
         }
       }
-      hpCache['m'+id]=melhor[id]||null;
     });
+    // v4.92 — 4) o CADASTRO. "Veja no cadastro da lâmina: último valor pago" (ela, 18/09).
+    // `materiais.ultimo_valor_pago` é o número que ela olha na ficha e nunca chegava aqui:
+    // sem NF e sem pedido válido, o orçamento dizia "1ª compra" num item já comprado.
+    try{
+      const faltam2 = mids.filter(id=>!melhor[id]);
+      if(faltam2.length){
+        const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago&id=in.('+faltam2.join(',')+')'))||[];
+        ms.forEach(m=>{ if(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)
+          melhor[m.id]={ data:null, valor:Number(m.ultimo_valor_pago), forn:null, cadastro:true }; });
+      }
+    }catch(e){}
+    mids.forEach(id=>{ hpCache['m'+id]=melhor[id]||null; });
   }
   for(const n of nomes){ // peças de CME: última ordem de compra pelo NOME
     try{
@@ -7781,6 +7798,7 @@ function hpLinha(chave, un){
   if(c.forn) p.push('🏪 do fornecedor <b>'+String(c.forn)+'</b>');
   if(c.pedido) p.push('<i>(do último pedido — NF ainda não entrou)</i>');
   if(c.planilha) p.push('<i>(da planilha)</i>');
+  if(c.cadastro) p.push('<i>(último valor pago do cadastro)</i>');
   return p.join(' · ');
 }
 // só o fornecedor+data (higiene e CME já mostram o últ. pago do jeito deles)
@@ -13413,13 +13431,84 @@ async function pnFichaOnde(mid){
       h+='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhum lote registrado'
         +(m_controlaLote(mid)?' — e este item está marcado como <b>controla lote</b>.':'.')+'</div>';
     }
+    // ── v4.92 · ÚLTIMAS COMPRAS ──────────────────────────────────────────
+    // Pedido dela (18/09): "aqui quero que entre as últimas compras". A ficha dizia
+    // o último valor pago e as marcas/fornecedores já usados, mas não mostrava as
+    // compras em si — e é olhando para elas que se vê se o preço de hoje faz sentido.
+    h+='<div style="margin-top:13px;padding-top:11px;border-top:1px dashed var(--cinza-3)">'
+      +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-5);margin-bottom:7px">🧾 Últimas compras</div>'
+      +'<div id="pf-compras-'+mid+'" style="font-size:12.5px;color:var(--cinza-4)">carregando…</div></div>';
     h+='</div></div></div>';
     el.innerHTML=h;
+    pnFichaCompras(mid);
   }catch(e){
     el.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Não consegui ler onde o item está: '+(e.message||e)+'</div>';
   }
 }
-function m_controlaLote(mid){ const m=pnMatFull[mid]; return !!(m&&m.controla_lote); }
+// ═══ v4.92 — ÚLTIMAS COMPRAS DO ITEM ══════════════════════════════════════
+// Duas origens, e a diferença importa na hora de negociar:
+//   • NOTA FISCAL = compra que aconteceu de verdade (valor pago).
+//   • PEDIDO sem nota = preço combinado que ainda não virou compra.
+// Linha cancelada ("NAO COMPRAR AGORA") não aparece: não é compra nem promessa.
+async function pnFichaCompras(mid){
+  const el=document.getElementById('pf-compras-'+mid); if(!el) return;
+  const dt=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+  const money=v=>(v==null||v==='')?'—':('R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  try{
+    if(typeof coFornecedores==='undefined' || !coFornecedores || !coFornecedores.length){
+      try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }catch(e){}
+    }
+    const fNome=id=>{ const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:(id?('fornecedor #'+id):'—'); };
+    const [its, ords] = await Promise.all([
+      sbFetch('nf_itens?select=id,nota_fiscal_id,qtd,valor_unitario,valor_item,descricao_nf&material_id=eq.'+mid+'&order=id.desc&limit=12'),
+      sbFetch('ordens_compra?select=id,pedido_id,fornecedor_compra_id,fornecedor_id,valor_unitario,qtd_a_comprar,situacao,marca_escolhida,data_pedido,created_at&material_id=eq.'+mid
+             +'&situacao=in.(PENDENTE)&order=id.desc&limit=8'),
+    ]);
+    const linhas=[];
+    const nids=[...new Set((its||[]).map(i=>i.nota_fiscal_id).filter(Boolean))];
+    const nfs = nids.length ? ((await sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,data_emissao,data_entrega&id=in.('+nids.join(',')+')&limit=100'))||[]) : [];
+    const nfDe=id=>nfs.find(n=>n.id===id)||null;
+    for(const i of (its||[])){
+      const n=nfDe(i.nota_fiscal_id);
+      linhas.push({ data:(n&&(n.data_entrega||n.data_emissao))||'', forn:fNome(n&&n.fornecedor_id),
+        desc:i.descricao_nf||'', qtd:i.qtd, unit:i.valor_unitario,
+        origem:'NF '+((n&&n.numero_nf)||('#'+i.nota_fiscal_id)), real:true });
+    }
+    for(const o of (ords||[])){
+      linhas.push({ data:(o.data_pedido||o.created_at||''), forn:fNome(o.fornecedor_compra_id||o.fornecedor_id),
+        desc:o.marca_escolhida||'', qtd:o.qtd_a_comprar, unit:o.valor_unitario,
+        origem:'Pedido #'+(o.pedido_id||o.id), real:false });
+    }
+    if(!linhas.length){
+      el.innerHTML='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhuma nota nem pedido em aberto deste item no app. '
+        +'O <b>último valor pago</b> do cadastro, acima, é a única referência que existe — veio da planilha antiga.</div>';
+      return;
+    }
+    linhas.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    const th=t=>'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">'+t+'</th>';
+    const thr=t=>'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">'+t+'</th>';
+    el.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+      +'<thead><tr style="background:var(--cinza-1)">'+th('Quando')+th('Fornecedor')+th('Marca / descrição')+thr('Qtd')+thr('R$/un')+th('De onde')+'</tr></thead><tbody>'
+      + linhas.map(function(l){
+          const td='padding:5px 8px;border-bottom:1px solid var(--cinza-2)';
+          return '<tr'+(l.real?'':' style="background:#FEF9E7"')+'>'
+            +'<td style="'+td+'">'+dt(l.data)+'</td>'
+            +'<td style="'+td+'">'+String(l.forn||'—')+'</td>'
+            +'<td style="'+td+';color:var(--cinza-5)">'+String(l.desc||'—')+'</td>'
+            +'<td style="'+td+';text-align:right">'+(l.qtd??'—')+'</td>'
+            +'<td style="'+td+';text-align:right;font-weight:700;color:'+(l.real?'var(--verde)':'#B9770E')+'">'+money(l.unit)+'</td>'
+            +'<td style="'+td+';font-size:11.5px;color:var(--cinza-4)">'+l.origem+(l.real?'':' · <b>ainda não chegou</b>')+'</td></tr>';
+        }).join('')
+      +'</tbody></table>'
+      +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Verde = <b>nota fiscal</b>, compra que aconteceu. '
+      +'Amarelo = <b>pedido sem nota</b>, preço combinado que ainda não virou compra. Linha cancelada não entra.</div>';
+  }catch(e){
+    el.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Não consegui ler as compras: '+(e.message||e)+'</div>';
+  }
+}
+
+function m_controlaLote(mid){
+ const m=pnMatFull[mid]; return !!(m&&m.controla_lote); }
 
 async function pnFichaSalvar(midClicado){
   // v4.36 — o Salvar não fazia NADA em silêncio quando pnFichaMid tinha sido
