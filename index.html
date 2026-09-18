@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.100 · o "últ. pago" da higiene compara caixa com caixa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.101 · solicitação de orçamento impressa: produto e quantidade, sem preço</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7964,6 +7964,7 @@ function deRenderizar(){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <!-- v4.90 — pedido dela: "gerei o pedido, preciso voltar para orçamento, vou mudar o fornecedor" -->
+          <button style="background:var(--branco);color:var(--azul);border:1px solid var(--azul);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" title="produto e quantidade, sem preço — para mandar ao fornecedor e receber o orçamento" onclick="dePedirOrcamento(${pid})">🖨 Solicitação de orçamento</button>
           ${p.cotacao_id?`<button style="background:var(--azul-claro);color:var(--azul);border:1px solid var(--azul);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" title="devolve os itens para a cotação com as ofertas que já estavam lá, para escolher outro fornecedor. Só vale enquanto o pedido está em montagem." onclick="deVoltarParaOrcamento(${pid})">↩ Voltar para o orçamento</button>`:``}
           <button style="background:#FDEDEC;color:var(--vermelho);border:1px solid var(--vermelho);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)" onclick="deCancelarPedido(${pid})">🚫 Cancelar pedido</button>
         </div>
@@ -20717,6 +20718,77 @@ async function hgOrcCarregar(){
   hgOrcRender();
 }
 
+// ═══ v4.101 — SOLICITAÇÃO DE ORÇAMENTO IMPRESSA ═══════════════════════════
+// Ela (18/09): "eu envio pra ela o produto e a quantidade para receber o orçamento" +
+// "preciso impressão no orçamento". O pedido impresso (dePedidoPDF) leva preço — é o
+// documento de COMPRA. Este é o de PERGUNTAR: produto, marca de referência, quantidade
+// e unidade, com as colunas de preço EM BRANCO para o fornecedor preencher, e as
+// condições (pagamento, prazo, validade) para ele responder. Mesmo papel do pedido.
+function hogImprimirSolicitacao(op){
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const quem=(typeof SESSAO!=='undefined'&&SESSAO&&SESSAO.nome)?SESSAO.nome:'';
+  const linhas=(op.itens||[]).map(function(it,i){
+    return '<tr><td style="text-align:center;color:#888">'+(i+1)+'</td>'
+      +'<td><b>'+esc(it.nome)+'</b>'+(it.desc&&it.desc!==it.nome?('<div style="font-size:9.5px;color:#666">'+esc(it.desc)+'</div>'):'')+'</td>'
+      +'<td>'+esc(it.marca||'—')+'</td>'
+      +'<td style="text-align:center;font-weight:bold;font-size:13px">'+esc(it.qtd)+'</td>'
+      +'<td style="text-align:center">'+esc(it.un||'un')+'</td>'
+      +'<td class="br"></td><td class="br"></td></tr>';
+  }).join('');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Solicitação de orçamento</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:26px}'
+    +'h1{font-size:18px;margin:0 0 2px}.sub{color:#555;font-size:11.5px}'
+    +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
+    +'.num{text-align:right;font-size:13px}.num b{font-size:17px;color:#1B4F72}'
+    +'.blocos{display:flex;gap:14px;margin-bottom:14px}.bloco{flex:1;border:1px solid #ccc;border-radius:6px;padding:9px 12px}'
+    +'.bloco h2{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;margin:0 0 5px}.bloco div{font-size:12px;line-height:1.6}'
+    +'table{width:100%;border-collapse:collapse;margin:6px 0}'
+    +'td,th{border:1px solid #bbb;padding:7px 8px;font-size:11px;text-align:left;vertical-align:top}'
+    +'th{background:#EEF3F8;text-transform:uppercase;font-size:9.5px;letter-spacing:.4px}'
+    +'td.br{background:#FFFDF5;min-width:80px}'
+    +'.cond{display:flex;gap:14px;margin-top:14px}.cond div{flex:1;border-bottom:1px solid #999;padding:18px 0 4px;font-size:10.5px;color:#555}'
+    +'.nota{margin-top:12px;font-size:11px;color:#555}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1><div class="sub">Centro Cirúrgico · Compras · F2MR Clínica Oftalmológica — CNPJ 15.047.746/0001-28</div></div>'
+    +'<div class="num">SOLICITAÇÃO DE ORÇAMENTO<br><b>'+esc(op.ref||'')+'</b><br><span style="font-size:11px;color:#555">Emitida em '+hoje+'</span></div></div>'
+    +'<div class="blocos">'
+    +'<div class="bloco"><h2>Para</h2><div><b>'+esc(op.fornecedor||'________________________')+'</b></div></div>'
+    +'<div class="bloco"><h2>Solicitante</h2><div>'+esc(quem||'—')+'</div></div>'
+    +'<div class="bloco"><h2>Itens</h2><div><b>'+(op.itens||[]).length+'</b> produto(s)</div></div>'
+    +'</div>'
+    +'<table><thead><tr><th style="width:28px">#</th><th>Produto</th><th>Marca de referência</th><th style="text-align:center">Qtd</th><th style="text-align:center">Unidade</th>'
+    +'<th style="text-align:center">Preço unitário</th><th style="text-align:center">Total</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+    +'<div class="cond"><div>Forma de pagamento</div><div>Prazo de entrega</div><div>Frete</div><div>Validade da proposta</div></div>'
+    +'<div class="nota">Por favor, informe o preço na mesma unidade pedida (caixa quando for caixa). Se a marca ou a embalagem for diferente, indique na linha.</div>'
+    +'<button onclick="window.print()" style="margin-top:16px;padding:9px 18px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
+    +'</body></html>');
+}
+
+// a partir de um pedido em montagem (é o caso do #59: o pedido nasceu antes do orçamento)
+function dePedirOrcamento(pid){
+  const b=deBoards.find(x=>x.pedido.id===pid); if(!b) return;
+  const higi=b.pedido.origem==='HIGIENE';
+  hogImprimirSolicitacao({ ref:'Pedido #'+pid, fornecedor:deNomeForn(b.pedido.fornecedor_id),
+    itens:(b.itens||[]).map(function(o){
+      const k=Number((typeof ultPagoKit!=='undefined'&&ultPagoKit[o.material_id])||1);
+      return { nome:deNomeMat(o.material_id,o), desc:(o.descricao_nf||'').trim(), marca:o.marca_escolhida||'',
+               qtd:o.qtd_a_comprar, un:(higi&&k>1)?('caixa c/ '+k):'un' };
+    }) });
+}
+
+// a partir do orçamento de higiene (grupo ativo)
+function hgOrcImprimirSolicitacao(){
+  const G=hgOrcG();
+  if(!G.itens.length){ toast('Este grupo não tem itens.','erro'); return; }
+  const forn=G.forns[0]?hgOrcFornNome(G.forns[0]):'';
+  hogImprimirSolicitacao({ ref:(hgOrcCotId?('Cotação #'+hgOrcCotId+' · '):'')+hgOrcAtivo, fornecedor:forn,
+    itens:G.itens.map(function(it){
+      const k=Number(it.qtd_kit)||1;
+      return { nome:it.nome, marca:(it.marcas&&it.marcas[0])||'', qtd:it.qtd, un:k>1?('caixa c/ '+k):'caixa' };
+    }) });
+}
+
 function hgOrcRender(){
   const box=document.getElementById('hg-orc-box'); if(!box) return;
   const G=hgOrcG();
@@ -20728,7 +20800,8 @@ function hgOrcRender(){
   // v4.23 — atalhos sempre à mão
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
     +'<button style="'+HG_BTN+'" onclick="hgNovoProduto()">➕ Novo produto</button>'
-    +'<button style="'+HG_BTN+'" onclick="hgOrcNovoFornBtn()">➕ Novo fornecedor</button></div>';
+    +'<button style="'+HG_BTN+'" onclick="hgOrcNovoFornBtn()">➕ Novo fornecedor</button>'
+    +'<button style="'+HG_BTN+';background:#1B4F72" onclick="hgOrcImprimirSolicitacao()" title="produto e quantidade, sem preço — para mandar ao fornecedor">🖨 Solicitação de orçamento</button></div>';
   // chips dos grupos
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
   Object.keys(hgOrcGrupos).forEach(function(g){
