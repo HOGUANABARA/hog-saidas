@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.94 · até 6 tipos de cirurgia no mesmo período</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.95 · contagem da limpeza: o consumo do período vira custo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1059,6 +1059,26 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-mat-l{gap:10px}
   #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
   #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  /* v4.95 — barra da contagem da limpeza */
+  .hg-ct-barra{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--cinza-1);
+    border:1.5px solid var(--cinza-2);border-radius:10px;padding:10px 14px;margin-bottom:12px}
+  .hg-ct-data{font-size:11px;text-transform:uppercase;font-weight:700;color:var(--cinza-4);display:flex;flex-direction:column;gap:3px}
+  .hg-ct-data input{border:1.5px solid var(--cinza-2);border-radius:8px;padding:5px 9px;font-size:13px;font-family:var(--fonte);text-transform:none}
+  .hg-ct-resumo{display:flex;gap:18px;flex-wrap:wrap;align-items:center;flex:1}
+  .hg-ct-k{display:flex;flex-direction:column;gap:1px;font-size:13px;color:var(--cinza-5)}
+  .hg-ct-k .rot{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);font-weight:700}
+  .hg-ct-btn{border:none;border-radius:8px;padding:9px 16px;font-size:12.5px;font-weight:800;cursor:pointer;
+    font-family:var(--fonte);color:#fff;background:var(--verde)}
+  .hg-ct-btn:disabled{cursor:default}
+  .hg-ct-inp{width:78px;border:1.5px solid var(--cinza-2);border-radius:7px;padding:4px 7px;font-size:13px;
+    font-family:var(--fonte);text-align:right}
+  .hg-ct-inp:focus{outline:none;border-color:var(--acao);background:var(--branco)}
+  .hg-ct-inp.preenchido{border-color:var(--verde);background:var(--verde-claro);font-weight:700}
+  .hg-ct-outra{background:transparent;color:var(--cinza-4);border:1px dashed var(--cinza-2);border-radius:6px;
+    padding:3px 8px;font-size:10.5px;cursor:pointer;font-family:var(--fonte);white-space:nowrap}
+  .hg-ct-outra:hover{color:var(--azul);border-color:var(--azul)}
+  .hg-dica{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+    background:var(--cinza-2);color:var(--cinza-5);font-size:11px;font-weight:800;cursor:help;margin-left:5px}
   /* v4.93 — justificativa por item na aprovação: discreta até ser usada */
   .ap-just-item{display:block;width:100%;margin-top:4px;border:1px dashed var(--cinza-2);border-radius:6px;
     padding:3px 7px;font-size:11px;font-family:var(--fonte);color:var(--azul);background:transparent}
@@ -12663,12 +12683,15 @@ function pnPerImprimir(){
 const PN_DESTINO_GRUPO = {
   'CONSULTÓRIOS':'consultorio',
   'USO CC':'interno', 'USO CME':'interno', 'USO RPA':'interno', 'AUTORREFRATOR':'interno',
-  'COPA':'setores', 'RECEPÇÃO':'setores', 'ADMINISTRATIVO':'setores',
+  'LIMPEZA':'limpeza',   // v4.95 — consumo apurado na contagem: não é lugar, é linha de custo
+  'COPA':'copa',
+  'RECEPÇÃO':'setores', 'ADMINISTRATIVO':'setores',
   'PERDA':'perda', 'VENCIMENTO':'perda', 'DESCARTE':'perda',
   'EMPRESTIMO':'emprestimo',
 };
 const PN_GRUPO_ROT = {
   cirurgia:'🏥 cirurgias', consultorio:'🩺 consultórios', interno:'🏨 uso interno (CC · CME · RPA)',
+  limpeza:'🧼 limpeza', copa:'☕ copa',
   setores:'🏢 outros setores', perda:'🗑 perdas e vencimentos', emprestimo:'🤝 empréstimo',
   diversas:'📦 diversas (sem destino)',
 };
@@ -12680,6 +12703,7 @@ function pnGrupoCusto(m){
 function pnComposicaoMes(mes){
   const movs = pnMovs.filter(m=>m.mes===mes);
   const c = { planilha:0, planilhaPer:0, cirurgia:0, consultorio:0, interno:0, setores:0,
+              limpeza:0, copa:0,   // v4.95
               perda:0, emprestimo:0, diversas:0, reproc:0, pac:0, itens:movs.length };
   for(const m of movs){
     if(m.reprocessado) c.reproc += m.custo;
@@ -12689,7 +12713,7 @@ function pnComposicaoMes(mes){
   for(const p of (typeof pnPeriodos!=='undefined'?pnPeriodos:[])){
     if(((p.data||'')+'').slice(0,7)===mes) c.pac += Number(p.qtd_pacientes)||0;
   }
-  c.app = c.cirurgia + c.consultorio + c.interno + c.setores + c.perda + c.emprestimo + c.diversas;
+  c.app = c.cirurgia + c.consultorio + c.interno + c.setores + c.limpeza + c.copa + c.perda + c.emprestimo + c.diversas;
   return c;
 }
 function pnCompLinhas(x){
@@ -18670,8 +18694,15 @@ async function alIgnorar(id){
 
 <div id="aba-hig_inv" class="container" style="display:none">
   <div class="card">
-    <div class="card-titulo">🧼 Inventário de Higiene / Copa</div>
-    <div class="hg-nota">O <b>saldo</b> é a contagem de consumo (rolo/pacote/frasco). <b>Consumo</b> e <b>sugestão</b> acendem quando existirem duas contagens fechadas — a de <b>31/08</b> é o marco zero.</div>
+    <div class="card-titulo">🧮 Contagem da Limpeza / Copa
+      <span class="hg-dica" title="Produto de limpeza não sai para um ambiente: ele limpa a clínica inteira e é uma linha no custo. Por isso quem apura o consumo aqui é a CONTAGEM — você lança o que tem hoje e o sistema calcula o que foi usado desde a contagem anterior (saldo do sistema menos contado). Fechar a contagem acerta o saldo, joga o consumo no custo e abre o período seguinte.">?</span></div>
+    <!-- v4.95 — a barra da contagem: período, quanto já foi contado, quanto deu de consumo -->
+    <div class="hg-ct-barra">
+      <label class="hg-ct-data">Data da contagem
+        <input type="date" id="hg-ct-data" onchange="hgCtDraftSalvar();hgCtResumo()"></label>
+      <div id="hg-ct-resumo" class="hg-ct-resumo"></div>
+      <button id="hg-ct-fechar" class="hg-ct-btn" onclick="hgCtFechar()" title="grava a contagem, acerta o saldo e lança o consumo do período no custo">🔒 Fechar contagem</button>
+    </div>
     <div class="hg-filtros">
       <input type="text" id="hg-inv-busca" placeholder="🔍 Buscar por código ou produto..." oninput="hgInvRender()">
       <select id="hg-inv-forn" onchange="hgInvRender()"><option value="">Fornecedor: todos</option></select>
@@ -19418,7 +19449,23 @@ function hgPreencherFornecedores(){
   sel.value = atual;
 }
 
-async function hgInvCarregar(){ await hgCarregarDados(); hgPreencherFornecedores(); hgInvRender(); }
+async function hgInvCarregar(){
+  await hgCarregarDados();
+  hgPreencherFornecedores();
+  // v4.95 — o período começa na última contagem fechada; a classe diz se o consumo
+  // é de limpeza ou de copa; o rascunho evita perder a contagem no meio.
+  await hgCtCarregarAnterior();
+  await hgCtCarregarClasses();
+  const el=document.getElementById('hg-ct-data');
+  const d=hgCtDraftLer();
+  if(el && !el.value) el.value = (d && d.data) ? d.data : hgCtHoje();
+  if(d && d.contado && !Object.keys(hgContado).length){
+    hgContado = d.contado;
+    const n=Object.keys(hgContado).length;
+    if(n) toast('📝 Recuperei a contagem que você tinha começado ('+n+' item(ns)). Confira antes de fechar.','sucesso');
+  }
+  hgInvRender();
+}
 
 function hgInvFiltrar(){
   const busca=(document.getElementById('hg-inv-busca').value||'').toLowerCase();
@@ -19434,36 +19481,38 @@ function hgInvFiltrar(){
 
 function hgInvRender(){
   const dados=hgInvFiltrar();
-  let semPreco=0; hgDados.forEach(function(r){ if(r.valor_compra==null||Number(r.valor_compra)===0) semPreco++; });
-  let h='<div class="hg-kpis">'
-    +'<div class="hg-kpi"><div class="rot">Produtos</div><div class="val">'+hgDados.length+'</div></div>'
-    +'<div class="hg-kpi"><div class="rot">Sem preço</div><div class="val" style="color:var(--vermelho)">'+semPreco+'</div></div>'
-    +'<div class="hg-kpi"><div class="rot">Mostrando</div><div class="val">'+dados.length+'</div></div>'
-    +'</div>';
-  h+='<table class="hg-tab"><thead><tr>'
+  let h='<table class="hg-tab"><thead><tr>'
     +'<th>Código</th><th>Produto</th><th>Fornecedor</th>'
-    +'<th class="hg-num">Valor compra</th><th class="hg-num">Valor/unid</th>'
-    +'<th class="hg-num">Saldo</th><th class="hg-num">Consumo 3m</th><th class="hg-num">Sugestão</th>'
+    +'<th class="hg-num">Sistema tem</th>'
+    +'<th class="hg-num" style="color:var(--azul)">Contado hoje</th>'
+    +'<th class="hg-num">Consumo do período</th>'
+    +'<th class="hg-num">Comprar</th>'
     +'<th></th>'
     +'</tr></thead><tbody>';
-  if(!dados.length) h+='<tr><td colspan="9" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
+  if(!dados.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:20px">Nenhum item.</td></tr>';
   dados.forEach(function(r){
     const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
     const semP = (r.valor_compra==null||Number(r.valor_compra)===0);
+    const sub = [ hgEsc(r.unidade_medida||''), (r.qtd_kit>1?(r.qtd_kit+'/caixa'):''),
+                  (semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':(hgMoeda(r.valor_unid)+'/un')) ]
+                .filter(Boolean).join(' · ');
     h+='<tr>'
       +'<td>'+cod+'</td>'
-      +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(r.qtd_kit>1?(' · '+r.qtd_kit+'/caixa'):'')+'</span></td>'
+      +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+sub+'</span></td>'
       +'<td>'+hgEsc(r.fornecedor||'—')+'</td>'
-      +'<td class="hg-num">'+(semP?'<span style="color:var(--vermelho);font-weight:700">sem preço</span>':hgMoeda(r.valor_compra))+'</td>'
-      +'<td class="hg-num">'+(semP?'—':hgMoeda(r.valor_unid))+'</td>'
-      +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
-      +'<td class="hg-num hg-aguardando">'+(r.consumo_3m==null?'—':hgN(r.consumo_3m))+'</td>'
-      +'<td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td>'
-      +'<td style="text-align:right"><button onclick="hgSaidaAbrir('+r.material_id+')" title="Registrar saída deste item — para a copa, um consultório, outro setor, perda ou descarte" style="background:var(--branco);color:var(--azul);border:1.5px solid var(--azul-medio,#AED6F1);border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte);white-space:nowrap">↗ Dar saída</button></td>'
+      +'<td class="hg-num" title="o que o sistema tem hoje: contagem anterior mais o que foi comprado">'+hgN(r.saldo)+'</td>'
+      +'<td class="hg-num"><input class="hg-ct-inp" id="hg-ct-'+r.material_id+'" type="number" step="any" min="0" inputmode="decimal"'
+        +' value="'+(hgContado[r.material_id]!=null?String(hgContado[r.material_id]):'')+'"'
+        +' title="'+hgEsc(r.material)+'" oninput="hgCtSet('+r.material_id+',this.value)"></td>'
+      +'<td class="hg-num" id="hg-ct-cons-'+r.material_id+'"><span style="color:var(--cinza-3)">—</span></td>'
+      +'<td class="hg-num" id="hg-ct-sug-'+r.material_id+'" title="repõe o que foi consumido no período, na embalagem de compra"><span style="color:var(--cinza-3)">—</span></td>'
+      +'<td style="text-align:right"><button onclick="hgSaidaAbrir('+r.material_id+')" title="perda, vencimento, descarte ou item que foi para outro setor — o consumo normal da limpeza sai pela contagem" class="hg-ct-outra">outra saída</button></td>'
       +'</tr>';
   });
   h+='</tbody></table>';
   document.getElementById('hg-inv-tabela').innerHTML=h;
+  dados.forEach(function(r){ hgCtAtualizarLinha(r.material_id); });
+  hgCtResumo();
 }
 
 // ═══ v4.42 — COLA ABERTA: o custo que só se sabe quando o frasco acaba ═══
@@ -19981,6 +20030,197 @@ async function hgSaidaGravar(){
       toast('Erro ao gravar a saída: '+msg,'erro');
     }
     if(btn){ btn.disabled=false; btn.textContent='Registrar saída'; }
+  }
+}
+
+// ═══ v4.95 — CONTAGEM DA LIMPEZA: É ELA QUE APURA O CONSUMO ═══════════════
+// Ditado por ela em 18/09 (doc: docs/fluxo-limpeza.md):
+//
+//   "Em uma data específica a gente faz o inventário... eu vou lançar a quantidade
+//    que eu tenho em estoque agora, e o sistema vai calcular automaticamente o
+//    consumo do período entre a última data em que nós colocamos a quantidade e a
+//    data atual. Essa quantidade vai ser jogada no nosso centro de custo como
+//    custo de limpeza."
+//
+//   "Tem a quantidade do inventário, a quantidade que foi comprada. Isso dá o
+//    saldo. Tira a quantidade que tem hoje."
+//
+// A conta fecha sozinha porque o saldo do app JÁ é "contagem anterior + comprado"
+// — a limpeza não tem saída lançada. Então:
+//
+//        consumo do período  =  saldo do sistema  −  contado hoje
+//
+// Fechar a contagem faz três coisas de uma vez: acerta o saldo, grava o consumo
+// como custo, e abre o período seguinte na data da contagem.
+//
+// O que NÃO existe aqui de propósito: saída por destino. Produto de limpeza não
+// vai para um ambiente — é uma linha no custo (destino LIMPEZA, SQL 88). Perda e
+// vencimento continuam tendo caminho, mas saíram do meio do fluxo.
+const HG_MARCA_CONTAGEM = 'CONTAGEM HIGIENE/COPA';
+const HG_CT_DRAFT = 'hog_hg_contagem';
+let hgContado = {};          // material_id -> quantidade contada (string do campo)
+let hgCtAnterior = null;     // { data_contagem, id } da última contagem fechada
+let hgClasse = {};           // material_id -> classe_compra (LIMPEZA | COPA | …)
+
+function hgCtNum(v){ const n = parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?null:n; }
+function hgCtHoje(){ return new Date().toISOString().slice(0,10); }
+function hgCtData(){ const el=document.getElementById('hg-ct-data'); return (el&&el.value)||hgCtHoje(); }
+function hgCtDataBr(d){ return d?String(d).slice(0,10).split('-').reverse().join('/'):'—'; }
+
+function hgCtDraftSalvar(){
+  try{ localStorage.setItem(HG_CT_DRAFT, JSON.stringify({ t:Date.now(), data:hgCtData(), contado:hgContado })); }catch(e){}
+}
+function hgCtDraftLer(){
+  try{
+    const d=JSON.parse(localStorage.getItem(HG_CT_DRAFT)||'null');
+    if(!d || (Date.now()-(d.t||0)) > 7*86400000) return null;   // rascunho de 7 dias
+    return d;
+  }catch(e){ return null; }
+}
+function hgCtDraftLimpar(){ try{ localStorage.removeItem(HG_CT_DRAFT); }catch(e){} }
+
+// a última contagem fechada é o começo do período; sem ela, o período é "desde sempre"
+async function hgCtCarregarAnterior(){
+  try{
+    const inv=(await sbFetch('inventarios?select=id,data_contagem,mes_referencia,fechado_em&status=eq.fechado'
+             +'&observacao=eq.'+encodeURIComponent(HG_MARCA_CONTAGEM)+'&order=data_contagem.desc&limit=1'))||[];
+    hgCtAnterior = inv[0]||null;
+  }catch(e){ hgCtAnterior = null; }
+}
+async function hgCtCarregarClasses(){
+  try{
+    const ids=hgDados.map(r=>r.material_id).filter(Boolean);
+    if(!ids.length) return;
+    const ms=(await sbFetch('materiais?select=id,classe_compra&id=in.('+ids.join(',')+')'))||[];
+    hgClasse={}; ms.forEach(m=>{ hgClasse[m.id]=m.classe_compra||null; });
+  }catch(e){ hgClasse={}; }
+}
+function hgCtDestino(mid){ return (hgClasse[mid]==='COPA') ? 'COPA' : 'LIMPEZA'; }
+
+function hgCtSet(mid, valor){
+  const v=String(valor==null?'':valor).trim();
+  if(v==='') delete hgContado[mid]; else hgContado[mid]=v;
+  hgCtDraftSalvar();
+  hgCtAtualizarLinha(mid);
+  hgCtResumo();
+}
+
+// uma linha = um item contado. Consumo negativo significa que apareceu mais do
+// que o sistema sabia: isso não é consumo, é acerto de entrada.
+function hgCtLinha(r){
+  const saldo=Number(r.saldo)||0;
+  const cont=hgCtNum(hgContado[r.material_id]);
+  if(cont===null) return { contado:null, consumo:null, custo:0, sobra:0 };
+  const dif=saldo-cont;
+  return { contado:cont, consumo: dif>0?dif:0, custo: (dif>0?dif:0)*(Number(r.valor_unid)||0), sobra: dif<0?(-dif):0 };
+}
+
+function hgCtAtualizarLinha(mid){
+  const r=hgDados.find(x=>x.material_id===mid); if(!r) return;
+  const L=hgCtLinha(r);
+  const cel=document.getElementById('hg-ct-cons-'+mid);
+  const sug=document.getElementById('hg-ct-sug-'+mid);
+  if(cel){
+    if(L.contado===null){ cel.innerHTML='<span style="color:var(--cinza-3)">—</span>'; }
+    else if(L.sobra>0){ cel.innerHTML='<span style="color:#B9770E;font-weight:700" title="apareceu mais do que o sistema sabia — entra como acerto de entrada, não como consumo">+'+hgN(L.sobra)+' a mais</span>'; }
+    else if(L.consumo===0){ cel.innerHTML='<span style="color:var(--cinza-4)">0</span>'; }
+    else { cel.innerHTML='<b style="color:var(--azul)">'+hgN(L.consumo)+'</b><span style="font-size:10px;color:var(--cinza-4)"> · '+hgMoeda(L.custo)+'</span>'; }
+  }
+  if(sug){
+    const kit=Number(r.qtd_kit)||1;
+    sug.innerHTML = (L.consumo>0) ? ('<b>'+Math.ceil(L.consumo/kit)+'</b><span style="font-size:10px;color:var(--cinza-4)"> '+(kit>1?('cx de '+kit):'un')+'</span>') : '<span style="color:var(--cinza-3)">—</span>';
+  }
+  const inp=document.getElementById('hg-ct-'+mid);
+  if(inp) inp.classList.toggle('preenchido', L.contado!==null);
+}
+
+function hgCtResumo(){
+  const el=document.getElementById('hg-ct-resumo'); if(!el) return;
+  let contados=0, custo=0, sobras=0;
+  for(const r of hgDados){ const L=hgCtLinha(r); if(L.contado!==null){ contados++; custo+=L.custo; if(L.sobra>0) sobras++; } }
+  const desde = hgCtAnterior && hgCtAnterior.data_contagem ? hgCtDataBr(hgCtAnterior.data_contagem) : null;
+  const dias = (hgCtAnterior && hgCtAnterior.data_contagem)
+    ? Math.max(1, Math.round((new Date(hgCtData()) - new Date(hgCtAnterior.data_contagem))/86400000)) : null;
+  el.innerHTML =
+     '<span class="hg-ct-k"><span class="rot">Período</span><b>'
+      + (desde ? (desde+' → '+hgCtDataBr(hgCtData())+' · '+dias+' dias') : ('primeira contagem — até '+hgCtDataBr(hgCtData())))
+      + '</b></span>'
+    +'<span class="hg-ct-k"><span class="rot">Contados</span><b>'+contados+' de '+hgDados.length+'</b></span>'
+    +'<span class="hg-ct-k"><span class="rot">Consumo do período</span><b style="color:var(--azul)">'+hgMoeda(custo)+'</b></span>'
+    + (sobras? ('<span class="hg-ct-k"><span class="rot">Apareceu a mais</span><b style="color:#B9770E">'+sobras+' item(ns)</b></span>') : '');
+  const btn=document.getElementById('hg-ct-fechar');
+  if(btn){ btn.disabled = contados===0; btn.style.opacity = contados===0?.5:1; }
+}
+
+// ── FECHAR ────────────────────────────────────────────────────────────────
+async function hgCtFechar(){
+  const data = hgCtData();
+  if(data > hgCtHoje()){ toast('A data da contagem não pode ser no futuro.','erro'); return; }
+  if(hgCtAnterior && hgCtAnterior.data_contagem && data <= String(hgCtAnterior.data_contagem).slice(0,10)){
+    toast('Já existe contagem fechada em '+hgCtDataBr(hgCtAnterior.data_contagem)+'. A nova precisa ser depois dessa.','erro'); return;
+  }
+  const linhas=[];
+  for(const r of hgDados){ const L=hgCtLinha(r); if(L.contado!==null) linhas.push({ r, L }); }
+  if(!linhas.length){ toast('Nenhum item contado.','erro'); return; }
+
+  const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : 'Evelise';
+  const comConsumo = linhas.filter(x=>x.L.consumo>0);
+  const comSobra   = linhas.filter(x=>x.L.sobra>0);
+  const custo = linhas.reduce((s,x)=>s+x.L.custo,0);
+  const naoContados = hgDados.length - linhas.length;
+
+  const aviso = 'Fechar a contagem de '+hgCtDataBr(data)+'?\n\n'
+    + '• '+linhas.length+' item(ns) contados; o saldo de cada um passa a ser o que você contou.\n'
+    + '• '+comConsumo.length+' com consumo no período → '+hgMoeda(custo)+' vão para o custo de limpeza/copa.\n'
+    + (comSobra.length ? ('• '+comSobra.length+' apareceram a mais que o sistema sabia → entram como acerto de entrada.\n') : '')
+    + (naoContados ? ('• '+naoContados+' item(ns) SEM contagem ficam como estão — não entram nesta apuração.\n') : '')
+    + '\nDepois disso o período novo começa em '+hgCtDataBr(data)+'.';
+  if(!confirm(aviso)) return;
+
+  const btn=document.getElementById('hg-ct-fechar');
+  if(btn){ btn.disabled=true; btn.textContent='fechando…'; }
+  try{
+    const localId = await getEstoqueGeralId();
+    // 1) a contagem em si — o mesmo par de tabelas do inventário do CC
+    const invArr = await sbFetch('inventarios','POST',{
+      mes_referencia: data, data_contagem: data, status:'fechado',
+      criado_por: quem, fechado_por: quem, fechado_em: new Date().toISOString(),
+      observacao: HG_MARCA_CONTAGEM });
+    const invId = Array.isArray(invArr) ? (invArr[0]||{}).id : (invArr||{}).id;
+    if(!invId) throw new Error('o banco não devolveu o id da contagem');
+
+    await sbFetch('inventario_itens','POST', linhas.map(x=>({
+      inventario_id: invId, material_id: x.r.material_id, local_id: localId,
+      qtd_contada: x.L.contado, contado_por: quem, contado_em: new Date().toISOString() })));
+
+    // 2) o consumo do período, que é o custo
+    const movs=[];
+    for(const x of comConsumo){
+      movs.push({ tipo:'SAIDA_GERAL', material_id:x.r.material_id, local_id:localId,
+        qtd: -Math.abs(x.L.consumo), destino_saida_geral: hgCtDestino(x.r.material_id),
+        aprovado:true, registrado_por:quem,
+        observacao:'Consumo apurado na contagem de '+hgCtDataBr(data)
+                 + (hgCtAnterior&&hgCtAnterior.data_contagem?(' (desde '+hgCtDataBr(hgCtAnterior.data_contagem)+')'):' (primeira contagem)') });
+    }
+    // 3) o que apareceu a mais não é consumo: é acerto de entrada
+    for(const x of comSobra){
+      movs.push({ tipo:'AJUSTE_INVENTARIO', material_id:x.r.material_id, local_id:localId,
+        qtd: Math.abs(x.L.sobra), aprovado:true, registrado_por:quem,
+        observacao:'Contagem de '+hgCtDataBr(data)+' achou '+hgN(x.L.sobra)+' a mais do que o sistema tinha' });
+    }
+    if(movs.length) await sbFetch('movimentacoes','POST',movs);
+
+    hgContado={}; hgCtDraftLimpar();
+    toast('Contagem de '+hgCtDataBr(data)+' fechada ✓ — '+comConsumo.length+' item(ns) de consumo, '+hgMoeda(custo)+' no custo.','sucesso');
+    await hgInvCarregar();
+  }catch(e){
+    const msg=String(e.message||e);
+    if(msg.indexOf('22P02')>=0 || msg.indexOf('invalid input value for enum')>=0){
+      toast('O banco ainda não conhece o destino LIMPEZA — rode o SQL 88. A contagem foi gravada, mas o consumo não virou custo.','erro');
+    }else{
+      toast('Erro ao fechar a contagem: '+msg,'erro');
+    }
+    if(btn){ btn.disabled=false; btn.textContent='🔒 Fechar contagem'; }
   }
 }
 
