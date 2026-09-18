@@ -438,7 +438,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.92 · pedido cancelado não vira referência de preço e a ficha mostra as últimas compras</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.93 · comparativo com a embalagem à vista e justificativa item a item</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1046,6 +1046,13 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-mat-l{gap:10px}
   #aba-cotacao .co-ref{font-size:10.5px;color:var(--cinza-4);white-space:nowrap} #aba-cotacao .co-ref b{color:var(--cinza-5);font-weight:700}
   #aba-cotacao .co-ico{cursor:help;font-size:12px;opacity:.7} #aba-cotacao .co-ico:hover{opacity:1}
+  /* v4.93 — justificativa por item na aprovação: discreta até ser usada */
+  .ap-just-item{display:block;width:100%;margin-top:4px;border:1px dashed var(--cinza-2);border-radius:6px;
+    padding:3px 7px;font-size:11px;font-family:var(--fonte);color:var(--azul);background:transparent}
+  .ap-just-item::placeholder{color:var(--cinza-3)}
+  .ap-just-item:hover{border-color:var(--cinza-3)}
+  .ap-just-item:focus{outline:none;border:1.5px solid var(--acao);background:var(--branco)}
+  .ap-just-item:not(:placeholder-shown){border-style:solid;border-color:#CBDDF2;background:#F4F8FC;font-weight:600}
   /* v4.89 — resumo por fornecedor: o que vira pedido para cada um */
   #aba-cotacao .co-ped-linha{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   #aba-cotacao .co-ped-rot{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);font-weight:700;cursor:help}
@@ -10453,6 +10460,25 @@ async function apCarregar(){
   }
 }
 
+// v4.93 — justificativa POR ITEM (SQL 87). Ela, 18/09: "justificativa em cada item
+// é melhor". A caixa única do pedido virava um parágrafo que misturava os motivos de
+// três itens; quem aprova precisa do porquê ao lado da linha.
+// Sem a coluna no banco, o campo some e a observação geral continua valendo.
+let apJustSemColuna = false;
+async function apSalvarJustItem(ordemId, valor){
+  const v = String(valor==null?'':valor).trim();
+  const b = apPedidos.find(x=>(x.itens||[]).some(o=>o.id===ordemId));
+  const o = b ? b.itens.find(x=>x.id===ordemId) : null;
+  if(o) o.justificativa = v || null;
+  try{
+    await sbFetch('ordens_compra?id=eq.'+ordemId,'PATCH',{ justificativa: v || null });
+  }catch(e){
+    apJustSemColuna = true;
+    toast('Não consegui gravar a justificativa deste item — falta rodar o SQL 87. '
+        + 'Use a observação geral do pedido por enquanto.','erro');
+  }
+}
+
 function apRenderizar(){
   const corpo=document.getElementById('ap-corpo');
   if(!apPedidos.length){
@@ -10462,7 +10488,12 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}</td>
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${o.observacao?`<span class="ap-obs">${o.observacao}</span>`:''}
+        <!-- v4.93 — "justificativa em cada item é melhor" -->
+        <input class="ap-just-item" id="ap-ji-${o.id}" value="${(o.justificativa||'').replace(/"/g,'&quot;')}"
+          placeholder="por que este fornecedor para este item?"
+          title="sai no comparativo impresso, ao lado do item — é o que quem aprova lê"
+          onchange="apSalvarJustItem(${o.id}, this.value)"></td>
       <td style="text-align:center">🏷️ ${o.marca_escolhida||'—'}</td>
       <td style="text-align:center">${o.codigo_escolhido||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.qtd_a_comprar ?? '—'}</td>
@@ -10495,8 +10526,8 @@ function apRenderizar(){
         <div id="ap-hist-${pid}" style="font-size:12px;color:var(--cinza-4)">Carregando...</div>
       </details>`:''}
       <div style="padding:0 16px 8px">
-        <label style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">📝 Justificativa da escolha (vai para o PDF)</label>
-        <textarea id="ap-just-${pid}" rows="2" placeholder="ex: menor preço no conjunto; fornecedor B só para os fios porque A não tinha" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical"></textarea>
+        <label style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--cinza-4)">📝 Observação geral do pedido (frete, condições) — o motivo de cada item vai na linha dele</label>
+        <textarea id="ap-just-${pid}" rows="2" placeholder="ex: para pedido pequeno a AA cobra R$ 35 de frete" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:12px;font-family:var(--fonte);resize:vertical"></textarea>
       </div>
       <div style="padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <div style="display:flex;gap:8px">
@@ -10523,7 +10554,7 @@ async function apCarregarHist(cid){
   return apHist[cid];
 }
 
-function apHistHtml(its){
+function apHistHtml(its, justPorMat){
   if(!its.length) return '<div style="padding:8px 0">Sem registros desta cotação.</div>';
   // v4.35 — cores LITERAIS: este HTML também vai para a impressão, que não tem
   // as variáveis de cor do app — por isso o destaque da escolhida sumia no papel.
@@ -10549,8 +10580,14 @@ function apHistHtml(its){
       return `<tr${estilo}>
         <td>${o.escolhida?'<b style="color:#1E8449">✔ ESCOLHIDO</b> · ':''}🏪 ${forn}</td>
         <td>🏷️ ${o.marca||'—'}${o.apresentacao?' · '+o.apresentacao:''}</td>
-        <td style="text-align:right">${rcMoney(o.preco_total)}${o.qtd_embalagem?` <span style="font-size:10px;color:#777">(${unit}/un)</span>`:''}
-          ${ehMenor?'<span style="font-size:9.5px;color:#1E8449;font-weight:700"> ↓ menor preço</span>':''}</td>
+        <!-- v4.93 — ela: "a quantidade da gaze são 3 pacotes por 56 enquanto as outras são
+             um pacote; ficou a impressão ser mais caro". O número grande era o da EMBALAGEM,
+             e embalagens de tamanhos diferentes não se comparam. Agora manda o R$/un, e
+             quantos vêm fica escrito embaixo — o que o papel compara é o que decide. -->
+        <td style="text-align:right;white-space:nowrap">
+          ${o.preco_unitario!=null?`<b style="font-size:12.5px">${rcMoney(o.preco_unitario)}/un</b>`:'<b>—</b>'}
+          ${ehMenor?'<span style="font-size:9.5px;color:#1E8449;font-weight:700"> ↓ menor</span>':''}
+          <div style="font-size:10px;color:#666">📦 vem ${o.qtd_embalagem??'?'} · embalagem ${rcMoney(o.preco_total)}</div></td>
         <td>💳 ${o.condicao_pagamento||'—'}</td>
         <td>🚚 ${o.prazo_entrega||'—'}</td>
         <td style="font-size:10px;color:#777">${o.observacao||''}</td>
@@ -10566,7 +10603,10 @@ function apHistHtml(its){
     } else if(!esc){
       nota = '<div style="font-size:10.5px;color:#777;margin-top:3px">Sem escolha marcada — item ficou no orçamento.</div>';
     }
-    return `<div style="margin:10px 0"><b>${it.material_nome||rcNomeMaterial(it.material_id)}</b> <span style="font-size:10px">(qtd desejada: ${it.qtd_desejada??'—'})</span>
+    // v4.93 — o porquê fica ao lado do item, não num parágrafo no fim do papel
+    const jus = (justPorMat && justPorMat[it.material_id]) ? String(justPorMat[it.material_id]).trim() : '';
+    const jusHtml = jus ? `<div style="font-size:11px;color:#1B4F72;background:#EBF5FB;border-left:3px solid #2E86AB;border-radius:0 5px 5px 0;padding:5px 9px;margin-top:4px"><b>Por quê:</b> ${jus}</div>` : '';
+    return `<div style="margin:10px 0"><b>${it.material_nome||rcNomeMaterial(it.material_id)}</b> <span style="font-size:10px">(qtd desejada: ${it.qtd_desejada??'—'})</span>${jusHtml}
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px">
         <tbody>${linhas}</tbody></table>${nota}</div>`;
   }).join('');
@@ -10644,7 +10684,10 @@ async function apGerarPDF(pid){
   const just=((document.getElementById('ap-just-'+pid)||{}).value||'').trim();
   let histHtml='';
   if(p.cotacao_id){
-    try{ histHtml=apHistHtml(await apHistDoPedido(pid, p.cotacao_id)); }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
+    try{
+      const jm={}; for(const o of (b.itens||[])) if(o.justificativa) jm[o.material_id]=o.justificativa;
+      histHtml=apHistHtml(await apHistDoPedido(pid, p.cotacao_id), jm);
+    }catch(e){ histHtml='<p>(histórico indisponível: '+e.message+')</p>'; }
   }
   const totItens=apTotalItens(b), frete=Number(p.frete)||0, descPed=Number(p.desconto)||0;
   // v4.25b — o PDF traz TUDO que a aprovação precisa: últ. pago × cotado,
@@ -10656,7 +10699,7 @@ async function apGerarPDF(pid){
     if(u!=null && v){ const d=((v-u)/u)*100; ref='últ. pago '+rcMoney(u)+' ('+(d>0?'+':'')+d.toFixed(1).replace('.',',')+'%)'; }
     else if(u!=null){ ref='últ. pago '+rcMoney(u); }
     const sub=Math.max(0,((o.qtd_a_comprar||0)*v)-(Number(o.desconto)||0));
-    return `<tr><td>${rcNomeMaterial(o.material_id,o)}${o.observacao?`<div style="font-size:9.5px;color:#777">${o.observacao}</div>`:''}</td>
+    return `<tr><td>${rcNomeMaterial(o.material_id,o)}${o.observacao?`<div style="font-size:9.5px;color:#777">${o.observacao}</div>`:''}${o.justificativa?`<div style="font-size:10px;color:#1B4F72;margin-top:2px"><b>Por quê:</b> ${o.justificativa}</div>`:''}</td>
       <td>${o.marca_escolhida||'—'}</td><td>${o.codigo_escolhido||'—'}</td><td style="text-align:center">${o.qtd_a_comprar??'—'}</td>
       <td style="text-align:right">${rcMoney(o.valor_unitario)}<div style="font-size:9.5px;color:#777">${ref}</div></td>
       <td style="text-align:right">${rcMoney(sub)}${Number(o.desconto)>0?`<div style="font-size:9.5px;color:#1E8449">−${rcMoney(o.desconto)} desc.</div>`:''}</td></tr>`;
