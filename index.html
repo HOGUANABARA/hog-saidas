@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.96 · contagem grava de verdade, com limpeza e copa separadas</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.97 · a compra da limpeza sai da contagem, em duas listas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1074,6 +1074,12 @@ details[open] summary { margin-bottom: 6px; }
     font-family:var(--fonte);text-align:right}
   .hg-ct-inp:focus{outline:none;border-color:var(--acao);background:var(--branco)}
   .hg-ct-inp.preenchido{border-color:var(--verde);background:var(--verde-claro);font-weight:700}
+  /* v4.97 — as duas listas de compra */
+  .hg-lista{border:1.5px solid var(--cinza-2);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  .hg-lista-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--cinza-1);
+    padding:9px 14px;border-bottom:1.5px solid var(--cinza-2);font-size:13px;font-weight:800;color:var(--cinza-5)}
+  .hg-lista-n{font-size:11px;font-weight:600;color:var(--cinza-4)}
+  .hg-lista-todos{font-size:11.5px;font-weight:600;color:var(--cinza-5);display:flex;align-items:center;gap:5px;cursor:pointer}
   .hg-tab tr.hg-ct-secao td{background:var(--cinza-1);font-size:10.5px;font-weight:800;text-transform:uppercase;
     letter-spacing:.7px;color:var(--cinza-5);padding:7px 10px;border-bottom:1.5px solid var(--cinza-2)}
   .hg-ct-outra{background:transparent;color:var(--cinza-4);border:1px dashed var(--cinza-2);border-radius:6px;
@@ -20289,42 +20295,140 @@ async function hgCtFechar(){
   }
 }
 
-async function hgCompCarregar(){
+// ═══ v4.97 — A COMPRA SAI DA CONTAGEM ════════════════════════════════════
+// Ela, 18/09: "cadê a sugestão de compra com base no inventário (consumo ×
+// estoque anterior × compras)?"
+//
+// A coluna "Sugestão (caixa)" lia `vw_higiene_inventario.sugestao_caixas`, que é
+// da view e continua nula — ela depende de duas contagens fechadas pela régua
+// antiga. Agora a sugestão vem da CONTAGEM que ela mesma acabou de fechar:
+//
+//        comprar  =  consumo do período  −  o que sobrou hoje
+//
+// Se em 4 dias gastou 2 galões e sobrou 0, compra 2. Se gastou 2 e ainda tem 3,
+// não compra nada. Arredondado para cima na embalagem de compra.
+//
+// E as DUAS LISTAS, regra dela: "o fornecedor principal é a HYGIBRAS, mas pode
+// acontecer de comprar itens em outros fornecedores". Quem separa é o
+// `materiais.fornecedor_padrao_id` — campo que já existe na ficha como
+// "Fornecedor padrão" — e não o fornecedor da última nota. O botão da linha move
+// o item de uma lista para a outra e a escolha fica gravada.
+const HG_FORN_FIXO = 47;      // HYGIBRAS
+let hgConsumo = {};           // material_id -> consumo do último período
+let hgFornPadrao = {};        // material_id -> fornecedor_padrao_id
+let hgUltimaContagem = null;
+
+async function hgCompCarregarBase(){
   if(!hgDados.length) await hgCarregarDados();
-  // v4.20 — seleção em lote: marca todos (ou alguns) e manda para o Orçar,
-  // escolhendo o grupo (contrato tipo HYGIBRAS vai num grupo próprio).
-  let h='<div class="hg-nota">Marque os itens e use <b>Enviar p/ Orçar</b> — eles caem no grupo escolhido da aba 💲 Orçar. A sugestão (em caixa) acende quando houver histórico de consumo.</div>';
-  let gopts=''; const gnomes=Object.keys(hgOrcGrupos);
-  (gnomes.length?gnomes:['Orçamento 1']).forEach(function(g){ gopts+='<option value="'+hgEsc(g)+'">'+hgEsc(g)+'</option>'; });
-  gopts+='<option value="__novo__">➕ novo grupo…</option>';
-  h+='<div class="hg-filtros">'
-    +'<label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px"><input type="checkbox" id="hg-comp-todos" onchange="hgCompTodos()"> marcar todos</label>'
-    +'<span style="flex:1"></span>'
-    +'<select id="hg-comp-grupo" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte);background:var(--branco)">'+gopts+'</select>'
-    +'<button style="'+HG_BTN+'" onclick="hgCompEnviar()">📤 Enviar p/ Orçar</button></div>';
-  h+='<table class="hg-tab"><thead><tr><th></th><th>Código</th><th>Produto</th><th class="hg-num">Saldo</th><th class="hg-num">Valor/unid</th><th class="hg-num">Sugestão (caixa)</th></tr></thead><tbody>';
-  hgDados.forEach(function(r){
-    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
-    const ja = hgOrcTemItem(r.material_id);
-    h+='<tr><td>'+(ja?'<span title="já está no Orçar" style="font-size:11px">🧾</span>':'<input type="checkbox" class="hg-comp-chk" data-mid="'+r.material_id+'">')+'</td>'
-      +'<td>'+cod+'</td><td class="hg-prod">'+hgEsc(r.material)+'</td><td class="hg-num">'+hgN(r.saldo)+'</td><td class="hg-num">'+hgMoeda(r.valor_unid)+'</td><td class="hg-num hg-aguardando">'+(r.sugestao_caixas==null?'—':hgN(r.sugestao_caixas))+'</td></tr>';
+  // a última contagem fechada e o consumo que ela apurou
+  try{
+    const inv=(await sbFetch('inventarios?select=id,data_contagem&status=eq.fechado'
+             +'&observacao=eq.'+encodeURIComponent(HG_MARCA_CONTAGEM)+'&order=data_contagem.desc&limit=1'))||[];
+    hgUltimaContagem = inv[0]||null;
+  }catch(e){ hgUltimaContagem=null; }
+  hgConsumo={};
+  if(hgUltimaContagem && hgUltimaContagem.data_contagem){
+    const marca='Consumo apurado na contagem de '+hgCtDataBr(hgUltimaContagem.data_contagem);
+    try{
+      const ms=(await sbFetch('movimentacoes?select=material_id,qtd&tipo=eq.SAIDA_GERAL'
+              +'&observacao=like.'+encodeURIComponent(marca+'*')+'&limit=500'))||[];
+      ms.forEach(function(m){ hgConsumo[m.material_id]=(hgConsumo[m.material_id]||0)+Math.abs(Number(m.qtd)||0); });
+    }catch(e){}
+  }
+  try{
+    const ids=hgDados.map(r=>r.material_id).filter(Boolean);
+    if(ids.length){
+      const ms=(await sbFetch('materiais?select=id,fornecedor_padrao_id&id=in.('+ids.join(',')+')'))||[];
+      hgFornPadrao={}; ms.forEach(function(m){ hgFornPadrao[m.id]=m.fornecedor_padrao_id||null; });
+    }
+  }catch(e){ hgFornPadrao={}; }
+}
+
+function hgEhFixo(mid){ return Number(hgFornPadrao[mid])===HG_FORN_FIXO; }
+// o que comprar para cobrir o próximo período igual ao que passou
+function hgComprar(r){
+  const cons=Number(hgConsumo[r.material_id])||0;
+  if(!cons) return { cons:0, falta:0, caixas:0 };
+  const falta=Math.max(0, cons-(Number(r.saldo)||0));
+  const kit=Number(r.qtd_kit)||1;
+  return { cons:cons, falta:falta, caixas: falta>0 ? Math.ceil(falta/kit) : 0 };
+}
+async function hgTrocarLista(mid){
+  const r=hgDados.find(x=>x.material_id===mid); if(!r) return;
+  const fixo=hgEhFixo(mid);
+  if(!confirm('Passar "'+r.material+'" para '+(fixo?'🛒 cotar no supermercado':'🏭 compra fixa da HYGIBRAS')+'?\n\n'
+      +'É isso que separa as duas listas de orçamento. Fica gravado no cadastro.')) return;
+  try{
+    await sbFetch('materiais?id=eq.'+mid,'PATCH',{ fornecedor_padrao_id: fixo ? null : HG_FORN_FIXO });
+    hgFornPadrao[mid]= fixo ? null : HG_FORN_FIXO;
+    toast('"'+r.material+'" agora é '+(fixo?'de cotar':'fixo da HYGIBRAS')+' ✓','sucesso');
+    hgCompCarregar();
+  }catch(e){ toast('Não consegui mudar a lista: '+(e.message||e),'erro'); }
+}
+
+async function hgCompCarregar(){
+  await hgCompCarregarBase();
+  const per = hgUltimaContagem
+    ? ('consumo apurado na contagem de <b>'+hgCtDataBr(hgUltimaContagem.data_contagem)+'</b>')
+    : '<b>nenhuma contagem fechada ainda</b> — feche uma na aba Contagem para a sugestão acender';
+  let h='<div class="hg-nota">A sugestão é <b>repor o que foi consumido</b>: '+per+', menos o que sobrou no estoque. '
+       +'Marque os itens e use <b>Enviar p/ Orçar</b> — cada lista abre o seu próprio orçamento.</div>';
+
+  const listas=[
+    { chave:'fixo',  rot:'🏭 HYGIBRAS — compra fixa', grupo:'HYGIBRAS',
+      itens:hgDados.filter(r=>hgEhFixo(r.material_id)) },
+    { chave:'cotar', rot:'🛒 Supermercado — cotar preço', grupo:'Supermercado',
+      itens:hgDados.filter(r=>!hgEhFixo(r.material_id)) },
+  ];
+
+  listas.forEach(function(L){
+    const aComprar=L.itens.filter(function(r){ return hgComprar(r).caixas>0; }).length;
+    h+='<div class="hg-lista">'
+      +'<div class="hg-lista-cab"><span>'+L.rot+'</span>'
+        +'<span class="hg-lista-n">'+L.itens.length+' item(ns) · '+aComprar+' a comprar</span>'
+        +'<span style="flex:1"></span>'
+        +'<label class="hg-lista-todos"><input type="checkbox" onchange="hgCompTodos(\''+L.chave+'\',this.checked)"> marcar os que faltam</label>'
+        +'<button style="'+HG_BTN+'" onclick="hgCompEnviar(\''+L.chave+'\',\''+L.grupo+'\')">📤 Enviar p/ Orçar</button>'
+      +'</div>'
+      +'<table class="hg-tab"><thead><tr><th></th><th>Produto</th><th class="hg-num">Consumo do período</th>'
+        +'<th class="hg-num">Tem hoje</th><th class="hg-num">Comprar</th><th class="hg-num">Valor/unid</th><th></th></tr></thead><tbody>';
+    if(!L.itens.length) h+='<tr><td colspan="7" style="text-align:center;color:var(--cinza-4);padding:16px">Nenhum item nesta lista.</td></tr>';
+    L.itens.slice().sort(function(a,b){ return hgComprar(b).caixas-hgComprar(a).caixas || String(a.material||'').localeCompare(String(b.material||'')); })
+      .forEach(function(r){
+      const S=hgComprar(r);
+      const ja=hgOrcTemItem(r.material_id);
+      const kit=Number(r.qtd_kit)||1;
+      h+='<tr'+(S.caixas>0?'':' style="opacity:.62"')+'>'
+        +'<td>'+(ja?'<span title="já está no Orçar" style="font-size:11px">🧾</span>'
+                  :'<input type="checkbox" class="hg-comp-chk hg-chk-'+L.chave+'" data-mid="'+r.material_id+'"'+(S.caixas>0?'':' data-vazio="1"')+'>')+'</td>'
+        +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(kit>1?(' · '+kit+'/caixa'):'')+'</span></td>'
+        +'<td class="hg-num">'+(S.cons?hgN(S.cons):'<span style="color:var(--cinza-3)">—</span>')+'</td>'
+        +'<td class="hg-num">'+hgN(r.saldo)+'</td>'
+        +'<td class="hg-num">'+(S.caixas>0
+            ? ('<b style="color:var(--azul);font-size:14px">'+S.caixas+'</b><span style="font-size:10px;color:var(--cinza-4)"> '+(kit>1?('cx de '+kit):'un')+'</span>')
+            : '<span style="color:var(--verde)" title="o que sobrou cobre o consumo do período">tem de sobra</span>')+'</td>'
+        +'<td class="hg-num">'+hgMoeda(r.valor_unid)+'</td>'
+        +'<td style="text-align:right"><button class="hg-ct-outra" onclick="hgTrocarLista('+r.material_id+')" title="'
+          +(hgEhFixo(r.material_id)?'passar para 🛒 cotar no supermercado':'passar para 🏭 compra fixa da HYGIBRAS')+'">'
+          +(hgEhFixo(r.material_id)?'🛒':'🏭')+'</button></td>'
+        +'</tr>';
+    });
+    h+='</tbody></table></div>';
   });
-  h+='</tbody></table>';
   document.getElementById('hg-comp-box').innerHTML=h;
 }
-function hgCompTodos(){
-  const on=document.getElementById('hg-comp-todos').checked;
-  document.querySelectorAll('.hg-comp-chk').forEach(function(c){ c.checked=on; });
+// v4.97 — marca só o que realmente falta comprar, e dentro de UMA lista
+function hgCompTodos(chave, on){
+  document.querySelectorAll('.hg-chk-'+chave).forEach(function(c){ c.checked = on && !c.dataset.vazio; });
 }
-async function hgCompEnviar(){
+// v4.97 — cada lista abre o SEU orçamento: a da HYGIBRAS é pedido de contrato,
+// a do supermercado é cotação de preço. Regra dela: "as listas separadas, dois
+// orçamentos abertos, para encontrar o melhor valor".
+async function hgCompEnviar(chave, grupoSugerido){
   if(!(await origemPronta())){ toast('Rode o SQL 54 no Supabase para liberar o orçamento de higiene.','erro'); return; }
-  const marcados=[...document.querySelectorAll('.hg-comp-chk')].filter(function(c){return c.checked;});
-  if(!marcados.length){ toast('Marque ao menos um item.','erro'); return; }
-  let g=(document.getElementById('hg-comp-grupo')||{}).value||'Orçamento 1';
-  if(g==='__novo__'){
-    g=(prompt('Nome do novo grupo:','Orçamento '+(Object.keys(hgOrcGrupos).length+1))||'').trim();
-    if(!g) return;
-  }
+  const marcados=[...document.querySelectorAll('.hg-chk-'+chave)].filter(function(c){return c.checked;});
+  if(!marcados.length){ toast('Marque ao menos um item desta lista.','erro'); return; }
+  const g=(grupoSugerido||'Orçamento 1');
   if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
   let n=0;
   marcados.forEach(function(c){
@@ -20333,8 +20437,10 @@ async function hgCompEnviar(){
     if(!r || hgOrcTemItem(mid)) return;
     // v4.23 — o cadastro alimenta o orçamento: marca e último preço vêm prontos, só corrige o que mudou
     const mCad=(r.marca||'').trim()||null, pCad=(Number(r.valor_compra)>0?Number(r.valor_compra):null);
+    // v4.97 — a quantidade já vai preenchida com a sugestão da contagem
+    const S=hgComprar(r);
     hgOrcGrupos[g].itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
-      qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
+      qtd:(S.caixas>0?S.caixas:(Number(r.sugestao_caixas)||1)), precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
     n++;
   });
   hgOrcAtivo=g;
