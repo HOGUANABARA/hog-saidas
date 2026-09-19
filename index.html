@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.102 · cadastro de departamentos</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.103 · pedido de material pelos departamentos</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -484,7 +484,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="mbi" data-ref="aba-btn-comprar" onclick="mbFechar();trocarAba('comprar')">🛒 Compras CC <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-instrumentais" onclick="mbFechar();cmeIr('compras')">🔩 Compras CME <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-hig_comp" onclick="mbFechar();trocarAba('hig_comp')">🧼 Compras Higiene <span class="mb-badge"></span></div>
-      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Compras Administrativo')">🗂️ Compras Administrativo <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-sol_compra" onclick="mbFechar();trocarAba('sol_compra')">🗂️ Compras Administrativo <span class="mb-badge"></span></div>
     </div>
   </div>
   <div class="mb-item">
@@ -504,9 +504,10 @@ details[open] summary { margin-bottom: 6px; }
     <button class="mb-btn" onclick="mbAbrir(this)">🗂️ Administrativo <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
     <div class="mb-dd">
       <div class="mb-rot">Materiais administrativos · estoque próprio</div>
-      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Solicitações dos departamentos')">📨 Solicitações dos departamentos <span class="mb-badge"></span></div>
-      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Separação e entrega')">📦 Separação &amp; entrega <span class="mb-badge"></span></div>
-      <div class="mbi" data-perm="cotacao" onclick="mbFechar();mbEmConstrucao('Estoque administrativo')">🗃️ Estoque administrativo <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-sol_pedir" onclick="mbFechar();trocarAba('sol_pedir')">📨 Pedir material <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-sol_sep" onclick="mbFechar();trocarAba('sol_sep')">📦 Separação &amp; entrega <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-sol_compra" onclick="mbFechar();trocarAba('sol_compra')">🛒 Alerta de compra <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-adm_inv" onclick="mbFechar();trocarAba('adm_inv')">🗃️ Estoque administrativo <span class="mb-badge"></span></div>
     </div>
   </div>
   <div class="mb-item">
@@ -594,6 +595,15 @@ details[open] summary { margin-bottom: 6px; }
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-aprovarpedido" onclick="trocarAba('aprovarpedido')"><span class="hs-ico">🔏</span> Aprovar Pedido</div>
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-receber" onclick="trocarAba('receber')"><span class="hs-ico">📥</span> Receber NF</div>
 
+    <div class="hs-grupo">
+      <div class="hs-cab" onclick="hsToggle('admsol')"><span><span class="hs-ico">🗂️</span> Administrativo</span><span class="hs-seta" id="hs-s-admsol">▾</span></div>
+      <div class="hs-lista" id="hs-l-admsol">
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_pedir" onclick="trocarAba('sol_pedir')">📨 Pedir material <span id="badge-sol_pedir" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_sep" onclick="trocarAba('sol_sep')">📦 Separação &amp; entrega <span id="badge-sol_sep" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_compra" onclick="trocarAba('sol_compra')">🛒 Alerta de compra <span id="badge-sol_compra" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+      </div>
+    </div>
+
     <div class="hs-div"></div>
     <div class="hs-secao">Acompanhar</div>
     <div class="hs-grupo">
@@ -618,6 +628,7 @@ details[open] summary { margin-bottom: 6px; }
     <div class="hs-secao">Sistema</div>
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-ocorrencias" onclick="trocarAba('ocorrencias')"><span class="hs-ico">⚠️</span> Ocorrências</div>
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-usuarios" onclick="trocarAba('usuarios')"><span class="hs-ico">👥</span> Usuários</div>
+    <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-departamentos" onclick="trocarAba('departamentos')"><span class="hs-ico">🏢</span> Departamentos</div>
     <div class="hs-item hs-solo hs-cadeado" id="aba-btn-cadeado" onclick="menuUsuario()" title="Trocar senha ou sair"><span class="hs-ico">👤</span> Minha conta</div>
   </nav>
 </aside>
@@ -1933,21 +1944,21 @@ key: 'sb_publishable_vVZsp2JaAWkwLWBiaqxS2Q_nrJ4lYAw',
 const PERFIS = {
   ENFERMAGEM: {
     rot: 'Enfermagem', cor: '#2E86AB',
-    abas: ['alertas','registro','diversas','remessas','instrumentais','comprar']
+    abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','sol_pedir']
   },
   RECEPCAO: {
     rot: 'Recepção', cor: '#16A085',
-    abas: ['diversas','comprar']
+    abas: ['diversas','comprar','sol_pedir']
   },
   COMPRAS: {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_compra']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
-    abas: ['alertas','painel','aprovarpedido','receber','historico','ocorrencias']
+    abas: ['alertas','painel','aprovarpedido','receber','historico','ocorrencias','sol_pedir']
   },
   DIRETORIA: {
     rot: 'Diretoria', cor: '#34495E',
@@ -1963,7 +1974,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_compra']
   }
 };
 
@@ -2060,7 +2071,8 @@ function exigirAssinatura(ato){
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
-                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'];
+                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv',
+                    'sol_pedir','sol_sep','sol_compra','departamentos'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -2086,6 +2098,7 @@ function aplicarPermissoes(){
     bd.style.background = perfilCor(SESSAO.perfil);
   }
   if (typeof hsAjustarGrupos === 'function') hsAjustarGrupos();
+  if (SESSAO && typeof solAtualizarBadges === 'function') setTimeout(solAtualizarBadges, 1200);   // v4.103
 }
 // nome antigo mantido: o app inteiro chamava esta função
 function revelarAbasRestritas(){ aplicarPermissoes(); }
@@ -4756,7 +4769,7 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_compra'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -4770,6 +4783,9 @@ function trocarAba(aba) {
     if(shell) shell.classList.remove('encolhida'); }
   if (aba==='adm_inv')  { admInvCarregar(); }
   if (aba==='departamentos') { dptoCarregar(); }   // v4.102
+  if (aba==='sol_pedir')  { solPedirCarregar(); }    // v4.103
+  if (aba==='sol_sep')    { solSepCarregar(); }
+  if (aba==='sol_compra') { solCompraCarregar(); }
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
   if (aba==='hig_orc')  { hgOrcCarregar(); }
@@ -18402,7 +18418,7 @@ const AL_SETORES = {
   ESTOQUE:          { nome:'Estoque e cadastro', quem:'quem cuida do cadastro de materiais', cor:'#1B4F72' },
   COMPRAS:          { nome:'Compras',            quem:'quem cota e faz pedido',              cor:'#2E86AB' },
   CENTRO_CIRURGICO: { nome:'Centro cirúrgico',   quem:'quem manda e recebe as remessas',     cor:'#6f42c1' },
-  ADMINISTRATIVO:   { nome:'Administrativo',     quem:'quem libera pagamento',               cor:'#E67E22' },
+  ADMINISTRATIVO:   { nome:'Administrativo',     quem:'quem libera pagamento e entrega material', cor:'#E67E22' },
 };
 const AL_ORDEM = ['ESTOQUE','COMPRAS','CENTRO_CIRURGICO','ADMINISTRATIVO'];
 
@@ -18434,6 +18450,7 @@ async function alCarregar(){
   if(!(typeof rmBens!=='undefined' && rmBens && rmBens.length)){
     try{ rmBens = (await sbFetch('remessa_bens?select=id,nome,tipo,material_id,ativo&limit=500')) || []; }catch(e){}
   }
+  if(typeof solAtualizarBadges==='function'){ try{ await solAtualizarBadges(); }catch(e){} }
   alRenderizar();
 }
 
@@ -18453,6 +18470,23 @@ function alLinhas(){
            <button class="al-b cinza" onclick="alIgnorar(${a.id})">🙈 ignorar</button>`
         : `<button class="al-b cinza" onclick="alMover(${a.id})">↔ outro setor</button>
            <button class="al-b cinza" onclick="alIgnorar(${a.id})">🙈 ignorar</button>` });
+  }
+  // v4.103 — pedidos de material dos departamentos e o que falta comprar para eles
+  if(typeof solAbertos!=='undefined' && typeof podeAba==='function'){
+    if(podeAba('sol_sep')) for(const p of solAbertos){
+      const n=(p.solicitacao_itens||[]).length;
+      linhas.push({ setor:'ADMINISTRATIVO', chave:'s'+p.id,
+        titulo: `📨 Pedido de material #${p.id} — ${alEsc(solDep(p.departamento_id))}`,
+        sub: `${n} item(ns) · ${SOL_ROT[p.status]||p.status}${p.solicitante?' · pedido por '+alEsc(p.solicitante):''}<br><span style="opacity:.8">${alData(p.created_at)}</span>`,
+        acoes: `<button class="al-b claro" onclick="trocarAba('sol_sep')">abrir Separação →</button>` });
+    }
+    if(podeAba('sol_compra')){
+      const nc=solNovos().length+solFaltas().length;
+      if(nc) linhas.push({ setor:'COMPRAS', chave:'sc',
+        titulo: `🛒 ${nc} item(ns) de escritório para comprar`,
+        sub: 'Os departamentos pediram e o estoque administrativo não cobre (ou o item ainda não existe no cadastro).',
+        acoes: `<button class="al-b claro" onclick="trocarAba('sol_compra')">abrir Alerta de compra →</button>` });
+    }
   }
   for(const p of (alPendRem||[])){
     const nome = (typeof rmBem==='function') ? rmBem(p.bem_id) : ('bem #'+p.bem_id);
@@ -18545,7 +18579,8 @@ function alAtualizarBadge(){
   const b = document.getElementById('badge-alertas');
   if(!b) return;
   const n = (alAlertas===null?0:(alAlertas||[]).length) + (alPendRem||[]).length + (alNfPend||[]).length
-          + (alSemSaida||[]).filter(x=>!x.conhecido).length;   // conhecido não conta no badge
+          + (alSemSaida||[]).filter(x=>!x.conhecido).length   // conhecido não conta no badge
+          + (typeof solAlertaN!=='undefined' ? solAlertaN : 0);   // v4.103 — pedidos de material
   b.textContent = n; b.style.display = n ? '' : 'none';
 }
 
@@ -18649,6 +18684,59 @@ async function alIgnorar(id){
 
 
 <!-- ── CADASTRO DE USUÁRIOS (v4.8) ──────────────────────────── -->
+<!-- v4.103 — pedido de material de escritório pelos departamentos -->
+<style>
+  .sol-linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .sol-rot{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);letter-spacing:.4px}
+  .sol-sel{padding:8px 10px;border:1.5px solid var(--cinza-2);border-radius:8px;font-size:14px;font-family:var(--fonte);min-width:240px}
+  .sol-busca{position:relative;margin-bottom:10px}
+  .sol-busca input{width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--cinza-2);border-radius:8px;font-size:14px;font-family:var(--fonte)}
+  .sol-sug{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--cinza-2);border-radius:0 0 8px 8px;box-shadow:0 6px 16px rgba(0,0,0,.12);z-index:30;max-height:320px;overflow:auto}
+  .sol-sug div{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--cinza-1)}
+  .sol-sug div:hover{background:#EBF5FB}
+  .sol-sug div span{font-size:11px;color:var(--cinza-4);margin-left:6px}
+  .sol-sug .sol-sug-nada{cursor:default;color:var(--cinza-4)}
+  .sol-livre{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#FEF9E7;border:1px dashed #F4D03F;border-radius:8px;padding:8px 10px}
+  .sol-livre span{font-size:12px;font-weight:700;color:#7D6608}
+  .sol-livre input#sol-livre{flex:1;min-width:220px;padding:8px 10px;border:1.5px solid var(--cinza-2);border-radius:8px;font-size:13px;font-family:var(--fonte)}
+  .sol-q{width:70px;padding:6px 8px;border:1.5px solid var(--cinza-2);border-radius:6px;font-size:13px;text-align:right;font-family:var(--fonte)}
+  .sol-obs{flex:1;min-width:240px;padding:9px 11px;border:1.5px solid var(--cinza-2);border-radius:8px;font-size:13px;font-family:var(--fonte)}
+  .sol-vazio{padding:16px;text-align:center;color:var(--cinza-4);font-size:13px}
+  .sol-sub-tit{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-5);margin:18px 0 6px}
+  .sol-tag{display:inline-block;color:#fff;border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+  .sol-novo{display:inline-block;background:#FEF9E7;color:#7D6608;border:1px solid #F4D03F;border-radius:10px;padding:0 7px;font-size:10.5px;font-weight:700}
+  .sol-dep{display:inline-block;background:#EBF5FB;color:#1B4F72;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700}
+  .sol-motivo{margin-top:4px;font-size:12px;color:#922B21;background:#FDEDEC;border-radius:6px;padding:4px 8px}
+  .sol-aviso{background:#FDEDEC;border-left:4px solid #C0392B;border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px;margin-bottom:10px}
+  .sol-card{border:1.5px solid var(--cinza-2);border-radius:10px;padding:12px;margin-bottom:14px}
+  .sol-card-cab{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:14px}
+  .sol-obs-lida{font-size:12.5px;background:var(--cinza-1);border-radius:6px;padding:6px 9px;margin-bottom:8px}
+  .sol-acoes{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  tr.sol-tr-novo td{background:#FFFDF5}
+  .sol-hist summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--cinza-4);margin:6px 0}
+</style>
+<div id="aba-sol_pedir" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">📨 Pedir material de escritório
+      <span class="hg-dica" title="Escolha o departamento, busque os itens e envie. O administrativo separa e entrega (pode ser em partes) ou devolve com o motivo para você corrigir. Item que não existe no cadastro vai pelo campo 📝 Não achou na lista?">?</span></div>
+    <div id="sol-pedir-box"></div>
+  </div>
+</div>
+<div id="aba-sol_sep" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">📦 Separação &amp; entrega
+      <span class="hg-dica" title="Pedidos dos departamentos em aberto. Entregar grava a saída do estoque administrativo como custo do departamento. Entrega parcial vale: o que faltou fica em aberto no mesmo pedido.">?</span>
+      <button class="hg-ct-outra" style="margin-left:auto" onclick="solSepCarregar()">↻ atualizar</button></div>
+    <div id="sol-sep-box"></div>
+  </div>
+</div>
+<div id="aba-sol_compra" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🛒 Alerta de compra — material de escritório
+      <button class="hg-ct-outra" style="margin-left:auto" onclick="solCompraCarregar()">↻ atualizar</button></div>
+    <div id="sol-compra-box"></div>
+  </div>
+</div>
 <!-- v4.102 — cadastro de departamentos: quem pede material de escritório e recebe o custo -->
 <div id="aba-departamentos" class="container" style="display:none">
   <div class="card">
@@ -19524,6 +19612,404 @@ async function hgInvCarregar(){
   }
   hgInvRender();
 }
+
+// ═══ v4.103 — SOLICITAÇÃO DE MATERIAL DE ESCRITÓRIO ════════════════════════
+// Fluxo combinado com ela em 18–19/09 (docs/fluxo-solicitacao-escritorio.md):
+// o departamento pede → o administrativo (Lucas/Evelise) separa e entrega,
+// parcial ou total, ou devolve com motivo → o departamento acompanha.
+// Sem etapa de aprovação. Item fora da lista entra como texto livre e, depois
+// de comprado e cadastrado, é vinculado ao cadastro ("🔗 Vincular").
+// A entrega é SAIDA_GERAL do estoque geral, destino ADMINISTRATIVO, com
+// departamento_id e solicitacao_id (SQL 90) — o custo fica por departamento.
+// Login: o departamento é escolhido na tela até o login único do HOG TOTAL
+// existir (decisão dela 19/09); quem pediu = usuário logado.
+const SOL_ABERTOS = ['ENVIADO','EM_SEPARACAO','ENTREGUE_PARCIAL'];
+const SOL_ROT = { ENVIADO:'enviado', EM_SEPARACAO:'em separação', ENTREGUE_PARCIAL:'entregue parcial',
+                  ENTREGUE:'entregue', DEVOLVIDO:'devolvido', CANCELADO:'cancelado' };
+const SOL_COR = { ENVIADO:'#2E86AB', EM_SEPARACAO:'#8E44AD', ENTREGUE_PARCIAL:'#D68910',
+                  ENTREGUE:'#1E8449', DEVOLVIDO:'#C0392B', CANCELADO:'#7F8C8D' };
+let solDeps = [], solItens = [], solCar = [], solRefazendo = null, solSemTabela = false;
+let solMeus = [], solAbertos = [], solFechados = [];
+let solAlertaN = 0;
+
+function solEsc(t){ return dptoEsc(t); }
+function solN(v){ const n=Number(v)||0; return (Math.round(n*100)/100).toString().replace('.',','); }
+function solQuem(){ return (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : ''; }
+function solData(d){ if(!d) return ''; const x=new Date(d); return x.toLocaleDateString('pt-BR')+' '+x.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function solTag(st){ return '<span class="sol-tag" style="background:'+(SOL_COR[st]||'#7F8C8D')+'">'+(SOL_ROT[st]||st)+'</span>'; }
+function solDep(id){ const d=solDeps.find(x=>x.id===id); return d?d.nome:('#'+id); }
+function solItem(mid){ return solItens.find(x=>x.material_id===mid) || null; }
+function solNomeItem(i){ if(i.material_id){ const it=solItem(i.material_id); return it?it.material:(i.item_livre||('material #'+i.material_id)); } return i.item_livre||'—'; }
+function solSaldo(mid){ const it=solItem(mid); return it?(Number(it.saldo)||0):0; }
+function solDepSel(){ try{ return parseInt(localStorage.getItem('hog_sol_dep'),10)||null; }catch(e){ return null; } }
+function solAvisoSemTabela(){
+  return '<div style="background:#FEF9E7;border-left:4px solid #B7950B;border-radius:0 8px 8px 0;padding:12px 14px;font-size:13px;color:#7D6608">'
+    +'As tabelas de solicitação ainda não existem no banco — falta rodar o <b>SQL 90</b> (<code>sql/90_solicitacoes_departamento.sql</code>).</div>';
+}
+
+async function solCarregarBase(){
+  try{
+    solDeps  = (await sbFetch('departamentos?select=id,nome,ativo&order=nome.asc')) || [];
+    solItens = (await sbFetch('vw_administrativo_inventario?select=material_id,material,classe,unidade_medida,saldo&order=material&limit=1000')) || [];
+    await sbFetch('solicitacoes?select=id&limit=1');
+    solSemTabela = false;
+  }catch(e){ solSemTabela = true; }
+}
+
+// ── 👤 PEDIR MATERIAL (departamento) ───────────────────────────────────────
+async function solPedirCarregar(){
+  const box=document.getElementById('sol-pedir-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await solCarregarBase();
+  if(solSemTabela){ box.innerHTML=solAvisoSemTabela(); return; }
+  await solMeusCarregar();
+  solPedirRender();
+}
+async function solMeusCarregar(){
+  const dep=solDepSel(); solMeus=[];
+  if(!dep) return;
+  try{ solMeus=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&departamento_id=eq.'+dep+'&order=id.desc&limit=30'))||[]; }catch(e){ solMeus=[]; }
+}
+function solPedirRender(){
+  const box=document.getElementById('sol-pedir-box'); if(!box) return;
+  const dep=solDepSel();
+  const ativos=solDeps.filter(d=>d.ativo!==false);
+  let h='<div class="sol-linha"><label class="sol-rot">Departamento</label>'
+    +'<select id="sol-dep" onchange="solTrocarDep(this.value)" class="sol-sel"><option value="">— escolha o seu departamento —</option>'
+    + ativos.map(d=>'<option value="'+d.id+'"'+(d.id===dep?' selected':'')+'>'+solEsc(d.nome)+'</option>').join('')
+    +'</select></div>';
+  if(!dep){ box.innerHTML=h+'<div class="sol-vazio">Escolha o departamento para pedir material e ver os seus pedidos.</div>'; return; }
+  if(solRefazendo){
+    const p=solMeus.find(x=>x.id===solRefazendo);
+    h+='<div class="sol-aviso">✏️ Corrigindo o pedido <b>#'+solRefazendo+'</b>, devolvido pelo administrativo'
+      +(p&&p.motivo_devolucao?': <i>'+solEsc(p.motivo_devolucao)+'</i>':'')
+      +' <button class="hg-ct-outra" onclick="solRefazerCancelar()">desistir da correção</button></div>';
+  }
+  h+='<div class="sol-busca"><input id="sol-busca" placeholder="🔍 Digite parte do nome do item (ex.: toner, etiqueta, caneta)" oninput="solSugerir(this.value)" autocomplete="off">'
+    +'<div class="sol-sug" id="sol-sug" hidden></div></div>'
+    +'<div class="sol-livre"><span title="para o que ainda não existe no cadastro: o administrativo compra, cadastra e entrega">📝 Não achou na lista?</span>'
+    +'<input id="sol-livre" placeholder="escreva o item como você conhece (ex.: grampeador de mesa preto)">'
+    +'<input id="sol-livre-q" type="number" min="1" value="1" class="sol-q" title="quantidade">'
+    +'<button class="btn btn-secundario" onclick="solPegarLivre()">➕ Incluir no pedido</button></div>';
+  if(solCar.length){
+    h+='<table class="hg-tab" style="margin-top:10px"><thead><tr><th>Item</th><th style="text-align:right">Quantidade</th><th></th></tr></thead><tbody>'
+      + solCar.map((c,ix)=>{
+          const it=c.mid?solItem(c.mid):null;
+          return '<tr><td class="hg-prod">'+(c.livre?(solEsc(c.livre)+' <span class="sol-novo">📝 item novo</span>'):solEsc(it?it.material:'?'))
+            +'<div style="font-size:11px;color:var(--cinza-4)">'+solEsc(c.livre?'fora do cadastro':((it&&it.unidade_medida)||''))+(c.ent?' · <b style="color:var(--verde)">já entregue '+solN(c.ent)+'</b>':'')+'</div></td>'
+            +'<td style="text-align:right"><input type="number" min="1" class="sol-q" value="'+c.qtd+'" onchange="solCarQtd('+ix+',this.value)"></td>'
+            +'<td style="text-align:right"><button class="hg-ct-outra" onclick="solCarTirar('+ix+')">✕ tirar</button></td></tr>';
+        }).join('')
+      +'</tbody></table>'
+      +'<div class="sol-linha" style="margin-top:10px"><input id="sol-obs" class="sol-obs" placeholder="observação para o administrativo (opcional)">'
+      +'<button class="btn btn-verde" onclick="solEnviar()">'+(solRefazendo?'📨 Reenviar pedido #'+solRefazendo:'📨 Enviar pedido')+'</button></div>';
+  }else{
+    h+='<div class="sol-vazio">Busque os itens acima — cada um entra aqui com a quantidade.</div>';
+  }
+  h+='<div class="sol-sub-tit">📋 Meus pedidos — '+solEsc(solDep(dep))+'</div>';
+  if(!solMeus.length) h+='<div class="sol-vazio">Nenhum pedido deste departamento ainda.</div>';
+  else h+='<table class="hg-tab"><thead><tr><th>Pedido</th><th>Itens (entregue / pedido)</th><th>Situação</th><th></th></tr></thead><tbody>'
+    + solMeus.map(p=>{
+        const its=(p.solicitacao_itens||[]).slice().sort((a,b)=>a.id-b.id);
+        return '<tr><td style="white-space:nowrap"><b>#'+p.id+'</b><div style="font-size:11px;color:var(--cinza-4)">'+solData(p.created_at)+(p.solicitante?'<br>'+solEsc(p.solicitante):'')+'</div></td>'
+          +'<td>'+its.map(i=>solEsc(solNomeItem(i))+(i.material_id?'':' <span class="sol-novo">📝 item novo</span>')
+                 +' — <b>'+solN(i.qtd_entregue)+'</b> / '+solN(i.qtd)).join('<br>')
+          +(p.observacao?'<div style="font-size:11px;color:var(--cinza-4);margin-top:3px">obs.: '+solEsc(p.observacao)+'</div>':'')
+          +(p.status==='DEVOLVIDO'&&p.motivo_devolucao?'<div class="sol-motivo">↩ '+solEsc(p.motivo_devolucao)+(p.devolvido_por?' — '+solEsc(p.devolvido_por):'')+'</div>':'')
+          +'</td><td>'+solTag(p.status)+'</td><td style="text-align:right;white-space:nowrap">'
+          +(p.status==='DEVOLVIDO'?'<button class="hg-ct-outra" onclick="solRefazer('+p.id+')">✏️ corrigir e reenviar</button> ':'')
+          +((p.status==='ENVIADO'||p.status==='DEVOLVIDO')?'<button class="hg-ct-outra" onclick="solCancelar('+p.id+')">cancelar</button>':'')
+          +'</td></tr>';
+      }).join('')+'</tbody></table>';
+  box.innerHTML=h;
+}
+async function solTrocarDep(v){
+  try{ localStorage.setItem('hog_sol_dep', v||''); }catch(e){}
+  solCar=[]; solRefazendo=null;
+  await solMeusCarregar(); solPedirRender(); solAtualizarBadges();
+}
+function solSugerir(t){
+  const sug=document.getElementById('sol-sug'); if(!sug) return;
+  const q=dptoNorm(t);
+  if(q.length<2){ sug.hidden=true; return; }
+  const partes=q.split(' ');
+  const achou=solItens.filter(x=>{ const n=dptoNorm(x.material); return partes.every(p=>n.indexOf(p)>=0); }).slice(0,12);
+  sug.innerHTML = achou.length
+    ? achou.map(x=>'<div onclick="solPegar('+x.material_id+')">'+solEsc(x.material)+' <span>'+solEsc(x.unidade_medida||'')+'</span></div>').join('')
+    : '<div class="sol-sug-nada">Nada no cadastro com esse nome — use o campo 📝 "Não achou na lista?" logo abaixo.</div>';
+  sug.hidden=false;
+}
+function solPegar(mid){
+  const j=solCar.find(c=>c.mid===mid);
+  if(j) j.qtd+=1; else solCar.push({mid:mid, livre:null, qtd:1});
+  solPedirRender();
+  const b=document.getElementById('sol-busca'); if(b) b.focus();
+}
+function solPegarLivre(){
+  const t=(document.getElementById('sol-livre').value||'').trim().toUpperCase();
+  const q=Math.max(1, parseInt(document.getElementById('sol-livre-q').value,10)||1);
+  if(t.length<3){ toast('Escreva o nome do item.','erro'); return; }
+  solCar.push({mid:null, livre:t, qtd:q});
+  solPedirRender();
+}
+function solCarQtd(ix,v){ const n=parseInt(v,10); if(solCar[ix]) solCar[ix].qtd = n>0 ? n : 1; }
+function solCarTirar(ix){
+  if(solCar[ix] && solCar[ix].ent){ toast('Este item já teve entrega — não sai do pedido. Ajuste a quantidade.','erro'); return; }
+  solCar.splice(ix,1); solPedirRender();
+}
+
+async function solEnviar(){
+  const dep=solDepSel(); if(!dep){ toast('Escolha o departamento.','erro'); return; }
+  if(!solCar.length) return;
+  const obs=(document.getElementById('sol-obs')||{}).value||'';
+  const resumo=solCar.map(c=>'• '+c.qtd+' × '+(c.livre? c.livre+' (item novo)' : (solItem(c.mid)||{}).material)).join('\n');
+  if(!confirm((solRefazendo?'Reenviar o pedido #'+solRefazendo:'Enviar o pedido')+' de '+solDep(dep)+'?\n\n'+resumo)) return;
+  // na correção de um pedido devolvido, o que já foi entregue acompanha o item — nunca entrega duas vezes
+  const baixo=solCar.find(c=>(c.ent||0)>c.qtd);
+  if(baixo){ toast((baixo.livre||(solItem(baixo.mid)||{}).material)+': já foram entregues '+solN(baixo.ent)+' — o pedido não pode ser menor que isso.','erro'); return; }
+  const itens=pid=>solCar.map(c=>({ solicitacao_id:pid, material_id:c.mid||null, item_livre:c.livre||null, qtd:c.qtd, qtd_entregue:c.ent||0 }));
+  try{
+    let pid=solRefazendo;
+    if(pid){
+      // insere os itens novos ANTES de apagar os antigos (lição da cotação #32)
+      const velhos=((solMeus.find(x=>x.id===pid)||{}).solicitacao_itens||[]).map(i=>i.id);
+      await sbFetch('solicitacao_itens','POST', itens(pid));
+      if(velhos.length) await sbFetch('solicitacao_itens?id=in.('+velhos.join(',')+')','DELETE');
+      await sbFetch('solicitacoes?id=eq.'+pid,'PATCH',{ status:'ENVIADO', observacao:obs.trim()||null, solicitante:solQuem()||null, updated_at:new Date().toISOString() });
+    }else{
+      const r=await sbFetch('solicitacoes','POST',{ departamento_id:dep, solicitante:solQuem()||null, observacao:obs.trim()||null });
+      pid=r&&r[0]&&r[0].id; if(!pid) throw new Error('o banco não devolveu o número do pedido');
+      await sbFetch('solicitacao_itens','POST', itens(pid));
+    }
+    toast('📨 Pedido #'+pid+' enviado ao administrativo ✓','sucesso');
+    solCar=[]; solRefazendo=null;
+    await solMeusCarregar(); solPedirRender(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui enviar: '+(e.message||e),'erro'); }
+}
+function solRefazer(pid){
+  const p=solMeus.find(x=>x.id===pid); if(!p) return;
+  solRefazendo=pid;
+  solCar=(p.solicitacao_itens||[]).slice().sort((a,b)=>a.id-b.id)
+    .map(i=>({ mid:i.material_id||null, livre:i.material_id?null:(i.item_livre||null), qtd:Number(i.qtd)||1, ent:Number(i.qtd_entregue)||0 }));
+  solPedirRender();
+  const o=document.getElementById('sol-obs'); if(o) o.value=p.observacao||'';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function solRefazerCancelar(){ solRefazendo=null; solCar=[]; solPedirRender(); }
+async function solCancelar(pid){
+  if(!confirm('Cancelar o pedido #'+pid+'? Ele sai da fila do administrativo.')) return;
+  try{
+    await sbFetch('solicitacoes?id=eq.'+pid+'&status=in.(ENVIADO,DEVOLVIDO)','PATCH',{ status:'CANCELADO', updated_at:new Date().toISOString() });
+    if(solRefazendo===pid){ solRefazendo=null; solCar=[]; }
+    await solMeusCarregar(); solPedirRender(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui cancelar: '+(e.message||e),'erro'); }
+}
+
+// ── 📦 SEPARAÇÃO & ENTREGA (administrativo) ────────────────────────────────
+async function solSepCarregar(){
+  const box=document.getElementById('sol-sep-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await solCarregarBase();
+  if(solSemTabela){ box.innerHTML=solAvisoSemTabela(); return; }
+  await solAbertosCarregar();
+  try{ solFechados=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&status=in.(ENTREGUE,DEVOLVIDO,CANCELADO)&order=updated_at.desc&limit=20'))||[]; }catch(e){ solFechados=[]; }
+  // pedido que o administrativo já viu passa a "em separação" — o departamento enxerga
+  const novos=solAbertos.filter(p=>p.status==='ENVIADO').map(p=>p.id);
+  if(novos.length && SESSAO && SESSAO.perfil!=='VISUALIZACAO'){
+    try{ await sbFetch('solicitacoes?id=in.('+novos.join(',')+')&status=eq.ENVIADO','PATCH',{ status:'EM_SEPARACAO', updated_at:new Date().toISOString() });
+         solAbertos.forEach(p=>{ if(novos.indexOf(p.id)>=0) p.status='EM_SEPARACAO'; }); }catch(e){}
+  }
+  solSepRender();
+}
+async function solAbertosCarregar(){
+  solAbertos=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&status=in.('+SOL_ABERTOS.join(',')+')&order=id.asc&limit=200'))||[];
+  solAbertos.forEach(p=>{ p.solicitacao_itens=(p.solicitacao_itens||[]).sort((a,b)=>a.id-b.id); });
+}
+function solSepRender(){
+  const box=document.getElementById('sol-sep-box'); if(!box) return;
+  let h='';
+  if(!solAbertos.length) h+='<div class="sol-vazio">Nenhum pedido de material esperando. Tudo entregue. ✓</div>';
+  solAbertos.forEach(p=>{
+    const its=p.solicitacao_itens;
+    h+='<div class="sol-card"><div class="sol-card-cab"><b>#'+p.id+' · '+solEsc(solDep(p.departamento_id))+'</b> '+solTag(p.status)
+      +'<span style="font-size:11.5px;color:var(--cinza-4)">'+solData(p.created_at)+(p.solicitante?' · '+solEsc(p.solicitante):'')+'</span></div>'
+      +(p.observacao?'<div class="sol-obs-lida">💬 '+solEsc(p.observacao)+'</div>':'')
+      +'<table class="hg-tab"><thead><tr><th>Item</th><th style="text-align:right">Pedido</th><th style="text-align:right">Já entregue</th><th style="text-align:right">Saldo</th><th style="text-align:right">Entregar agora</th></tr></thead><tbody>'
+      + its.map(i=>{
+          const aberto=Math.max(0,(Number(i.qtd)||0)-(Number(i.qtd_entregue)||0));
+          if(!i.material_id) return '<tr class="sol-tr-novo"><td class="hg-prod">'+solEsc(i.item_livre)+' <span class="sol-novo">📝 item novo — fora do cadastro</span></td>'
+            +'<td style="text-align:right">'+solN(i.qtd)+'</td><td style="text-align:right">—</td><td style="text-align:right">—</td>'
+            +'<td style="text-align:right"><button class="hg-ct-outra" onclick="solVincular('+i.id+')" title="depois de comprar e cadastrar: escolha o item do cadastro e ele passa a ser entregue normalmente">🔗 Vincular ao cadastro</button></td></tr>';
+          const s=solSaldo(i.material_id), sug=Math.min(aberto, Math.max(0,s));
+          return '<tr><td class="hg-prod">'+solEsc(solNomeItem(i))+'</td><td style="text-align:right">'+solN(i.qtd)+'</td>'
+            +'<td style="text-align:right">'+solN(i.qtd_entregue)+'</td>'
+            +'<td style="text-align:right'+(s<aberto?';color:var(--vermelho);font-weight:700':'')+'">'+solN(s)+'</td>'
+            +'<td style="text-align:right">'+(aberto>0?'<input type="number" min="0" class="sol-q" id="sol-e-'+i.id+'" value="'+sug+'">':'<span style="color:var(--verde);font-weight:700">✓</span>')+'</td></tr>';
+        }).join('')
+      +'</tbody></table><div class="sol-acoes">'
+      +'<button class="btn btn-verde" onclick="solEntregar('+p.id+')">📦 Entregar</button>'
+      +'<button class="btn btn-secundario" onclick="solDevolver('+p.id+')">↩ Devolver para refazer</button>'
+      +'<button class="hg-ct-outra" onclick="solEncerrar('+p.id+')" title="o que faltou não vai ser entregue">✖ encerrar o que falta</button>'
+      +'</div></div>';
+  });
+  if(solFechados.length){
+    h+='<details class="sol-hist"><summary>Últimos pedidos encerrados ('+solFechados.length+')</summary><table class="hg-tab"><tbody>'
+      + solFechados.map(p=>'<tr><td style="white-space:nowrap"><b>#'+p.id+'</b> · '+solEsc(solDep(p.departamento_id))+'</td><td>'
+          +(p.solicitacao_itens||[]).map(i=>solEsc(solNomeItem(i))+' '+solN(i.qtd_entregue)+'/'+solN(i.qtd)).join(' · ')
+          +(p.motivo_devolucao?'<div class="sol-motivo">↩ '+solEsc(p.motivo_devolucao)+'</div>':'')
+          +'</td><td>'+solTag(p.status)+'</td><td style="font-size:11px;color:var(--cinza-4);white-space:nowrap">'+solData(p.updated_at)+'</td></tr>').join('')
+      +'</tbody></table></details>';
+  }
+  box.innerHTML=h;
+}
+async function solEntregar(pid){
+  const p=solAbertos.find(x=>x.id===pid); if(!p) return;
+  const vai=[];
+  for(const i of p.solicitacao_itens){
+    if(!i.material_id) continue;
+    const el=document.getElementById('sol-e-'+i.id); if(!el) continue;
+    const q=Math.max(0, Number(el.value)||0); if(!q) continue;
+    const aberto=(Number(i.qtd)||0)-(Number(i.qtd_entregue)||0);
+    if(q>aberto){ toast(solNomeItem(i)+': entregar '+solN(q)+' é mais do que falta ('+solN(aberto)+').','erro'); el.focus(); return; }
+    const s=solSaldo(i.material_id);
+    if(q>s){ toast(solNomeItem(i)+': o estoque tem só '+solN(s)+'. Entregue o que tem — o resto fica em aberto no pedido.','erro'); el.focus(); return; }
+    vai.push({i:i, q:q});
+  }
+  if(!vai.length){ toast('Nada para entregar — preencha a coluna "Entregar agora".','erro'); return; }
+  if(!confirm('Entregar para '+solDep(p.departamento_id)+' (pedido #'+pid+')?\n\n'
+      + vai.map(v=>'• '+solN(v.q)+' × '+solNomeItem(v.i)).join('\n')
+      + '\n\nSai do estoque administrativo e vira custo do departamento.')) return;
+  try{
+    const localId=await getEstoqueGeralId(), quem=solQuem(), agora=new Date().toISOString();
+    await sbFetch('movimentacoes','POST', vai.map(v=>({
+      tipo:'SAIDA_GERAL', material_id:v.i.material_id, local_id:localId, qtd:-Math.abs(v.q),
+      destino_saida_geral:'ADMINISTRATIVO', aprovado:true, aprovado_por:quem||null, aprovado_em:agora,
+      registrado_por:quem||null, observacao:'Pedido de material #'+pid+' — '+solDep(p.departamento_id),
+      departamento_id:p.departamento_id, solicitacao_id:pid })));
+    for(const v of vai){
+      v.i.qtd_entregue=(Number(v.i.qtd_entregue)||0)+v.q;
+      await sbFetch('solicitacao_itens?id=eq.'+v.i.id,'PATCH',{ qtd_entregue:v.i.qtd_entregue });
+    }
+    const tudo=p.solicitacao_itens.every(i=>i.material_id && (Number(i.qtd_entregue)||0)>=(Number(i.qtd)||0));
+    await sbFetch('solicitacoes?id=eq.'+pid,'PATCH', tudo
+      ? { status:'ENTREGUE', entregue_em:agora, updated_at:agora }
+      : { status:'ENTREGUE_PARCIAL', updated_at:agora });
+    toast(tudo?'📦 Pedido #'+pid+' entregue ✓':'📦 Entrega parcial do pedido #'+pid+' gravada — o resto fica em aberto','sucesso');
+    solSepCarregar(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui gravar a entrega: '+(e.message||e),'erro'); solSepCarregar(); }
+}
+async function solDevolver(pid){
+  const p=solAbertos.find(x=>x.id===pid); if(!p) return;
+  const r=await hogPergunta({ titulo:'Devolver o pedido #'+pid+' para '+solDep(p.departamento_id),
+    texto:'O departamento recebe o pedido de volta com o motivo, corrige e reenvia.',
+    campos:[{ id:'motivo', rot:'O que precisa mudar', tipo:'texto-longo', obrigatorio:true, placeholder:'ex.: toner errado — a impressora da recepção usa o TN-1060' }], ok:'Devolver' });
+  if(!r) return;
+  try{
+    await sbFetch('solicitacoes?id=eq.'+pid,'PATCH',{ status:'DEVOLVIDO', motivo_devolucao:String(r.motivo).trim(),
+      devolvido_por:solQuem()||null, devolvido_em:new Date().toISOString(), updated_at:new Date().toISOString() });
+    toast('↩ Pedido #'+pid+' devolvido para '+solDep(p.departamento_id),'sucesso');
+    solSepCarregar(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui devolver: '+(e.message||e),'erro'); }
+}
+async function solEncerrar(pid){
+  const p=solAbertos.find(x=>x.id===pid); if(!p) return;
+  const algum=p.solicitacao_itens.some(i=>(Number(i.qtd_entregue)||0)>0);
+  const r=await hogPergunta({ titulo:'Encerrar o pedido #'+pid,
+    texto: algum ? 'O que já foi entregue fica registrado; o que faltou não será mais entregue.' : 'Nada foi entregue — o pedido fica como cancelado.',
+    campos:[{ id:'motivo', rot:'Motivo', obrigatorio:true, placeholder:'ex.: item fora de linha' }], ok:'Encerrar' });
+  if(!r) return;
+  const agora=new Date().toISOString();
+  try{
+    await sbFetch('solicitacoes?id=eq.'+pid,'PATCH',{ status: algum?'ENTREGUE':'CANCELADO',
+      observacao: ((p.observacao?p.observacao+' · ':'')+'Encerrado por '+(solQuem()||'—')+': '+String(r.motivo).trim()),
+      entregue_em: algum?agora:null, updated_at:agora });
+    solSepCarregar(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui encerrar: '+(e.message||e),'erro'); }
+}
+async function solVincular(itemId){
+  let item=null; solAbertos.forEach(p=>p.solicitacao_itens.forEach(i=>{ if(i.id===itemId) item=i; }));
+  if(!item) return;
+  const r=await hogPergunta({ titulo:'Vincular "'+item.item_livre+'" ao cadastro',
+    texto:'Depois de comprado e cadastrado no Inventário Administrativo, escolha o item do cadastro. A partir daí ele é entregue normalmente.',
+    campos:[{ id:'t', rot:'Parte do nome no cadastro', obrigatorio:true, valor:String(item.item_livre||'').split(' ')[0] }], ok:'Procurar' });
+  if(!r) return;
+  const partes=dptoNorm(r.t).split(' ').filter(Boolean);
+  const achou=solItens.filter(x=>{ const n=dptoNorm(x.material); return partes.every(p=>n.indexOf(p)>=0); }).slice(0,30);
+  if(!achou.length){ toast('Não achei no cadastro administrativo — cadastre o item primeiro (Inventário Administrativo).','erro'); return; }
+  const r2=await hogPergunta({ titulo:'Qual é o item?', texto:'Pedido: '+item.item_livre,
+    campos:[{ id:'mid', rot:'Item do cadastro', tipo:'lista', valor:achou[0].material_id,
+              opcoes:achou.map(x=>({ v:x.material_id, r:x.material+' · saldo '+solN(x.saldo) })) }], ok:'Vincular' });
+  if(!r2) return;
+  try{
+    await sbFetch('solicitacao_itens?id=eq.'+itemId,'PATCH',{ material_id:parseInt(r2.mid,10) });
+    toast('🔗 Vinculado — agora entrega normalmente ✓','sucesso');
+    solSepCarregar(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui vincular: '+(e.message||e),'erro'); }
+}
+
+// ── 🛒 ALERTA DE COMPRA ────────────────────────────────────────────────────
+function solFaltas(){
+  const por={};
+  solAbertos.forEach(p=>p.solicitacao_itens.forEach(i=>{
+    if(!i.material_id) return;
+    const ab=(Number(i.qtd)||0)-(Number(i.qtd_entregue)||0); if(ab<=0) return;
+    const k=i.material_id; por[k]=por[k]||{ mid:k, aberto:0, quem:[] };
+    por[k].aberto+=ab; por[k].quem.push({ dep:p.departamento_id, pid:p.id });
+  }));
+  return Object.values(por).map(x=>Object.assign(x,{ saldo:solSaldo(x.mid), falta:x.aberto-Math.max(0,solSaldo(x.mid)) })).filter(x=>x.falta>0);
+}
+function solNovos(){
+  const l=[]; solAbertos.forEach(p=>p.solicitacao_itens.forEach(i=>{ if(!i.material_id) l.push({ nome:i.item_livre, qtd:i.qtd, dep:p.departamento_id, pid:p.id }); }));
+  return l;
+}
+async function solCompraCarregar(){
+  const box=document.getElementById('sol-compra-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await solCarregarBase();
+  if(solSemTabela){ box.innerHTML=solAvisoSemTabela(); return; }
+  try{ await solAbertosCarregar(); }catch(e){ solAbertos=[]; }
+  const nv=solNovos(), f=solFaltas();
+  const quem=l=>l.map(q=>'<span class="sol-dep">'+solEsc(solDep(q.dep))+'</span> <span style="font-size:11px;color:var(--cinza-4)">#'+q.pid+'</span>').join(' ');
+  let h='<div style="font-size:12.5px;color:var(--cinza-4);margin-bottom:10px">O que os departamentos pediram e o estoque não cobre. A compra segue o caminho de sempre (orçamento → pedido → aprovação); o pedido do departamento fica esperando e é entregue quando o material chegar.</div>';
+  if(!nv.length && !f.length){ box.innerHTML=h+'<div class="sol-vazio">Nada para comprar: o estoque cobre todos os pedidos em aberto. ✓</div>'; return; }
+  if(nv.length) h+='<div class="sol-sub-tit" style="color:#7D6608">📝 Itens novos — comprar e cadastrar</div>'
+    +'<table class="hg-tab" style="margin-bottom:16px"><thead><tr><th>Como o departamento escreveu</th><th style="text-align:right">Qtd</th><th>Quem pediu</th></tr></thead><tbody>'
+    + nv.map(x=>'<tr><td class="hg-prod">'+solEsc(x.nome)+'</td><td style="text-align:right">'+solN(x.qtd)+'</td><td>'+quem([x])+'</td></tr>').join('')
+    +'</tbody></table>';
+  if(f.length) h+='<div class="sol-sub-tit" style="color:var(--vermelho)">📦 Do cadastro, sem saldo suficiente</div>'
+    +'<table class="hg-tab"><thead><tr><th>Item</th><th style="text-align:right">Pedido em aberto</th><th style="text-align:right">Saldo</th><th style="text-align:right">Falta comprar</th><th>Quem está esperando</th></tr></thead><tbody>'
+    + f.map(x=>'<tr><td class="hg-prod">'+solEsc((solItem(x.mid)||{}).material||('#'+x.mid))+'</td><td style="text-align:right">'+solN(x.aberto)+'</td>'
+        +'<td style="text-align:right">'+solN(x.saldo)+'</td><td style="text-align:right;color:var(--vermelho);font-weight:800">'+solN(x.falta)+'</td><td>'+quem(x.quem)+'</td></tr>').join('')
+    +'</tbody></table>';
+  box.innerHTML=h;
+}
+
+// ── 🔔 contadores: fila do administrativo, compra e devolvidos do departamento
+function solBadge(id, n){
+  const b=document.getElementById('badge-'+id); if(!b) return;
+  b.textContent=n; b.style.display = n>0 ? '' : 'none';
+}
+async function solAtualizarBadges(){
+  if(typeof SESSAO==='undefined' || !SESSAO || !sbUrl || !sbKey) return;
+  try{
+    if(podeAba('sol_sep') || podeAba('sol_compra')){
+      if(!solItens.length || !solDeps.length) await solCarregarBase();
+      if(solSemTabela) return;
+      await solAbertosCarregar();
+      const nFila=solAbertos.length, nCompra=solNovos().length+solFaltas().length;
+      solBadge('sol_sep', podeAba('sol_sep')?nFila:0);
+      solBadge('sol_compra', podeAba('sol_compra')?nCompra:0);
+      solAlertaN = (podeAba('sol_sep')?nFila:0) + (podeAba('sol_compra')?nCompra:0);
+      if(typeof alAtualizarBadge==='function') alAtualizarBadge();
+    }
+    if(podeAba('sol_pedir')){
+      const dep=solDepSel();
+      const dv = dep ? ((await sbFetch('solicitacoes?select=id&status=eq.DEVOLVIDO&departamento_id=eq.'+dep))||[]).length : 0;
+      solBadge('sol_pedir', dv);
+    }
+  }catch(e){}
+}
+setInterval(solAtualizarBadges, 90000);
 
 // ═══ v4.102 — CADASTRO DE DEPARTAMENTOS ═══════════════════════════════════
 // Ela (18/09): "tabelas de departamentos: EXAMES, COORDENAÇÃO CLÍNICA, RECEPÇÃO,
@@ -21958,7 +22444,7 @@ function mbSync(){
     if(bdst){
       var n = bsrc ? (parseInt(bsrc.textContent,10)||0) : 0;
       var vis = bsrc && bsrc.style.display!=='none' && n>0;
-      bdst.textContent = n; bdst.style.display = vis ? '' : 'none';
+      bdst.textContent = n; bdst.style.display = vis ? 'inline-block' : 'none';
     }
   });
   // itens de módulos em construção: aparecem só pra quem tem acesso a compras
@@ -21978,7 +22464,7 @@ function mbSync(){
       if(b && b.style.display!=='none') soma += parseInt(b.textContent,10)||0;
     });
     var tb = g.querySelector('.mb-btn > .mb-badge');
-    if(tb){ tb.textContent = soma; tb.style.display = soma>0 ? '' : 'none'; }
+    if(tb){ tb.textContent = soma; tb.style.display = soma>0 ? 'inline-block' : 'none'; }
     var btn = g.querySelector('.mb-btn');
     if(btn) btn.classList.toggle('secao-ativa', itens.some(function(i){ return i.classList.contains('ativa'); }));
   });
@@ -21991,7 +22477,7 @@ function mbSync(){
   if(alB && sinoB){
     var na = parseInt(alB.textContent,10)||0;
     var visA = alB.style.display!=='none' && na>0;
-    sinoB.textContent = na; sinoB.style.display = visA ? '' : 'none';
+    sinoB.textContent = na; sinoB.style.display = visA ? 'inline-block' : 'none';
   }
   // usuário
   var u = document.getElementById('mb-user-nome');
