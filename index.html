@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.101 · solicitação de orçamento impressa: produto e quantidade, sem preço</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.102 · cadastro de departamentos</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -539,6 +539,7 @@ details[open] summary { margin-bottom: 6px; }
     <div class="mb-dd">
       <div class="mbi" data-ref="aba-btn-ocorrencias" onclick="mbFechar();trocarAba('ocorrencias')">⚠️ Ocorrências <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-usuarios" onclick="mbFechar();trocarAba('usuarios')">👥 Usuários <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-departamentos" onclick="mbFechar();trocarAba('departamentos')">🏢 Departamentos <span class="mb-badge"></span></div>
     </div>
   </div>
   <div class="mb-dir">
@@ -4755,7 +4756,7 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -4768,6 +4769,7 @@ function trocarAba(aba) {
   { const shell = document.querySelector('.hog-shell');
     if(shell) shell.classList.remove('encolhida'); }
   if (aba==='adm_inv')  { admInvCarregar(); }
+  if (aba==='departamentos') { dptoCarregar(); }   // v4.102
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
   if (aba==='hig_orc')  { hgOrcCarregar(); }
@@ -18647,6 +18649,14 @@ async function alIgnorar(id){
 
 
 <!-- ── CADASTRO DE USUÁRIOS (v4.8) ──────────────────────────── -->
+<!-- v4.102 — cadastro de departamentos: quem pede material de escritório e recebe o custo -->
+<div id="aba-departamentos" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🏢 Departamentos
+      <span class="hg-dica" title="Os departamentos que pedem material de escritório. Cada entrega vira custo do departamento que pediu. Departamento desativado some das telas de pedido, mas o histórico dele continua.">?</span></div>
+    <div id="dpto-box"></div>
+  </div>
+</div>
 <div id="aba-usuarios" class="container" style="display:none">
   <div class="card">
     <h2 style="margin-top:0">👥 Usuários e permissões</h2>
@@ -19513,6 +19523,108 @@ async function hgInvCarregar(){
     if(n) toast('📝 Recuperei a contagem que você tinha começado ('+n+' item(ns)). Confira antes de fechar.','sucesso');
   }
   hgInvRender();
+}
+
+// ═══ v4.102 — CADASTRO DE DEPARTAMENTOS ═══════════════════════════════════
+// Ela (18/09): "tabelas de departamentos: EXAMES, COORDENAÇÃO CLÍNICA, RECEPÇÃO,
+// CENTRO CIRÚRGICO, COMERCIAL" + "menu cadastro de departamento". É a base da
+// solicitação de material de escritório: quem pede é um departamento, e a entrega
+// vira custo dele. Tabela própria (SQL 89) — departamento novo entra por aqui,
+// sem SQL. Nunca se apaga: desativa (o histórico continua apontando para ele).
+let dptoLista = [];
+let dptoSemTabela = false;
+function dptoEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function dptoNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
+
+async function dptoCarregar(){
+  const box=document.getElementById('dpto-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  try{
+    dptoLista=(await sbFetch('departamentos?select=*&order=nome.asc'))||[];
+    dptoSemTabela=false;
+  }catch(e){
+    dptoLista=[]; dptoSemTabela=true;
+  }
+  dptoRender();
+}
+
+function dptoRender(){
+  const box=document.getElementById('dpto-box'); if(!box) return;
+  if(dptoSemTabela){
+    box.innerHTML='<div style="background:#FEF9E7;border-left:4px solid #B7950B;border-radius:0 8px 8px 0;padding:12px 14px;font-size:13px;color:#7D6608">'
+      +'A tabela de departamentos ainda não existe no banco — falta rodar o <b>SQL 89</b> (<code>sql/89_departamentos.sql</code>). O resto do sistema funciona normal.</div>';
+    return;
+  }
+  const ativos=dptoLista.filter(d=>d.ativo!==false).length;
+  let h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<span style="font-size:12px;color:var(--cinza-4)">'+ativos+' ativo(s)'+(dptoLista.length>ativos?(' · '+(dptoLista.length-ativos)+' desativado(s)'):'')+'</span>'
+    +'<button onclick="dptoNovo()" style="margin-left:auto;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">➕ Novo departamento</button></div>';
+  h+='<table class="hg-tab"><thead><tr><th>Departamento</th><th>Responsável</th><th>Situação</th><th></th></tr></thead><tbody>';
+  if(!dptoLista.length) h+='<tr><td colspan="4" style="text-align:center;color:var(--cinza-4);padding:18px">Nenhum departamento cadastrado.</td></tr>';
+  dptoLista.forEach(function(d){
+    const on=d.ativo!==false;
+    h+='<tr'+(on?'':' style="opacity:.55"')+'>'
+      +'<td class="hg-prod"><b>'+dptoEsc(d.nome)+'</b></td>'
+      +'<td>'+(d.responsavel?dptoEsc(d.responsavel):'<span style="color:var(--cinza-3)">—</span>')+'</td>'
+      +'<td>'+(on?'<span style="color:var(--verde);font-weight:700">ativo</span>':'<span style="color:var(--cinza-4)">desativado</span>')+'</td>'
+      +'<td style="text-align:right;white-space:nowrap">'
+        +'<button class="hg-ct-outra" onclick="dptoEditar('+d.id+')" title="mudar o nome ou o responsável">✏️ editar</button> '
+        +'<button class="hg-ct-outra" onclick="dptoAtivo('+d.id+')" title="'+(on?'some das telas de pedido; o histórico continua':'volta a aparecer nas telas de pedido')+'">'+(on?'desativar':'reativar')+'</button>'
+      +'</td></tr>';
+  });
+  h+='</tbody></table>';
+  box.innerHTML=h;
+}
+
+function dptoRepetido(nome, idIgnorar){
+  const n=dptoNorm(nome);
+  return dptoLista.find(d=>d.id!==idIgnorar && dptoNorm(d.nome)===n) || null;
+}
+
+async function dptoNovo(){
+  const r=await hogPergunta({ titulo:'Novo departamento',
+    campos:[ { id:'nome', rot:'Nome do departamento', obrigatorio:true, placeholder:'ex.: FATURAMENTO' },
+             { id:'resp', rot:'Responsável (opcional)', placeholder:'quem responde pelo setor' } ], ok:'Cadastrar' });
+  if(!r) return;
+  const nome=String(r.nome||'').trim().toUpperCase();
+  if(!nome) return;
+  const igual=dptoRepetido(nome, null);
+  if(igual){ toast('"'+igual.nome+'" já está cadastrado'+(igual.ativo===false?' (desativado — use reativar)':'')+'.','erro'); return; }
+  try{
+    await sbFetch('departamentos','POST',{ nome:nome, responsavel:(String(r.resp||'').trim()||null) });
+    toast('Departamento "'+nome+'" cadastrado ✓','sucesso');
+    dptoCarregar();
+  }catch(e){ toast('Não consegui cadastrar: '+(e.message||e),'erro'); }
+}
+
+async function dptoEditar(id){
+  const d=dptoLista.find(x=>x.id===id); if(!d) return;
+  const r=await hogPergunta({ titulo:'Editar departamento',
+    campos:[ { id:'nome', rot:'Nome do departamento', valor:d.nome, obrigatorio:true },
+             { id:'resp', rot:'Responsável', valor:d.responsavel||'' } ], ok:'Gravar' });
+  if(!r) return;
+  const nome=String(r.nome||'').trim().toUpperCase();
+  const resp=String(r.resp||'').trim()||null;
+  if(!nome) return;
+  const igual=dptoRepetido(nome, id);
+  if(igual){ toast('Já existe "'+igual.nome+'".','erro'); return; }
+  if(nome===d.nome && resp===(d.responsavel||null)) return;
+  try{
+    await sbFetch('departamentos?id=eq.'+id,'PATCH',{ nome:nome, responsavel:resp });
+    toast('Departamento atualizado ✓','sucesso');
+    dptoCarregar();
+  }catch(e){ toast('Não consegui gravar: '+(e.message||e),'erro'); }
+}
+
+async function dptoAtivo(id){
+  const d=dptoLista.find(x=>x.id===id); if(!d) return;
+  const on=d.ativo!==false;
+  if(!confirm((on?'Desativar':'Reativar')+' o departamento "'+d.nome+'"?\n\n'
+    +(on?'Ele some das telas de pedido. O que ele já pediu continua no histórico.':'Ele volta a aparecer nas telas de pedido.'))) return;
+  try{
+    await sbFetch('departamentos?id=eq.'+id,'PATCH',{ ativo:!on });
+    dptoCarregar();
+  }catch(e){ toast('Não consegui mudar: '+(e.message||e),'erro'); }
 }
 
 function hgInvFiltrar(){
