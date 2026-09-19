@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.103 · pedido de material pelos departamentos</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.104 · custo por departamento no painel</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11521,6 +11521,8 @@ async function invAplicarAjustesImportados(){
 <script>
 // ═══ PAINEL v2 — cada indicador com função · explosão de detalhes · comparativos mensais ═══
 let pnUvp = {};        // material_id -> {nome, uvp, ativo, tratativa, precoAnterior}
+let pnMovsDep = [];    // v4.104 — entregas de material aos departamentos (fora do custo do CC)
+let pnDeps = {};       // v4.104 — departamento id -> nome
 let pnEntradas = [];   // v4.27 — histórico de entradas (economias + detecção de amostra)
 let pnAmostraOnly = new Set();   // materiais que só entraram como amostra grátis
 let pnNomeId = {};     // NOME normalizado -> material_id
@@ -12281,12 +12283,22 @@ async function pnCarregar(){
     document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
     pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,fellow,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
     const perMap={}; for(const p of pnPeriodos) perMap[p.id]=p;
-    const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por,destino_saida_geral&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
-    pnMovs=[];
+    const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por,destino_saida_geral,departamento_id&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
+    pnMovs=[]; pnMovsDep=[];
+    try{ pnDeps={}; ((await sbFetch('departamentos?select=id,nome'))||[]).forEach(d=>pnDeps[d.id]=d.nome); }catch(e){}
     for(const mv of movs){
       if((mv.registrado_por||'')==='MIGRAÇÃO') continue; // só dados vivos
       const per=mv.periodo_cirurgico_id?perMap[mv.periodo_cirurgico_id]:null;
       const dia=(per&&per.data?per.data:(mv.created_at||'').slice(0,10))||'';
+      // v4.104 — entrega de material a um departamento: custo DO DEPARTAMENTO, não do CC.
+      // Fica numa lista à parte (os itens de escritório estão fora das estatísticas do CC)
+      // e aparece só no bloco "Custo por departamento" dos custos gerais.
+      if(mv.departamento_id){
+        pnMovsDep.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
+          dep:pnDeps[mv.departamento_id]||('departamento #'+mv.departamento_id),
+          custo:pnCusto(mv.material_id,mv.qtd,dia.slice(0,7)) });
+        continue;
+      }
       if(!pnStatOk(mv.material_id)) continue; // fora das estatísticas do painel
       pnMovs.push({ qtd:Math.abs(mv.qtd), material_id:mv.material_id, dia, mes:dia.slice(0,7),
         periodoId:mv.periodo_cirurgico_id||null,
@@ -13114,6 +13126,7 @@ async function pnCG_Render(){
   const cirur=movs.filter(m=>pnGrupoCusto(m)==='cirurgia');
   const perdas=movs.filter(m=>pnGrupoCusto(m)==='perda');            // v4.80
   const consult=movs.filter(m=>{ const g=pnGrupoCusto(m); return g!=='cirurgia' && g!=='perda'; });
+  const depMovs=(pnMovsDep||[]).filter(m=>m.mes===mes&&okMat(m));   // v4.104
   const soma=a=>a.reduce((s,m)=>s+m.custo,0);
   // v4.26c — jun/jul vêm da PLANILHA (pnHistPer): entram no bloco cirúrgico
   // junto com os dados vivos (o filtro de material só alcança os vivos)
@@ -13253,6 +13266,8 @@ async function pnCG_Render(){
   Object.entries(porTipoPac).forEach(([t,v])=>pnCGultimoCsv.push(['R$/paciente — '+t,(v.p+' pacientes'),'',(v.p?(v.c/v.p):0).toFixed(2)]));
   agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas diversas — itens',k,Math.round(v.q),v.c.toFixed(2)]));
   agrupa(perdas,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Perdas e vencimentos — itens',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.80
+  agrupa(depMovs,m=>m.dep).forEach(([k,v])=>pnCGultimoCsv.push(['Custo por departamento',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.104
+  agrupa(depMovs,m=>m.dep+' — '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).forEach(([k,v])=>pnCGultimoCsv.push(['Custo por departamento — itens',k,Math.round(v.q),v.c.toFixed(2)]));
   lav.forEach(n=>pnCGultimoCsv.push(['Lavanderia','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   ester.forEach(n=>pnCGultimoCsv.push(['Esterilização','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
   manut.forEach(n=>pnCGultimoCsv.push(['Manutenção','NF '+(n.numero_nf||'—'),'',(Number(n.valor_total)||0).toFixed(2)]));
@@ -13315,6 +13330,15 @@ async function pnCG_Render(){
             ? '📅 <b>Este mês vem da planilha</b>, e ela trouxe <b>só as cirurgias</b> — as saídas para consultórios daquele período não foram importadas. A partir de 21/07 elas aparecem aqui normalmente.'
             : 'Nenhuma saída para consultórios registrada neste mês.')
           +'</div>'))
+    // v4.104 — material de escritório entregue aos departamentos (Administrativo › Separação & entrega)
+    +D('🏢 Custo por departamento (material de escritório)', soma(depMovs),
+      (depMovs.length
+        ? tabela(agrupa(depMovs,m=>m.dep),'Departamento')
+          +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens entregues:</div>'
+          +tabela(agrupa(depMovs,m=>m.dep+' — '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))),'Departamento — item')
+          +(depMovs.some(m=>!(m.custo>0))?'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:5px 8px;border-radius:6px;margin-top:6px">⚠️ '+new Set(depMovs.filter(m=>!(m.custo>0)).map(m=>m.material_id)).size+' item(ns) sem último valor pago no cadastro — entram com R$ 0,00 até ter preço.</div>':'')
+        : '<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Nenhuma entrega de material aos departamentos neste mês.</div>')
+      +'<div style="font-size:11px;color:var(--cinza-4);margin-top:6px">Valor pelo último preço pago. Não entra no custo do centro cirúrgico.</div>')
     +D('🧺 Lavanderia (serviço do mês)', somaNf(lav), lav.length?listaNf(lav):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de lavanderia neste mês.</div>')
     +D('☣️ Esterilização (serviço cobrado)', somaNf(ester), (ester.length?listaNf(ester):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de esterilização neste mês.</div>')+'<div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:6px 8px;border-radius:6px;margin-top:6px">⚠️ Os itens reprocessados também valorizam as cirurgias no bloco de cima — este é o valor do SERVIÇO cobrado pela esterilizadora. Não some os dois.</div>')
     +D('🔧 Manutenção de instrumental', somaNf(manut), manut.length?listaNf(manut):'<div style="font-size:12px;color:var(--cinza-4);padding:6px 0">Sem nota de manutenção neste mês.</div>')
