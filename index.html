@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.106 · solicitação de manutenção (jornada até o pagamento)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.107 · escritório: compra por pacote, saída por unidade</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7802,14 +7802,15 @@ function deNomeMat(id, o){
 // Peça de instrumental → última solicitação RECEBIDA/DESTINADA da mesma peça.
 // v4.100 — quantos vêm na caixa, para comparar caixa com caixa no pedido de higiene
 let ultPagoKit = {};      // material_id -> qtd_kit
+let ultPagoAdm = {};      // v4.107 — material_id -> é item administrativo (compra por embalagem)
 let ultPagoCache = {};   // 'm<id>' -> valor | 'n<nome>' -> valor | null = nunca comprado
 async function ultPagoCarregar(ordens){
   const mids=[...new Set((ordens||[]).map(o=>o.material_id).filter(Boolean))].filter(id=>ultPagoCache['m'+id]===undefined);
   if(mids.length){
     try{
-      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago,qtd_kit&id=in.('+mids.join(',')+')'))||[];
+      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago,qtd_kit,classe_compra&id=in.('+mids.join(',')+')'))||[];
       ms.forEach(m=>{ ultPagoCache['m'+m.id]=(m.ultimo_valor_pago!=null && Number(m.ultimo_valor_pago)>0)?Number(m.ultimo_valor_pago):null;
-                      ultPagoKit[m.id]=Number(m.qtd_kit)||1; });
+                      ultPagoKit[m.id]=Number(m.qtd_kit)||1; ultPagoAdm[m.id]=/^ADM_/.test(m.classe_compra||''); });
       mids.forEach(id=>{ if(ultPagoCache['m'+id]===undefined) ultPagoCache['m'+id]=null; });
     }catch(e){}
   }
@@ -7830,7 +7831,7 @@ function ultPagoDe(o){
   const u=ultPagoCache['m'+o.material_id];
   if(u==null) return u;
   const k=Number(ultPagoKit[o.material_id])||1;
-  return (o.origem==='HIGIENE' && k>1) ? u*k : u;
+  return ((o.origem==='HIGIENE' || ultPagoAdm[o.material_id]) && k>1) ? u*k : u;
 }
 function ultPagoTag(o){
   const u=ultPagoDe(o), v=Number(o.valor_unitario);
@@ -9900,15 +9901,21 @@ async function rcGravarNF(chave, confirmar){
       // qtd × qtd_kit e preço ÷ qtd_kit — o valor total não muda.
       // (ordem.origem só existe depois do SQL 54; sem ele, nada muda aqui.)
       let qtdMov = qtd, valMov = val;
-      if(ordem.origem === 'HIGIENE'){
-        try{
-          const mk = await sbFetch(`materiais?select=qtd_kit&id=eq.${ordem.material_id}&limit=1`);
-          const kit = mk && mk[0] && Number(mk[0].qtd_kit);
-          if(kit && kit > 1){
+      // v4.107 — ela, 19/09: "compra por pacote, saída por unidade" também no ESCRITÓRIO
+      // (pulseira pacote 1000, etiqueta cartela 1000, pasta suspensa caixa 50). O item
+      // administrativo com qtd_kit > 1 converte igual à higiene, venha de onde vier o pedido.
+      {
+        let mk=null;
+        try{ mk = await sbFetch(`materiais?select=qtd_kit,classe_compra&id=eq.${ordem.material_id}&limit=1`); }catch(e){}
+        const kit = mk && mk[0] && Number(mk[0].qtd_kit);
+        const ehAdm = !!(mk && mk[0] && /^ADM_/.test(mk[0].classe_compra||''));
+        if(ordem.origem === 'HIGIENE' || ehAdm){
+          if(!mk) toast('⚠ Não li quantas unidades vêm na embalagem — a entrada foi em EMBALAGENS: confira o saldo.','erro');
+          else if(kit && kit > 1){
             qtdMov = qtd * kit; valMov = val / kit;
-            toast('🧼 Higiene: '+qtd+' caixa(s) × '+kit+' = '+qtdMov+' unidades no estoque.','');
+            toast((ehAdm?'🗂️ Escritório: ':'🧼 Higiene: ')+qtd+' embalagem(ns) × '+kit+' = '+qtdMov+' unidades no estoque.','');
           }
-        }catch(e){ toast('⚠ Não li o qtd_kit do item de higiene — a entrada foi em CAIXAS: confira o saldo.','erro'); }
+        }
       }
       let movArr;
       const movBase = { material_id: ordem.material_id, local_id: localId,
@@ -19798,7 +19805,7 @@ function solAvisoSemTabela(){
 async function solCarregarBase(){
   try{
     solDeps  = (await sbFetch('departamentos?select=id,nome,ativo&order=nome.asc')) || [];
-    solItens = (await sbFetch('vw_administrativo_inventario?select=material_id,material,classe,unidade_medida,saldo&order=material&limit=1000')) || [];
+    solItens = (await sbFetch('vw_administrativo_inventario?select=material_id,material,classe,unidade_medida,qtd_kit,saldo&order=material&limit=1000')) || [];
     await sbFetch('solicitacoes?select=id&limit=1');
     solSemTabela = false;
   }catch(e){ solSemTabela = true; }
@@ -20184,7 +20191,9 @@ async function solCompraCarregar(){
   if(f.length) h+='<div class="sol-sub-tit" style="color:var(--vermelho)">📦 Do cadastro, sem saldo suficiente</div>'
     +'<table class="hg-tab"><thead><tr><th>Item</th><th style="text-align:right">Pedido em aberto</th><th style="text-align:right">Saldo</th><th style="text-align:right">Falta comprar</th><th>Quem está esperando</th></tr></thead><tbody>'
     + f.map(x=>'<tr><td class="hg-prod">'+solEsc((solItem(x.mid)||{}).material||('#'+x.mid))+'</td><td style="text-align:right">'+solN(x.aberto)+'</td>'
-        +'<td style="text-align:right">'+solN(x.saldo)+'</td><td style="text-align:right;color:var(--vermelho);font-weight:800">'+solN(x.falta)+'</td><td>'+quem(x.quem)+'</td></tr>').join('')
+        +'<td style="text-align:right">'+solN(x.saldo)+'</td><td style="text-align:right;color:var(--vermelho);font-weight:800">'+solN(x.falta)
+        +(((solItem(x.mid)||{}).qtd_kit>1)?'<div style="font-size:11px;font-weight:600;color:var(--cinza-4)">≈ '+Math.ceil(x.falta/(solItem(x.mid).qtd_kit))+' embalagem(ns) de '+solItem(x.mid).qtd_kit+'</div>':'')
+        +'</td><td>'+quem(x.quem)+'</td></tr>').join('')
     +'</tbody></table>';
   box.innerHTML=h;
 }
