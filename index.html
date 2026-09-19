@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.110 · manutenção: prestadores de serviço (apelido → empresa)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.111 · manutenção: prestador separado dos fornecedores de compras</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -18898,7 +18898,7 @@ async function alIgnorar(id){
 <div id="aba-man_prest" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">👷 Prestadores de serviço
-      <span class="hg-dica" title="Quem vem fazer a manutenção, pelo apelido. A empresa da nota é vinculada depois — ela só é exigida na hora de mandar a fatura ao financeiro. Prestador que não trabalha mais: desative (o histórico continua).">?</span>
+      <span class="hg-dica" title="Quem vem fazer a manutenção, pelo apelido. A empresa é opcional e fica só aqui — esta lista não se mistura com os fornecedores das compras. Prestador que não trabalha mais: desative (o histórico continua).">?</span>
       <button class="hg-ct-outra" style="margin-left:auto" onclick="manPrestCarregar()">↻ atualizar</button></div>
     <div id="man-prest-box"></div>
   </div>
@@ -22689,7 +22689,10 @@ function manFornNome(id){ const f=manFornDe(id); return f?f.nome:'—'; }
 // v4.110 — prestador = quem vem fazer (apelido); empresa = quem emite a nota (fornecedores), vinculada depois
 function manPrestDe(id){ return manPrest.find(p=>p.id===id)||null; }
 function manPrestNome(id){ const p=manPrestDe(id); return p?p.apelido:'—'; }
-function manEmpresaDe(s){ const p=manPrestDe(s.prestador_id); return (p&&p.fornecedor_id)||s.fornecedor_id||null; }
+// v4.111 — empresa é TEXTO da manutenção (prestador, orçamento, fatura); não usa a lista de fornecedores das compras
+function manEmpresaPrest(p){ return p?[p.empresa,p.documento].filter(Boolean).join(' · '):''; }
+function manEmpresaDe(s){ return s.fatura_empresa || manEmpresaPrest(manPrestDe(s.prestador_id)); }
+function manEmpresaFatura(s){ const o=manAberta?manAberta.orcs.find(x=>x.situacao==='APROVADO'):null; return s.fatura_empresa||(o&&o.empresa)||manEmpresaPrest(manPrestDe(s.prestador_id)); }
 function manOrcNome(o){ return o.prestador_id?manPrestNome(o.prestador_id):manFornNome(o.fornecedor_id); }
 function manQuemFaz(s){ return s.prestador_id?manPrestNome(s.prestador_id):(s.fornecedor_id?manFornNome(s.fornecedor_id):''); }
 function manGv(id){ const e=document.getElementById(id); return e?e.value:''; }
@@ -22740,10 +22743,9 @@ function manNomes(){
   return [...s];
 }
 function manDatalists(){
-  let h='<datalist id="man-dl-nomes">'+manNomes().map(n=>'<option value="'+manEsc(n)+'">').join('')+'</datalist>'
-    +'<datalist id="man-dl-forn">'+manForn.filter(f=>f.ativo!==false).map(f=>'<option value="'+manEsc(f.nome)+'">').join('')+'</datalist>';
+  let h='<datalist id="man-dl-nomes">'+manNomes().map(n=>'<option value="'+manEsc(n)+'">').join('')+'</datalist>';
   const loc=new Set(MAN_LOCAIS);
-  h+='<datalist id="man-dl-prest">'+manPrest.filter(p=>p.ativo!==false).map(p=>'<option value="'+manEsc(p.apelido)+'" label="'+manEsc([p.servico,p.fornecedor_id?manFornNome(p.fornecedor_id):'sem empresa'].filter(Boolean).join(' · '))+'">').join('')+'</datalist>';
+  h+='<datalist id="man-dl-prest">'+manPrest.filter(p=>p.ativo!==false).map(p=>'<option value="'+manEsc(p.apelido)+'" label="'+manEsc([p.servico,p.empresa].filter(Boolean).join(' · '))+'">').join('')+'</datalist>';
   h+='<datalist id="man-dl-locais">'+[...loc].map(l=>'<option value="'+manEsc(l)+'">').join('')+'</datalist>';
   let d=document.getElementById('man-dls'); if(!d){ d=document.createElement('div'); d.id='man-dls'; d.style.display='none'; document.body.appendChild(d); }
   d.innerHTML=h;
@@ -22993,7 +22995,7 @@ function manFinRender(){
    +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>Prestador</th><th class="man-ocs">Serviço</th><th class="man-ocm">Depto</th><th style="text-align:right">Valor</th><th class="man-ocm">NF · venc.</th><th>Etapa</th><th class="man-ocs">Pagamento</th><th></th></tr></thead><tbody>';
   if(!L.length) h+='<tr><td colspan="9" class="sol-vazio">Nenhuma fatura de manutenção no financeiro.</td></tr>';
   L.forEach(s=>{
-    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(manFornNome(s.fornecedor_id))+'</b>'+(s.prestador_id?'<span class="man-sub">'+manEsc(manPrestNome(s.prestador_id))+'</span>':'')+'</td>'
+    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(manQuemFaz(s)||'—')+'</b>'+(s.fatura_empresa?'<span class="man-sub">'+manEsc(s.fatura_empresa)+'</span>':'')+'</td>'
       +'<td class="man-ocs">'+manEsc(s.o_que)+'<span class="man-sub">'+manEsc(s.local)+'</span></td><td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td>'
       +'<td style="text-align:right">'+manBrl(s.fatura_valor)+'</td><td class="man-ocm">'+manEsc(s.fatura_nf||'—')+'<span class="man-sub">vence '+manDt(s.fatura_vencimento)+'</span></td>'
       +'<td>'+manTagEtapa(s)+manTagAtraso(s)+'</td><td class="man-ocs">'+(s.pagto_programado_para?'🗓️ '+manDt(s.pagto_programado_para):'—')+(s.pago_em?'<span class="man-sub">paga '+manDt(s.pago_em)+'</span>':'')+'</td>'
@@ -23062,20 +23064,21 @@ function manFichaRender(){
     +'<div class="man-par"><span>Responsável</span><b>'+manEsc(s.responsavel||'— definir')+'</b></div>'
     +'<div class="man-par"><span>Prestador</span><b>'+(s.prestador_id?manEsc(pr.apelido||'—'):(s.fornecedor_id?manEsc(manFornNome(s.fornecedor_id)):'—'))+'</b></div>'
     +(pr.servico?'<div class="man-par"><span>Faz</span><span>'+manEsc(pr.servico)+'</span></div>':'')
-    +'<div class="man-par"><span>Empresa da nota</span><span>'+(emp?manEsc(manFornNome(emp)):'<i>— vincular depois</i>')+'</span></div>';
+    +'<div class="man-par"><span>Empresa</span><span>'+(emp?manEsc(emp):'<i>— só o prestador</i>')+'</span></div>';
   if(s.prestador_id){ const tel=(pr.telefone||'').replace(/\D/g,'');
     c3+='<div class="man-par"><span>Contato</span><span>'+manEsc(pr.contato||'—')+'</span></div>'
       +'<div class="man-par"><span>Telefone</span><span>'+(pr.telefone?manEsc(pr.telefone)+(tel.length>=10?' <a href="https://wa.me/'+(tel.length<=11?'55':'')+tel+'" target="_blank" title="abrir WhatsApp">💬</a>':''):'—')+'</span></div>'
       +'<div class="man-par"><span>E-mail</span><span>'+manEsc(pr.email||'—')+'</span></div>'; }
   c3+='</div>';
   if(A.orcs.length) c3+='<h4>Orçamentos</h4><div class="man-bloco">'+A.orcs.map(o=>'<div class="man-orc'+(o.situacao==='APROVADO'?' aprov':'')+'"><b style="flex:1">'+manEsc(manOrcNome(o))+'</b>'+manBrl(o.valor)
-      +'<span class="man-sub">'+manEsc(o.prazo||'')+'</span>'+(o.arquivo?'<a href="'+manEsc(manPublica(o.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')
+      +'<span class="man-sub">'+manEsc([o.prazo,o.empresa].filter(Boolean).join(' · '))+'</span>'+(o.arquivo?'<a href="'+manEsc(manPublica(o.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')
       +(o.situacao==='APROVADO'?' <span class="man-tag man-t-ok">aprovado</span>':o.situacao==='REPROVADO'?' <span class="man-tag man-t-dev">reprovado</span>':'')+'</div>').join('')+'</div>';
   if(s.aprovado_por) c3+='<div class="man-ok">✍️ Autorizado por <b>'+manEsc(s.aprovado_por)+'</b> · '+manEsc(s.aprovado_como||'')+' · '+manDt(s.aprovado_data)+'<span class="man-sub">registrado por '+manEsc(s.aprovado_registrado_por||'')+'</span></div>';
   if(s.incluso_contrato) c3+='<div class="man-ok">📑 Incluso no contrato — sem orçamento, custo R$ 0</div>';
   if(s.fatura_valor!=null){ const fat=A.anexos.find(a=>a.fase==='FATURA');
     c3+='<h4>Financeiro</h4><div class="man-bloco">'
     +'<div class="man-par"><span>Fatura</span><b>'+manBrl(s.fatura_valor)+' · NF '+manEsc(s.fatura_nf||'—')+(fat?' <a href="'+manEsc(manPublica(fat.caminho))+'" target="_blank" title="ver a fatura">📄</a>':'')+'</b></div>'
+    +(s.fatura_empresa?'<div class="man-par"><span>Empresa na nota</span><span>'+manEsc(s.fatura_empresa)+'</span></div>':'')
     +'<div class="man-par"><span>Vencimento</span><span>'+manDt(s.fatura_vencimento)+'</span></div>'
     +'<div class="man-par"><span>Enviada ao financeiro</span><span>'+manDt(s.enviada_fin_em)+' · '+manEsc(s.enviada_fin_por||'')+'</span></div>'
     +'<div class="man-par"><span>Lançada no Omie</span><span>'+(s.omie_lancado_em?manDt(s.omie_lancado_em)+(s.omie_ref?' · '+manEsc(s.omie_ref):''):'—')+'</span></div>'
@@ -23111,16 +23114,17 @@ function manProximo(s){
     +'<div class="man-linha">'+B('n p','↩ Devolver pedindo informação','manDevolver()')+cancelar+'</div></div>';
   case 'ORCAMENTO': { const p=manPrestDe(s.prestador_id)||{}; const vivos=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO').length;
     return '<div class="man-bloco agora">'
-    +'<label class="man-rot" style="margin-bottom:8px">Prestador (apelido) <input id="man-x-prest" list="man-dl-prest" value="'+manEsc(p.apelido||'')+'" placeholder="digite o apelido — ex.: Zé do ar" onchange="manTrocarPrest(this.value)" title="quem vem fazer o serviço. Não está na lista? Digite o apelido e o sistema cadastra na hora"></label>'
+    +'<label class="man-rot" style="margin-bottom:8px">Prestador (apelido) <input id="man-x-prest" list="man-dl-prest" value="'+manEsc(p.apelido||'')+'" placeholder="digite o apelido — ex.: Zé do ar" onchange="manTrocarPrest(this.value)" title="quem vem fazer o serviço. Não está na lista? Digite o apelido e o sistema cadastra na hora. Lista própria da manutenção — não mistura com os fornecedores das compras"></label>'
     +(s.prestador_id?'<div class="man-grade"><label class="man-rot">O que faz <input id="man-x-psv" value="'+manEsc(p.servico||'')+'" placeholder="elétrica, ar-condicionado…"></label><label class="man-rot">Telefone / WhatsApp <input id="man-x-ctt" value="'+manEsc(p.telefone||'')+'" placeholder="(19) 9…"></label>'
-      +'<label class="man-rot">Nome / contato <input id="man-x-ctn" value="'+manEsc(p.contato||'')+'"></label><label class="man-rot">E-mail <input id="man-x-cte" value="'+manEsc(p.email||'')+'"></label>'
-      +'<label class="man-rot" style="grid-column:1/-1">Empresa da nota <input id="man-x-emp" list="man-dl-forn" value="'+manEsc(p.fornecedor_id?manFornNome(p.fornecedor_id):'')+'" placeholder="pode vincular depois" title="a empresa que emite a nota — pode ficar em branco agora; é exigida só ao mandar a fatura ao financeiro"></label></div>'
+      +'<label class="man-rot">Nome / contato <input id="man-x-ctn" value="'+manEsc(p.contato||'')+'"></label><label class="man-rot">E-mail <input id="man-x-cte" value="'+manEsc(p.email||'')+'"></label></div>'
       +'<div class="man-linha">'+B('o p','💾 Salvar dados do prestador','manSalvarPrest()','fica no cadastro de prestadores e aparece nas próximas solicitações')+'</div>'
-      +'<hr class="man-hr"><div class="man-grade"><label class="man-rot">Valor do orçamento <input id="man-x-val" type="number" min="0" step="0.01" placeholder="R$"></label><label class="man-rot">Prazo <input id="man-x-prazo" placeholder="ex.: 3 dias"></label></div>'
+      +'<hr class="man-hr"><div class="man-rot" style="margin-bottom:6px">Orçamento de '+manEsc(p.apelido||'')+'</div>'
+      +'<div class="man-grade"><label class="man-rot">Valor <input id="man-x-val" type="number" min="0" step="0.01" placeholder="R$"></label><label class="man-rot">Prazo <input id="man-x-prazo" placeholder="ex.: 3 dias"></label>'
+      +'<label class="man-rot" style="grid-column:1/-1">Empresa / CNPJ do orçamento (se tiver) <input id="man-x-oemp" value="'+manEsc(manEmpresaPrest(p))+'" placeholder="em branco = só o prestador" title="os dados que vierem no orçamento; sem empresa, segue só com o nome do prestador"></label></div>'
       +'<div class="man-linha">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manAnexoTmp(this,\'ORCAMENTO\')','application/pdf,image/*')+'<span id="man-x-orcarq" class="man-sub">'+(manTmpOrc?'📄 '+manEsc(manTmpOrc.nome):'sem arquivo')+'</span></div>'
-      +'<div class="man-linha">'+B('o','➕ Incluir orçamento','manIncluirOrc()','dá para lançar vários: troque o prestador e inclua outro')+'</div>'
+      +'<div class="man-linha">'+B('o','➕ Incluir orçamento','manIncluirOrc()')+(manAberta.orcs.length?B('n p','🔁 Orçar com outro prestador','manOutroPrest()','limpa o prestador para lançar o orçamento de outro; os já lançados continuam na coluna ao lado'):'')+'</div>'
       :'<div class="man-sub">Digite o apelido do prestador. Se ainda não estiver no cadastro, o sistema cadastra na hora.</div>')
-    +'</div><div class="man-linha"><button class="man-b g"'+(vivos?'':' disabled')+' onclick="manParaAprovacao()">✍️ Enviar para aprovação</button>'+cancelar+'</div>'; }
+    +'</div><div class="man-linha"><button class="man-b g"'+(vivos?'':' disabled')+' onclick="manParaAprovacao()">✍️ Enviar para aprovação'+(vivos>1?' ('+vivos+' orçamentos)':'')+'</button>'+cancelar+'</div>'; }
   case 'APROVACAO': { const vivos=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO');
     return '<div class="man-bloco agora"><div class="man-rot" style="margin-bottom:4px">Qual orçamento</div>'
     + vivos.map((o,i)=>'<label class="man-orc" style="cursor:pointer"><input type="radio" name="man-x-orc" value="'+o.id+'"'+(i===0?' checked':'')+'><b style="flex:1">'+manEsc(manOrcNome(o))+'</b>'+manBrl(o.valor)+'</label>').join('')
@@ -23141,7 +23145,7 @@ function manProximo(s){
     +(s.incluso_contrato?'<div class="man-bloco agora">'+B('g','✅ Concluir (incluso no contrato, sem fatura)','manConcluir()')+'</div>'
      :'<div class="man-bloco agora"><div class="man-grade"><label class="man-rot">Valor da fatura <input id="man-x-fv" type="number" step="0.01" value="'+manEsc((manAberta.orcs.find(o=>o.situacao==='APROVADO')||{}).valor||'')+'"></label>'
       +'<label class="man-rot">Vencimento <input id="man-x-fvc" type="date"></label><label class="man-rot">Nº da NF / fatura <input id="man-x-fnf"></label></div>'
-      +(manEmpresaDe(s)?'':'<label class="man-rot" style="margin-bottom:8px">Empresa da nota <input id="man-x-femp" list="man-dl-forn" placeholder="quem emitiu a nota" title="o prestador ainda não tem empresa vinculada — ela fica gravada no cadastro dele"></label>')
+      +'<label class="man-rot" style="margin-bottom:8px">Empresa / CNPJ na nota (se tiver) <input id="man-x-femp" value="'+manEsc(manEmpresaFatura(s))+'" placeholder="em branco = só o prestador" title="opcional — sem empresa, a fatura segue no nome do prestador"></label>'
       +'<div class="man-linha">'+manBotaoUp('📄 Anexar fatura (PDF/foto)','manAnexoTmp(this,\'FATURA\')','application/pdf,image/*')+'<span id="man-x-fatarq" class="man-sub">'+(manTmpFat?'📄 '+manEsc(manTmpFat.nome):'anexe a fatura')+'</span></div>'
       +'<div class="man-linha">'+B('g','🧾 Enviar ao financeiro','manEnviarFin()')+'</div></div>')
     +'<div class="man-linha">'+B('r p','↩ Não resolveu — reabrir','manReabrir('+s.id+')')+'</div>';
@@ -23188,15 +23192,6 @@ async function manDevolver(){ const s=manS(); const m=await manMotivo('Devolver 
   await manExec(()=>manMover(s,'DEVOLVIDA',null,m),'Devolvida ao departamento',s.id); }
 async function manCancelar(){ const s=manS(); const m=await manMotivo('Cancelar a #'+s.id+' ('+s.o_que+')','Motivo do cancelamento (fica no histórico)'); if(!m) return;
   await manExec(()=>manMover(s,'CANCELADA',null,m),'Cancelada',s.id); }
-// devolve o id da empresa (fornecedores) pelo nome; cadastra se confirmar; null = cancelou
-async function manResolverEmpresa(nome){
-  nome=(nome||'').trim(); if(!nome) return null;
-  let f=manForn.find(x=>manNorm(x.nome)===manNorm(nome)); if(f) return f.id;
-  if(!await hogConfirma({titulo:'Empresa fora do cadastro', texto:'"'+nome+'" não está no cadastro de fornecedores. Cadastrar agora?', ok:'➕ Cadastrar'})) return null;
-  try{ const r=await sbFetch('fornecedores','POST',{nome:nome.toUpperCase()}); f=r&&r[0]; if(f){ manForn.push(f); manDatalists(); return f.id; } }
-  catch(e){ toast('Não consegui cadastrar a empresa: '+e.message,'erro'); }
-  return null;
-}
 async function manPrestCriar(apelido, extra){
   const r=await sbFetch('manut_prestadores','POST',Object.assign({criado_por:manQuem()},extra||{},{apelido:apelido.trim()}));
   const p=r&&r[0]; if(p){ manPrest.push(p); manPrest.sort((a,b)=>a.apelido.localeCompare(b.apelido,'pt-BR')); manDatalists(); } return p;
@@ -23204,20 +23199,17 @@ async function manPrestCriar(apelido, extra){
 async function manTrocarPrest(apelido){ const s=manS(); apelido=(apelido||'').trim(); if(!apelido) return;
   let p=manPrest.find(x=>manNorm(x.apelido)===manNorm(apelido));
   if(!p){
-    if(!await hogConfirma({titulo:'Prestador novo', texto:'Cadastrar "'+apelido+'" na lista de prestadores?\nTelefone, o que faz e a empresa da nota você completa em seguida — a empresa pode ficar para depois.', ok:'➕ Cadastrar'})) return;
+    if(!await hogConfirma({titulo:'Prestador novo', texto:'Cadastrar "'+apelido+'" na lista de prestadores da manutenção?\nTelefone e o que faz você completa em seguida. Empresa não é obrigatória.', ok:'➕ Cadastrar'})) return;
     try{ p=await manPrestCriar(apelido); }catch(e){ return toast('Não consegui cadastrar: '+e.message,'erro'); }
     if(!p) return;
   }
-  await manExec(()=>manNota(s,'prestador: '+p.apelido,{prestador_id:p.id,fornecedor_id:p.fornecedor_id||null}),'',s.id); }
+  await manExec(()=>manNota(s,'prestador: '+p.apelido,{prestador_id:p.id}),'',s.id); }
+function manOutroPrest(){ const e=document.getElementById('man-x-prest'); if(e){ e.value=''; e.focus(); } }
 async function manSalvarPrest(){ const s=manS(); const p=manPrestDe(s.prestador_id); if(!p) return;
-  const en=manGv('man-x-emp').trim(); let emp=null;
-  if(en){ emp=await manResolverEmpresa(en); if(!emp) return; }
   const d={servico:manGv('man-x-psv').trim()||null,contato:manGv('man-x-ctn').trim()||null,telefone:manGv('man-x-ctt').trim()||null,
-    email:manGv('man-x-cte').trim()||null,fornecedor_id:emp,updated_at:new Date().toISOString()};
+    email:manGv('man-x-cte').trim()||null,updated_at:new Date().toISOString()};
   try{ const r=await sbFetch('manut_prestadores?id=eq.'+p.id,'PATCH',d); if(!r||!r.length) return toast('Nada gravado — confira o prestador','erro');
-    Object.assign(p,r[0]); manDatalists();
-    if(emp!==(s.fornecedor_id||null)) await manNota(s,emp?'empresa da nota: '+manFornNome(emp):'empresa desvinculada',{fornecedor_id:emp});
-    toast('Dados do prestador salvos'); await manFicha(s.id); }
+    Object.assign(p,r[0]); manDatalists(); toast('Dados do prestador salvos'); await manFicha(s.id); }
   catch(e){ toast('Erro: '+e.message,'erro'); } }
 async function manAnexoTmp(input, fase){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1), fase); if(!p.length) return;
   if(fase==='ORCAMENTO'){ manTmpOrc=p[0]; const e=document.getElementById('man-x-orcarq'); if(e) e.textContent='📄 '+p[0].nome; }
@@ -23226,7 +23218,7 @@ async function manIncluirOrc(){ const s=manS(); const v=Number(manGv('man-x-val'
   const prazo=manGv('man-x-prazo').trim();
   await manExec(async()=>{
     let arq=null; if(manTmpOrc){ arq=await manSubir(manTmpOrc, s.id); manTmpOrc=null; }
-    await sbFetch('manut_orcamentos','POST',{solicitacao_id:s.id,prestador_id:s.prestador_id||null,fornecedor_id:manEmpresaDe(s),valor:v,prazo:prazo||null,arquivo:arq,lancado_por:manQuem()});
+    await sbFetch('manut_orcamentos','POST',{solicitacao_id:s.id,prestador_id:s.prestador_id||null,empresa:manGv('man-x-oemp').trim()||null,valor:v,prazo:prazo||null,arquivo:arq,lancado_por:manQuem()});
     await manNota(s,'orçamento '+manQuemFaz(s)+' '+manBrl(v)+(prazo?' · '+prazo:''));
   },'Orçamento incluído — dá para lançar outro, de outro prestador',s.id); }
 async function manParaAprovacao(){ const s=manS(); const v=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO');
@@ -23237,9 +23229,10 @@ async function manAprovar(){ const s=manS(); const por=manGv('man-x-aut').trim()
   const o=manAberta.orcs.find(x=>x.id===Number(r.value)), como=manGv('man-x-como'), data=manGv('man-x-dt')||manIsoDia();
   if(!await hogConfirma({titulo:'Registrar a aprovação?', texto:manOrcNome(o)+' — '+manBrl(o.valor)+'\nAutorizado por: '+por+' ('+como+', '+manDt(data)+')', ok:'✍️ Registrar'})) return;
   await manExec(async()=>{
-    await manMover(s,'AGENDADA',{orcamento_aprovado_id:o.id,aprovado_por:por,aprovado_como:como,aprovado_data:data,aprovado_registrado_por:manQuem(),prestador_id:o.prestador_id||s.prestador_id||null,fornecedor_id:(manPrestDe(o.prestador_id)||{}).fornecedor_id||o.fornecedor_id||null},
+    await manMover(s,'AGENDADA',{orcamento_aprovado_id:o.id,aprovado_por:por,aprovado_como:como,aprovado_data:data,aprovado_registrado_por:manQuem(),prestador_id:o.prestador_id||s.prestador_id||null},
       'autorizado por '+por+' ('+como+') · '+manOrcNome(o)+' '+manBrl(o.valor));
     await sbFetch('manut_orcamentos?id=eq.'+o.id,'PATCH',{situacao:'APROVADO'});
+    const pa=manPrestDe(o.prestador_id); if(pa&&o.empresa&&!pa.empresa){ const r=await sbFetch('manut_prestadores?id=eq.'+pa.id,'PATCH',{empresa:o.empresa,updated_at:new Date().toISOString()}); if(r&&r[0]) Object.assign(pa,r[0]); }
     await sbFetch('manut_orcamentos?solicitacao_id=eq.'+s.id+'&situacao=eq.EM_ANALISE','PATCH',{situacao:'REPROVADO'});
   },'Aprovado — agora é agendar com o prestador',s.id); }
 async function manReprovar(){ const s=manS(); const m=await manMotivo('Reprovar e pedir outro orçamento','Por que foi reprovado?'); if(!m) return;
@@ -23259,18 +23252,16 @@ async function manConcluir(){ const s=manS(); if(!await hogConfirma({titulo:'Con
   await manExec(()=>manMover(s,'CONCLUIDA',null,'incluso no contrato'),'Concluída',s.id); }
 async function manEnviarFin(){ const s=manS(); const v=Number(manGv('man-x-fv')), vc=manGv('man-x-fvc'), nf=manGv('man-x-fnf').trim();
   if(!(v>0)) return toast('Informe o valor da fatura','erro'); if(!vc) return toast('Informe o vencimento','erro'); if(!manTmpFat) return toast('Anexe a fatura (PDF ou foto)','erro');
-  let emp=manEmpresaDe(s);
-  if(!emp){ const n=manGv('man-x-femp').trim(); if(!n) return toast('Informe a empresa da nota','erro'); emp=await manResolverEmpresa(n); if(!emp) return;
-    if(s.prestador_id){ try{ const r=await sbFetch('manut_prestadores?id=eq.'+s.prestador_id,'PATCH',{fornecedor_id:emp,updated_at:new Date().toISOString()}); const p=manPrestDe(s.prestador_id); if(p&&r&&r[0]) Object.assign(p,r[0]); }catch(e){} } }
-  if(!await hogConfirma({titulo:'Enviar ao financeiro?', texto:manFornNome(emp)+(s.prestador_id?' ('+manPrestNome(s.prestador_id)+')':'')+' — '+manBrl(v)+' · vence '+manDt(vc)+'\nNF '+(nf||'—'), ok:'🧾 Enviar'})) return;
+  const emp=manGv('man-x-femp').trim();
+  if(!await hogConfirma({titulo:'Enviar ao financeiro?', texto:manQuemFaz(s)+(emp?' · '+emp:' · sem empresa (só o prestador)')+' — '+manBrl(v)+' · vence '+manDt(vc)+'\nNF '+(nf||'—'), ok:'🧾 Enviar'})) return;
   await manExec(async()=>{ await manSubir(manTmpFat, s.id); manTmpFat=null;
-    await manMover(s,'FATURA',{fornecedor_id:emp,fatura_valor:v,fatura_vencimento:vc,fatura_nf:nf||null,enviada_fin_em:new Date().toISOString(),enviada_fin_por:manQuem()},'fatura '+manBrl(v)+' vence '+manDt(vc)); },
+    await manMover(s,'FATURA',{fatura_empresa:emp||null,fatura_valor:v,fatura_vencimento:vc,fatura_nf:nf||null,enviada_fin_em:new Date().toISOString(),enviada_fin_por:manQuem()},'fatura '+manBrl(v)+' vence '+manDt(vc)); },
     'Enviada — acendeu o sino do financeiro',s.id); }
 async function manOmie(){ const s=manS(); const inf=manGv('man-x-inf').trim()||manQuem(), ref=manGv('man-x-omie').trim();
-  if(!await hogConfirma({titulo:'Marcar como LANÇADA NO OMIE?', texto:manBrl(s.fatura_valor)+' · '+manFornNome(s.fornecedor_id)+'\nInformado por: '+inf, ok:'📘 Confirmar'})) return;
+  if(!await hogConfirma({titulo:'Marcar como LANÇADA NO OMIE?', texto:manBrl(s.fatura_valor)+' · '+manQuemFaz(s)+'\nInformado por: '+inf, ok:'📘 Confirmar'})) return;
   await manExec(()=>manMover(s,'OMIE',{omie_lancado_em:new Date().toISOString(),omie_lancado_por:inf,omie_ref:ref||null},'lançada no Omie'+(ref?' ('+ref+')':'')+' · informado por '+inf),'Lançada no Omie',s.id); }
 async function manProgramar(){ const s=manS(); const d=manGv('man-x-prog'); if(!d) return toast('Informe a data programada','erro');
-  if(!await hogConfirma({titulo:'Pagamento programado para '+manDt(d)+'?', texto:manBrl(s.fatura_valor)+' · '+manFornNome(s.fornecedor_id), ok:'🗓️ Confirmar'})) return;
+  if(!await hogConfirma({titulo:'Pagamento programado para '+manDt(d)+'?', texto:manBrl(s.fatura_valor)+' · '+manQuemFaz(s), ok:'🗓️ Confirmar'})) return;
   await manExec(()=>manMover(s,'PROGRAMADO',{pagto_programado_para:d},'pagamento programado para '+manDt(d)),'Pagamento programado — o responsável vê a data',s.id); }
 async function manReprogramar(){ const s=manS(); const r=await hogPergunta({titulo:'Mudar a data programada', campos:[{id:'d',rot:'Nova data',tipo:'data',valor:s.pagto_programado_para||'',obrigatorio:true}], ok:'Salvar'});
   if(!r) return; await manExec(()=>manNota(s,'pagamento reprogramado de '+manDt(s.pagto_programado_para)+' para '+manDt(r.d),{pagto_programado_para:r.d}),'Data mudada',s.id); }
@@ -23296,7 +23287,8 @@ function manPrestRender(){
    +'<label class="man-rot">Nome / contato <input id="mp-contato" value="'+manEsc(e.contato||'')+'"></label>'
    +'<label class="man-rot">Telefone / WhatsApp <input id="mp-telefone" value="'+manEsc(e.telefone||'')+'" placeholder="(19) 9…"></label>'
    +'<label class="man-rot">E-mail <input id="mp-email" value="'+manEsc(e.email||'')+'"></label>'
-   +'<label class="man-rot">Empresa da nota <input id="mp-empresa" list="man-dl-forn" value="'+manEsc(e.fornecedor_id?manFornNome(e.fornecedor_id):'')+'" placeholder="pode vincular depois" title="vem do cadastro de fornecedores; se não existir, é cadastrada"></label></div>'
+   +'<label class="man-rot">Empresa (se tiver) <input id="mp-empresa" value="'+manEsc(e.empresa||'')+'" placeholder="razão social — pode ficar em branco"></label>'
+   +'<label class="man-rot">CNPJ / CPF <input id="mp-doc" value="'+manEsc(e.documento||'')+'"></label></div>'
    +'<div class="man-linha"><button class="man-b g" onclick="manPrestSalvar()">💾 '+(manPrestEd?'Salvar alterações':'Cadastrar prestador')+'</button>'
    +(manPrestEd?'<button class="man-b n p" onclick="manPrestEd=null;manPrestRender()">Cancelar edição</button>':'')+'</div></div>'
    +'<div class="man-linha"><input placeholder="🔍 buscar por apelido, serviço, contato ou empresa" value="'+manEsc(manPrestBusca||'')+'" oninput="manPrestBusca=this.value;manPrestTabela()" style="flex:1;min-width:220px;padding:8px 10px;border:1.5px solid var(--cinza-2);border-radius:8px;font-family:var(--fonte);font-size:13px"></div>'
@@ -23307,13 +23299,13 @@ function manPrestTabela(){
   const el=document.getElementById('mp-tabela'); if(!el) return;
   const q=manNorm(manPrestBusca||''), usos={};
   manSols.forEach(s=>{ if(s.prestador_id) usos[s.prestador_id]=(usos[s.prestador_id]||0)+1; });
-  const lista=manPrest.filter(p=>!q||manNorm([p.apelido,p.servico,p.contato,p.fornecedor_id?manFornNome(p.fornecedor_id):''].join(' ')).includes(q));
-  let h='<table class="hg-tab man-tab"><thead><tr><th>Apelido</th><th class="man-ocs">O que faz</th><th class="man-ocm">Contato</th><th>Telefone</th><th>Empresa da nota</th><th class="man-ocm" title="solicitações em que foi o prestador">Serviços</th><th></th></tr></thead><tbody>';
+  const lista=manPrest.filter(p=>!q||manNorm([p.apelido,p.servico,p.contato,p.empresa||'',p.documento||''].join(' ')).includes(q));
+  let h='<table class="hg-tab man-tab"><thead><tr><th>Apelido</th><th class="man-ocs">O que faz</th><th class="man-ocm">Contato</th><th>Telefone</th><th>Empresa</th><th class="man-ocm" title="solicitações em que foi o prestador">Serviços</th><th></th></tr></thead><tbody>';
   if(!lista.length) h+='<tr><td colspan="7" class="sol-vazio">'+(manPrest.length?'Nada com essa busca.':'Nenhum prestador cadastrado ainda.')+'</td></tr>';
   lista.forEach(p=>{
     h+='<tr'+(p.ativo===false?' style="opacity:.55"':'')+'><td><b>'+manEsc(p.apelido)+'</b>'+(p.ativo===false?' <span class="man-tag man-t-n">inativo</span>':'')+'</td>'
       +'<td class="man-ocs">'+manEsc(p.servico||'—')+'</td><td class="man-ocm">'+manEsc(p.contato||'—')+'</td><td>'+manEsc(p.telefone||'—')+'</td>'
-      +'<td>'+(p.fornecedor_id?manEsc(manFornNome(p.fornecedor_id)):'<span class="man-sub">— vincular</span>')+'</td><td class="man-ocm">'+(usos[p.id]||0)+'</td>'
+      +'<td>'+(p.empresa?manEsc(p.empresa)+(p.documento?'<span class="man-sub">'+manEsc(p.documento)+'</span>':''):'<span class="man-sub">—</span>')+'</td><td class="man-ocm">'+(usos[p.id]||0)+'</td>'
       +'<td class="man-acoes"><button class="man-b n p" onclick="manPrestEditar('+p.id+')">Editar</button> <button class="man-b n p" onclick="manPrestAtivo('+p.id+','+(p.ativo===false)+')">'+(p.ativo===false?'Reativar':'Desativar')+'</button></td></tr>';
   });
   el.innerHTML=h+'</tbody></table>';
@@ -23322,8 +23314,8 @@ function manPrestEditar(id){ manPrestEd=id; manPrestRender(); const e=document.g
 async function manPrestSalvar(){
   const ap=manGv('mp-apelido').trim(); if(!ap) return toast('O apelido é obrigatório','erro');
   const dup=manPrest.find(p=>manNorm(p.apelido)===manNorm(ap) && p.id!==manPrestEd); if(dup) return toast('Já existe um prestador com o apelido "'+dup.apelido+'"','erro');
-  const en=manGv('mp-empresa').trim(); let emp=null; if(en){ emp=await manResolverEmpresa(en); if(!emp) return; }
-  const d={servico:manGv('mp-servico').trim()||null,contato:manGv('mp-contato').trim()||null,telefone:manGv('mp-telefone').trim()||null,email:manGv('mp-email').trim()||null,fornecedor_id:emp};
+  const d={servico:manGv('mp-servico').trim()||null,contato:manGv('mp-contato').trim()||null,telefone:manGv('mp-telefone').trim()||null,
+    email:manGv('mp-email').trim()||null,empresa:manGv('mp-empresa').trim()||null,documento:manGv('mp-doc').trim()||null};
   try{
     if(manPrestEd){ const r=await sbFetch('manut_prestadores?id=eq.'+manPrestEd,'PATCH',Object.assign({apelido:ap,updated_at:new Date().toISOString()},d));
       const p=manPrestDe(manPrestEd); if(p&&r&&r[0]) Object.assign(p,r[0]); toast('Prestador atualizado'); }
