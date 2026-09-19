@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.104 · custo por departamento no painel</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.105 · pedidos entregues (devolver para edição)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -506,6 +506,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="mb-rot">Materiais administrativos · estoque próprio</div>
       <div class="mbi" data-ref="aba-btn-sol_pedir" onclick="mbFechar();trocarAba('sol_pedir')">📨 Pedir material <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-sol_sep" onclick="mbFechar();trocarAba('sol_sep')">📦 Separação &amp; entrega <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-sol_ent" onclick="mbFechar();trocarAba('sol_ent')">✅ Pedidos entregues <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-sol_compra" onclick="mbFechar();trocarAba('sol_compra')">🛒 Alerta de compra <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-adm_inv" onclick="mbFechar();trocarAba('adm_inv')">🗃️ Estoque administrativo <span class="mb-badge"></span></div>
     </div>
@@ -600,6 +601,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-admsol">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_pedir" onclick="trocarAba('sol_pedir')">📨 Pedir material <span id="badge-sol_pedir" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_sep" onclick="trocarAba('sol_sep')">📦 Separação &amp; entrega <span id="badge-sol_sep" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_ent" onclick="trocarAba('sol_ent')">✅ Pedidos entregues</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-sol_compra" onclick="trocarAba('sol_compra')">🛒 Alerta de compra <span id="badge-sol_compra" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
       </div>
     </div>
@@ -1954,7 +1956,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_compra']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_ent','sol_compra']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -1974,7 +1976,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_compra']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_ent','sol_compra']
   }
 };
 
@@ -2072,7 +2074,7 @@ const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remess
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
                     'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv',
-                    'sol_pedir','sol_sep','sol_compra','departamentos'];
+                    'sol_pedir','sol_sep','sol_ent','sol_compra','departamentos'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -4769,7 +4771,7 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_compra'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -4785,6 +4787,7 @@ function trocarAba(aba) {
   if (aba==='departamentos') { dptoCarregar(); }   // v4.102
   if (aba==='sol_pedir')  { solPedirCarregar(); }    // v4.103
   if (aba==='sol_sep')    { solSepCarregar(); }
+  if (aba==='sol_ent')    { solEntCarregar(); }   // v4.105
   if (aba==='sol_compra') { solCompraCarregar(); }
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
@@ -18754,6 +18757,14 @@ async function alIgnorar(id){
     <div id="sol-sep-box"></div>
   </div>
 </div>
+<div id="aba-sol_ent" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">✅ Pedidos entregues
+      <span class="hg-dica" title="Pedidos já entregues por completo. Devolver para edição manda o pedido de volta ao departamento com o motivo; o que já foi entregue continua registrado e o departamento corrige e reenvia.">?</span>
+      <button class="hg-ct-outra" style="margin-left:auto" onclick="solEntCarregar()">↻ atualizar</button></div>
+    <div id="sol-ent-box"></div>
+  </div>
+</div>
 <div id="aba-sol_compra" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">🛒 Alerta de compra — material de escritório
@@ -19836,7 +19847,7 @@ async function solSepCarregar(){
   await solCarregarBase();
   if(solSemTabela){ box.innerHTML=solAvisoSemTabela(); return; }
   await solAbertosCarregar();
-  try{ solFechados=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&status=in.(ENTREGUE,DEVOLVIDO,CANCELADO)&order=updated_at.desc&limit=20'))||[]; }catch(e){ solFechados=[]; }
+  try{ solFechados=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&status=in.(DEVOLVIDO,CANCELADO)&order=updated_at.desc&limit=20'))||[]; }catch(e){ solFechados=[]; }
   // pedido que o administrativo já viu passa a "em separação" — o departamento enxerga
   const novos=solAbertos.filter(p=>p.status==='ENVIADO').map(p=>p.id);
   if(novos.length && SESSAO && SESSAO.perfil!=='VISUALIZACAO'){
@@ -19876,8 +19887,9 @@ function solSepRender(){
       +'<button class="hg-ct-outra" onclick="solEncerrar('+p.id+')" title="o que faltou não vai ser entregue">✖ encerrar o que falta</button>'
       +'</div></div>';
   });
+  h+='<div style="margin-top:6px"><button class="hg-ct-outra" onclick="trocarAba(\'sol_ent\')">✅ ver pedidos entregues →</button></div>';
   if(solFechados.length){
-    h+='<details class="sol-hist"><summary>Últimos pedidos encerrados ('+solFechados.length+')</summary><table class="hg-tab"><tbody>'
+    h+='<details class="sol-hist"><summary>Devolvidos e cancelados ('+solFechados.length+')</summary><table class="hg-tab"><tbody>'
       + solFechados.map(p=>'<tr><td style="white-space:nowrap"><b>#'+p.id+'</b> · '+solEsc(solDep(p.departamento_id))+'</td><td>'
           +(p.solicitacao_itens||[]).map(i=>solEsc(solNomeItem(i))+' '+solN(i.qtd_entregue)+'/'+solN(i.qtd)).join(' · ')
           +(p.motivo_devolucao?'<div class="sol-motivo">↩ '+solEsc(p.motivo_devolucao)+'</div>':'')
@@ -19899,7 +19911,16 @@ async function solEntregar(pid){
     if(q>s){ toast(solNomeItem(i)+': o estoque tem só '+solN(s)+'. Entregue o que tem — o resto fica em aberto no pedido.','erro'); el.focus(); return; }
     vai.push({i:i, q:q});
   }
-  if(!vai.length){ toast('Nada para entregar — preencha a coluna "Entregar agora".','erro'); return; }
+  if(!vai.length){
+    const tudoJa=p.solicitacao_itens.every(i=>i.material_id && (Number(i.qtd_entregue)||0)>=(Number(i.qtd)||0));
+    if(tudoJa && confirm('Tudo deste pedido já foi entregue. Marcar o pedido #'+pid+' como entregue?')){
+      const agora=new Date().toISOString();
+      try{ await sbFetch('solicitacoes?id=eq.'+pid,'PATCH',{ status:'ENTREGUE', entregue_em:agora, updated_at:agora }); solSepCarregar(); solAtualizarBadges(); }
+      catch(e){ toast('Não consegui gravar: '+(e.message||e),'erro'); }
+      return;
+    }
+    toast('Nada para entregar — preencha a coluna "Entregar agora".','erro'); return;
+  }
   if(!confirm('Entregar para '+solDep(p.departamento_id)+' (pedido #'+pid+')?\n\n'
       + vai.map(v=>'• '+solN(v.q)+' × '+solNomeItem(v.i)).join('\n')
       + '\n\nSai do estoque administrativo e vira custo do departamento.')) return;
@@ -19969,6 +19990,53 @@ async function solVincular(itemId){
     toast('🔗 Vinculado — agora entrega normalmente ✓','sucesso');
     solSepCarregar(); solAtualizarBadges();
   }catch(e){ toast('Não consegui vincular: '+(e.message||e),'erro'); }
+}
+
+// ── ✅ PEDIDOS ENTREGUES (v4.105) ─────────────────────────────────────────
+// Ela, 19/09: "após entregue, criar um submenu pedidos entregues com opção de devolver
+// o pedido para edição". Devolver = volta ao departamento como DEVOLVIDO, com motivo; o
+// que já foi entregue continua em qtd_entregue (a correção nunca entrega duas vezes).
+let solEntregues = [], solEntDep = '';
+async function solEntCarregar(){
+  const box=document.getElementById('sol-ent-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await solCarregarBase();
+  if(solSemTabela){ box.innerHTML=solAvisoSemTabela(); return; }
+  try{ solEntregues=(await sbFetch('solicitacoes?select=*,solicitacao_itens(*)&status=eq.ENTREGUE&order=entregue_em.desc.nullslast,id.desc&limit=150'))||[]; }catch(e){ solEntregues=[]; }
+  solEntRender();
+}
+function solEntRender(){
+  const box=document.getElementById('sol-ent-box'); if(!box) return;
+  const deps=[...new Set(solEntregues.map(p=>p.departamento_id))];
+  const lista=solEntregues.filter(p=>!solEntDep || String(p.departamento_id)===String(solEntDep));
+  let h='<div class="sol-linha"><label class="sol-rot">Departamento</label><select class="sol-sel" onchange="solEntDep=this.value;solEntRender()">'
+    +'<option value="">todos</option>'+deps.map(d=>'<option value="'+d+'"'+(String(d)===String(solEntDep)?' selected':'')+'>'+solEsc(solDep(d))+'</option>').join('')+'</select>'
+    +'<span style="font-size:12px;color:var(--cinza-4)">'+lista.length+' pedido(s)</span></div>';
+  if(!lista.length){ box.innerHTML=h+'<div class="sol-vazio">Nenhum pedido entregue'+(solEntDep?' para este departamento':'')+'.</div>'; return; }
+  h+='<table class="hg-tab"><thead><tr><th>Pedido</th><th>Departamento</th><th>Itens (entregue / pedido)</th><th>Entregue em</th><th></th></tr></thead><tbody>'
+    + lista.map(p=>'<tr><td style="white-space:nowrap"><b>#'+p.id+'</b><div style="font-size:11px;color:var(--cinza-4)">'+solData(p.created_at)+(p.solicitante?'<br>'+solEsc(p.solicitante):'')+'</div></td>'
+      +'<td><span class="sol-dep">'+solEsc(solDep(p.departamento_id))+'</span></td>'
+      +'<td>'+(p.solicitacao_itens||[]).slice().sort((a,b)=>a.id-b.id).map(i=>solEsc(solNomeItem(i))+' — <b>'+solN(i.qtd_entregue)+'</b> / '+solN(i.qtd)).join('<br>')
+        +(p.observacao?'<div style="font-size:11px;color:var(--cinza-4);margin-top:3px">obs.: '+solEsc(p.observacao)+'</div>':'')+'</td>'
+      +'<td style="font-size:12px;white-space:nowrap">'+solData(p.entregue_em||p.updated_at)+'</td>'
+      +'<td style="text-align:right;white-space:nowrap"><button class="hg-ct-outra" onclick="solEntDevolver('+p.id+')" title="volta para o departamento corrigir e reenviar; o que já foi entregue continua registrado">↩ Devolver para edição</button></td></tr>').join('')
+    +'</tbody></table>';
+  box.innerHTML=h;
+}
+async function solEntDevolver(pid){
+  const p=solEntregues.find(x=>x.id===pid); if(!p) return;
+  const r=await hogPergunta({ titulo:'Devolver o pedido #'+pid+' para edição',
+    texto:'Volta para '+solDep(p.departamento_id)+' com o motivo. O que já foi entregue continua registrado; o departamento corrige e reenvia, e o pedido reaparece na Separação.',
+    campos:[{ id:'motivo', rot:'O que precisa mudar', tipo:'texto-longo', obrigatorio:true, placeholder:'ex.: faltou incluir as canetas vermelhas' }], ok:'Devolver' });
+  if(!r) return;
+  const agora=new Date().toISOString();
+  try{
+    const x=await sbFetch('solicitacoes?id=eq.'+pid+'&status=eq.ENTREGUE','PATCH',{ status:'DEVOLVIDO', motivo_devolucao:String(r.motivo).trim(),
+      devolvido_por:solQuem()||null, devolvido_em:agora, entregue_em:null, updated_at:agora });
+    if(!x || !x.length){ toast('O pedido #'+pid+' mudou de situação — recarreguei a lista.','erro'); solEntCarregar(); return; }
+    toast('↩ Pedido #'+pid+' devolvido para '+solDep(p.departamento_id)+' editar','sucesso');
+    solEntCarregar(); solAtualizarBadges();
+  }catch(e){ toast('Não consegui devolver: '+(e.message||e),'erro'); }
 }
 
 // ── 🛒 ALERTA DE COMPRA ────────────────────────────────────────────────────
