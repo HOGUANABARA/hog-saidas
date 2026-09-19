@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.107 · escritório: compra por pacote, saída por unidade</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.108 · manutenção: "Onde" = lista dos espaços da empresa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -22653,6 +22653,11 @@ const MAN_FIM=['PAGA','CONCLUIDA','CANCELADA'];
 const MAN_FIN=['FATURA','OMIE','PROGRAMADO'];
 const MAN_URG={PARADO:'🔴 Parado — não dá para usar', ATRAPALHA:'🟠 Atrapalha', PODE_ESPERAR:'🟢 Pode esperar'};
 const MAN_DIA=86400000;
+// v4.108 — "Onde" = os espaços da empresa (lista dela, 19/09), em ordem alfabética
+const MAN_LOCAIS=['Administrativo','Arsenal','Banheiro acessível térreo','Banheiro cliente recepção','Banheiro cliente superior',
+  'Banheiro feminino funcionário','Banheiro masculino funcionário','CME','Consultório 1','Consultório 2','Consultório 3','Consultório 4',
+  'Copa','Escada','Expurgo','Garagem','Recepção','RPA','Sala 5','Sala cirúrgica','Sala de espera superior','Sala de espera térreo',
+  'Sala exames','Sala multiuso','Vestiários CC'].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true}));
 const MAN_MAX=50*1024*1024;
 
 let manSols=[], manDeps=[], manForn=[], manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manUsoKb=null;
@@ -22719,8 +22724,7 @@ function manNomes(){
 function manDatalists(){
   let h='<datalist id="man-dl-nomes">'+manNomes().map(n=>'<option value="'+manEsc(n)+'">').join('')+'</datalist>'
     +'<datalist id="man-dl-forn">'+manForn.filter(f=>f.ativo!==false).map(f=>'<option value="'+manEsc(f.nome)+'">').join('')+'</datalist>';
-  const loc=new Set(['Sala cirúrgica 1','Sala cirúrgica 2','Sala cirúrgica 3','CME','Recepção','Consultório','Sala de exames','Copa','Banheiro']);
-  manSols.forEach(x=>{ if(x.local) loc.add(x.local); });
+  const loc=new Set(MAN_LOCAIS);
   h+='<datalist id="man-dl-locais">'+[...loc].map(l=>'<option value="'+manEsc(l)+'">').join('')+'</datalist>';
   let d=document.getElementById('man-dls'); if(!d){ d=document.createElement('div'); d.id='man-dls'; d.style.display='none'; document.body.appendChild(d); }
   d.innerHTML=h;
@@ -22827,7 +22831,7 @@ function manPedirRender(){
    +'<div class="man-grade"><label class="man-rot">Departamento <select onchange="manTrocarDep(this.value)" title="no login único do HOG TOTAL o departamento virá do login">'
    +'<option value="">— escolha —</option>'+manDeps.filter(d=>d.ativo!==false).map(d=>'<option value="'+d.id+'"'+(d.id===dep?' selected':'')+'>'+manEsc(d.nome)+'</option>').join('')+'</select></label></div>'
    +'<div class="man-grade">'
-   +'<label class="man-rot">Onde <input list="man-dl-locais" placeholder="sala, andar, ambiente" value="'+manEsc(R.local||'')+'" oninput="manRasc.local=this.value"></label>'
+   +'<label class="man-rot">Onde <select onchange="manRasc.local=this.value" title="espaços da empresa — detalhe (qual sala, qual pia) vai em O que está acontecendo"><option value="">— escolha o espaço —</option>'+MAN_LOCAIS.map(l=>'<option'+(R.local===l?' selected':'')+'>'+manEsc(l)+'</option>').join('')+'</select></label>'
    +'<label class="man-rot">O que é <input placeholder="ex.: ar-condicionado, porta, tomada" value="'+manEsc(R.oque||'')+'" oninput="manRasc.oque=this.value" title="o equipamento ou a parte do prédio — não precisa saber marca nem série"></label></div>'
    +'<label class="man-rot" style="margin-bottom:10px">O que está acontecendo <textarea placeholder="descreva o problema como você vê" oninput="manRasc.desc=this.value">'+manEsc(R.desc||'')+'</textarea></label>'
    +'<div class="man-rot" style="margin-bottom:4px">Urgência</div><div class="man-urg">'
