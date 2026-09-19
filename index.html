@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.108 · manutenção: "Onde" = lista dos espaços da empresa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.109 · manutenção: "Onde" com opção Outro (digitar)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -22831,7 +22831,9 @@ function manPedirRender(){
    +'<div class="man-grade"><label class="man-rot">Departamento <select onchange="manTrocarDep(this.value)" title="no login único do HOG TOTAL o departamento virá do login">'
    +'<option value="">— escolha —</option>'+manDeps.filter(d=>d.ativo!==false).map(d=>'<option value="'+d.id+'"'+(d.id===dep?' selected':'')+'>'+manEsc(d.nome)+'</option>').join('')+'</select></label></div>'
    +'<div class="man-grade">'
-   +'<label class="man-rot">Onde <select onchange="manRasc.local=this.value" title="espaços da empresa — detalhe (qual sala, qual pia) vai em O que está acontecendo"><option value="">— escolha o espaço —</option>'+MAN_LOCAIS.map(l=>'<option'+(R.local===l?' selected':'')+'>'+manEsc(l)+'</option>').join('')+'</select></label>'
+   +'<label class="man-rot">Onde <select onchange="manLocalEscolher(this.value)" title="espaços da empresa — detalhe (qual sala, qual pia) vai em O que está acontecendo"><option value="">— escolha o espaço —</option>'+MAN_LOCAIS.map(l=>'<option'+(!R.outro&&R.local===l?' selected':'')+'>'+manEsc(l)+'</option>').join('')
+     +'<option value="__OUTRO"'+(R.outro?' selected':'')+'>Outro — digitar</option></select>'
+     +(R.outro?'<input id="man-local-outro" placeholder="escreva o espaço" value="'+manEsc(R.local||'')+'" oninput="manRasc.local=this.value" style="margin-top:4px">':'')+'</label>'
    +'<label class="man-rot">O que é <input placeholder="ex.: ar-condicionado, porta, tomada" value="'+manEsc(R.oque||'')+'" oninput="manRasc.oque=this.value" title="o equipamento ou a parte do prédio — não precisa saber marca nem série"></label></div>'
    +'<label class="man-rot" style="margin-bottom:10px">O que está acontecendo <textarea placeholder="descreva o problema como você vê" oninput="manRasc.desc=this.value">'+manEsc(R.desc||'')+'</textarea></label>'
    +'<div class="man-rot" style="margin-bottom:4px">Urgência</div><div class="man-urg">'
@@ -22858,6 +22860,12 @@ function manPedirRender(){
   }
   h+='</div></div>';
   box.innerHTML=h;
+}
+// v4.109 — "Outro — digitar": abre o campo para escrever o espaço que não está na lista
+function manLocalEscolher(v){
+  if(v==='__OUTRO'){ manRasc.outro=true; manRasc.local=''; } else { manRasc.outro=false; manRasc.local=v; }
+  manPedirRender();
+  if(manRasc.outro){ const e=document.getElementById('man-local-outro'); if(e) e.focus(); }
 }
 function manTrocarDep(v){ try{ localStorage.setItem('hog_sol_dep', v||''); }catch(e){} manPedirRender(); manAtualizarBadges(); }
 async function manRascArquivos(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'ANTES');
