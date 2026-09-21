@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.115 · novo material pelo inventário administrativo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.116 · orçamento no modelo do pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1165,7 +1165,83 @@ details[open] summary { margin-bottom: 6px; }
   #aba-cotacao .co-wa-head button{background:var(--verde);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fonte)}
   #aba-cotacao .co-wa textarea{width:100%;border:1px solid var(--cinza-2);border-radius:8px;padding:9px;font-size:12px;font-family:var(--fonte);resize:vertical}
 </style>
+<style>
+  /* v4.116 — orçamento no modelo do cartão de pedido (mockup aprovado 21/09) */
+  #aba-cotacao .coN-topo{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+  #aba-cotacao .coN-busca{flex:1;min-width:260px;margin:0;padding:8px 10px}
+  #aba-cotacao .coN-topo>button,#aba-cotacao .coN-rod button{font-size:12px;font-weight:700;font-family:var(--fonte);padding:9px 13px;border-radius:8px;border:none;cursor:pointer;align-self:center}
+  #aba-cotacao .coN-busca input{width:100%}
+  #aba-cotacao .coN-mais{margin-bottom:12px}
+  #aba-cotacao .coN-mais>summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--cinza-4);padding:4px 2px;width:max-content}
+  #aba-cotacao .coN-mais[open]>summary{margin-bottom:8px}
+  .coN-card{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;margin-bottom:12px}
+  .coN-cab{background:#6f42c1;color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;flex-wrap:wrap}
+  .coN-card.fechado .coN-cab{background:#fff;color:var(--cinza-5);border-left:5px solid #6f42c1}
+  .coN-cab b{font-size:16px}.coN-cab .sub{opacity:.85;font-size:12px}
+  .coN-cab .chip{margin-left:auto;background:rgba(255,255,255,.2);border-radius:12px;padding:3px 10px;font-size:12px;font-weight:700}
+  .coN-card.fechado .coN-cab .chip{background:var(--cinza-1)}
+  .coN-cab .idade.alerta{background:#FDEDEC;color:var(--vermelho);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700}
+  .coN-info{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:var(--cinza-1);border-bottom:1px solid var(--cinza-2);font-size:12px}
+  .coN-forn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--cinza-2);border-radius:14px;padding:3px 10px;font-weight:700;font-size:11.5px}
+  .coN-forn .x{color:var(--cinza-3);cursor:pointer;font-weight:400}
+  .coN-forn .resp{font-weight:800;color:var(--cinza-4)}.coN-forn .resp.ok{color:var(--verde)}
+  .coN-pf{margin:10px 16px;border:1px solid var(--cinza-2);border-radius:10px;overflow:hidden}
+  .coN-pf .tit{background:var(--cinza-1);padding:6px 12px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4)}
+  .coN-pf .lin{display:flex;gap:12px;align-items:center;padding:7px 12px;border-top:1px solid var(--cinza-2);font-size:12.5px}
+  .coN-pf .lin b{margin-left:auto;color:var(--azul)}
+  table.coN-tab{width:100%;border-collapse:collapse}
+  table.coN-tab th{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--cinza-4);text-align:left;padding:8px 8px;border-bottom:1px solid var(--cinza-2);background:#fafbfc;white-space:nowrap}
+  table.coN-tab th.n,table.coN-tab td.n{text-align:right;white-space:nowrap}
+  table.coN-tab th:nth-child(1){width:27%} table.coN-tab th:nth-child(2){width:15%} table.coN-tab th:nth-child(3){width:25%}
+  table.coN-tab td{padding:5px 8px;vertical-align:middle;font-size:12.5px}
+  table.coN-tab tr.fim td{border-bottom:1px solid var(--cinza-2)}
+  table.coN-tab td.coN-mat{width:31%;vertical-align:top;padding-top:9px;border-right:1px solid var(--cinza-1)}
+  .coN-mat .nome{font-weight:700;font-size:13px}
+  .coN-mat .lin2{font-size:11px;color:var(--cinza-4);margin-top:3px;line-height:1.55}
+  .coN-mat .lin2 b{color:var(--cinza-5)}
+  .coN-mat .ult{font-size:11.5px;margin-top:3px}
+  .coN-mat .ult b{color:var(--azul)}
+  .coN-mat .qtd input{width:64px;padding:2px 5px;border:1.5px solid var(--cinza-2);border-radius:6px;font:700 12px var(--fonte)}
+  .coN-in{width:100%;border:1px solid transparent;border-radius:6px;padding:3px 6px;font:12px var(--fonte);background:transparent;color:var(--cinza-5)}
+  .coN-in:hover{border-color:var(--cinza-2)}
+  .coN-in:focus{outline:none;border-color:var(--acao);background:#fff}
+  .coN-in::placeholder{color:var(--cinza-3)}
+  .coN-in.num{text-align:right;width:74px}
+  .coN-in.nf{font-size:11px;color:var(--cinza-4);padding:1px 6px}
+  .coN-obs{width:100%;margin-top:4px;border:1px dashed var(--cinza-2);border-radius:7px;padding:4px 8px;font:11.5px var(--fonte);background:#fff}
+  .coN-obs.int{background:#fbfbfd}
+  .coN-obs:not(:placeholder-shown){border-style:solid;border-color:#CBDDF2;background:#F4F8FC}
+  .coN-obs.int:not(:placeholder-shown){border-color:#E8DAEF;background:#FAF5FC}
+  .coN-acts{display:flex;gap:6px;align-items:center;margin-top:5px;flex-wrap:wrap}
+  .coN-acts select,.coN-acts button{font:11px var(--fonte);border:1px solid var(--cinza-2);background:#fff;border-radius:6px;padding:2px 6px;color:var(--cinza-4);cursor:pointer}
+  tr.coN-of.esc td:not(.coN-mat){background:#e9f7ef}
+  tr.coN-of.naotem td:not(.coN-mat){color:var(--cinza-3)}
+  tr.coN-of.co-melhor td.un b{color:var(--verde)}
+  .coN-fn{font-weight:700;white-space:nowrap}
+  .coN-esc{border:1px solid var(--cinza-2);background:#fff;border-radius:6px;padding:4px 9px;font:700 11.5px var(--fonte);cursor:pointer;color:var(--azul);white-space:nowrap}
+  tr.coN-of.esc .coN-esc{background:var(--verde);color:#fff;border-color:var(--verde)}
+  .coN-mais-of{border:none;background:none;color:var(--cinza-4);cursor:pointer;font:700 12px var(--fonte);padding:2px 5px}
+  tr.coN-cond td{background:#fafbfc;font-size:11.5px}
+  tr.coN-cond input{border:1px solid var(--cinza-2);border-radius:6px;padding:3px 6px;font:11.5px var(--fonte);margin-right:6px}
+  .coN-rod{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--cinza-2)}
+  .coN-rod .tot{margin-left:auto;font-weight:700;font-size:12.5px}.coN-rod .tot b{color:var(--azul);font-size:14px}
+  details.coN-txt{padding:0 16px 8px}
+  details.coN-txt>summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--azul);padding:6px 0}
+</style>
 <div id="aba-cotacao" class="container" style="display:none">
+  <!-- v4.116 — ela, 21/09: "a tela de orçamento ficaria melhor neste modelo (o do pedido); ainda está muito
+       poluído". No topo fica só o que se usa sempre; o resto (mesmos botões, mesmos ids) mora no "⋯ Mais". -->
+  <div class="coN-topo">
+    <div class="co-search coN-busca">
+      <input id="co-busca" placeholder="🔍 Incluir item no orçamento — digite parte do nome (ex.: xylo, propofol, colírio)" title="a busca é a tela: o item entra no orçamento ativo">
+      <div class="co-res" id="co-busca-res"></div>
+    </div>
+    <button class="co-b2" onclick="coPuxarAlerta()" title="itens que a Enfermagem pediu para comprar (Etapa 1)">⬇ Puxar pedidos de compra</button>
+    <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
+    <button class="co-b2" id="co-btn-limpar" style="display:none;background:#FDF2E9;color:#D35400" onclick="coLimparJaComprados()">🧹 Tirar os que já viraram pedido</button>
+    <button class="co-b4" id="co-btn-novogrupo" onclick="coNovoGrupo()" title="abre um orçamento novo; os itens buscados entram nele">＋ Novo orçamento</button>
+  </div>
+  <details class="coN-mais"><summary title="responsável, novo fornecedor, nova cotação, salvar, comprar por fornecedor e a esteira">⋯ Mais</summary>
   <div class="co-bar">
     <span class="co-status" id="co-status">Rascunho</span>
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700;display:flex;align-items:center;gap:6px">
@@ -1175,19 +1251,10 @@ details[open] summary { margin-bottom: 6px; }
       </select>
     </span>
     <span style="font-size:12px;color:var(--cinza-4);font-weight:700">Grupo ativo: <b id="co-grupo-atual-label" style="color:var(--azul)">Orçamento 1</b></span>
-    <button class="co-b4" id="co-btn-novogrupo" onclick="coNovoGrupo()">🗂️ + Novo grupo</button>
-    <button class="co-b2" onclick="coPuxarAlerta()">⬇ Puxar itens da Etapa 1 (pedindo compra)</button>
-    <button class="co-b2" id="co-btn-desfazer" style="display:none;background:#FDEDEC;color:var(--vermelho)" onclick="coDesfazerPuxada()">↩ Desfazer puxada</button>
     <button class="co-b2" onclick="coNovoFornecedor()">🏪➕ Novo fornecedor</button>
-    <button class="co-b2" id="co-btn-limpar" style="display:none;background:#FDF2E9;color:#D35400" onclick="coLimparJaComprados()">🧹 Tirar os que já viraram pedido</button>
     <button class="co-b4" id="co-btn-novacot" onclick="coNova()">＋ Nova cotação</button>
     <button class="co-b3" onclick="coSalvar()" title="a cotação grava sozinha a cada mudança; este botão só força a gravação agora">💾 Salvar agora</button>
     <button class="co-b1" onclick="coWhatsapp()">💬 Gerar textos WhatsApp</button>
-  </div>
-  <div class="co-search">
-    <label>Incluir item no orçamento (busca no catálogo)</label>
-    <input id="co-busca" placeholder="buscar por nome… ex: xylo, propofol, colírio">
-    <div class="co-res" id="co-busca-res"></div>
   </div>
   <div class="co-card" style="margin-bottom:14px">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--cinza-4);margin-bottom:7px">🏪 Comprar por fornecedor — fechar pedido mínimo</div>
@@ -1197,8 +1264,9 @@ details[open] summary { margin-bottom: 6px; }
     </div>
     <div id="fv-corpo" style="margin-top:12px"></div>
   </div>
-  <div id="co-textos" style="display:none;margin-bottom:14px"></div>
   <div id="co-esteira"></div>
+  </details>
+  <div id="co-textos" style="display:none;margin-bottom:14px"></div>
   <div id="co-corpo"><div class="co-empty">Carregando…</div></div>
   <div id="co-wa-box" style="margin-top:16px"></div>
 </div>
@@ -6198,6 +6266,7 @@ function coNovoGrupo(){
   const nome = prompt('Nome do novo grupo de orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
   if(!nome||!nome.trim()) return;
   coGrupoAtual = nome.trim(); if(!coFornGrupo[coGrupoAtual]) coFornGrupo[coGrupoAtual]=[];
+  coGrupoAberto = coGrupoAtual; try{ localStorage.setItem('hog_orc_aberto', coGrupoAberto); }catch(e){}   // v4.116 — o novo já abre
   coAtualizaLabelGrupo(); coRender();
   toast('Grupo "'+coGrupoAtual+'" ativo.','sucesso');
 }
@@ -6275,6 +6344,7 @@ async function coAbrir(id){
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
     qtd_desejada: it.qtd_desejada, saldo: it.saldo_no_momento, minimo: it.estoque_minimo,
     grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || '',
+    obs_produto: it.obs_produto || '', obs_interna: it.obs_interna || '',   // v4.116 (SQL 96)
     opcoes: (it.cotacao_opcoes||[]).sort((a,b)=>(a.slot||0)-(b.slot||0)).map(coOpMap)
   }));
   // v4.88 — resto de um salvamento que falhou no meio: se o mesmo material aparece
@@ -6553,7 +6623,8 @@ function coTextoGrupo(g, fid){
   const linhas = itens.map(it=>{
     const o = (it.opcoes||[]).find(x=>x.fornecedor_id===fid);
     const desc = (o&&o.apresentacao&&String(o.apresentacao).trim()) || (it.descricao_nf&&it.descricao_nf.trim()) || it.material_nome;
-    return `• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${desc}`;
+    const obsP = (it.obs_produto||'').trim();   // v4.116 — a obs. do produto vai para o fornecedor
+    return `• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${desc}${obsP?' — '+obsP:''}`;
   }).join('\n');
   const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
   return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
@@ -6955,8 +7026,12 @@ function coLinhaOferta(i, it, fid){
 }
 const coCondAbertas = new Set();
 function coToggleCond(i, fid){
-  const k=i+'-'+fid, tr=document.getElementById('co-cond-'+k); if(!tr) return;
-  if(coCondAbertas.has(k)){ coCondAbertas.delete(k); tr.style.display='none'; } else { coCondAbertas.add(k); tr.style.display=''; const inp=tr.querySelector('input'); if(inp) inp.focus(); }
+  // v4.116 — a linha de condições só existe no desenho quando está aberta (linha escondida
+  // bagunçava o rowspan da coluna do produto); abrir/fechar redesenha
+  const k=i+'-'+fid;
+  if(coCondAbertas.has(k)) coCondAbertas.delete(k); else coCondAbertas.add(k);
+  coRender();
+  const tr=document.getElementById('co-cond-'+k); if(tr){ const inp=tr.querySelector('input'); if(inp) inp.focus(); }
 }
 // v4.87 — pedido dela: "no orçamento saía o último fornecedor que compramos e o último
 // valor pago, para ter uma referência na negociação". Na limpeza da v4.71 isso virou
@@ -7115,7 +7190,9 @@ function coRender(){
       + 'ou virou pedido, ou foi renomeado. Feche esta janela e abra pela principal.</div>';
     return;
   }
-  for(const g of ordemVis){
+  if(coObsCols===null) coObsSondar();   // v4.116
+  for(const g of ordemVis){ html += coCardGrupo(g, porGrupo[g]||[]); }
+  for(const g of []){
     const idxs=porGrupo[g]||[];
     const fids=coFornGrupo[g]||[];
     const chips = fids.map(fid=>`<span class="chip-forn" style="background:var(--azul-claro);color:var(--azul);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:inline-flex;gap:6px;align-items:center">🏪 ${coFornNomeById(fid)} <span class="co-resp ${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length?'ok':''}" title="itens deste grupo que já têm preço deste fornecedor">${idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length}/${idxs.length}</span>
@@ -7150,6 +7227,161 @@ function coRender(){
   const nJa=coItens.filter(it=>coJaComprado[it.material_id]).length;
   const btnL=document.getElementById('co-btn-limpar');
   if(btnL){ btnL.style.display = nJa?'':'none'; btnL.textContent = `🧹 Tirar os ${nJa} que já viraram pedido`; }
+}
+// ═══ v4.116 — ORÇAMENTO NO MODELO DO CARTÃO DE PEDIDO ═════════════════════════
+// Ela, 21/09: "a tela de orçamento ficaria melhor neste modelo (o do pedido); ainda está muito poluído.
+// Tive um feedback negativo sobre o processo de orçamento. A observação precisa estar no produto e
+// precisamos ter uma observação interna também" + "com dropdown por orçamento para não ficar todos
+// abertos" + "após escolher, subtotal por fornecedor escolhido" (no TOPO, "não vejo o subtotal acima")
+// + "trazer o máximo das informações do cadastro, inclusive último valor pago, data da última compra e
+// fornecedor". Mockup aprovado: docs/mockup_orcamento_limpo.html. Mesmos dados e mesmas ações de antes
+// (coSetOp, coEscolher, coSetItem, coMoverItem, coDevolverParaCompras, coRemoveItem, coWhatsGrupo…).
+let coObsCols = null;          // null = não sabe; true/false = o SQL 96 rodou?
+async function coObsSondar(){
+  coObsCols = false;
+  try{ await sbFetch('cotacao_itens?select=obs_produto,obs_interna&limit=1'); coObsCols = true; }catch(e){ coObsCols = false; }
+  coRender();
+}
+let coGrupoAberto = (function(){ try{ return localStorage.getItem('hog_orc_aberto'); }catch(e){ return null; } })();
+function coAlternarGrupo(g){
+  coGrupoAberto = (coGrupoAberto===g) ? '' : g;
+  try{ localStorage.setItem('hog_orc_aberto', coGrupoAberto); }catch(e){}
+  if(coGrupoAberto){ coGrupoAtual = coGrupoAberto; coAtualizaLabelGrupo(); }
+  coRender();
+}
+function coSetObs(i, campo, val){
+  if(!coObsCols){ toast('As observações ainda não gravam — falta rodar o SQL 96 (sql/96_orcamento_obs_produto_interna.sql).','erro'); return; }
+  coItens[i][campo] = val; coDraftAgendar(); coAutoAgendar();
+}
+function coDataCheia(d){ if(!d) return ''; const p=String(d).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : ''; }
+function coEscolhas(idxs){
+  // por fornecedor: o que vai virar pedido quando o orçamento fechar (soma as quebras)
+  const pf={}; let tot=0, nEsc=0;
+  idxs.forEach(i=>{ const it=coItens[i]; let esc=false;
+    (it.opcoes||[]).forEach(o=>{ if(!o.escolhida || !o.fornecedor_id) return; esc=true;
+      const u=Number(coUnit(o))||0, q=Number(o.qtd_escolhida!=null?o.qtd_escolhida:it.qtd_desejada)||0;
+      const f=pf[o.fornecedor_id]=pf[o.fornecedor_id]||{n:0,v:0,itens:[]}; f.n++; f.v+=u*q; tot+=u*q;
+      f.itens.push(it.material_nome+': '+q+' × '+coMoney(u)); });
+    if(esc) nEsc++; });
+  return { pf, tot, nEsc };
+}
+function coCardGrupo(g, idxs){
+  const ge = g.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const fids = coFornGrupo[g]||[];
+  const aberto = !!coOrcFoco || coGrupoAberto===g;
+  const idade = coCotInfo.criado_em ? Math.round((Date.now()-new Date(coCotInfo.criado_em).getTime())/86400000) : null;
+  const semPreco = idxs.filter(i=>!(coItens[i].opcoes||[]).some(o=>!o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length;
+  const E = coEscolhas(idxs);
+  const nomes = fids.length ? fids.map(coFornNomeById).join(' × ') : 'sem fornecedor ainda';
+  const cab = '<div class="coN-cab" onclick="coAlternarGrupo(\''+ge+'\')" title="'+(aberto?'recolher':'abrir este orçamento')+'">'
+    + '<span>'+(aberto?'▾':'▸')+'</span> 🗂️ <b>'+coEsc(g)+'</b>'
+    + '<span class="sub">· '+coEsc(nomes)+(coCotacaoId?' · Cotação #'+coCotacaoId:'')+'</span>'
+    + (idade!==null?'<span class="sub'+(idade>=3?' idade alerta':'')+'" title="dias desde a abertura da cotação">aberto há '+idade+' dia(s)'+(semPreco?' · '+semPreco+' sem preço':'')+'</span>':'')
+    + '<span class="chip">'+idxs.length+' item(ns) · escolhidos '+E.nEsc+'/'+idxs.length+(E.tot?' · '+coMoney(E.tot):'')+'</span></div>';
+  if(!aberto) return '<div class="coN-card fechado">'+cab+'</div>';
+  const nPreco = fid => idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length;
+  const info = '<div class="coN-info">'
+    + '<span title="quem cuida deste orçamento (muda no ⋯ Mais)">👤 <b>'+coEsc((document.getElementById('co-criado-por')||{}).value||coCotInfo.criado_por||'—')+'</b></span>'
+    + '<span>🏪 '+(fids.map(fid=>'<span class="coN-forn">'+coEsc(coFornNomeById(fid))
+        +' <span class="resp '+(nPreco(fid)?'ok':'')+'" title="itens com preço deste fornecedor">'+nPreco(fid)+'/'+idxs.length+'</span>'
+        +' <span class="x" title="tirar este fornecedor do orçamento" onclick="event.stopPropagation();coRemFornGrupo(\''+ge+'\','+fid+')">✕</span></span>').join(' ')||'<span class="sub">nenhum</span>')
+    + (fids.length<3?' <button class="coN-esc" title="incluir outro fornecedor (até 3)" onclick="coAddFornGrupo(\''+ge+'\')">+ fornecedor</button>':'')+'</span>'
+    + '<span style="margin-left:auto;font-size:11px"><a style="cursor:pointer;color:var(--cinza-4)" title="mudar o nome deste orçamento" onclick="coRenomearGrupo(\''+ge+'\')">✎ renomear</a>'
+    + (idxs.length===0?' · <a style="cursor:pointer;color:var(--vermelho)" onclick="coExcluirGrupo(\''+ge+'\')">🗑 excluir orçamento vazio</a>':'')+'</span></div>';
+  const pfK = Object.keys(E.pf);
+  const resumo = pfK.length ? '<div class="coN-pf"><div class="tit">Subtotal por fornecedor escolhido <span class="co-dica" title="ao fechar, cada fornecedor escolhido vira um pedido separado, que vai para aprovação">?</span></div>'
+    + pfK.sort((a,b)=>E.pf[b].v-E.pf[a].v).map(f=>'<div class="lin"><span class="coN-fn">🏪 '+coEsc(coFornNomeById(Number(f)))+'</span>'
+        +'<span class="sub" title="'+coEsc(E.pf[f].itens.join(' · '))+'">'+E.pf[f].n+' item(ns)</span><b>'+coMoney(E.pf[f].v)+'</b></div>').join('')+'</div>' : '';
+  const tabela = idxs.length
+    ? '<table class="coN-tab"><thead><tr><th>Material</th><th>Fornecedor · marca</th><th>Descrição da nota <span class="co-dica" title="como ESTE fornecedor descreve o produto — vai no texto e no pedido dele">?</span></th>'
+      +'<th class="n">Vem <span class="co-dica" title="quantos vêm na embalagem deste fornecedor">?</span></th><th class="n">R$ emb.</th><th class="n">R$/un</th><th class="n">Subtotal</th><th></th></tr></thead><tbody>'
+      + idxs.map(i=>coItemNovo(i, coItens[i], fids)).join('') + '</tbody></table>'
+    : '<div class="co-empty" style="margin:10px 16px">Orçamento vazio — busque um item acima (ele entra no orçamento aberto).</div>';
+  const textos = coTextosDoGrupo(g);
+  const txt = fids.length ? '<details class="coN-txt"'+(textos?' open':'')+'><summary>💬 Textos para os fornecedores</summary>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+fids.map(fid=>'<button class="coN-esc" onclick="coWhatsGrupo(\''+ge+'\','+fid+')">💬 texto para '+coEsc(coFornNomeById(fid))+'</button>').join('')+'</div>'
+      + textos + '</details>' : '';
+  const rod = '<div class="coN-rod">'
+    + (fids.length?'<button class="co-b1" title="abre o texto de cada fornecedor para copiar e mandar" onclick="'+fids.map(fid=>'coWhatsGrupo(\''+ge+'\','+fid+')').join(';')+'">💬 Textos WhatsApp</button>':'')
+    + '<button class="co-b2" title="folha com produto e quantidade, sem preço, para mandar ao fornecedor" onclick="coImprimirSolicitacaoGrupo(\''+ge+'\')">🖨 Solicitação de orçamento</button>'
+    + (coOrcFoco?'':'<button class="co-b2" title="abre SÓ este orçamento numa janela própria" onclick="coAbrirJanela(\''+ge+'\')">🗗 Abrir em janela</button>')
+    + '<span class="tot">Escolhidos '+E.nEsc+'/'+idxs.length+' · Total <b>'+coMoney(E.tot)+'</b></span>'
+    + '<button class="co-b3" title="cada fornecedor escolhido vira um pedido, que vai para aprovação" onclick="coFecharGrupo(\''+ge+'\')">🔒 Fechar → Pedidos</button></div>';
+  return '<div class="coN-card">'+cab+info+resumo+tabela+txt+rod+'</div>';
+}
+function coItemNovo(i, it, fids){
+  const g = it.grupo||'Orçamento 1';
+  const q = v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  // tudo o que o cadastro sabe do produto, numa coluna só
+  const cad=[];
+  if(it.qtd_kit) cad.push('📦 <b>'+it.qtd_kit+'</b>'+(it.unidade?'/'+String(it.unidade).toLowerCase():''));
+  if(it.saldo!=null) cad.push('saldo <b>'+it.saldo+'</b>'); if(it.minimo!=null) cad.push('mín <b>'+it.minimo+'</b>');
+  if(it.consumo) cad.push('consumo/mês <b>'+Math.round(it.consumo)+'</b>');
+  const hp = it.material_id ? hpCache['m'+it.material_id] : undefined;
+  const uv = (hp && hp.valor!=null) ? hp.valor : (it.uc_valor!=null ? it.uc_valor : null);
+  const uf = (hp && hp.forn) ? hp.forn : '';
+  const ud = (hp && hp.data) ? hp.data : (it.uc_data||'');
+  const ult = (hp===undefined && it.uc_valor==null) ? '🧾 buscando a última compra…'
+    : (uv==null && !uf) ? '🧾 <span style="color:var(--cinza-4)">sem compra registrada</span>'
+    : '🧾 última compra <b>'+(uv!=null?coMoney(uv)+'/un':'—')+'</b>'+(uf?' · '+q(uf):'')+(ud?' · '+coDataCheia(ud):'');
+  const conhec=[it.marcas_conhecidas?'🏷️ '+q(it.marcas_conhecidas):'', it.forn_conhecidos?'🏪 '+q(it.forn_conhecidos):''].filter(Boolean).join(' · ');
+  const ja = coJaComprado[it.material_id] ? ' <span class="co-ja">⚠ já virou o Pedido #'+coJaComprado[it.material_id].pedido+'</span>' : '';
+  const ops = fids.length ? fids : [null];
+  const nLin = fids.length ? fids.length + fids.filter(fid=>coCondAbertas.has(i+'-'+fid)).length : 1;
+  const mat = '<td class="coN-mat" rowspan="'+nLin+'" id="co-item-'+i+'">'
+    + '<div class="nome">'+q(it.material_nome)+ja+'</div>'
+    + '<input class="coN-in nf" placeholder="descrição da nota (cadastro)" title="descrição de NF do cadastro — vale para quem não tiver a própria" value="'+q(it.descricao_nf)+'" oninput="coSetItem('+i+',\'descricao_nf\',this.value)">'
+    + '<div class="lin2"><span class="qtd">pedir <input type="number" step="any" title="quantidade a orçar" value="'+(it.qtd_desejada??'')+'" oninput="coSetItem('+i+',\'qtd_desejada\',this.value)"></span>'+(cad.length?' · '+cad.join(' · '):'')+'</div>'
+    + '<div class="ult" title="use como piso da negociação">'+ult+'</div>'
+    + (conhec?'<div class="lin2">'+conhec+'</div>':'')
+    + '<input class="coN-obs" placeholder="📝 obs. do produto — vai para o fornecedor" title="sai no texto do orçamento e no pedido impresso" value="'+q(it.obs_produto)+'" oninput="coSetObs('+i+',\'obs_produto\',this.value)">'
+    + '<input class="coN-obs int" placeholder="🔒 obs. interna — só a equipe vê" title="não sai no texto nem no pedido; aparece na aprovação" value="'+q(it.obs_interna)+'" oninput="coSetObs('+i+',\'obs_interna\',this.value)">'
+    + '<div class="coN-acts"><select title="mover este item para outro orçamento" onchange="coMoverItem('+i+', this.value)">'
+      + coGruposDistintos().map(x=>'<option value="'+q(x)+'" '+(x===g?'selected':'')+'>📁 '+q(x)+'</option>').join('')
+      + '<option value="__novo__">📁 + novo orçamento…</option></select>'
+      + '<button onclick="coDevolverParaCompras('+i+')" title="devolver para a lista de compras">↩ voltar</button>'
+      + '<button onclick="coRemoveItem('+i+')" title="tirar item do orçamento">✕ tirar</button></div></td>';
+  if(!fids.length) return '<tr class="coN-of fim">'+mat+'<td colspan="7" style="color:var(--cinza-4);font-size:11.5px">inclua um fornecedor acima para abrir as linhas de oferta</td></tr>';
+  return fids.map((fid,ix)=>coOfertaNova(i, it, fid, ix===0?mat:'', ix===fids.length-1)).join('');
+}
+function coOfertaNova(i, it, fid, mat, ultimo){
+  const o = it.opcoes.find(x=>x.fornecedor_id===fid) || coOpVazia(0);
+  const q = v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const u = coUnit(o), esc=o.escolhida;
+  const qe = (o.qtd_escolhida!=null?o.qtd_escolhida:it.qtd_desejada);
+  const sub = (esc && u!=null) ? u*(Number(qe)||0) : null;
+  const k = i+'-'+fid, aberta = coCondAbertas.has(k);
+  const temCond = !!(o.condicao_pagamento||o.prazo_entrega||o.observacao||o.nao_pedir||o.nao_tem);
+  const cls = 'coN-of'+(esc?' esc':'')+(o.nao_tem?' naotem':'');
+  const linha = '<tr class="'+cls+'" id="co-op-'+i+'-'+fid+'">'+mat
+    + '<td><span class="coN-fn">'+coEsc(coFornNomeById(fid))+'</span>'+(o.memoria?' <span title="marca, descrição e embalagem vieram da última cotação deste fornecedor — confira">🧠</span>':'')
+      + '<input class="coN-in" style="width:110px" placeholder="marca" value="'+q(o.marca)+'" oninput="coSetOp('+i+','+fid+',\'marca\',this.value)"></td>'
+    + (o.nao_tem
+      ? '<td colspan="5" style="font-size:11.5px">não tem'+(o.observacao?' — '+q(o.observacao):'')+'</td>'
+      : '<td><input class="coN-in" placeholder="descrição / apresentação deste fornecedor" title="como ESTE fornecedor descreve e vende o item — vai no texto e no pedido dele" value="'+q(o.apresentacao)+'" oninput="coSetOp('+i+','+fid+',\'apresentacao\',this.value)"></td>'
+      + '<td class="n"><input class="coN-in num" style="width:54px" type="number" step="any" placeholder="vem" title="quantos vêm na embalagem deste fornecedor" value="'+(o.qtd_embalagem ?? it.qtd_kit ?? '')+'" oninput="coSetOp('+i+','+fid+',\'qtd_embalagem\',this.value)"></td>'
+      + '<td class="n"><input class="coN-in num" type="number" step="any" placeholder="R$" title="preço da embalagem" value="'+(o.preco_total??'')+'" oninput="coSetOp('+i+','+fid+',\'preco_total\',this.value)"></td>'
+      + '<td class="n un"><b id="co-unit-'+i+'-'+fid+'">'+(u!=null?coMoney(u):'—')+'</b></td>'
+      + '<td class="n">'+(esc?'<b>'+(sub!=null?coMoney(sub):'—')+'</b><div style="font-size:10.5px;color:var(--cinza-4)"><input class="coN-in num" style="width:54px;font-size:10.5px" type="number" step="any" title="quantidade deste fornecedor (dá para dividir o item entre dois)" value="'+(o.qtd_escolhida??'')+'" oninput="coSetOp('+i+','+fid+',\'qtd_escolhida\',this.value)"> un</div>':'')+'</td>')
+    + '<td class="n" style="white-space:nowrap">'+(o.nao_tem?'':'<button class="coN-esc" title="marcar este fornecedor para este item (dá para dividir entre dois)" onclick="coEscolher('+i+','+fid+')">'+(esc?'✔ escolhido':'escolher')+'</button>')
+      + '<button class="coN-mais-of" title="condições, não tem, não pedir" onclick="coToggleCond('+i+','+fid+')">'+(temCond?'⋯•':'⋯')+'</button></td></tr>';
+  const cond = !aberta ? '' : '<tr class="coN-cond'+(ultimo?' fim':'')+'" id="co-cond-'+i+'-'+fid+'"><td colspan="7">'
+    + '💳 <input placeholder="pagamento" value="'+q(o.condicao_pagamento)+'" oninput="coSetOp('+i+','+fid+',\'condicao_pagamento\',this.value)">'
+    + '🚚 <input placeholder="prazo" value="'+q(o.prazo_entrega)+'" oninput="coSetOp('+i+','+fid+',\'prazo_entrega\',this.value)">'
+    + '📝 <input placeholder="observação da oferta" value="'+q(o.observacao)+'" oninput="coSetOp('+i+','+fid+',\'observacao\',this.value)">'
+    + '<label title="não incluir este item no texto deste fornecedor"><input type="checkbox" '+(o.nao_pedir?'checked':'')+' onchange="coSetOp('+i+','+fid+',\'nao_pedir\',this.checked);coRender()"> não pedir</label> '
+    + '<label title="fornecedor respondeu que não tem"><input type="checkbox" '+(o.nao_tem?'checked':'')+' onchange="coSetOp('+i+','+fid+',\'nao_tem\',this.checked);coRender()"> não tem</label></td></tr>';
+  // a linha de condições fecha a borda do item quando é a última; senão a linha da oferta não leva borda
+  return (ultimo && !aberta) ? linha.replace('<tr class="'+cls+'"','<tr class="'+cls+' fim"')+cond : linha+cond;
+}
+function coImprimirSolicitacaoGrupo(g){
+  // mesma folha da v4.101 (produto + quantidade, sem preço); a obs. do produto vai junto
+  const its = coItens.filter(it=>(it.grupo||'Orçamento 1')===g);
+  if(!its.length){ toast('Orçamento vazio.','erro'); return; }
+  const fids = coFornGrupo[g]||[];
+  hogImprimirSolicitacao({ ref:(coCotacaoId?('Cotação #'+coCotacaoId+' · '):'')+g, fornecedor: fids.map(coFornNomeById).join(' / '),
+    itens: its.map(it=>({ nome: it.material_nome, desc: [it.descricao_nf, (it.obs_produto||'').trim()?('obs.: '+it.obs_produto.trim()):''].filter(Boolean).join(' — '),
+      marca:'', qtd: it.qtd_desejada??'', un: it.unidade||'un' })) });
 }
 // drag & drop entre grupos
 function coDnD(){
@@ -7305,7 +7537,8 @@ async function coSalvar(silencioso){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
         qtd_desejada:it.qtd_desejada, saldo_no_momento:it.saldo, estoque_minimo:it.minimo,
-        grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || null });
+        grupo: it.grupo || 'Orçamento 1', descricao_nf: it.descricao_nf || null,
+        ...(coObsCols ? { obs_produto: (it.obs_produto||'').trim()||null, obs_interna: (it.obs_interna||'').trim()||null } : {}) });
       const itemId=ins&&ins[0]&&ins[0].id;
       if(!itemId) throw new Error('o banco não devolveu o id da linha de "'+(it.material_nome||'item')+'"');
       novos.push(itemId);
@@ -7408,6 +7641,7 @@ async function coFecharGrupo(g){
           valor_unitario: coUnit(o), ultimo_valor_pago: null,
           marca_escolhida: o.marca||null, codigo_escolhido: codigo,
           observacao: 'Cotação #'+coCotacaoId+' — grupo '+g + (o.apresentacao?(' — '+o.apresentacao):''),
+          ...(coObsCols ? { obs_produto: (it.obs_produto||'').trim()||null, obs_interna: (it.obs_interna||'').trim()||null } : {}),   // v4.116
         });
         nItens++;
         if(pedidoId){
@@ -8155,6 +8389,7 @@ async function dePedidoPDF(pid){
     const desc=(descPed[o.id]||o.descricao_nf||'').trim();
     return '<tr>'
       +'<td>'+deNomeMat(o.material_id,o)+(desc?('<div style="font-size:9.5px;color:#666">'+desc+'</div>'):'')
+        +((o.obs_produto||'').trim()?('<div style="font-size:9.5px;color:#333">📝 '+String(o.obs_produto).trim()+'</div>'):'')
         +(obsLimpa(o.observacao)?('<div style="font-size:9.5px;color:#666">'+obsLimpa(o.observacao)+'</div>'):'')+'</td>'
       +'<td>'+(o.marca_escolhida||'—')+'</td>'
       +'<td>'+(o.codigo_escolhido||'—')+'</td>'
@@ -10617,6 +10852,9 @@ async function apCarregar(){
     if(!catalogoMateriais.length){ catalogoMateriais=(await sbFetch('materiais?select=id,nome&limit=5000'))||[]; }
     if(!coFornecedores.length){ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }
     const peds=(await sbFetch("pedidos?select=*&status=eq.AGUARDANDO_APROVACAO&order=id.asc"))||[];
+    // v4.116 — fornecedor cadastrado depois de a lista carregar aparecia como "fornecedor #64"
+    if(peds.some(p=>p.fornecedor_id && !coFornecedores.some(f=>f.id===p.fornecedor_id)))
+      coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||coFornecedores;
     apPedidos=[];
     if(peds.length){
       const ids=peds.map(p=>p.id).join(',');
@@ -10658,7 +10896,7 @@ function apRenderizar(){
   corpo.innerHTML = apPedidos.map(b=>{
     const p=b.pedido, pid=p.id;
     const linhas = b.itens.map(o=>`<tr>
-      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${obsLimpa(o.observacao)?`<span class="ap-obs">${obsLimpa(o.observacao)}</span>`:''}
+      <td>${rcNomeMaterial(o.material_id,o)}${deAvulso(o)?' <span class="de-tag-sc">sem cotação</span>':''}${obsLimpa(o.observacao)?`<span class="ap-obs">${obsLimpa(o.observacao)}</span>`:''}${(o.obs_produto||'').trim()?`<span class="ap-obs" title="vai para o fornecedor">📝 ${coEsc(o.obs_produto)}</span>`:''}${(o.obs_interna||'').trim()?`<span class="ap-obs" style="color:#6C3483" title="observação interna do orçamento — não sai para o fornecedor">🔒 ${coEsc(o.obs_interna)}</span>`:''}
         <!-- v4.93 — "justificativa em cada item é melhor" -->
         <input class="ap-just-item" id="ap-ji-${o.id}" value="${(o.justificativa||'').replace(/"/g,'&quot;')}"
           placeholder="por que este fornecedor para este item?"
