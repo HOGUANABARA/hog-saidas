@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.117 · descrição da nota pré-preenchida e atualizada ao virar pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.118 · manutenção: demanda · visita · custo · lote de pagamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -532,10 +532,10 @@ details[open] summary { margin-bottom: 6px; }
     <button class="mb-btn" onclick="mbAbrir(this)">🔧 Manutenção <span class="mb-badge"></span><span class="mb-seta">▼</span></button>
     <div class="mb-dd">
       <div class="mbi" data-ref="aba-btn-man_pedir" onclick="mbFechar();trocarAba('man_pedir')">📨 Pedir manutenção <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-man_acomp" onclick="mbFechar();manFiltro='ABERTAS';trocarAba('man_acomp')">🔧 Jornada — em aberto <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-man_acomp" onclick="mbFechar();manFiltro='AGENDADA';trocarAba('man_acomp')">📅 Agendados</div>
-      <div class="mbi" data-ref="aba-btn-man_acomp" onclick="mbFechar();manFiltro='EXECUTADA';trocarAba('man_acomp')">✅ Executados</div>
-      <div class="mbi" data-ref="aba-btn-man_fin" onclick="mbFechar();trocarAba('man_fin')">💳 Faturas → Omie <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-man_acomp" onclick="mbFechar();manFiltro='ABERTAS';trocarAba('man_acomp')">📋 Demandas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-man_vis" onclick="mbFechar();trocarAba('man_vis')">🔧 Visitas</div>
+      <div class="mbi" data-ref="aba-btn-man_cus" onclick="mbFechar();trocarAba('man_cus')">💰 Custos e orçamentos <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-man_fin" onclick="mbFechar();trocarAba('man_fin')">💳 Lotes de pagamento <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-man_prest" onclick="mbFechar();trocarAba('man_prest')">👷 Prestadores de serviço</div>
       <div class="mbi" data-ref="aba-btn-man_contr" onclick="mbFechar();manContrEd=null;trocarAba('man_contr')">📑 Contratos</div>
     </div>
@@ -614,8 +614,10 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-cab" onclick="hsToggle('man')"><span><span class="hs-ico">🔧</span> Manutenção</span><span class="hs-seta" id="hs-s-man">▾</span></div>
       <div class="hs-lista" id="hs-l-man">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_pedir" onclick="trocarAba('man_pedir')">📨 Pedir manutenção <span id="badge-man_pedir" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_acomp" onclick="trocarAba('man_acomp')">🔧 Jornada da manutenção <span id="badge-man_acomp" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_fin" onclick="trocarAba('man_fin')">💳 Faturas → Omie <span id="badge-man_fin" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_acomp" onclick="manFiltro='ABERTAS';trocarAba('man_acomp')">📋 Demandas <span id="badge-man_acomp" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_vis" onclick="trocarAba('man_vis')">🔧 Visitas</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_cus" onclick="trocarAba('man_cus')">💰 Custos e orçamentos <span id="badge-man_cus" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_fin" onclick="trocarAba('man_fin')">💳 Lotes de pagamento <span id="badge-man_fin" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_prest" onclick="trocarAba('man_prest')">👷 Prestadores de serviço</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_contr" onclick="manContrEd=null;trocarAba('man_contr')">📑 Contratos</div>
       </div>
@@ -2039,7 +2041,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -2068,7 +2070,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_ent','sol_compra','man_acomp','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
   }
 };
 
@@ -2167,7 +2169,7 @@ const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remess
                     'inventario','historico','ocorrencias','usuarios',
                     'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv',
                     'sol_pedir','sol_sep','sol_ent','sol_compra','departamentos',
-                    'man_pedir','man_acomp','man_fin','man_prest','man_contr'];
+                    'man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -4867,7 +4869,7 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_fin','man_prest','man_contr'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -4888,6 +4890,8 @@ function trocarAba(aba) {
   if (aba==='man_pedir')  { manPedirCarregar(); }    // v4.106
   if (aba==='man_acomp')  { manAcompCarregar(); }
   if (aba==='man_fin')    { manFinCarregar(); }
+  if (aba==='man_vis')    { manVisCarregar(); }   // v4.118
+  if (aba==='man_cus')    { manCusCarregar(); }
   if (aba==='man_prest')  { manPrestCarregar(); }   // v4.110
   if (aba==='man_contr')  { manContrCarregar(); }   // v4.112
   if (aba==='hig_inv')  { hgInvCarregar(); }
@@ -19175,22 +19179,40 @@ async function alIgnorar(id){
   @media(max-width:900px){ .man-duas,.man-mb{grid-template-columns:1fr} .man-ocm{display:none}
     .man-trilha{padding:8px 6px} .man-passo{font-size:0} .man-passo.agora{font-size:10px} .man-passo .d{display:none} }
   @media(max-width:520px){ .man-grade{grid-template-columns:1fr} .man-ocs{display:none} .man-tag{white-space:normal} .man-acoes{white-space:normal} }
+  .man-chk{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--cinza-2);font-size:13px}
+  .man-chk input[type=checkbox]{margin-top:3px;width:auto}
 </style>
 <div id="aba-man_pedir" class="container" style="display:none">
   <div class="card"><div id="man-pedir-box"></div></div>
 </div>
 <div id="aba-man_acomp" class="container" style="display:none">
   <div class="card">
-    <div class="card-titulo">🔧 Jornada da manutenção
-      <span class="hg-dica" title="Nada sai daqui sem chegar em PAGA, CONCLUÍDA (contrato) ou CANCELADA com motivo. Cada etapa tem prazo de atenção: solicitada 2 dias · orçamento 5 · aprovação 3 · agendada = passou da data (sem data: 2 dias) · executada sem fatura 5 · financeiro 3 · Omie sem programar 3 · programado = passou da data. Passou do prazo, a linha fica vermelha e acende o sino.">?</span>
+    <div class="card-titulo">📋 Demandas de manutenção
+      <span class="hg-dica" title="O que precisa ser feito. Editável a qualquer momento; fecha quando é marcada resolvida (com custo ou sem cobrança). Visitas, custos e lotes de pagamento andam separados. Aberta há mais de 2 dias, ou em andamento há mais de 7 dias sem movimento, acende ⏰.">?</span>
       <button class="hg-ct-outra" style="margin-left:auto" onclick="manAcompCarregar()">↻ atualizar</button></div>
     <div id="man-acomp-box"></div>
   </div>
 </div>
+<div id="aba-man_vis" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">🔧 Visitas
+      <span class="hg-dica" title="O prestador veio e fez: marque uma ou várias demandas, o que fez em cada uma e se ficou resolvida ou falta terminar. Não depende de orçamento.">?</span>
+      <button class="hg-ct-outra" style="margin-left:auto" onclick="manVisCarregar()">↻ atualizar</button></div>
+    <div id="man-vis-box"></div>
+  </div>
+</div>
+<div id="aba-man_cus" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">💰 Custos e orçamentos
+      <span class="hg-dica" title="Mão de obra, material ou peça — quantos quiser por demanda, de prestadores diferentes. Um custo pode valer para várias demandas. Pago ao prestador ou ao fornecedor (loja). Cada custo tem o próprio autorizado por; aprovado, vai para um lote de pagamento.">?</span>
+      <button class="hg-ct-outra" style="margin-left:auto" onclick="manCusCarregar()">↻ atualizar</button></div>
+    <div id="man-cus-box"></div>
+  </div>
+</div>
 <div id="aba-man_fin" class="container" style="display:none">
   <div class="card">
-    <div class="card-titulo">💳 Faturas de manutenção → Omie
-      <span class="hg-dica" title="O sistema não fala com o Omie. Aqui fica a ponte: a fatura chega do responsável, o financeiro lança no Omie e informa a data programada do pagamento. Se o financeiro não usar o sistema, o Lucas ou a Evelise marcam, dizendo quem informou.">?</span>
+    <div class="card-titulo">💳 Lotes de pagamento
+      <span class="hg-dica" title="Junta custos aprovados de um recebedor numa cobrança só. O sistema não fala com o Omie: o financeiro (ou o Lucas / a Evelise, dizendo quem informou) marca lançado, pagamento programado e pago.">?</span>
       <button class="hg-ct-outra" style="margin-left:auto" onclick="manFinCarregar()">↻ atualizar</button></div>
     <div id="man-fin-box"></div>
   </div>
@@ -23035,39 +23057,29 @@ async function siDeskFechar(){
 </script>
 
 <script>
-// ═══ v4.106 — SOLICITAÇÃO DE MANUTENÇÃO: a jornada inteira ═══════════════════
-// Fluxo dela (19/09, docs/fluxo-solicitacao-manutencao.md). Eixo: "o importante é
-// gravar a jornada da manutenção para que nada fique sem atenção". Cada passo muda
-// manut_solicitacoes.etapa (com trava na etapa anterior: duas pessoas não passam o
-// mesmo passo) e grava uma linha em manut_historico (quem, quando, motivo).
-// Aprovação é REGISTRO: "Autorizado por" é texto — quem autoriza não entra no sistema.
-// Fotos/vídeos/orçamento/fatura vão para o Storage (bucket `manutencao`, SQL 91).
-const MAN_ETAPAS=[
-  {id:'SOLICITADA', curto:'Solicitada', rot:'📨 Solicitada',           prazo:2, tag:'man-t-env'},
-  {id:'ORCAMENTO',  curto:'Orçamento',  rot:'💰 Em orçamento',         prazo:5, tag:'man-t-sep'},
-  {id:'APROVACAO',  curto:'Aprovação',  rot:'✍️ Aguard. aprovação',    prazo:3, tag:'man-t-par'},
-  {id:'AGENDADA',   curto:'Agendada',   rot:'📅 Agendada',             prazo:null, tag:'man-t-env'},
-  {id:'EXECUTADA',  curto:'Executada',  rot:'🔧 Executada',            prazo:5, tag:'man-t-sep'},
-  {id:'FATURA',     curto:'Financeiro', rot:'🧾 Fatura no financeiro', prazo:3, tag:'man-t-par'},
-  {id:'OMIE',       curto:'Omie',       rot:'📘 Lançada no Omie',      prazo:3, tag:'man-t-par'},
-  {id:'PROGRAMADO', curto:'Programado', rot:'🗓️ Pagto programado',     prazo:null, tag:'man-t-env'},
-  {id:'PAGA',       curto:'Paga',       rot:'✅ Paga',                 prazo:null, tag:'man-t-ok'},
-];
-const MAN_FORA={ DEVOLVIDA:{rot:'↩ Devolvida ao depto',tag:'man-t-dev',curto:'Devolvida'},
-  CANCELADA:{rot:'✖ Cancelada',tag:'man-t-n',curto:'Cancelada'}, CONCLUIDA:{rot:'✅ Concluída (contrato)',tag:'man-t-ok',curto:'Concluída'} };
-const MAN_FIM=['PAGA','CONCLUIDA','CANCELADA'];
-const MAN_FIN=['FATURA','OMIE','PROGRAMADO'];
+// ═══ v4.118 — MANUTENÇÃO v2: DEMANDA · VISITA · CUSTO · LOTE DE PAGAMENTO ════════
+// Ela (21/09): "o fluxo é DEMANDA — com opção de editar; orçamento e execução não podem estar
+// atrelados — o Cris vem, faz várias coisinhas, volta e termina, junta duas coisas para cobrar uma
+// visita → lote de pagamento agrupando; casos consertados sem cobrança; vários orçamentos, MO e
+// material, prestadores diferentes; fotos do depois independente do orçamento" + "material pode ser
+// pago ao fornecedor ou ao prestador — é uma pergunta a ser feita". Mockup v2 aprovado ("pode construir").
+// SQL 95. A esteira antiga (etapa) ficou só por compatibilidade no banco.
+const MAN_SIT={ ABERTA:['Aberta','man-t-env'], ANDAMENTO:['Em andamento','man-t-sep'], RESOLVIDA:['Resolvida','man-t-ok'], CANCELADA:['Cancelada','man-t-n'] };
 const MAN_URG={PARADO:'🔴 Parado — não dá para usar', ATRAPALHA:'🟠 Atrapalha', PODE_ESPERAR:'🟢 Pode esperar'};
+const MAN_TIPOS={MAO_DE_OBRA:'Mão de obra', MATERIAL:'Material', PECA:'Peça'};
+const MAN_LOTE={ FINANCEIRO:['🧾 No financeiro','man-t-par'], OMIE:['📘 Lançado no Omie','man-t-par'], PROGRAMADO:['🗓️ Pagto programado','man-t-env'], PAGO:['✅ Pago','man-t-ok'], CANCELADO:['✖ Desfeito','man-t-n'] };
 const MAN_DIA=86400000;
-// v4.108 — "Onde" = os espaços da empresa (lista dela, 19/09), em ordem alfabética
+// "Onde" = os espaços da empresa (lista dela, 19/09), em ordem alfabética
 const MAN_LOCAIS=['Administrativo','Arsenal','Banheiro acessível térreo','Banheiro cliente recepção','Banheiro cliente superior',
   'Banheiro feminino funcionário','Banheiro masculino funcionário','CME','Consultório 1','Consultório 2','Consultório 3','Consultório 4',
   'Copa','Escada','Expurgo','Garagem','Recepção','RPA','Sala 5','Sala cirúrgica','Sala de espera superior','Sala de espera térreo',
   'Sala exames','Sala multiuso','Vestiários CC'].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true}));
 const MAN_MAX=50*1024*1024;
 
-let manSols=[], manDeps=[], manForn=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null, manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manUsoKb=null;
-let manRasc={midias:[]}, manAberta=null, manTmpOrc=null, manTmpFat=null;
+let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
+let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[];
+let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
+let manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
 function manEsc(t){ return dptoEsc(t); }
 function manNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
@@ -23076,74 +23088,79 @@ function manBrl(v){ return v==null||v==='' ? '—' : Number(v).toLocaleString('p
 function manDt(d){ if(!d) return '—'; const x=/^\d{4}-\d{2}-\d{2}$/.test(d)?new Date(d+'T12:00'):new Date(d); return x.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); }
 function manDth(d){ return d ? new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'; }
 function manIsoDia(d){ const x=new Date(d||Date.now()); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,10); }
-function manEt(id){ return MAN_ETAPAS.find(e=>e.id===id) || Object.assign({id, curto:id, rot:id}, MAN_FORA[id]||{}); }
-function manIdx(id){ return MAN_ETAPAS.findIndex(e=>e.id===id); }
 function manDepNome(id){ const d=manDeps.find(x=>x.id===id); return d?d.nome:('#'+id); }
-function manFornDe(id){ return manForn.find(f=>f.id===id) || null; }
-function manFornNome(id){ const f=manFornDe(id); return f?f.nome:'—'; }
-// v4.110 — prestador = quem vem fazer (apelido); empresa = quem emite a nota (fornecedores), vinculada depois
 function manPrestDe(id){ return manPrest.find(p=>p.id===id)||null; }
 function manPrestNome(id){ const p=manPrestDe(id); return p?p.apelido:'—'; }
-// v4.111 — empresa é TEXTO da manutenção (prestador, orçamento, fatura); não usa a lista de fornecedores das compras
-function manEmpresaPrest(p){ return p?[p.empresa,p.documento].filter(Boolean).join(' · '):''; }
-function manEmpresaDe(s){ return s.fatura_empresa || manEmpresaPrest(manPrestDe(s.prestador_id)); }
-function manEmpresaFatura(s){ const o=manAberta?manAberta.orcs.find(x=>x.situacao==='APROVADO'):null; return s.fatura_empresa||(o&&o.empresa)||manEmpresaPrest(manPrestDe(s.prestador_id)); }
-function manOrcNome(o){ return o.prestador_id?manPrestNome(o.prestador_id):manFornNome(o.fornecedor_id); }
-function manQuemFaz(s){ return s.prestador_id?manPrestNome(s.prestador_id):(s.fornecedor_id?manFornNome(s.fornecedor_id):''); }
 function manGv(id){ const e=document.getElementById(id); return e?e.value:''; }
+function manDias(d){ return Math.floor((Date.now()-new Date(d).getTime())/MAN_DIA); }
 function manAviso(){
   return '<div style="background:#FEF9E7;border-left:4px solid #B7950B;border-radius:0 8px 8px 0;padding:12px 14px;font-size:13px;color:#7D6608">'
-    +'As tabelas da manutenção ainda não existem no banco — falta rodar o <b>SQL 91</b> (<code>sql/91_manutencao_solicitacoes.sql</code>).</div>';
+    +'As tabelas da manutenção ainda não estão completas no banco — falta rodar o <b>SQL 95</b> (<code>sql/95_manut_demanda_visita_custo_lote.sql</code>).</div>';
 }
+// ligações
+function manCustosDe(sid){ const ids=manCustoDem.filter(x=>x.solicitacao_id===sid).map(x=>x.custo_id); return manCustos.filter(c=>ids.includes(c.id)); }
+function manDemsDoCusto(cid){ return manCustoDem.filter(x=>x.custo_id===cid).map(x=>x.solicitacao_id).sort((a,b)=>a-b); }
+function manVisitasDe(sid){ return manVisItens.filter(i=>i.solicitacao_id===sid).map(i=>({i, v:manVisitas.find(v=>v.id===i.visita_id)})).filter(x=>x.v).sort((a,b)=>String(b.v.data).localeCompare(String(a.v.data))); }
+function manReceb(c){ return c.pago_a==='FORNECEDOR' ? (c.loja||'—') : manPrestNome(c.prestador_id); }
+function manRecebChave(c){ return c.pago_a==='FORNECEDOR' ? 'F:'+manNorm(c.loja) : 'P:'+(c.prestador_id||0); }
+function manRecebIcone(c){ return c.pago_a==='FORNECEDOR'?'🏪 ':'👷 '; }
+function manDemCurta(id){ const s=manSols.find(x=>x.id===id); return '#'+id+(s?' '+s.o_que:''); }
 
-// ⏰ dias além do prazo de atenção da etapa (0 = em dia)
+// ⏰ o que ficou parado além do prazo de atenção (0 = em dia)
 function manAtraso(s){
-  if(MAN_FIM.includes(s.etapa) || s.etapa==='DEVOLVIDA') return 0;
-  const agora=Date.now(), desde=new Date(s.etapa_desde||s.created_at).getTime();
-  if(s.etapa==='AGENDADA'){
-    if(!s.agendada_para){ const d=Math.floor((agora-desde)/MAN_DIA); return d>2?d:0; }
-    const d=Math.floor((agora-new Date(s.agendada_para).getTime())/MAN_DIA); return d>=1?d:0;
-  }
-  if(s.etapa==='PROGRAMADO'){
-    if(!s.pagto_programado_para) return 0;
-    const fim=new Date(s.pagto_programado_para+'T23:59').getTime(); return agora>fim?Math.max(1,Math.floor((agora-fim)/MAN_DIA)):0;
-  }
-  const e=manEt(s.etapa); if(!e.prazo) return 0;
-  const d=Math.floor((agora-desde)/MAN_DIA); return d>e.prazo?d:0;
+  if(s.situacao==='RESOLVIDA'||s.situacao==='CANCELADA') return 0;
+  const d=manDias(s.situacao_desde||s.created_at);
+  if(s.situacao==='ABERTA') return d>2?d:0;           // aberta sem ninguém mexer
+  return d>7?d:0;                                      // em andamento sem movimento
 }
-function manTagEtapa(s){ const e=manEt(s.etapa); return '<span class="man-tag '+(e.tag||'man-t-n')+'">'+manEsc(e.rot)+'</span>'; }
-function manTagAtraso(s){
-  const a=manAtraso(s); if(!a) return '';
-  const t = s.etapa==='AGENDADA' ? (s.agendada_para?'⏰ data passou há '+a+' d':'⏰ sem data há '+a+' d')
-          : s.etapa==='PROGRAMADO' ? '⏰ pagamento vencido há '+a+' d' : '⏰ parada há '+a+' d';
-  return ' <span class="man-tag man-atraso" title="passou do prazo de atenção desta etapa">'+t+'</span>';
-}
+function manTagSit(s){ const t=MAN_SIT[s.situacao]||[s.situacao,'man-t-n']; return '<span class="man-tag '+t[1]+'">'+t[0]+(s.situacao==='RESOLVIDA'&&s.sem_cobranca?' · sem cobrança':'')+'</span>'; }
+function manTagAtraso(s){ const a=manAtraso(s); if(!a) return '';
+  return ' <span class="man-tag man-atraso" title="passou do prazo de atenção">⏰ '+(s.situacao==='ABERTA'?'aberta':'sem movimento')+' há '+a+' d</span>'; }
+function manCusAtraso(c){ if(c.situacao==='AGUARDANDO'){ const d=manDias(c.created_at); return d>3?d:0; }
+  if(c.situacao==='APROVADO'&&!c.lote_id){ const d=manDias(c.decidido_em||c.created_at); return d>10?d:0; } return 0; }
+function manTagCus(c){ const l=c.lote_id?manLotes.find(x=>x.id===c.lote_id):null;
+  if(l) return '<span class="man-tag '+(l.etapa==='PAGO'?'man-t-ok':'man-t-env')+'">lote #'+l.id+(l.etapa==='PAGO'?' · pago':'')+'</span>';
+  if(c.situacao==='APROVADO') return '<span class="man-tag man-t-ok">aprovado</span>'+(manCusAtraso(c)?' <span class="man-tag man-atraso">⏰ sem lote há '+manCusAtraso(c)+' d</span>':'');
+  if(c.situacao==='REPROVADO') return '<span class="man-tag man-t-dev" title="'+manEsc(c.motivo||'')+'">reprovado</span>';
+  return '<span class="man-tag man-t-par">aguardando aprovação</span>'+(manCusAtraso(c)?' <span class="man-tag man-atraso">⏰ '+manCusAtraso(c)+' d</span>':''); }
+function manLoteAtraso(l){ if(l.etapa==='FINANCEIRO'||l.etapa==='OMIE'){ const d=manDias(l.etapa_desde); return d>3?d:0; }
+  if(l.etapa==='PROGRAMADO'&&l.pagto_programado_para){ const fim=new Date(l.pagto_programado_para+'T23:59').getTime(); return Date.now()>fim?Math.max(1,Math.floor((Date.now()-fim)/MAN_DIA)):0; } return 0; }
 
 // ── carga ────────────────────────────────────────────────────────────────
 async function manBase(){
   try{
     manDeps=(await sbFetch('departamentos?select=id,nome,ativo&order=nome.asc'))||[];
-    manForn=(await sbFetch('fornecedores?select=id,nome,contato,telefone,email,ativo&order=nome.asc&limit=3000'))||[];
-    try{ manPrest=(await sbFetch('manut_prestadores?select=*&order=apelido.asc&limit=3000'))||[]; }catch(e){ manPrest=[]; }   // v4.110 (SQL 92)
-    try{ manContr=(await sbFetch('manut_contratos?select=*&order=objeto.asc&limit=1000'))||[];   // v4.112 (SQL 94)
+    manPrest=(await sbFetch('manut_prestadores?select=*&order=apelido.asc&limit=3000'))||[];
+    try{ manContr=(await sbFetch('manut_contratos?select=*&order=objeto.asc&limit=1000'))||[];
          manContrItens=(await sbFetch('manut_contrato_itens?select=*&order=contrato_id.asc,ordem.asc&limit=5000'))||[]; }catch(e){ manContr=[]; manContrItens=[]; }
-    await sbFetch('manut_solicitacoes?select=id&limit=1');
+    await sbFetch('manut_custos?select=id&limit=1');
     manSemTabela=false;
   }catch(e){ manSemTabela=true; }
 }
-async function manSolsCarregar(){
-  manSols=(await sbFetch('manut_solicitacoes?select=*&order=id.desc&limit=5000'))||[];
+async function manSolsCarregar(){ manSols=(await sbFetch('manut_solicitacoes?select=*&order=id.desc&limit=5000'))||[]; }
+async function manDadosCarregar(){
+  const [s,c,cd,v,vi,l]=await Promise.all([
+    sbFetch('manut_solicitacoes?select=*&order=id.desc&limit=5000'),
+    sbFetch('manut_custos?select=*&order=id.desc&limit=5000'),
+    sbFetch('manut_custo_demandas?select=*&limit=20000'),
+    sbFetch('manut_visitas?select=*&order=data.desc,id.desc&limit=3000'),
+    sbFetch('manut_visita_itens?select=*&limit=20000'),
+    sbFetch('manut_lotes?select=*&order=id.desc&limit=2000')]);
+  manSols=s||[]; manCustos=c||[]; manCustoDem=cd||[]; manVisitas=v||[]; manVisItens=vi||[]; manLotes=l||[];
 }
 function manNomes(){
   const s=new Set(['Evelise','Lucas']); if(solQuem()) s.add(solQuem());
-  manSols.forEach(x=>{ [x.responsavel,x.aprovado_por,x.omie_lancado_por].forEach(n=>{ if(n&&n.trim()) s.add(n.trim()); }); });
+  manSols.forEach(x=>{ if(x.responsavel&&x.responsavel.trim()) s.add(x.responsavel.trim()); });
+  manCustos.forEach(x=>{ if(x.aprovado_por&&x.aprovado_por.trim()) s.add(x.aprovado_por.trim()); });
+  manLotes.forEach(x=>{ if(x.omie_lancado_por&&x.omie_lancado_por.trim()) s.add(x.omie_lancado_por.trim()); });
   return [...s];
 }
+function manLojas(){ const s=new Set(); manCustos.forEach(c=>{ if(c.loja&&c.loja.trim()) s.add(c.loja.trim()); }); return [...s].sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 function manDatalists(){
   let h='<datalist id="man-dl-nomes">'+manNomes().map(n=>'<option value="'+manEsc(n)+'">').join('')+'</datalist>';
-  const loc=new Set(MAN_LOCAIS);
   h+='<datalist id="man-dl-prest">'+manPrest.filter(p=>p.ativo!==false).map(p=>'<option value="'+manEsc(p.apelido)+'" label="'+manEsc([p.servico,p.empresa].filter(Boolean).join(' · '))+'">').join('')+'</datalist>';
-  h+='<datalist id="man-dl-locais">'+[...loc].map(l=>'<option value="'+manEsc(l)+'">').join('')+'</datalist>';
+  h+='<datalist id="man-dl-lojas">'+manLojas().map(l=>'<option value="'+manEsc(l)+'">').join('')+'</datalist>';
+  h+='<datalist id="man-dl-locais">'+MAN_LOCAIS.map(l=>'<option value="'+manEsc(l)+'">').join('')+'</datalist>';
   let d=document.getElementById('man-dls'); if(!d){ d=document.createElement('div'); d.id='man-dls'; d.style.display='none'; document.body.appendChild(d); }
   d.innerHTML=h;
 }
@@ -23231,13 +23248,34 @@ function manMiniaturas(ms, apagar){
   }).join('')+'</div>';
 }
 
+// ── gravação comum ───────────────────────────────────────────────────────
+// registra no histórico da demanda; campos (opcional) atualizam a demanda e renovam situacao_desde
+async function manNota(sid, motivo, campos, para){
+  const s=manSols.find(x=>x.id===sid);
+  const body=Object.assign({updated_at:new Date().toISOString(), situacao_desde:new Date().toISOString()}, campos||{});
+  const r=await sbFetch('manut_solicitacoes?id=eq.'+sid,'PATCH',body); if(r&&r[0]&&s) Object.assign(s,r[0]);
+  await sbFetch('manut_historico','POST',{solicitacao_id:sid,de_etapa:s?s.situacao:null,para_etapa:para||(r&&r[0]?r[0].situacao:null),quem:manQuem(),motivo});
+}
+// demanda que tinha só sido aberta passa a "em andamento" quando alguém mexe
+function manAndamento(sid){ const s=manSols.find(x=>x.id===sid); return (s&&s.situacao==='ABERTA')?{situacao:'ANDAMENTO'}:{}; }
+async function manMotivo(titulo, rot){ const r=await hogPergunta({titulo, campos:[{id:'t',rot,tipo:'texto-longo',obrigatorio:true}], ok:'Confirmar'}); return r&&r.t.trim(); }
+async function manRecarregar(){ try{ await manDadosCarregar(); }catch(e){} manDatalists(); }
+function manVis(id){ const p=document.getElementById('aba-'+id); return p && p.style.display!=='none'; }
+async function manRecarregarTela(){
+  await manRecarregar();
+  if(manVis('man_acomp')) manAcompRender(); if(manVis('man_vis')) manVisRender(); if(manVis('man_cus')) manCusRender();
+  if(manVis('man_fin')) manFinRender(); if(manVis('man_pedir')) manPedirRender();
+  if(manAberta) manFichaRender();
+  manAtualizarBadges(false);
+}
+async function manExec(fn, msg){ try{ await fn(); if(msg) toast(msg); }catch(e){ toast('Erro: '+e.message,'erro'); } await manRecarregarTela(); }
+
 // ═══ 👤 PEDIR MANUTENÇÃO (departamento) ═════════════════════════════════════
 async function manPedirCarregar(){
   const box=document.getElementById('man-pedir-box'); if(!box) return;
   box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
-  await manBase();
-  if(manSemTabela){ box.innerHTML=manAviso(); return; }
-  try{ await manSolsCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro ao ler as solicitações: '+manEsc(e.message)+'</div>'; return; }
+  await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
+  try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro ao ler as demandas: '+manEsc(e.message)+'</div>'; return; }
   manDatalists(); manPedirRender();
 }
 function manPedirRender(){
@@ -23245,7 +23283,7 @@ function manPedirRender(){
   const dep=solDepSel(), R=manRasc;
   const meus=manSols.filter(s=>s.departamento_id===dep).sort((a,b)=>b.id-a.id).slice(0,40);
   let h='<div class="man-duas"><div>'
-   +'<div class="card-titulo">📨 Pedir manutenção <span class="hg-dica" title="Quem percebe o problema abre aqui: onde é, o que é, o que está acontecendo e a urgência. Foto ou vídeo curto ajuda o prestador a orçar sem vir antes. O administrativo (Lucas / Evelise) recebe no sino e acompanha até o pagamento.">?</span></div>'
+   +'<div class="card-titulo">📨 Pedir manutenção <span class="hg-dica" title="Quem percebe o problema abre aqui: onde é, o que é, o que está acontecendo e a urgência. Foto ou vídeo curto ajuda o prestador. O administrativo (Lucas / Evelise) recebe no sino e acompanha.">?</span></div>'
    +'<div class="man-grade"><label class="man-rot">Departamento <select onchange="manTrocarDep(this.value)" title="no login único do HOG TOTAL o departamento virá do login">'
    +'<option value="">— escolha —</option>'+manDeps.filter(d=>d.ativo!==false).map(d=>'<option value="'+d.id+'"'+(d.id===dep?' selected':'')+'>'+manEsc(d.nome)+'</option>').join('')+'</select></label></div>'
    +'<div class="man-grade">'
@@ -23261,31 +23299,26 @@ function manPedirRender(){
    + manMiniaturas(R.midias,'manRascTirar')
    +'<div class="man-linha" style="margin-top:12px"><button class="man-b g" onclick="manEnviar()">📨 Enviar solicitação</button></div>'
    +'</div><div>'
-   +'<div class="card-titulo">📋 Solicitações '+(dep?'do '+manEsc(manDepNome(dep)):'')+' <span class="hg-dica" title="O departamento acompanha cada pedido até o fim. Serviço feito que não resolveu: dá para reabrir enquanto a fatura não foi para o financeiro.">?</span></div>';
+   +'<div class="card-titulo">📋 Demandas '+(dep?'do '+manEsc(manDepNome(dep)):'')+' <span class="hg-dica" title="O departamento acompanha cada pedido. Se foi dado como resolvido e não resolveu, dá para reabrir.">?</span></div>';
   if(!dep) h+='<div class="sol-vazio">Escolha o departamento.</div>';
   else {
-    h+='<table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê</th><th>Onde está</th><th></th></tr></thead><tbody>';
-    if(!meus.length) h+='<tr><td colspan="4" class="sol-vazio">Nenhuma solicitação deste departamento.</td></tr>';
+    h+='<table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê</th><th>Situação</th><th></th></tr></thead><tbody>';
+    if(!meus.length) h+='<tr><td colspan="4" class="sol-vazio">Nenhuma demanda deste departamento.</td></tr>';
     meus.forEach(s=>{
       let a='<button class="man-b n p" onclick="manFicha('+s.id+')">Ver</button>';
-      if(s.etapa==='DEVOLVIDA') a='<button class="man-b p" onclick="manCorrigir('+s.id+')">Corrigir e reenviar</button> '+a;
-      if(s.etapa==='EXECUTADA') a='<button class="man-b r p" onclick="manReabrir('+s.id+')">Não resolveu</button> '+a;
+      if(s.situacao==='RESOLVIDA') a='<button class="man-b r p" onclick="manReabrir('+s.id+')">Não resolveu</button> '+a;
       h+='<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+' · aberta '+manDt(s.created_at)+'</span></td>'
-        +'<td>'+manTagEtapa(s)+(s.etapa==='AGENDADA'&&s.agendada_para?'<span class="man-sub">📅 '+manDth(s.agendada_para)+'</span>':'')+'</td>'
-        +'<td class="man-acoes">'+a+'</td></tr>';
+        +'<td>'+manTagSit(s)+'</td><td class="man-acoes">'+a+'</td></tr>';
     });
     h+='</tbody></table>';
   }
-  h+='</div></div>';
-  box.innerHTML=h;
+  box.innerHTML=h+'</div></div>';
 }
-// v4.109 — "Outro — digitar": abre o campo para escrever o espaço que não está na lista
 function manLocalEscolher(v){
   if(v==='__OUTRO'){ manRasc.outro=true; manRasc.local=''; } else { manRasc.outro=false; manRasc.local=v; }
-  manPedirRender();
-  if(manRasc.outro){ const e=document.getElementById('man-local-outro'); if(e) e.focus(); }
+  manPedirRender(); if(manRasc.outro){ const e=document.getElementById('man-local-outro'); if(e) e.focus(); }
 }
-function manTrocarDep(v){ try{ localStorage.setItem('hog_sol_dep', v||''); }catch(e){} manPedirRender(); manAtualizarBadges(); }
+function manTrocarDep(v){ try{ localStorage.setItem('hog_sol_dep', v||''); }catch(e){} manPedirRender(); manAtualizarBadges(false); }
 async function manRascArquivos(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'ANTES');
   manRasc.midias.push(...p); if(p.length) toast('✔ '+p.length+' arquivo(s) no pedido'+(p[0].tipo==='FOTO'&&p[0].origKb>p[0].kb*1.5?' — foto reduzida de '+p[0].origKb+' KB para '+p[0].kb+' KB':'')); manPedirRender(); }
 function manRascTirar(i){ manRasc.midias.splice(i,1); manPedirRender(); }
@@ -23294,114 +23327,62 @@ async function manEnviar(){
   if(!dep) falta.push('departamento'); if(!(R.local||'').trim()) falta.push('onde'); if(!(R.oque||'').trim()) falta.push('o que é');
   if(!(R.desc||'').trim()) falta.push('o que está acontecendo'); if(!R.urg) falta.push('urgência');
   if(falta.length) return toast('Falta preencher: '+falta.join(', '),'erro');
-  const ok=await hogConfirma({titulo:'Enviar a solicitação de manutenção?',
-    texto:manDepNome(dep)+' · '+R.local.trim()+'\n'+R.oque.trim()+' — '+MAN_URG[R.urg]+'\n'+R.midias.length+' foto(s)/vídeo(s)', ok:'📨 Enviar'});
-  if(!ok) return;
+  if(!await hogConfirma({titulo:'Enviar a solicitação de manutenção?', texto:manDepNome(dep)+' · '+R.local.trim()+'\n'+R.oque.trim()+' — '+MAN_URG[R.urg]+'\n'+R.midias.length+' foto(s)/vídeo(s)', ok:'📨 Enviar'})) return;
   try{
     const r=await sbFetch('manut_solicitacoes','POST',{departamento_id:dep,local:R.local.trim(),o_que:R.oque.trim(),descricao:R.desc.trim(),
-      urgencia:R.urg,etapa:'SOLICITADA',aberta_por:manQuem()});
-    const s=r&&r[0]; if(!s) throw new Error('o banco não devolveu a solicitação');
-    await sbFetch('manut_historico','POST',{solicitacao_id:s.id,de_etapa:null,para_etapa:'SOLICITADA',quem:manQuem(),motivo:'aberta'});
+      urgencia:R.urg,situacao:'ABERTA',aberta_por:manQuem()});
+    const s=r&&r[0]; if(!s) throw new Error('o banco não devolveu a demanda');
+    await sbFetch('manut_historico','POST',{solicitacao_id:s.id,de_etapa:null,para_etapa:'ABERTA',quem:manQuem(),motivo:'aberta'});
     const n=R.midias.length ? await manSubirVarios(R.midias, s.id) : 0;
     manRasc={midias:[]};
-    toast('📨 Solicitação #'+s.id+' enviada'+(n?' com '+n+' arquivo(s)':'')+' — acendeu o sino da Manutenção');
-    await manSolsCarregar(); manPedirRender(); manAtualizarBadges();
+    toast('📨 Demanda #'+s.id+' enviada'+(n?' com '+n+' arquivo(s)':'')+' — acendeu o sino da Manutenção');
+    await manRecarregarTela();
   }catch(e){ toast('Erro ao enviar: '+e.message,'erro'); }
 }
-async function manCorrigir(id){
-  const s=manSols.find(x=>x.id===id); if(!s) return;
-  const r=await hogPergunta({titulo:'Corrigir e reenviar #'+s.id, texto:'Pedido da manutenção: '+(await manUltimoMotivo(s.id)),
-    campos:[{id:'t',rot:'O que você acrescenta',tipo:'texto-longo',obrigatorio:true}], ok:'Reenviar'});
-  if(!r) return;
-  await manExec(async()=>{ await manMover(s,'SOLICITADA',{descricao:s.descricao+'\n[acrescentado '+manDth(new Date())+'] '+r.t.trim()},'reenviada: '+r.t.trim()); }, 'Reenviada para a Manutenção', s.id, false);
-}
-async function manReabrir(id){
-  const s=(manAberta&&manAberta.s.id===id)?manAberta.s:manSols.find(x=>x.id===id); if(!s) return;
-  const r=await hogPergunta({titulo:'Não resolveu — reabrir #'+s.id, texto:s.o_que+' · '+s.local+'\nVolta para AGENDADA, com o prestador.',
-    campos:[{id:'t',rot:'O que continua acontecendo',tipo:'texto-longo',obrigatorio:true}], ok:'Reabrir'});
-  if(!r) return;
-  await manExec(async()=>{ await manMover(s,'AGENDADA',{agendada_para:null},'reaberta: '+r.t.trim()); }, 'Reaberta — volta para o responsável agendar de novo', s.id, !!manAberta);
-}
-async function manUltimoMotivo(id){
-  try{ const h=(await sbFetch('manut_historico?select=motivo&solicitacao_id=eq.'+id+'&motivo=not.is.null&order=id.desc&limit=1'))||[]; return h[0]?h[0].motivo:''; }catch(e){ return ''; }
-}
+async function manReabrir(id){ const s=manSols.find(x=>x.id===id); if(!s) return;
+  const m=await manMotivo('Não resolveu — reabrir #'+s.id+' ('+s.o_que+')','O que continua acontecendo'); if(!m) return;
+  await manExec(()=>manNota(id,'reaberta: '+m,{situacao:'ANDAMENTO',sem_cobranca:false,resolvida_em:null,resolvida_por:null},'ANDAMENTO'),'Reaberta'); }
 
-// ═══ 🔧 ACOMPANHAMENTO (administrativo) ═════════════════════════════════════
+// ═══ 📋 DEMANDAS ════════════════════════════════════════════════════════════
 async function manAcompCarregar(){
   const box=document.getElementById('man-acomp-box'); if(!box) return;
   box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
-  await manBase();
-  if(manSemTabela){ box.innerHTML=manAviso(); return; }
-  try{ await manSolsCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
+  await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
+  try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
   try{ const a=(await sbFetch('manut_anexos?select=tamanho_kb&limit=20000'))||[]; manUsoKb=a.reduce((t,x)=>t+(Number(x.tamanho_kb)||0),0); }catch(e){ manUsoKb=null; }
-  manDatalists(); manAcompRender(); manAtualizarBadges();
+  manDatalists(); manAcompRender(); manAtualizarBadges(false);
 }
 const MAN_FILTROS={
-  ABERTAS:   s=>!MAN_FIM.includes(s.etapa),
-  PARADAS:   s=>manAtraso(s)>0,
-  SOLICITADA:s=>['SOLICITADA','DEVOLVIDA'].includes(s.etapa),
-  ORC:       s=>['ORCAMENTO','APROVACAO'].includes(s.etapa),
-  AGENDADA:  s=>s.etapa==='AGENDADA',
-  EXECUTADA: s=>s.etapa==='EXECUTADA',
-  FIN:       s=>MAN_FIN.includes(s.etapa),
-  FIM:       s=>MAN_FIM.includes(s.etapa)
+  ABERTAS:  s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO',
+  PARADAS:  s=>manAtraso(s)>0,
+  ABERTA:   s=>s.situacao==='ABERTA',
+  ANDAMENTO:s=>s.situacao==='ANDAMENTO',
+  RESOLVIDA:s=>s.situacao==='RESOLVIDA',
+  CANCELADA:s=>s.situacao==='CANCELADA'
 };
 function manAcompRender(){
   const box=document.getElementById('man-acomp-box'); if(!box) return;
   const n=k=>manSols.filter(MAN_FILTROS[k]).length;
-  const grupos=[['ABERTAS','Em aberto'],['PARADAS','⏰ Paradas',true],['SOLICITADA','📨 Solicitadas'],['ORC','💰 Orçamento & aprovação'],
-    ['AGENDADA','📅 Agendadas'],['EXECUTADA','🔧 Executadas'],['FIN','💳 No financeiro'],['FIM','Encerradas']];
+  const grupos=[['ABERTAS','Em aberto'],['PARADAS','⏰ Paradas',true],['ABERTA','📨 Abertas'],['ANDAMENTO','🔧 Em andamento'],['RESOLVIDA','✅ Resolvidas'],['CANCELADA','Canceladas']];
   const f=MAN_FILTROS[manFiltro]||MAN_FILTROS.ABERTAS;
-  const lista=manSols.filter(f).sort((a,b)=>(manAtraso(b)>0)-(manAtraso(a)>0) || (a.urgencia==='PARADO'?0:1)-(b.urgencia==='PARADO'?0:1)
-    || new Date(a.etapa_desde)-new Date(b.etapa_desde)).slice(0, manFiltro==='FIM'?80:1000);
-  let h='<div class="man-kpis">'+grupos.map(([k,r,al])=>{ const q=n(k); return '<div class="man-k'+(manFiltro===k?' on':'')+(al&&q?' al':'')+'" onclick="manFiltro=\''+k+'\';manAcompRender()"><span class="r">'+r+'</span><b>'+q+'</b></div>'; }).join('')
+  const lista=manSols.filter(f).sort((a,b)=>(manAtraso(b)>0)-(manAtraso(a)>0) || (a.urgencia==='PARADO'?0:1)-(b.urgencia==='PARADO'?0:1) || b.id-a.id).slice(0,300);
+  let h='<div class="man-linha" style="margin-top:0"><button class="man-b g" onclick="trocarAba(\'man_pedir\')">+ Nova demanda</button></div>'
+   +'<div class="man-kpis">'+grupos.map(([k,r,al])=>{ const q=n(k); return '<div class="man-k'+(manFiltro===k?' on':'')+(al&&q?' al':'')+'" onclick="manFiltro=\''+k+'\';manAcompRender()"><span class="r">'+r+'</span><b>'+q+'</b></div>'; }).join('')
    +(manUsoKb!=null?'<div class="man-k fixo" title="espaço de arquivos do plano gratuito (1 GB)"><span class="r">📎 Fotos e vídeos</span><b style="font-size:15px">'+(manUsoKb/1024).toFixed(manUsoKb<10240?1:0)+' MB</b><span class="man-sub">de 1 GB</span></div>':'')+'</div>'
-   +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th class="man-ocm">Departamento</th><th class="man-ocm">Urgência</th><th>Etapa</th><th class="man-ocm">Responsável</th><th class="man-ocm">Prestador</th><th></th></tr></thead><tbody>';
+   +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th class="man-ocm">Departamento</th><th class="man-ocm">Urgência</th><th>Situação</th><th class="man-ocm">Visitas</th><th>Custos</th><th></th></tr></thead><tbody>';
   if(!lista.length) h+='<tr><td colspan="8" class="sol-vazio">Nada aqui.</td></tr>';
   lista.forEach(s=>{
-    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+'</span></td>'
-      +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td><td class="man-ocm man-u-'+s.urgencia+'">'+MAN_URG[s.urgencia].split(' — ')[0]+'</td>'
-      +'<td>'+manTagEtapa(s)+manTagAtraso(s)+'<span class="man-sub">desde '+manDt(s.etapa_desde)+'</span></td>'
-      +'<td class="man-ocm">'+(s.responsavel?manEsc(s.responsavel):'<span class="man-sub">— definir</span>')+'</td>'
-      +'<td class="man-ocm">'+(manQuemFaz(s)?manEsc(manQuemFaz(s)):'<span class="man-sub">—</span>')+'</td>'
+    const cs=manCustosDe(s.id).filter(c=>c.situacao!=='REPROVADO'), nv=manVisitasDe(s.id).length, pend=cs.filter(c=>c.situacao==='AGUARDANDO').length;
+    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
+      +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td><td class="man-ocm man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'').split(' — ')[0]+'</td>'
+      +'<td>'+manTagSit(s)+manTagAtraso(s)+'</td><td class="man-ocm">'+(nv||'—')+'</td>'
+      +'<td>'+(cs.length?manBrl(cs.reduce((t,c)=>t+Number(c.valor||0),0))+'<span class="man-sub">'+cs.length+' custo(s)'+(pend?' · '+pend+' aguardando':'')+'</span>':'—')+'</td>'
       +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>';
   });
   box.innerHTML=h+'</tbody></table>';
 }
 
-// ═══ 💳 FINANCEIRO — Omie ═══════════════════════════════════════════════════
-async function manFinCarregar(){
-  const box=document.getElementById('man-fin-box'); if(!box) return;
-  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
-  await manBase();
-  if(manSemTabela){ box.innerHTML=manAviso(); return; }
-  try{ await manSolsCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
-  manDatalists(); manFinRender(); manAtualizarBadges();
-}
-function manFinRender(){
-  const box=document.getElementById('man-fin-box'); if(!box) return;
-  const limite=Date.now()-60*MAN_DIA;
-  const L=manSols.filter(s=>MAN_FIN.includes(s.etapa) || (s.etapa==='PAGA' && new Date(s.etapa_desde).getTime()>limite))
-    .sort((a,b)=>manIdx(a.etapa)-manIdx(b.etapa) || new Date(a.etapa_desde)-new Date(b.etapa_desde));
-  const soma=a=>a.reduce((t,s)=>t+(Number(s.fatura_valor)||0),0);
-  const aL=L.filter(s=>s.etapa==='FATURA'), sP=L.filter(s=>s.etapa==='OMIE'), pr=L.filter(s=>s.etapa==='PROGRAMADO');
-  let h='<div class="man-kpis">'
-   +'<div class="man-k fixo'+(aL.length?' al':'')+'"><span class="r">🧾 A lançar no Omie</span><b>'+aL.length+'</b><span class="man-sub">'+manBrl(soma(aL))+'</span></div>'
-   +'<div class="man-k fixo'+(sP.length?' al':'')+'"><span class="r">📘 Lançadas sem programação</span><b>'+sP.length+'</b><span class="man-sub">'+manBrl(soma(sP))+'</span></div>'
-   +'<div class="man-k fixo"><span class="r">🗓️ Pagamento programado</span><b>'+pr.length+'</b><span class="man-sub">'+manBrl(soma(pr))+'</span></div></div>'
-   +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>Prestador</th><th class="man-ocs">Serviço</th><th class="man-ocm">Depto</th><th style="text-align:right">Valor</th><th class="man-ocm">NF · venc.</th><th>Etapa</th><th class="man-ocs">Pagamento</th><th></th></tr></thead><tbody>';
-  if(!L.length) h+='<tr><td colspan="9" class="sol-vazio">Nenhuma fatura de manutenção no financeiro.</td></tr>';
-  L.forEach(s=>{
-    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(manQuemFaz(s)||'—')+'</b>'+(s.fatura_empresa?'<span class="man-sub">'+manEsc(s.fatura_empresa)+'</span>':'')+'</td>'
-      +'<td class="man-ocs">'+manEsc(s.o_que)+'<span class="man-sub">'+manEsc(s.local)+'</span></td><td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td>'
-      +'<td style="text-align:right">'+manBrl(s.fatura_valor)+'</td><td class="man-ocm">'+manEsc(s.fatura_nf||'—')+'<span class="man-sub">vence '+manDt(s.fatura_vencimento)+'</span></td>'
-      +'<td>'+manTagEtapa(s)+manTagAtraso(s)+'</td><td class="man-ocs">'+(s.pagto_programado_para?'🗓️ '+manDt(s.pagto_programado_para):'—')+(s.pago_em?'<span class="man-sub">paga '+manDt(s.pago_em)+'</span>':'')+'</td>'
-      +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>';
-  });
-  box.innerHTML=h+'</tbody></table>';
-}
-
-// ═══ A FICHA: a jornada de uma solicitação ══════════════════════════════════
+// ═══ A FICHA DA DEMANDA ═══════════════════════════════════════════════════════
 function manOv(){
   let ov=document.getElementById('man-ov');
   if(!ov){ ov=document.createElement('div'); ov.id='man-ov'; ov.className='man-ov';
@@ -23409,276 +23390,371 @@ function manOv(){
     document.body.appendChild(ov); }
   return ov;
 }
-function manFechar(){ const ov=document.getElementById('man-ov'); if(ov) ov.classList.remove('on'); manAberta=null; manTmpOrc=null; manTmpFat=null; manRecarregarTela(); }
-function manRecarregarTela(){
-  const vis=id=>{ const p=document.getElementById('aba-'+id); return p && p.style.display!=='none'; };
-  if(vis('man_acomp')) manAcompCarregar(); if(vis('man_fin')) manFinCarregar(); if(vis('man_pedir')) manPedirCarregar();
-  manAtualizarBadges();
-}
+function manFechar(){ const ov=document.getElementById('man-ov'); if(ov) ov.classList.remove('on'); manAberta=null; }
 async function manFicha(id){
   const ov=manOv(); const mdl=document.getElementById('man-mdl');
-  if(!manAberta || manAberta.s.id!==id){ manTmpOrc=null; manTmpFat=null; }
   if(!ov.classList.contains('on')){ mdl.innerHTML='<div style="padding:30px;color:var(--cinza-4)">Carregando…</div>'; ov.classList.add('on'); }
   try{
-    if(!manDeps.length || !manForn.length) await manBase();
-    const [ss,orcs,anexos,hist]=await Promise.all([
-      sbFetch('manut_solicitacoes?select=*&id=eq.'+id),
-      sbFetch('manut_orcamentos?select=*&solicitacao_id=eq.'+id+'&order=id.asc'),
-      sbFetch('manut_anexos?select=*&solicitacao_id=eq.'+id+'&order=id.asc'),
-      sbFetch('manut_historico?select=*&solicitacao_id=eq.'+id+'&order=id.asc')]);
-    if(!ss||!ss.length) throw new Error('solicitação #'+id+' não encontrada');
-    manAberta={s:ss[0],orcs:orcs||[],anexos:anexos||[],hist:hist||[]};
-    const i=manSols.findIndex(x=>x.id===id); if(i>=0) manSols[i]=ss[0];
-    if(!document.getElementById('man-dls')) manDatalists();
-    manFichaRender();
+    if(!manDeps.length) await manBase();
+    if(!manSols.some(x=>x.id===id) || !manCustos) await manDadosCarregar();
+    manAberta={id, edit:false, anexos:[], hist:[]};
+    await manFichaDados(); manDatalists(); manFichaRender();
   }catch(e){ mdl.innerHTML='<div class="man-mh"><b>Erro</b><button class="fecha" onclick="manFechar()">&#10005;</button></div><div style="padding:20px">'+manEsc(e.message)+'</div>'; }
 }
+async function manFichaDados(){ const id=manAberta.id;
+  const [anexos,hist]=await Promise.all([sbFetch('manut_anexos?select=*&solicitacao_id=eq.'+id+'&order=id.asc'),sbFetch('manut_historico?select=*&solicitacao_id=eq.'+id+'&order=id.asc')]);
+  manAberta.anexos=anexos||[]; manAberta.hist=hist||[]; }
 function manFichaRender(){
-  const A=manAberta; if(!A) return; const s=A.s;
-  const ia=manIdx(s.etapa), fimOk=['PAGA','CONCLUIDA'].includes(s.etapa);
-  const quando=e=>{ const h=[...A.hist].reverse().find(x=>x.para_etapa===e); return h?manDt(h.created_at):''; };
-  const trilha='<div class="man-trilha">'+MAN_ETAPAS.map((e,i)=>{
-    let c=''; if(fimOk||(ia>=0&&i<ia)) c='feito'; else if(i===ia) c='agora';
-    if(s.etapa==='CONCLUIDA'&&['FATURA','OMIE','PROGRAMADO','PAGA'].includes(e.id)) c='';
-    if(s.incluso_contrato&&['ORCAMENTO','APROVACAO'].includes(e.id)) c='';
-    return '<div class="man-passo '+c+'">'+e.curto+'<span class="d">'+(quando(e.id)||'&nbsp;')+'</span></div>'; }).join('')+'</div>';
+  const A=manAberta; if(!A) return; const s=manSols.find(x=>x.id===A.id); if(!s) return;
+  const pode=podeAba('man_acomp'), fim=s.situacao==='RESOLVIDA'||s.situacao==='CANCELADA';
+  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
   const mid=a=>({tipo:a.tipo,url:manPublica(a.caminho),nome:a.nome,kb:a.tamanho_kb,quem:a.enviado_por,em:a.created_at});
   const antes=A.anexos.filter(a=>a.fase==='ANTES').map(mid), depois=A.anexos.filter(a=>a.fase==='DEPOIS').map(mid);
-  const pode=podeAba('man_acomp');
-  const c1='<div class="man-col"><h4>O pedido</h4><div class="man-bloco">'
-    +'<div class="man-par"><span>Departamento</span><b>'+manEsc(manDepNome(s.departamento_id))+'</b></div>'
-    +'<div class="man-par"><span>Onde</span><b>'+manEsc(s.local)+'</b></div>'
-    +'<div class="man-par"><span>Urgência</span><b class="man-u-'+s.urgencia+'">'+MAN_URG[s.urgencia]+'</b></div>'
-    +'<div class="man-par"><span>Aberta</span><span>'+manDth(s.created_at)+' · '+manEsc(s.aberta_por||'')+'</span></div>'
-    +'<div style="margin-top:6px;white-space:pre-wrap;font-size:13px">'+manEsc(s.descricao)+'</div></div>'
-    +'<h4>📷 Antes</h4>'+(antes.length?manMiniaturas(antes):'<div class="man-semfoto">sem foto do problema</div>')
-    +(['SOLICITADA','ORCAMENTO','DEVOLVIDA'].includes(s.etapa)?'<div class="man-linha">'+manBotaoUp('+ foto / vídeo do antes','manFichaArquivos(this,\'ANTES\')')+'</div>':'')
-    +'<h4 style="margin-top:12px">✅ Depois</h4>'+(depois.length?manMiniaturas(depois):'<div class="man-semfoto">'+(ia>=manIdx('EXECUTADA')||fimOk?'sem foto do serviço feito':'aparece quando o serviço for feito')+'</div>')
-    +(pode&&['AGENDADA','EXECUTADA'].includes(s.etapa)?'<div class="man-linha">'+manBotaoUp('+ foto / vídeo do depois','manFichaArquivos(this,\'DEPOIS\')')+'</div>':'')
-    +'<div class="man-lgpd" style="margin-top:6px">🚫 nunca fotografar ou filmar paciente</div></div>';
-  const pr=manPrestDe(s.prestador_id)||{}, emp=manEmpresaDe(s);
-  let c3='<div class="man-col"><h4>Quem cuida</h4><div class="man-bloco">'
-    +'<div class="man-par"><span>Responsável</span><b>'+manEsc(s.responsavel||'— definir')+'</b></div>'
-    +'<div class="man-par"><span>Prestador</span><b>'+(s.prestador_id?manEsc(pr.apelido||'—'):(s.fornecedor_id?manEsc(manFornNome(s.fornecedor_id)):'—'))+'</b></div>'
-    +(pr.servico?'<div class="man-par"><span>Faz</span><span>'+manEsc(pr.servico)+'</span></div>':'')
-    +'<div class="man-par"><span>Empresa</span><span>'+(emp?manEsc(emp):'<i>— só o prestador</i>')+'</span></div>';
-  if(s.prestador_id){ const tel=(pr.telefone||'').replace(/\D/g,'');
-    c3+='<div class="man-par"><span>Contato</span><span>'+manEsc(pr.contato||'—')+'</span></div>'
-      +'<div class="man-par"><span>Telefone</span><span>'+(pr.telefone?manEsc(pr.telefone)+(tel.length>=10?' <a href="https://wa.me/'+(tel.length<=11?'55':'')+tel+'" target="_blank" title="abrir WhatsApp">💬</a>':''):'—')+'</span></div>'
-      +'<div class="man-par"><span>E-mail</span><span>'+manEsc(pr.email||'—')+'</span></div>'; }
-  c3+='</div>';
-  if(A.orcs.length) c3+='<h4>Orçamentos</h4><div class="man-bloco">'+A.orcs.map(o=>'<div class="man-orc'+(o.situacao==='APROVADO'?' aprov':'')+'"><b style="flex:1">'+(o.fora_contrato?'🧩 '+manEsc(o.descricao||'fora do contrato')+'<span class="man-sub">'+manEsc(manOrcNome(o))+'</span>':manEsc(manOrcNome(o)))+'</b>'+manBrl(o.valor)
-      +'<span class="man-sub">'+manEsc([o.prazo,o.empresa].filter(Boolean).join(' · '))+'</span>'+(o.arquivo?'<a href="'+manEsc(manPublica(o.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')
-      +(o.situacao==='APROVADO'?' <span class="man-tag man-t-ok">aprovado</span>':o.situacao==='REPROVADO'?' <span class="man-tag man-t-dev">reprovado</span>':'')+'</div>').join('')+'</div>';
-  if(s.aprovado_por) c3+='<div class="man-ok">✍️ Autorizado por <b>'+manEsc(s.aprovado_por)+'</b> · '+manEsc(s.aprovado_como||'')+' · '+manDt(s.aprovado_data)+'<span class="man-sub">registrado por '+manEsc(s.aprovado_registrado_por||'')+'</span></div>';
-  if(s.incluso_contrato) c3+='<div class="man-ok">📑 '+(s.contrato_id?'Contrato: <b>'+manEsc(manContrNome(s.contrato_id))+'</b>'+(s.contrato_item_id?'<span class="man-sub">item: '+manEsc(manContrItemNome(s.contrato_item_id))+'</span>':''):'Incluso no contrato')+'<span class="man-sub">serviço coberto; só o que for aprovado fora do contrato vai para a fatura</span></div>';
-  if(s.fatura_valor!=null){ const fat=A.anexos.find(a=>a.fase==='FATURA');
-    c3+='<h4>Financeiro</h4><div class="man-bloco">'
-    +'<div class="man-par"><span>Fatura</span><b>'+manBrl(s.fatura_valor)+' · NF '+manEsc(s.fatura_nf||'—')+(fat?' <a href="'+manEsc(manPublica(fat.caminho))+'" target="_blank" title="ver a fatura">📄</a>':'')+'</b></div>'
-    +(s.fatura_empresa?'<div class="man-par"><span>Empresa na nota</span><span>'+manEsc(s.fatura_empresa)+'</span></div>':'')
-    +'<div class="man-par"><span>Vencimento</span><span>'+manDt(s.fatura_vencimento)+'</span></div>'
-    +'<div class="man-par"><span>Enviada ao financeiro</span><span>'+manDt(s.enviada_fin_em)+' · '+manEsc(s.enviada_fin_por||'')+'</span></div>'
-    +'<div class="man-par"><span>Lançada no Omie</span><span>'+(s.omie_lancado_em?manDt(s.omie_lancado_em)+(s.omie_ref?' · '+manEsc(s.omie_ref):''):'—')+'</span></div>'
-    +'<div class="man-par"><span>Pagamento programado</span><b>'+manDt(s.pagto_programado_para)+'</b></div>'
-    +'<div class="man-par"><span>Paga</span><span>'+manDt(s.pago_em)+'</span></div></div>'; }
-  c3+='<details class="man-hist"><summary>Histórico ('+A.hist.length+')</summary><table style="width:100%;border-collapse:collapse"><tbody>'
-    +[...A.hist].reverse().map(x=>'<tr><td>'+manDth(x.created_at)+'</td><td>'+manEsc(x.quem||'')+'</td><td>'
-      +(x.de_etapa===x.para_etapa||!x.de_etapa?'':manEsc(manEt(x.de_etapa).curto)+' → ')+'<b>'+manEsc(manEt(x.para_etapa).curto)+'</b>'
-      +(x.motivo?'<span class="man-sub">'+manEsc(x.motivo)+'</span>':'')+'</td></tr>').join('')+'</tbody></table></details></div>';
-  const c2='<div class="man-col"><h4>Próximo passo</h4>'+manProximo(s)+'</div>';
-  document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
-    +manTagEtapa(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar()">&#10005;</button></div>'+trilha+'<div class="man-mb">'+c1+c2+c3+'</div>';
-}
-
-// o formulário do próximo passo depende só da etapa (e de quem está vendo)
-function manProximo(s){
-  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
-  const cancelar=B('n p','✖ Cancelar solicitação','manCancelar()','encerra com motivo — fica no histórico');
-  const fin=MAN_FIN.includes(s.etapa);
-  const podeAcomp=podeAba('man_acomp'), podeFin=podeAba('man_fin')||podeAcomp;
-  if(s.etapa==='PAGA') return '<div class="man-ok">✅ Jornada completa — paga em '+manDt(s.pago_em)+'.</div>';
-  if(s.etapa==='CONCLUIDA') return '<div class="man-ok">✅ Concluída — incluso no contrato, sem custo.</div>';
-  if(s.etapa==='CANCELADA') return '<div class="man-motivo">Cancelada: '+manEsc(manUltMotivoLocal())+'</div>';
-  if(s.etapa==='DEVOLVIDA') return '<div class="man-motivo">'+manEsc(manUltMotivoLocal())+'</div><div class="man-bloco">Aguardando o departamento corrigir e reenviar.</div>'+(podeAcomp?'<div class="man-linha">'+cancelar+'</div>':'');
-  if(s.etapa==='EXECUTADA' && !podeAcomp && podeAba('man_pedir'))
-    return '<div class="man-bloco"><b>Serviço feito:</b> '+manEsc(s.servico_feito||'')+'</div><div class="man-linha">'+B('r p','↩ Não resolveu — reabrir','manReabrir('+s.id+')')+'</div>';
-  if(fin ? !podeFin : !podeAcomp) return '<div class="man-bloco">Em andamento com '+(fin?'o financeiro':'o administrativo')+'. Você acompanha por aqui.</div>';
-  switch(s.etapa){
-  case 'SOLICITADA': return '<div class="man-bloco agora">'
-    +'<label class="man-rot" style="margin-bottom:10px">Responsável pelo acompanhamento <input id="man-x-resp" list="man-dl-nomes" value="'+manEsc(s.responsavel||manQuem())+'" title="quem vai cuidar até o fim — o nome aparece na lista"></label>'
-    +'<div class="man-linha">'+B('g','💰 Assumir e pedir orçamento','manAssumir(false)')+'</div>'
-    +'<hr class="man-hr"><div class="man-rot" style="margin-bottom:6px">📑 Ou coberto por contrato</div>'+manContrSeletor(s)
-    +'<div class="man-linha">'+B('o','📑 Coberto pelo contrato — agendar','manAssumir(true)','pula orçamento e aprovação do serviço; peças ou o que o contrato não cobre entram depois como orçamento fora do contrato')+'</div>'
-    +'<div class="man-linha">'+B('n p','↩ Devolver pedindo informação','manDevolver()')+cancelar+'</div></div>';
-  case 'ORCAMENTO': { const p=manPrestDe(s.prestador_id)||{}; const vivos=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO').length;
-    return '<div class="man-bloco agora">'
-    +'<label class="man-rot" style="margin-bottom:8px">Prestador (apelido) <input id="man-x-prest" list="man-dl-prest" value="'+manEsc(p.apelido||'')+'" placeholder="digite o apelido — ex.: Zé do ar" onchange="manTrocarPrest(this.value)" title="quem vem fazer o serviço. Não está na lista? Digite o apelido e o sistema cadastra na hora. Lista própria da manutenção — não mistura com os fornecedores das compras"></label>'
-    +(s.prestador_id?'<div class="man-grade"><label class="man-rot">O que faz <input id="man-x-psv" value="'+manEsc(p.servico||'')+'" placeholder="elétrica, ar-condicionado…"></label><label class="man-rot">Telefone / WhatsApp <input id="man-x-ctt" value="'+manEsc(p.telefone||'')+'" placeholder="(19) 9…"></label>'
-      +'<label class="man-rot">Nome / contato <input id="man-x-ctn" value="'+manEsc(p.contato||'')+'"></label><label class="man-rot">E-mail <input id="man-x-cte" value="'+manEsc(p.email||'')+'"></label></div>'
-      +'<div class="man-linha">'+B('o p','💾 Salvar dados do prestador','manSalvarPrest()','fica no cadastro de prestadores e aparece nas próximas solicitações')+'</div>'
-      +'<hr class="man-hr"><div class="man-rot" style="margin-bottom:6px">Orçamento de '+manEsc(p.apelido||'')+'</div>'
-      +'<div class="man-grade"><label class="man-rot">Valor <input id="man-x-val" type="number" min="0" step="0.01" placeholder="R$"></label><label class="man-rot">Prazo <input id="man-x-prazo" placeholder="ex.: 3 dias"></label>'
-      +'<label class="man-rot" style="grid-column:1/-1">Empresa / CNPJ do orçamento (se tiver) <input id="man-x-oemp" value="'+manEsc(manEmpresaPrest(p))+'" placeholder="em branco = só o prestador" title="os dados que vierem no orçamento; sem empresa, segue só com o nome do prestador"></label></div>'
-      +'<div class="man-linha">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manAnexoTmp(this,\'ORCAMENTO\')','application/pdf,image/*')+'<span id="man-x-orcarq" class="man-sub">'+(manTmpOrc?'📄 '+manEsc(manTmpOrc.nome):'sem arquivo')+'</span></div>'
-      +'<div class="man-linha">'+B('o','➕ Incluir orçamento','manIncluirOrc()')+(manAberta.orcs.length?B('n p','🔁 Orçar com outro prestador','manOutroPrest()','limpa o prestador para lançar o orçamento de outro; os já lançados continuam na coluna ao lado'):'')+'</div>'
-      :'<div class="man-sub">Digite o apelido do prestador. Se ainda não estiver no cadastro, o sistema cadastra na hora.</div>')
-    +'</div><div class="man-linha"><button class="man-b g"'+(vivos?'':' disabled')+' onclick="manParaAprovacao()">✍️ Enviar para aprovação'+(vivos>1?' ('+vivos+' orçamentos)':'')+'</button>'+cancelar+'</div>'; }
-  case 'APROVACAO': { const vivos=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO');
-    return '<div class="man-bloco agora"><div class="man-rot" style="margin-bottom:4px">Qual orçamento</div>'
-    + vivos.map((o,i)=>'<label class="man-orc" style="cursor:pointer"><input type="radio" name="man-x-orc" value="'+o.id+'"'+(i===0?' checked':'')+'><b style="flex:1">'+manEsc(manOrcNome(o))+'</b>'+manBrl(o.valor)+'</label>').join('')
-    +'<div class="man-grade" style="margin-top:8px"><label class="man-rot">Autorizado por <input id="man-x-aut" list="man-dl-nomes" placeholder="nome de quem autorizou" title="quem autorizou não precisa entrar no sistema — você registra"></label>'
-    +'<label class="man-rot">Como <select id="man-x-como"><option>WhatsApp</option><option>E-mail</option><option>Verbal</option><option>Presencial</option></select></label>'
-    +'<label class="man-rot">Data <input id="man-x-dt" type="date" value="'+manIsoDia()+'"></label></div>'
-    +'<div class="man-linha">'+B('g','✍️ Registrar aprovação','manAprovar()')+'</div></div>'
-    +'<div class="man-linha">'+B('n p','↩ Reprovar — pedir outro orçamento','manReprovar()')+cancelar+'</div>'; }
-  case 'AGENDADA': { const ag=s.agendada_para?new Date(new Date(s.agendada_para).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
-    return '<div class="man-bloco agora">'
-    +'<div class="man-linha"><label class="man-rot" style="flex:1">Data e hora da execução <input id="man-x-ag" type="datetime-local" value="'+ag+'"></label>'+B('o p','📅 Salvar data','manAgendar()')+'</div>'
-    +(s.agendada_para?'<hr class="man-hr"><label class="man-rot">O que foi feito <textarea id="man-x-feito" placeholder="o serviço realizado, peças trocadas"></textarea></label>'
-      +'<div class="man-sub" style="margin-top:6px">Foto/vídeo do serviço feito: botão "+ foto / vídeo do depois" na coluna do pedido.</div>'
-      +'<div class="man-linha">'+B('g','🔧 Registrar serviço feito','manExecutar()')+'</div>'
-      :'<div class="man-sub">Combine a data com o prestador e salve — sem data, a solicitação acende ⏰ em 2 dias.</div>')
-    +'</div>'+(s.incluso_contrato?manForaBloco(s):'')+'<div class="man-linha">'+cancelar+'</div>'; }
-  case 'EXECUTADA': { const fa=manAberta.orcs.filter(o=>o.fora_contrato&&o.situacao==='APROVADO'), fp=manAberta.orcs.filter(o=>o.fora_contrato&&o.situacao==='EM_ANALISE');
-    const vp=s.incluso_contrato?fa.reduce((t,o)=>t+(Number(o.valor)||0),0):((manAberta.orcs.find(o=>o.situacao==='APROVADO'&&!o.fora_contrato)||{}).valor||'');
-    const fatura='<div class="man-bloco agora">'+(s.incluso_contrato?'<div class="man-sub" style="margin-bottom:6px">Fatura só do que ficou fora do contrato ('+fa.length+' aprovado(s))</div>':'')
-      +'<div class="man-grade"><label class="man-rot">Valor da fatura <input id="man-x-fv" type="number" step="0.01" value="'+manEsc(vp||'')+'"></label>'
-      +'<label class="man-rot">Vencimento <input id="man-x-fvc" type="date"></label><label class="man-rot">Nº da NF / fatura <input id="man-x-fnf"></label></div>'
-      +'<label class="man-rot" style="margin-bottom:8px">Empresa / CNPJ na nota (se tiver) <input id="man-x-femp" value="'+manEsc(manEmpresaFatura(s))+'" placeholder="em branco = só o prestador" title="opcional — sem empresa, a fatura segue no nome do prestador"></label>'
-      +'<div class="man-linha">'+manBotaoUp('📄 Anexar fatura (PDF/foto)','manAnexoTmp(this,\'FATURA\')','application/pdf,image/*')+'<span id="man-x-fatarq" class="man-sub">'+(manTmpFat?'📄 '+manEsc(manTmpFat.nome):'anexe a fatura')+'</span></div>'
-      +'<div class="man-linha">'+B('g','🧾 Enviar ao financeiro','manEnviarFin()')+'</div></div>';
-    return '<div class="man-bloco"><b>Serviço feito:</b> '+manEsc(s.servico_feito||'')+'<span class="man-sub">'+manDth(s.executada_em)+' · '+manEsc(s.executada_por||'')+'</span></div>'
-      +(!s.incluso_contrato?fatura
-        :(fp.length?'<div class="man-motivo">Decida o orçamento fora do contrato (aprovar ou reprovar) antes de fechar.</div>'
-          :(fa.length?fatura:'<div class="man-bloco agora">'+B('g','✅ Concluir (coberto pelo contrato, sem fatura)','manConcluir()')+'</div>'))+manForaBloco(s))
-      +'<div class="man-linha">'+B('r p','↩ Não resolveu — reabrir','manReabrir('+s.id+')')+'</div>'; }
-  case 'FATURA': return '<div class="man-bloco agora"><div class="man-grade"><label class="man-rot">Nº do lançamento no Omie <input id="man-x-omie" placeholder="opcional"></label>'
-    +'<label class="man-rot">Informado por <input id="man-x-inf" list="man-dl-nomes" value="'+manEsc(manQuem())+'" title="se o financeiro não usa o sistema, diga quem informou"></label></div>'
-    +'<div class="man-linha">'+B('g','📘 Lançada no Omie','manOmie()')+'</div></div>';
-  case 'OMIE': return '<div class="man-bloco agora"><label class="man-rot">Pagamento programado para <input id="man-x-prog" type="date" value="'+manEsc(s.fatura_vencimento||'')+'"></label>'
-    +'<div class="man-linha">'+B('g','🗓️ Pagamento programado','manProgramar()')+'</div></div>';
-  case 'PROGRAMADO': return '<div class="man-bloco agora"><div class="man-par"><span>Programado para</span><b>'+manDt(s.pagto_programado_para)+'</b></div>'
-    +'<label class="man-rot" style="margin-top:8px">Pago em <input id="man-x-pago" type="date" value="'+manIsoDia()+'"></label>'
-    +'<div class="man-linha">'+B('g','✅ Marcar como paga','manPagar()')+B('o p','Mudar a data programada','manReprogramar()')+'</div></div>';
+  // coluna 1 — a demanda (editável) + fotos
+  let c1='<div class="man-col"><h4>A demanda</h4><div class="man-bloco'+(A.edit?' agora':'')+'">';
+  if(A.edit){
+    c1+='<div class="man-grade"><label class="man-rot">Onde <input id="me-local" list="man-dl-locais" value="'+manEsc(s.local)+'"></label>'
+      +'<label class="man-rot">O quê <input id="me-oque" value="'+manEsc(s.o_que)+'"></label>'
+      +'<label class="man-rot">Urgência <select id="me-urg">'+Object.keys(MAN_URG).map(k=>'<option value="'+k+'"'+(s.urgencia===k?' selected':'')+'>'+MAN_URG[k]+'</option>').join('')+'</select></label>'
+      +'<label class="man-rot">Departamento <select id="me-dep">'+manDeps.map(d=>'<option value="'+d.id+'"'+(d.id===s.departamento_id?' selected':'')+'>'+manEsc(d.nome)+'</option>').join('')+'</select></label>'
+      +'<label class="man-rot" style="grid-column:1/-1">Responsável pelo acompanhamento <input id="me-resp" list="man-dl-nomes" value="'+manEsc(s.responsavel||'')+'"></label></div>'
+      +'<label class="man-rot">Descrição <textarea id="me-desc">'+manEsc(s.descricao)+'</textarea></label>'
+      +'<div class="man-linha">'+B('g p','💾 Salvar','manSalvarDem()')+B('n p','Cancelar','manAberta.edit=false;manFichaRender()')+'</div>';
+  } else {
+    c1+='<div class="man-par"><span>Departamento</span><b>'+manEsc(manDepNome(s.departamento_id))+'</b></div>'
+      +'<div class="man-par"><span>Onde</span><b>'+manEsc(s.local)+'</b></div>'
+      +'<div class="man-par"><span>Urgência</span><b class="man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'')+'</b></div>'
+      +'<div class="man-par"><span>Responsável</span><span>'+manEsc(s.responsavel||'—')+'</span></div>'
+      +'<div class="man-par"><span>Aberta</span><span>'+manDth(s.created_at)+' · '+manEsc(s.aberta_por||'')+'</span></div>'
+      +'<div style="margin-top:6px;white-space:pre-wrap;font-size:13px">'+manEsc(s.descricao)+'</div>'
+      +(pode?'<div class="man-linha">'+B('n p','✏️ Editar demanda','manAberta.edit=true;manFichaRender()','o que mudar fica no histórico')+'</div>':'');
   }
-  return '';
+  c1+='</div><h4>📷 Antes</h4>'+(antes.length?manMiniaturas(antes):'<div class="man-semfoto">sem foto do problema</div>')
+    +'<div class="man-linha">'+manBotaoUp('+ foto / vídeo do antes','manFichaArquivos(this,\'ANTES\')')+'</div>'
+    +'<h4 style="margin-top:10px">✅ Depois</h4>'+(depois.length?manMiniaturas(depois):'<div class="man-semfoto">sem foto do serviço feito</div>')
+    +'<div class="man-linha">'+manBotaoUp('+ foto / vídeo do depois','manFichaArquivos(this,\'DEPOIS\')')+'<span class="hg-dica" title="a qualquer momento — não depende de orçamento nem de visita">?</span></div>'
+    +'<div class="man-lgpd">🚫 nunca fotografar ou filmar paciente</div></div>';
+  // coluna 2 — fechar, contrato, visitas
+  let c2='<div class="man-col"><h4>Situação</h4><div class="man-bloco agora">';
+  if(s.situacao==='RESOLVIDA') c2+='<div class="man-ok">✅ Resolvida'+(s.sem_cobranca?' — sem cobrança':'')+'<span class="man-sub">'+manDth(s.resolvida_em)+' · '+manEsc(s.resolvida_por||'')+'</span></div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
+  else if(s.situacao==='CANCELADA') c2+='<div class="man-motivo">Cancelada</div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
+  else if(pode) c2+='<div class="man-linha" style="margin-top:0">'+B('g','✅ Resolvida','manResolver(false)')+B('o','✅ Resolvida sem cobrança','manResolver(true)','consertado sem custo')+B('n p','✖ Cancelar','manCancelar()')+'</div>'
+    +'<span class="man-sub">Fechar não depende dos custos: o pagamento segue nos lotes.</span>';
+  else c2+=manTagSit(s);
+  c2+='</div>';
+  // contrato
+  const ativos=manContr.filter(c=>c.ativo!==false);
+  if(s.contrato_id) c2+='<div class="man-ok">📑 Contrato: <b>'+manEsc(manContrNome(s.contrato_id))+'</b>'+(s.contrato_item_id?'<span class="man-sub">item: '+manEsc(manContrItemNome(s.contrato_item_id))+'</span>':'')+'</div>';
+  if(pode && !fim && ativos.length) c2+='<details'+(s.contrato_id?'':' open')+' class="man-hist" style="margin-bottom:10px"><summary>📑 '+(s.contrato_id?'Trocar contrato':'Coberto por contrato?')+'</summary>'
+    +'<div class="man-grade" style="margin-top:6px"><label class="man-rot">Contrato <select id="man-x-contr" onchange="manContrItensSel()"><option value="">— nenhum —</option>'
+    +ativos.map(c=>'<option value="'+c.id+'"'+(s.contrato_id===c.id?' selected':'')+'>'+manEsc(manContrNome(c.id))+(c.prestador_id?' · '+manEsc(manPrestNome(c.prestador_id)):'')+'</option>').join('')+'</select></label>'
+    +'<label class="man-rot">Item coberto <select id="man-x-citem">'+manContrItensOpts(s.contrato_id||null)+'</select></label></div>'
+    +'<div class="man-linha">'+B('o p','💾 Salvar contrato','manSalvarContrato()','o serviço coberto não gera custo; o que ficar fora vira custo normal')+'</div></details>';
+  // visitas
+  const vs=manVisitasDe(s.id);
+  c2+='<h4>🔧 Visitas</h4><div class="man-bloco">'+(vs.length?vs.map(({i,v})=>{ const outras=manVisItens.filter(x=>x.visita_id===v.id&&x.solicitacao_id!==s.id).map(x=>'#'+x.solicitacao_id);
+      return '<div class="man-orc"><b style="flex:1">'+manDt(v.data)+' · '+manEsc(manPrestNome(v.prestador_id))+'<span class="man-sub">'+manEsc(i.feito||'—')+(outras.length?' · na mesma visita: '+outras.join(', '):'')+'</span></b>'
+        +(i.resolveu?'<span class="man-tag man-t-ok">resolveu</span>':'<span class="man-tag man-t-sep">falta terminar</span>')+'</div>'; }).join(''):'<span class="man-sub">Nenhuma visita registrada.</span>')
+    +(pode&&!fim?'<div class="man-linha">'+B('o p','+ Registrar visita','manPreDem='+s.id+';manFechar();trocarAba(\'man_vis\')')+'</div>':'')+'</div></div>';
+  // coluna 3 — custos + histórico
+  const cs=manCustosDe(s.id);
+  let c3='<div class="man-col"><h4>💰 Custos</h4><div class="man-bloco">'+(cs.length?cs.map(c=>{ const ds=manDemsDoCusto(c.id);
+      return '<div class="man-orc'+(c.situacao==='APROVADO'?' aprov':'')+'"><b style="flex:1">'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+' · '+manEsc(c.descricao||'')
+        +'<span class="man-sub">'+manRecebIcone(c)+manEsc(manReceb(c))+(ds.length>1?' · vale para '+ds.map(x=>'#'+x).join(' + '):'')+'</span></b>'+manBrl(c.valor)
+        +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
+    +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>'
+    +'<details class="man-hist"><summary>Histórico ('+A.hist.length+')</summary><table style="width:100%;border-collapse:collapse"><tbody>'
+    +[...A.hist].reverse().map(x=>'<tr><td>'+manDth(x.created_at)+'</td><td>'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')+'</tbody></table></details></div>';
+  document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
+    +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+'</div>';
 }
-function manUltMotivoLocal(){ const h=manAberta?[...manAberta.hist].reverse().find(x=>x.motivo):null; return h?h.motivo:''; }
+async function manFichaReabrir(){ if(!manAberta) return; await manRecarregar(); await manFichaDados(); manFichaRender(); }
+async function manSalvarDem(){ const s=manSols.find(x=>x.id===manAberta.id); const v={local:manGv('me-local').trim(),o_que:manGv('me-oque').trim(),urgencia:manGv('me-urg'),
+    departamento_id:Number(manGv('me-dep')),responsavel:manGv('me-resp').trim()||null,descricao:manGv('me-desc').trim()};
+  if(!v.local||!v.o_que||!v.descricao) return toast('Onde, o quê e descrição não podem ficar em branco','erro');
+  const rot={local:'onde',o_que:'o quê',urgencia:'urgência',departamento_id:'departamento',responsavel:'responsável',descricao:'descrição'};
+  const mud=Object.keys(v).filter(k=>String(v[k]??'')!==String(s[k]??'')); if(!mud.length){ manAberta.edit=false; return manFichaRender(); }
+  try{ await manNota(s.id,'editada: '+mud.map(k=>rot[k]+(k==='descricao'?'':' → '+(k==='departamento_id'?manDepNome(v[k]):(k==='urgencia'?(MAN_URG[v[k]]||'').split(' — ')[0]:v[k]||'—')))).join('; '),v);
+    manAberta.edit=false; toast('Demanda salva — a mudança ficou no histórico'); await manFichaReabrir(); }
+  catch(e){ toast('Erro: '+e.message,'erro'); } }
+async function manFichaArquivos(input, fase){ const id=manAberta.id; const fs=[...input.files]; input.value=''; const p=await manPreparar(fs, fase); if(!p.length) return;
+  try{ const n=await manSubirVarios(p, id); if(n) await manNota(id,'anexou '+n+' arquivo(s) do '+fase.toLowerCase(),manAndamento(id)); }catch(e){ toast('Erro: '+e.message,'erro'); }
+  await manFichaReabrir(); }
+async function manResolver(sem){ const s=manSols.find(x=>x.id===manAberta.id);
+  const pend=manCustosDe(s.id).filter(c=>c.situacao==='AGUARDANDO').length;
+  if(!await hogConfirma({titulo:'Marcar #'+s.id+' como RESOLVIDA'+(sem?' SEM COBRANÇA':'')+'?', texto:s.o_que+' · '+s.local+(pend?'\n\n⚠ '+pend+' custo(s) ainda aguardando aprovação — eles continuam na aba Custos.':''), ok:'✅ Resolvida'})) return;
+  try{ await manNota(s.id,'resolvida'+(sem?' sem cobrança':''),{situacao:'RESOLVIDA',sem_cobranca:!!sem,resolvida_em:new Date().toISOString(),resolvida_por:manQuem()},'RESOLVIDA'); toast('✅ Resolvida'); }
+  catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
+async function manCancelar(){ const s=manSols.find(x=>x.id===manAberta.id); const m=await manMotivo('Cancelar #'+s.id+' ('+s.o_que+')','Motivo do cancelamento (fica no histórico)'); if(!m) return;
+  try{ await manNota(s.id,'cancelada: '+m,{situacao:'CANCELADA'},'CANCELADA'); toast('Cancelada'); }catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
+async function manSalvarContrato(){ const s=manSols.find(x=>x.id===manAberta.id); const cid=Number(manGv('man-x-contr'))||null, iid=Number(manGv('man-x-citem'))||null;
+  try{ await manNota(s.id,cid?'coberto pelo contrato: '+manContrNome(cid)+(iid?' · item: '+manContrItemNome(iid):''):'sem contrato',Object.assign({contrato_id:cid,contrato_item_id:cid?iid:null,incluso_contrato:!!cid},manAndamento(s.id)));
+    toast('Contrato salvo'); }catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
 
-// ── gravação: toda mudança de etapa tem trava e vai para o histórico ───────
-async function manMover(s, para, campos, motivo){
-  const agora=new Date().toISOString();
-  const r=await sbFetch('manut_solicitacoes?id=eq.'+s.id+'&etapa=eq.'+s.etapa,'PATCH',Object.assign({etapa:para,etapa_desde:agora,updated_at:agora},campos||{}));
-  if(!r||!r.length) throw new Error('a solicitação #'+s.id+' já tinha mudado de etapa (outra pessoa mexeu) — recarreguei a ficha');
-  await sbFetch('manut_historico','POST',{solicitacao_id:s.id,de_etapa:s.etapa,para_etapa:para,quem:manQuem(),motivo:motivo||null});
-  Object.assign(s,r[0]);
+// ═══ 🔧 VISITAS ═════════════════════════════════════════════════════════════
+async function manVisCarregar(){
+  const box=document.getElementById('man-vis-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
+  try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
+  manVisFotos={}; manDatalists(); manVisRender();
 }
-async function manNota(s, motivo, campos){
-  if(campos){ const r=await sbFetch('manut_solicitacoes?id=eq.'+s.id,'PATCH',Object.assign({updated_at:new Date().toISOString()},campos)); if(r&&r[0]) Object.assign(s,r[0]); }
-  await sbFetch('manut_historico','POST',{solicitacao_id:s.id,de_etapa:s.etapa,para_etapa:s.etapa,quem:manQuem(),motivo});
+function manVisRender(){
+  const box=document.getElementById('man-vis-box'); if(!box) return;
+  const abertas=manSols.filter(s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO'||s.id===manPreDem).sort((a,b)=>(b.id===manPreDem)-(a.id===manPreDem)||b.id-a.id);
+  let h='<div class="man-bloco agora"><div class="man-grade"><label class="man-rot">Prestador <input id="mv-prest" list="man-dl-prest" placeholder="apelido"></label>'
+   +'<label class="man-rot">Data <input id="mv-data" type="date" value="'+manIsoDia()+'"></label></div>'
+   +'<div class="man-rot" style="margin-bottom:4px">O que ele atendeu nesta visita</div>';
+  if(!abertas.length) h+='<div class="man-sub">Nenhuma demanda em aberto.</div>';
+  abertas.forEach(s=>{ const fs=manVisFotos[s.id]||[];
+    h+='<div class="man-chk"><input type="checkbox" id="mv-c'+s.id+'"'+(s.id===manPreDem?' checked':'')+'><div style="flex:1;min-width:0"><b>#'+s.id+' '+manEsc(s.o_que)+'</b> <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span>'
+      +'<div class="man-grade" style="margin:4px 0 0"><label class="man-rot">O que fez <input id="mv-f'+s.id+'" placeholder="ex.: trocou o trinco" oninput="document.getElementById(\'mv-c'+s.id+'\').checked=true"></label>'
+      +'<label class="man-rot">Ficou <select id="mv-r'+s.id+'"><option value="0">falta terminar</option><option value="1">resolvida</option></select></label></div>'
+      +'<div class="man-linha" style="margin:4px 0 0">'+manBotaoUp('📷 Fotos do depois','manVisArquivos(this,'+s.id+')')+(fs.length?'<span class="man-sub">'+fs.length+' arquivo(s)</span>':'')+'</div></div></div>';
+  });
+  h+='<div class="man-linha">'+'<button class="man-b g" onclick="manVisSalvar()">💾 Registrar visita</button></div></div>'
+   +'<div class="card-titulo" style="margin-top:14px">Visitas registradas</div><table class="hg-tab man-tab"><thead><tr><th>Data</th><th>Prestador</th><th>Demandas atendidas</th></tr></thead><tbody>';
+  if(!manVisitas.length) h+='<tr><td colspan="3" class="sol-vazio">Nenhuma visita ainda.</td></tr>';
+  manVisitas.slice(0,40).forEach(v=>{ const its=manVisItens.filter(i=>i.visita_id===v.id);
+    h+='<tr><td>'+manDt(v.data)+'</td><td><b>'+manEsc(manPrestNome(v.prestador_id))+'</b><span class="man-sub">'+manEsc(v.registrada_por||'')+'</span></td><td>'
+      +its.map(i=>'<a href="#" onclick="manFicha('+i.solicitacao_id+');return false">'+manEsc(manDemCurta(i.solicitacao_id))+'</a> '+(i.resolveu?'<span class="man-tag man-t-ok">resolveu</span>':'<span class="man-tag man-t-sep">falta terminar</span>')+(i.feito?'<span class="man-sub">'+manEsc(i.feito)+'</span>':'')).join('<br>')+'</td></tr>'; });
+  box.innerHTML=h+'</tbody></table>';
 }
-// roda a ação, avisa e recarrega (a ficha, se aberta; senão a tela)
-async function manExec(fn, msg, id, ficha){
-  try{ await fn(); if(msg) toast(msg); }
-  catch(e){ toast('Erro: '+e.message,'erro'); }
-  if(ficha!==false && document.getElementById('man-ov') && document.getElementById('man-ov').classList.contains('on')) await manFicha(id);
-  else manRecarregarTela();
-  manAtualizarBadges();
+async function manVisArquivos(input, sid){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'DEPOIS'); if(!p.length) return;
+  (manVisFotos[sid]=manVisFotos[sid]||[]).push(...p); const c=document.getElementById('mv-c'+sid); const marc=c&&c.checked;
+  const keep={}; manSols.forEach(s=>{ const f=document.getElementById('mv-f'+s.id); if(f) keep[s.id]=[f.value,manGv('mv-r'+s.id),(document.getElementById('mv-c'+s.id)||{}).checked]; });
+  const pr=manGv('mv-prest'), dt=manGv('mv-data'); manVisRender();
+  Object.keys(keep).forEach(k=>{ const [f,r,c]=keep[k]; const ef=document.getElementById('mv-f'+k); if(ef){ ef.value=f; document.getElementById('mv-r'+k).value=r; document.getElementById('mv-c'+k).checked=c; } });
+  document.getElementById('mv-prest').value=pr; document.getElementById('mv-data').value=dt; const cc=document.getElementById('mv-c'+sid); if(cc) cc.checked=true; toast('📷 '+p.length+' foto(s) para a #'+sid); }
+async function manVisSalvar(){
+  const pn=manGv('mv-prest').trim(); if(!pn) return toast('Diga qual prestador veio','erro');
+  const itens=manSols.filter(s=>(document.getElementById('mv-c'+s.id)||{}).checked).map(s=>({s, feito:manGv('mv-f'+s.id).trim(), res:manGv('mv-r'+s.id)==='1'}));
+  if(!itens.length) return toast('Marque pelo menos uma demanda','erro');
+  const p=await manPrestPorNome(pn); if(!p) return;
+  const data=manGv('mv-data')||manIsoDia();
+  if(!await hogConfirma({titulo:'Registrar a visita de '+p.apelido+' ('+manDt(data)+')?', texto:itens.map(x=>'#'+x.s.id+' '+x.s.o_que+' — '+(x.res?'RESOLVIDA':'falta terminar')).join('\n'), ok:'💾 Registrar'})) return;
+  await manExec(async()=>{
+    const r=await sbFetch('manut_visitas','POST',{prestador_id:p.id,data,registrada_por:manQuem()}); const v=r&&r[0]; if(!v) throw new Error('o banco não devolveu a visita');
+    await sbFetch('manut_visita_itens','POST',itens.map(x=>({visita_id:v.id,solicitacao_id:x.s.id,feito:x.feito||null,resolveu:x.res})));
+    for(const x of itens){
+      const fs=manVisFotos[x.s.id]||[]; if(fs.length) await manSubirVarios(fs, x.s.id);
+      const campos=x.res?{situacao:'RESOLVIDA',resolvida_em:new Date().toISOString(),resolvida_por:manQuem()}:{situacao:'ANDAMENTO'};
+      await manNota(x.s.id,'visita de '+p.apelido+' em '+manDt(data)+': '+(x.feito||'—')+(x.res?' (resolveu)':' (falta terminar)')+(fs.length?' · '+fs.length+' foto(s)':''),campos,campos.situacao);
+    }
+    manVisFotos={}; manPreDem=null;
+  },'Visita registrada em '+itens.length+' demanda(s)');
 }
-const manS=()=>manAberta&&manAberta.s;
-async function manMotivo(titulo, rot){ const r=await hogPergunta({titulo, campos:[{id:'t',rot,tipo:'texto-longo',obrigatorio:true}], ok:'Confirmar'}); return r&&r.t.trim(); }
 
-async function manAssumir(incluso){ const s=manS(); const r=manGv('man-x-resp').trim(); if(!r) return toast('Diga quem é o responsável','erro');
-  let cid=null, iid=null, c=null;
-  if(incluso && manContr.some(x=>x.ativo!==false)){
-    cid=Number(manGv('man-x-contr'))||null; if(!cid) return toast('Escolha o contrato','erro');
-    iid=Number(manGv('man-x-citem'))||null; c=manContrDe(cid);
-    if(manContrItensDe(cid).length && !iid && !await hogConfirma({titulo:'Sem item do contrato?', texto:'O contrato tem itens listados e nenhum foi escolhido. Seguir mesmo assim?', ok:'Seguir'})) return; }
-  const txt=incluso?(c?'Contrato: '+manContrNome(cid)+(iid?'\nItem: '+manContrItemNome(iid):''):'Incluso no contrato (sem contrato cadastrado)'):'';
-  if(!await hogConfirma({titulo:incluso?'Coberto por contrato — ir direto para AGENDAR?':'Assumir e pedir orçamento?', texto:'#'+s.id+' '+s.o_que+'\nResponsável: '+r+(txt?'\n'+txt:''), ok:'Confirmar'})) return;
-  const campos={responsavel:r,incluso_contrato:!!incluso};
-  if(incluso){ campos.contrato_id=cid; campos.contrato_item_id=iid; if(c&&c.prestador_id&&!s.prestador_id) campos.prestador_id=c.prestador_id; }
-  await manExec(()=>manMover(s,incluso?'AGENDADA':'ORCAMENTO',campos,'responsável: '+r+(incluso?' · '+(c?'contrato: '+manContrNome(cid)+(iid?' · item: '+manContrItemNome(iid):''):'incluso no contrato'):'')),'Responsável: '+r,s.id); }
-async function manDevolver(){ const s=manS(); const m=await manMotivo('Devolver ao '+manDepNome(s.departamento_id),'O que falta o departamento informar?'); if(!m) return;
-  await manExec(()=>manMover(s,'DEVOLVIDA',null,m),'Devolvida ao departamento',s.id); }
-async function manCancelar(){ const s=manS(); const m=await manMotivo('Cancelar a #'+s.id+' ('+s.o_que+')','Motivo do cancelamento (fica no histórico)'); if(!m) return;
-  await manExec(()=>manMover(s,'CANCELADA',null,m),'Cancelada',s.id); }
+// ═══ 💰 CUSTOS ══════════════════════════════════════════════════════════════
+async function manCusCarregar(){
+  const box=document.getElementById('man-cus-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
+  try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
+  manTmpCus=null; manDatalists(); manCusRender();
+}
+const MAN_FCUS={ PENDENTES:c=>c.situacao==='AGUARDANDO'||(c.situacao==='APROVADO'&&!c.lote_id), AGUARDANDO:c=>c.situacao==='AGUARDANDO', SEMLOTE:c=>c.situacao==='APROVADO'&&!c.lote_id,
+  EMLOTE:c=>!!c.lote_id, REPROVADO:c=>c.situacao==='REPROVADO', TODOS:()=>true };
+function manCusRender(){
+  const box=document.getElementById('man-cus-box'); if(!box) return;
+  const dems=manSols.filter(s=>s.situacao!=='CANCELADA').sort((a,b)=>(b.id===manPreDem)-(a.id===manPreDem)||((a.situacao==='RESOLVIDA')-(b.situacao==='RESOLVIDA'))||b.id-a.id).slice(0,120);
+  let h='<div class="man-bloco agora"><div class="man-grade">'
+   +'<label class="man-rot">Tipo <select id="mc-tipo" onchange="manCusPagoA()">'+Object.keys(MAN_TIPOS).map(k=>'<option value="'+k+'">'+MAN_TIPOS[k]+'</option>').join('')+'</select></label>'
+   +'<label class="man-rot">O que é <input id="mc-desc" placeholder="ex.: visita — janela + tomada"></label>'
+   +'<label class="man-rot">Pago a <select id="mc-pago" onchange="manCusPagoA()"><option value="">— escolha —</option><option value="PRESTADOR">👷 prestador</option><option value="FORNECEDOR">🏪 fornecedor (loja)</option></select></label>'
+   +'<label class="man-rot"><span id="mc-rec-rot">Prestador / loja</span><input id="mc-rec" list="man-dl-prest" placeholder="apelido ou loja"></label>'
+   +'<label class="man-rot">Valor <input id="mc-val" type="number" min="0" step="0.01" placeholder="R$"></label>'
+   +'<label class="man-rot">Empresa / CNPJ (se tiver) <input id="mc-emp" placeholder="em branco = só o nome"></label></div>'
+   +'<div class="man-linha" style="margin-top:0">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manCusArquivo(this)','application/pdf,image/*')+'<span id="mc-arq" class="man-sub">'+(manTmpCus?'📄 '+manEsc(manTmpCus.nome):'sem arquivo')+'</span></div>'
+   +'<div class="man-rot" style="margin:6px 0 4px">Vale para quais demandas <span class="hg-dica" title="Marque mais de uma quando o prestador cobra uma visita só por várias coisas.">?</span></div>'
+   +'<div style="max-height:170px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px;padding:2px 8px">'
+   +dems.map(s=>'<label class="man-chk" style="padding:3px 0"><input type="checkbox" class="mc-dem" value="'+s.id+'"'+(s.id===manPreDem?' checked':'')+'> <span>#'+s.id+' '+manEsc(s.o_que)+' <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span></span></label>').join('')+'</div>'
+   +'<div class="man-linha"><button class="man-b g" onclick="manCusSalvar()">➕ Lançar custo</button></div></div>';
+  const n=k=>manCustos.filter(MAN_FCUS[k]).length;
+  h+='<div class="man-kpis" style="margin-top:12px">'+[['PENDENTES','Pendentes'],['AGUARDANDO','Aguardando aprovação'],['SEMLOTE','Aprovados sem lote'],['EMLOTE','Em lote'],['REPROVADO','Reprovados'],['TODOS','Todos']]
+    .map(([k,r])=>'<div class="man-k'+(manFiltroCus===k?' on':'')+'" onclick="manFiltroCus=\''+k+'\';manCusRender()"><span class="r">'+r+'</span><b>'+n(k)+'</b></div>').join('')+'</div>'
+   +'<table class="hg-tab man-tab"><thead><tr><th>Tipo · o que é</th><th>Demandas</th><th>Pago a</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>';
+  const lista=manCustos.filter(MAN_FCUS[manFiltroCus]||MAN_FCUS.PENDENTES);
+  if(!lista.length) h+='<tr><td colspan="6" class="sol-vazio">Nada aqui.</td></tr>';
+  lista.forEach(c=>{ const ds=manDemsDoCusto(c.id);
+    h+='<tr class="'+(manCusAtraso(c)?'man-parada':'')+'"><td><b>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+'</b><span class="man-sub">'+manEsc(c.descricao||'')+(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank">📄</a>':'')+'</span></td>'
+      +'<td>'+ds.map(x=>'<a href="#" onclick="manFicha('+x+');return false">#'+x+'</a>').join(' + ')+'</td><td>'+manRecebIcone(c)+manEsc(manReceb(c))+(c.empresa?'<span class="man-sub">'+manEsc(c.empresa)+'</span>':'')+'</td>'
+      +'<td style="text-align:right">'+manBrl(c.valor)+'</td><td>'+manTagCus(c)+(c.aprovado_por?'<span class="man-sub">'+manEsc(c.aprovado_por)+' · '+manEsc(c.aprovado_como||'')+'</span>':'')+'</td>'
+      +'<td class="man-acoes">'+(c.situacao==='AGUARDANDO'?'<button class="man-b g p" onclick="manCusAprovar('+c.id+')">✍️ Aprovar</button> <button class="man-b n p" onclick="manCusReprovar('+c.id+')">Reprovar</button>':'')+'</td></tr>'; });
+  box.innerHTML=h+'</tbody></table>';
+  manCusPagoA(); manPreDem=null;
+}
+function manCusPagoA(){ const p=manGv('mc-pago'), t=manGv('mc-tipo'), rot=document.getElementById('mc-rec-rot'), rec=document.getElementById('mc-rec'); if(!rot||!rec) return;
+  rot.textContent=p==='FORNECEDOR'?'Fornecedor (loja)':(p==='PRESTADOR'?'Prestador':'Prestador / loja');
+  rec.setAttribute('list',p==='FORNECEDOR'?'man-dl-lojas':'man-dl-prest'); rec.placeholder=p==='FORNECEDOR'?'nome da loja':'apelido';
+  const sel=document.getElementById('mc-pago'); if(sel) sel.title=t==='MATERIAL'?'material: foi pago à loja ou o prestador comprou e cobra?':''; }
+async function manCusArquivo(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1),'ORCAMENTO'); if(!p.length) return;
+  manTmpCus=p[0]; const e=document.getElementById('mc-arq'); if(e) e.textContent='📄 '+p[0].nome; }
+async function manCusSalvar(){
+  const tipo=manGv('mc-tipo'), pago=manGv('mc-pago'), rec=manGv('mc-rec').trim(), v=Number(manGv('mc-val')), desc=manGv('mc-desc').trim();
+  const dems=[...document.querySelectorAll('.mc-dem:checked')].map(x=>Number(x.value));
+  if(!pago) return toast(tipo==='MATERIAL'?'Material: foi pago ao fornecedor (loja) ou ao prestador?':'Diga se é pago ao prestador ou ao fornecedor','erro');
+  if(!rec) return toast(pago==='FORNECEDOR'?'Diga a loja':'Diga o prestador','erro');
+  if(!(v>0)) return toast('Informe o valor','erro'); if(!dems.length) return toast('Marque a(s) demanda(s)','erro');
+  let p=null; if(pago==='PRESTADOR'){ p=await manPrestPorNome(rec); if(!p) return; }
+  if(!await hogConfirma({titulo:'Lançar o custo?', texto:(MAN_TIPOS[tipo])+' · '+(desc||'—')+'\n'+(pago==='FORNECEDOR'?'🏪 '+rec:'👷 '+p.apelido)+' — '+manBrl(v)+'\nDemandas: '+dems.map(x=>'#'+x).join(' + '), ok:'➕ Lançar'})) return;
+  await manExec(async()=>{
+    const r=await sbFetch('manut_custos','POST',{tipo,descricao:desc||null,pago_a:pago,prestador_id:p?p.id:null,loja:pago==='FORNECEDOR'?rec:null,empresa:manGv('mc-emp').trim()||null,valor:v,lancado_por:manQuem()});
+    const c=r&&r[0]; if(!c) throw new Error('o banco não devolveu o custo');
+    await sbFetch('manut_custo_demandas','POST',dems.map(id=>({custo_id:c.id,solicitacao_id:id})));
+    if(manTmpCus){ const ext=manTmpCus.ext||'pdf'; const cam=await manStoragePut(manTmpCus,'custos/'+c.id+'/orcamento-'+Date.now()+'.'+ext); await sbFetch('manut_custos?id=eq.'+c.id,'PATCH',{arquivo:cam}); manTmpCus=null; }
+    for(const id of dems) await manNota(id,'custo lançado: '+MAN_TIPOS[tipo]+' '+manBrl(v)+' · '+(pago==='FORNECEDOR'?rec:p.apelido)+(dems.length>1?' (vale para '+dems.map(x=>'#'+x).join(' + ')+')':''),manAndamento(id));
+  },'Custo lançado — falta a aprovação');
+}
+async function manCusAprovar(id){ const c=manCustos.find(x=>x.id===id); if(!c) return;
+  const r=await hogPergunta({titulo:'Aprovar: '+(c.descricao||MAN_TIPOS[c.tipo])+' — '+manBrl(c.valor), texto:manReceb(c)+' · demandas '+manDemsDoCusto(id).map(x=>'#'+x).join(' + '),
+    campos:[{id:'por',rot:'Autorizado por',obrigatorio:true,valor:manQuem()},{id:'como',rot:'Como',tipo:'lista',opcoes:['WhatsApp','E-mail','Verbal','Presencial'].map(x=>({v:x,r:x}))}], ok:'✍️ Aprovar'});
+  if(!r) return;
+  await manExec(async()=>{
+    const q=await sbFetch('manut_custos?id=eq.'+id+'&situacao=eq.AGUARDANDO','PATCH',{situacao:'APROVADO',aprovado_por:r.por.trim(),aprovado_como:r.como,aprovado_data:manIsoDia(),decidido_por:manQuem(),decidido_em:new Date().toISOString()});
+    if(!q||!q.length) throw new Error('esse custo já tinha sido decidido — recarreguei');
+    for(const d of manDemsDoCusto(id)) await manNota(d,'custo aprovado: '+(c.descricao||MAN_TIPOS[c.tipo])+' '+manBrl(c.valor)+' · autorizado por '+r.por.trim()+' ('+r.como+')');
+  },'Aprovado — já pode entrar num lote de pagamento'); }
+async function manCusReprovar(id){ const c=manCustos.find(x=>x.id===id); if(!c) return;
+  const m=await manMotivo('Reprovar: '+(c.descricao||MAN_TIPOS[c.tipo]),'Por que foi reprovado?'); if(!m) return;
+  await manExec(async()=>{
+    const q=await sbFetch('manut_custos?id=eq.'+id+'&situacao=eq.AGUARDANDO','PATCH',{situacao:'REPROVADO',motivo:m,decidido_por:manQuem(),decidido_em:new Date().toISOString()});
+    if(!q||!q.length) throw new Error('esse custo já tinha sido decidido — recarreguei');
+    for(const d of manDemsDoCusto(id)) await manNota(d,'custo reprovado: '+(c.descricao||MAN_TIPOS[c.tipo])+' — '+m);
+  },'Reprovado'); }
+
+// ═══ 💳 LOTES DE PAGAMENTO ══════════════════════════════════════════════════
+async function manFinCarregar(){
+  const box=document.getElementById('man-fin-box'); if(!box) return;
+  box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
+  await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
+  try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
+  manTmpFat=null; manDatalists(); manFinRender(); manAtualizarBadges(false);
+}
+function manLoteNomeReceb(l){ return l.pago_a==='FORNECEDOR'?(l.loja||'—'):manPrestNome(l.prestador_id); }
+function manFinRender(){
+  const box=document.getElementById('man-fin-box'); if(!box) return;
+  const livres=manCustos.filter(c=>c.situacao==='APROVADO'&&!c.lote_id);
+  const recs={}; livres.forEach(c=>{ const k=manRecebChave(c); (recs[k]=recs[k]||{rot:manRecebIcone(c)+manReceb(c),itens:[]}).itens.push(c); });
+  const chaves=Object.keys(recs); if(!chaves.includes(manLoteReceb)) manLoteReceb=chaves[0]||'';
+  const pode=podeAba('man_acomp');
+  let h='';
+  if(pode){
+    h+='<div class="man-bloco agora"><div class="man-rot" style="margin-bottom:6px">🧾 Gerar lote de pagamento <span class="hg-dica" title="Junta custos aprovados de um mesmo recebedor (de uma ou várias demandas) numa cobrança só. O lote vai para o financeiro lançar no Omie.">?</span></div>';
+    if(!chaves.length) h+='<span class="man-sub">Nenhum custo aprovado esperando lote.</span>';
+    else {
+      const R=recs[manLoteReceb], emp=(R.itens.find(c=>c.empresa)||{}).empresa||(()=>{ const c=R.itens[0]; const p=c.pago_a==='PRESTADOR'?manPrestDe(c.prestador_id):null; return p?[p.empresa,p.documento].filter(Boolean).join(' · '):''; })();
+      h+='<div class="man-grade"><label class="man-rot">Recebedor <select onchange="manLoteReceb=this.value;manFinRender()">'+chaves.map(k=>'<option value="'+manEsc(k)+'"'+(k===manLoteReceb?' selected':'')+'>'+manEsc(recs[k].rot)+' ('+recs[k].itens.length+')</option>').join('')+'</select></label><span></span></div>'
+        +R.itens.map(c=>'<label class="man-chk"><input type="checkbox" class="ml-c" value="'+c.id+'" checked onchange="manLoteSoma()"> <span style="flex:1"><b>'+manEsc(c.descricao||MAN_TIPOS[c.tipo])+'</b><span class="man-sub">'+manEsc(MAN_TIPOS[c.tipo])+' · '+manDemsDoCusto(c.id).map(x=>manEsc(manDemCurta(x))).join(' + ')+'</span></span><b>'+manBrl(c.valor)+'</b></label>').join('')
+        +'<div class="man-grade" style="margin-top:8px"><label class="man-rot">Total do lote <input id="ml-tot" readonly></label><label class="man-rot">Vencimento <input id="ml-venc" type="date"></label>'
+        +'<label class="man-rot">NF / fatura <input id="ml-nf" placeholder="nº (se tiver)"></label><label class="man-rot">Empresa / CNPJ na nota <input id="ml-emp" value="'+manEsc(emp)+'" placeholder="em branco = só o nome"></label></div>'
+        +'<div class="man-linha">'+manBotaoUp('📄 Anexar fatura (PDF/foto)','manLoteArquivo(this)','application/pdf,image/*')+'<span id="ml-arq" class="man-sub">'+(manTmpFat?'📄 '+manEsc(manTmpFat.nome):'sem arquivo')+'</span></div>'
+        +'<div class="man-linha"><button class="man-b g" onclick="manLoteGerar()">🧾 Gerar lote e mandar ao financeiro</button></div>';
+    }
+    h+='</div>';
+  }
+  const ativos=manLotes.filter(l=>l.etapa!=='CANCELADO'), soma=a=>a.reduce((t,l)=>t+Number(l.total||0),0);
+  const fF=ativos.filter(l=>l.etapa==='FINANCEIRO'), fO=ativos.filter(l=>l.etapa==='OMIE'), fP=ativos.filter(l=>l.etapa==='PROGRAMADO');
+  h+='<div class="man-kpis" style="margin-top:12px"><div class="man-k fixo'+(fF.length?' al':'')+'"><span class="r">🧾 A lançar no Omie</span><b>'+fF.length+'</b><span class="man-sub">'+manBrl(soma(fF))+'</span></div>'
+   +'<div class="man-k fixo'+(fO.length?' al':'')+'"><span class="r">📘 Lançados sem programação</span><b>'+fO.length+'</b><span class="man-sub">'+manBrl(soma(fO))+'</span></div>'
+   +'<div class="man-k fixo"><span class="r">🗓️ Pagamento programado</span><b>'+fP.length+'</b><span class="man-sub">'+manBrl(soma(fP))+'</span></div></div>'
+   +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>Recebedor</th><th class="man-ocs">Custos · demandas</th><th style="text-align:right">Total</th><th class="man-ocm">NF · venc.</th><th>Financeiro</th><th></th></tr></thead><tbody>';
+  const lista=manLotes.filter(l=>l.etapa!=='CANCELADO'&&(l.etapa!=='PAGO'||manDias(l.etapa_desde)<60));
+  if(!lista.length) h+='<tr><td colspan="7" class="sol-vazio">Nenhum lote.</td></tr>';
+  lista.forEach(l=>{ const cs=manCustos.filter(c=>c.lote_id===l.id); const at=manLoteAtraso(l); const t=MAN_LOTE[l.etapa]||[l.etapa,'man-t-n'];
+    const prox={FINANCEIRO:'<button class="man-b g p" onclick="manLoteOmie('+l.id+')">📘 Lançado no Omie</button> '+(pode?'<button class="man-b n p" onclick="manLoteDesfazer('+l.id+')">Desfazer</button>':''),
+      OMIE:'<button class="man-b g p" onclick="manLoteProgramar('+l.id+')">🗓️ Programar pagamento</button>',
+      PROGRAMADO:'<button class="man-b g p" onclick="manLotePagar('+l.id+')">✅ Pago</button> <button class="man-b n p" onclick="manLoteProgramar('+l.id+')">Mudar data</button>'}[l.etapa]||'';
+    h+='<tr class="'+(at?'man-parada':'')+'"><td>'+l.id+'</td><td><b>'+(l.pago_a==='FORNECEDOR'?'🏪 ':'👷 ')+manEsc(manLoteNomeReceb(l))+'</b>'+(l.fatura_empresa?'<span class="man-sub">'+manEsc(l.fatura_empresa)+'</span>':'')+'</td>'
+      +'<td class="man-ocs">'+cs.map(c=>manEsc(c.descricao||MAN_TIPOS[c.tipo])+' <span class="man-sub" style="display:inline">'+manDemsDoCusto(c.id).map(x=>'#'+x).join(' + ')+'</span>').join('<br>')+'</td>'
+      +'<td style="text-align:right">'+manBrl(l.total)+(l.arquivo?' <a href="'+manEsc(manPublica(l.arquivo))+'" target="_blank" title="fatura">📄</a>':'')+'</td>'
+      +'<td class="man-ocm">'+manEsc(l.fatura_nf||'—')+'<span class="man-sub">'+(l.fatura_vencimento?'vence '+manDt(l.fatura_vencimento):'')+'</span></td>'
+      +'<td><span class="man-tag '+t[1]+'">'+t[0]+'</span>'+(at?' <span class="man-tag man-atraso">⏰ '+at+' d</span>':'')+(l.pagto_programado_para?'<span class="man-sub">🗓️ '+manDt(l.pagto_programado_para)+'</span>':'')+(l.pago_em?'<span class="man-sub">pago '+manDt(l.pago_em)+'</span>':'')+'</td>'
+      +'<td class="man-acoes">'+prox+'</td></tr>'; });
+  box.innerHTML=h+'</tbody></table>'; manLoteSoma();
+}
+function manLoteSoma(){ const e=document.getElementById('ml-tot'); if(!e) return; const t=[...document.querySelectorAll('.ml-c:checked')].reduce((s,x)=>s+Number((manCustos.find(c=>c.id==x.value)||{}).valor||0),0); e.value=manBrl(t); }
+async function manLoteArquivo(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1),'FATURA'); if(!p.length) return; manTmpFat=p[0]; const e=document.getElementById('ml-arq'); if(e) e.textContent='📄 '+p[0].nome; }
+async function manLoteGerar(){
+  const ids=[...document.querySelectorAll('.ml-c:checked')].map(x=>Number(x.value)); if(!ids.length) return toast('Marque os custos','erro');
+  const cs=ids.map(id=>manCustos.find(c=>c.id===id)), c0=cs[0], tot=cs.reduce((s,c)=>s+Number(c.valor||0),0);
+  const venc=manGv('ml-venc'), nf=manGv('ml-nf').trim(), emp=manGv('ml-emp').trim();
+  if(!await hogConfirma({titulo:'Gerar lote para '+manReceb(c0)+' — '+manBrl(tot)+'?', texto:cs.map(c=>'• '+(c.descricao||MAN_TIPOS[c.tipo])+' '+manBrl(c.valor)).join('\n')+(venc?'\nVence '+manDt(venc):'')+(nf?'\nNF '+nf:''), ok:'🧾 Gerar e mandar ao financeiro'})) return;
+  await manExec(async()=>{
+    const r=await sbFetch('manut_lotes','POST',{pago_a:c0.pago_a,prestador_id:c0.pago_a==='PRESTADOR'?c0.prestador_id:null,loja:c0.pago_a==='FORNECEDOR'?c0.loja:null,total:tot,
+      fatura_nf:nf||null,fatura_vencimento:venc||null,fatura_empresa:emp||null,etapa:'FINANCEIRO',enviado_por:manQuem()});
+    const l=r&&r[0]; if(!l) throw new Error('o banco não devolveu o lote');
+    const q=await sbFetch('manut_custos?id=in.('+ids.join(',')+')&lote_id=is.null&situacao=eq.APROVADO','PATCH',{lote_id:l.id});
+    if(!q||q.length!==ids.length){ await sbFetch('manut_custos?lote_id=eq.'+l.id,'PATCH',{lote_id:null}); await sbFetch('manut_lotes?id=eq.'+l.id,'PATCH',{etapa:'CANCELADO'}); throw new Error('algum custo já estava em outro lote — nada foi gerado, recarreguei'); }
+    if(manTmpFat){ const cam=await manStoragePut(manTmpFat,'lotes/'+l.id+'/fatura-'+Date.now()+'.'+(manTmpFat.ext||'pdf')); await sbFetch('manut_lotes?id=eq.'+l.id,'PATCH',{arquivo:cam}); manTmpFat=null; }
+    const dems=[...new Set(ids.flatMap(id=>manDemsDoCusto(id)))];
+    for(const d of dems) await sbFetch('manut_historico','POST',{solicitacao_id:d,de_etapa:null,para_etapa:null,quem:manQuem(),motivo:'lote de pagamento #'+l.id+' gerado ('+manReceb(c0)+' · '+manBrl(tot)+')'});
+  },'Lote gerado — acendeu o sino do financeiro'); }
+async function manLoteNota(l, motivo){ const dems=[...new Set(manCustos.filter(c=>c.lote_id===l.id).flatMap(c=>manDemsDoCusto(c.id)))];
+  for(const d of dems) await sbFetch('manut_historico','POST',{solicitacao_id:d,de_etapa:null,para_etapa:null,quem:manQuem(),motivo:'lote #'+l.id+': '+motivo}); }
+async function manLoteMover(l, para, campos, motivo){ const r=await sbFetch('manut_lotes?id=eq.'+l.id+'&etapa=eq.'+l.etapa,'PATCH',Object.assign({etapa:para,etapa_desde:new Date().toISOString()},campos||{}));
+  if(!r||!r.length) throw new Error('o lote #'+l.id+' já tinha mudado (outra pessoa mexeu) — recarreguei'); await manLoteNota(l,motivo); }
+async function manLoteOmie(id){ const l=manLotes.find(x=>x.id===id); if(!l) return;
+  const r=await hogPergunta({titulo:'Lote #'+id+' lançado no Omie — '+manBrl(l.total), campos:[{id:'ref',rot:'Nº do lançamento no Omie (opcional)'},{id:'inf',rot:'Informado por',valor:manQuem(),obrigatorio:true}], ok:'📘 Confirmar'}); if(!r) return;
+  await manExec(()=>manLoteMover(l,'OMIE',{omie_lancado_em:new Date().toISOString(),omie_lancado_por:r.inf.trim(),omie_ref:(r.ref||'').trim()||null},'lançado no Omie'+(r.ref?' ('+r.ref+')':'')+' · informado por '+r.inf.trim()),'Lançado no Omie'); }
+async function manLoteProgramar(id){ const l=manLotes.find(x=>x.id===id); if(!l) return;
+  const r=await hogPergunta({titulo:'Pagamento programado — lote #'+id, campos:[{id:'d',rot:'Data programada',tipo:'data',valor:l.pagto_programado_para||l.fatura_vencimento||'',obrigatorio:true}], ok:'🗓️ Confirmar'}); if(!r) return;
+  await manExec(async()=>{ if(l.etapa==='PROGRAMADO'){ await sbFetch('manut_lotes?id=eq.'+id,'PATCH',{pagto_programado_para:r.d}); await manLoteNota(l,'pagamento reprogramado para '+manDt(r.d)); }
+    else await manLoteMover(l,'PROGRAMADO',{pagto_programado_para:r.d},'pagamento programado para '+manDt(r.d)); },'Data salva'); }
+async function manLotePagar(id){ const l=manLotes.find(x=>x.id===id); if(!l) return;
+  const r=await hogPergunta({titulo:'Lote #'+id+' pago — '+manBrl(l.total), campos:[{id:'d',rot:'Pago em',tipo:'data',valor:manIsoDia(),obrigatorio:true}], ok:'✅ Pago'}); if(!r) return;
+  await manExec(()=>manLoteMover(l,'PAGO',{pago_em:r.d},'pago em '+manDt(r.d)),'✅ Pago'); }
+async function manLoteDesfazer(id){ const l=manLotes.find(x=>x.id===id); if(!l) return;
+  const m=await manMotivo('Desfazer o lote #'+id+'?','Motivo (os custos voltam para "aprovados sem lote")'); if(!m) return;
+  await manExec(async()=>{ await manLoteMover(l,'CANCELADO',null,'desfeito: '+m); await sbFetch('manut_custos?lote_id=eq.'+id,'PATCH',{lote_id:null}); },'Lote desfeito'); }
+
+// ── 🔔 contadores e alertas ──────────────────────────────────────────────
+async function manAtualizarBadges(recarregar){
+  if(typeof SESSAO==='undefined' || !SESSAO || !sbUrl || !sbKey) return;
+  if(!['man_acomp','man_fin','man_pedir','man_cus','man_contr'].some(a=>podeAba(a))) return;
+  try{
+    if(recarregar!==false){ if(!manDeps.length) await manBase(); if(manSemTabela) return; await manDadosCarregar(); }
+    const acomp=podeAba('man_acomp'), fin=podeAba('man_fin');
+    const nD=manSols.filter(s=>s.situacao==='ABERTA'||manAtraso(s)>0).length;
+    const nC=manCustos.filter(c=>c.situacao==='AGUARDANDO').length;
+    const nL=manLotes.filter(l=>l.etapa==='FINANCEIRO'||l.etapa==='OMIE'||manLoteAtraso(l)>0).length;
+    const nK=manContr.filter(c=>c.ativo!==false&&manContrDias(c)!=null&&manContrDias(c)<=30).length;
+    solBadge('man_acomp', acomp?nD:0); solBadge('man_cus', podeAba('man_cus')?nC:0); solBadge('man_fin', fin?nL:0); solBadge('man_pedir', 0);
+    manAlertaN=(acomp?nD+nC:0)+(fin?nL:0)+(podeAba('man_contr')?nK:0);
+    if(typeof alAtualizarBadge==='function') alAtualizarBadge();
+    if(typeof mbSync==='function') mbSync();
+  }catch(e){}
+}
+setInterval(manAtualizarBadges, 90000);
+function manAlertaLinhas(){
+  const out=[]; if(typeof podeAba!=='function') return out;
+  if(podeAba('man_acomp')){
+    manSols.forEach(s=>{ const a=manAtraso(s); if(!(s.situacao==='ABERTA'||a>0)) return;
+      out.push({ setor:'MANUTENCAO', chave:'m'+s.id,
+        titulo:'🔧 #'+s.id+' '+alEsc(s.o_que)+' — '+alEsc(s.local)+(a?' <span style="color:var(--vermelho)">'+manTagAtraso(s).replace(/<[^>]+>/g,'').trim()+'</span>':''),
+        sub:(MAN_SIT[s.situacao]||[''])[0]+' · '+alEsc(manDepNome(s.departamento_id))+(s.responsavel?' · responsável '+alEsc(s.responsavel):''),
+        acoes:'<button class="al-b claro" onclick="manFicha('+s.id+')">abrir →</button>' }); });
+    const ag=manCustos.filter(c=>c.situacao==='AGUARDANDO');
+    if(ag.length) out.push({ setor:'MANUTENCAO', chave:'ca', titulo:'💰 '+ag.length+' custo(s) aguardando aprovação — '+manBrl(ag.reduce((t,c)=>t+Number(c.valor||0),0)),
+      sub:ag.slice(0,4).map(c=>alEsc(c.descricao||MAN_TIPOS[c.tipo])+' ('+alEsc(manReceb(c))+')').join(' · '), acoes:'<button class="al-b claro" onclick="manFiltroCus=\'AGUARDANDO\';trocarAba(\'man_cus\')">abrir →</button>' });
+    const sl=manCustos.filter(c=>c.situacao==='APROVADO'&&!c.lote_id&&manCusAtraso(c)>0);
+    if(sl.length) out.push({ setor:'MANUTENCAO', chave:'cl', titulo:'💳 '+sl.length+' custo(s) aprovado(s) há mais de 10 dias sem lote de pagamento',
+      sub:sl.slice(0,4).map(c=>alEsc(manReceb(c))+' '+manBrl(c.valor)).join(' · '), acoes:'<button class="al-b claro" onclick="trocarAba(\'man_fin\')">abrir →</button>' });
+  }
+  if(podeAba('man_fin')) manLotes.forEach(l=>{ if(!(l.etapa==='FINANCEIRO'||l.etapa==='OMIE'||manLoteAtraso(l)>0)) return;
+    out.push({ setor:'MANUTENCAO', chave:'l'+l.id, titulo:'💳 Lote #'+l.id+' — '+alEsc(manLoteNomeReceb(l))+' '+manBrl(l.total)+(manLoteAtraso(l)?' <span style="color:var(--vermelho)">⏰ '+manLoteAtraso(l)+' d</span>':''),
+      sub:(MAN_LOTE[l.etapa]||[''])[0]+(l.fatura_vencimento?' · vence '+manDt(l.fatura_vencimento):''), acoes:'<button class="al-b claro" onclick="trocarAba(\'man_fin\')">abrir →</button>' }); });
+  if(podeAba('man_contr')) manContr.forEach(c=>{ const d=manContrDias(c); if(c.ativo===false||d==null||d>30) return;
+    out.push({ setor:'MANUTENCAO', chave:'c'+c.id, titulo:'📑 Contrato '+(d<0?'VENCIDO há '+(-d)+' d':'vence em '+d+' d')+': '+alEsc(manContrNome(c.id)),
+      sub:(c.prestador_id?alEsc(manPrestNome(c.prestador_id))+' · ':'')+'fim da vigência '+manDt(c.vigencia_fim)+' — renovar ou encerrar',
+      acoes:'<button class="al-b claro" onclick="manContrEd='+c.id+';trocarAba(\'man_contr\')">abrir →</button>' }); });
+  return out;
+}
+
 async function manPrestCriar(apelido, extra){
   const r=await sbFetch('manut_prestadores','POST',Object.assign({criado_por:manQuem()},extra||{},{apelido:apelido.trim()}));
   const p=r&&r[0]; if(p){ manPrest.push(p); manPrest.sort((a,b)=>a.apelido.localeCompare(b.apelido,'pt-BR')); manDatalists(); } return p;
 }
-async function manTrocarPrest(apelido){ const s=manS(); apelido=(apelido||'').trim(); if(!apelido) return;
-  let p=manPrest.find(x=>manNorm(x.apelido)===manNorm(apelido));
-  if(!p){
-    if(!await hogConfirma({titulo:'Prestador novo', texto:'Cadastrar "'+apelido+'" na lista de prestadores da manutenção?\nTelefone e o que faz você completa em seguida. Empresa não é obrigatória.', ok:'➕ Cadastrar'})) return;
-    try{ p=await manPrestCriar(apelido); }catch(e){ return toast('Não consegui cadastrar: '+e.message,'erro'); }
-    if(!p) return;
-  }
-  await manExec(()=>manNota(s,'prestador: '+p.apelido,{prestador_id:p.id}),'',s.id); }
-function manOutroPrest(){ const e=document.getElementById('man-x-prest'); if(e){ e.value=''; e.focus(); } }
-async function manSalvarPrest(){ const s=manS(); const p=manPrestDe(s.prestador_id); if(!p) return;
-  const d={servico:manGv('man-x-psv').trim()||null,contato:manGv('man-x-ctn').trim()||null,telefone:manGv('man-x-ctt').trim()||null,
-    email:manGv('man-x-cte').trim()||null,updated_at:new Date().toISOString()};
-  try{ const r=await sbFetch('manut_prestadores?id=eq.'+p.id,'PATCH',d); if(!r||!r.length) return toast('Nada gravado — confira o prestador','erro');
-    Object.assign(p,r[0]); manDatalists(); toast('Dados do prestador salvos'); await manFicha(s.id); }
-  catch(e){ toast('Erro: '+e.message,'erro'); } }
-async function manAnexoTmp(input, fase){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1), fase); if(!p.length) return;
-  if(fase==='ORCAMENTO'){ manTmpOrc=p[0]; const e=document.getElementById('man-x-orcarq'); if(e) e.textContent='📄 '+p[0].nome; }
-  else { manTmpFat=p[0]; const e=document.getElementById('man-x-fatarq'); if(e) e.textContent='📄 '+p[0].nome; } }
-async function manIncluirOrc(){ const s=manS(); const v=Number(manGv('man-x-val')); if(!(v>0)) return toast('Informe o valor do orçamento','erro');
-  const prazo=manGv('man-x-prazo').trim();
-  await manExec(async()=>{
-    let arq=null; if(manTmpOrc){ arq=await manSubir(manTmpOrc, s.id); manTmpOrc=null; }
-    await sbFetch('manut_orcamentos','POST',{solicitacao_id:s.id,prestador_id:s.prestador_id||null,empresa:manGv('man-x-oemp').trim()||null,valor:v,prazo:prazo||null,arquivo:arq,lancado_por:manQuem()});
-    await manNota(s,'orçamento '+manQuemFaz(s)+' '+manBrl(v)+(prazo?' · '+prazo:''));
-  },'Orçamento incluído — dá para lançar outro, de outro prestador',s.id); }
-async function manParaAprovacao(){ const s=manS(); const v=manAberta.orcs.filter(o=>o.situacao!=='REPROVADO');
-  if(!await hogConfirma({titulo:'Enviar para aprovação?', texto:'#'+s.id+' '+s.o_que+'\n'+v.map(o=>manOrcNome(o)+' '+manBrl(o.valor)).join('\n'), ok:'✍️ Enviar'})) return;
-  await manExec(()=>manMover(s,'APROVACAO',null,v.length+' orçamento(s)'),'Aguardando aprovação',s.id); }
-async function manAprovar(){ const s=manS(); const por=manGv('man-x-aut').trim(); if(!por) return toast('Diga quem autorizou','erro');
-  const r=document.querySelector('input[name=man-x-orc]:checked'); if(!r) return toast('Escolha o orçamento','erro');
-  const o=manAberta.orcs.find(x=>x.id===Number(r.value)), como=manGv('man-x-como'), data=manGv('man-x-dt')||manIsoDia();
-  if(!await hogConfirma({titulo:'Registrar a aprovação?', texto:manOrcNome(o)+' — '+manBrl(o.valor)+'\nAutorizado por: '+por+' ('+como+', '+manDt(data)+')', ok:'✍️ Registrar'})) return;
-  await manExec(async()=>{
-    await manMover(s,'AGENDADA',{orcamento_aprovado_id:o.id,aprovado_por:por,aprovado_como:como,aprovado_data:data,aprovado_registrado_por:manQuem(),prestador_id:o.prestador_id||s.prestador_id||null},
-      'autorizado por '+por+' ('+como+') · '+manOrcNome(o)+' '+manBrl(o.valor));
-    await sbFetch('manut_orcamentos?id=eq.'+o.id,'PATCH',{situacao:'APROVADO'});
-    const pa=manPrestDe(o.prestador_id); if(pa&&o.empresa&&!pa.empresa){ const r=await sbFetch('manut_prestadores?id=eq.'+pa.id,'PATCH',{empresa:o.empresa,updated_at:new Date().toISOString()}); if(r&&r[0]) Object.assign(pa,r[0]); }
-    await sbFetch('manut_orcamentos?solicitacao_id=eq.'+s.id+'&situacao=eq.EM_ANALISE','PATCH',{situacao:'REPROVADO'});
-  },'Aprovado — agora é agendar com o prestador',s.id); }
-async function manReprovar(){ const s=manS(); const m=await manMotivo('Reprovar e pedir outro orçamento','Por que foi reprovado?'); if(!m) return;
-  await manExec(async()=>{ await manMover(s,'ORCAMENTO',null,'reprovado: '+m);
-    await sbFetch('manut_orcamentos?solicitacao_id=eq.'+s.id+'&situacao=eq.EM_ANALISE','PATCH',{situacao:'REPROVADO'}); },'Volta para orçamento',s.id); }
-async function manAgendar(){ const s=manS(); const v=manGv('man-x-ag'); if(!v) return toast('Escolha data e hora','erro');
-  if(!await hogConfirma({titulo:'Agendar a execução para '+manDth(v)+'?', texto:'#'+s.id+' '+s.o_que+' · '+(manQuemFaz(s)||'sem prestador'), ok:'📅 Agendar'})) return;
-  await manExec(()=>manNota(s,'agendada para '+manDth(v),{agendada_para:new Date(v).toISOString()}),'Data salva',s.id); }
-async function manFichaArquivos(input, fase){ const s=manS(); const fs=[...input.files]; input.value=''; const p=await manPreparar(fs, fase); if(!p.length) return;
-  await manExec(async()=>{ const n=await manSubirVarios(p, s.id); if(n) await manNota(s,'anexou '+n+' arquivo(s) do '+fase.toLowerCase()); },'',s.id); }
-async function manExecutar(){ const s=manS(); const t=manGv('man-x-feito').trim(); if(!t) return toast('Descreva o que foi feito','erro');
-  const nD=manAberta.anexos.filter(a=>a.fase==='DEPOIS').length;
-  if(!await hogConfirma({titulo:'Registrar o serviço como FEITO?', texto:t+'\n\n'+nD+' foto(s)/vídeo(s) do depois'+(nD?'':' — nenhum anexado'), ok:'🔧 Registrar'})) return;
-  await manExec(()=>manMover(s,'EXECUTADA',{servico_feito:t,executada_em:new Date().toISOString(),executada_por:manQuem()},t),
-    s.incluso_contrato?'Feito — é só concluir':'Feito — agora anexar a fatura e mandar ao financeiro',s.id); }
-async function manConcluir(){ const s=manS(); if(!await hogConfirma({titulo:'Concluir a #'+s.id+' sem fatura?', texto:'Incluso no contrato — custo R$ 0.', ok:'✅ Concluir'})) return;
-  await manExec(()=>manMover(s,'CONCLUIDA',null,'incluso no contrato'),'Concluída',s.id); }
-async function manEnviarFin(){ const s=manS(); const v=Number(manGv('man-x-fv')), vc=manGv('man-x-fvc'), nf=manGv('man-x-fnf').trim();
-  if(!(v>0)) return toast('Informe o valor da fatura','erro'); if(!vc) return toast('Informe o vencimento','erro'); if(!manTmpFat) return toast('Anexe a fatura (PDF ou foto)','erro');
-  const emp=manGv('man-x-femp').trim();
-  if(!await hogConfirma({titulo:'Enviar ao financeiro?', texto:manQuemFaz(s)+(emp?' · '+emp:' · sem empresa (só o prestador)')+' — '+manBrl(v)+' · vence '+manDt(vc)+'\nNF '+(nf||'—'), ok:'🧾 Enviar'})) return;
-  await manExec(async()=>{ await manSubir(manTmpFat, s.id); manTmpFat=null;
-    await manMover(s,'FATURA',{fatura_empresa:emp||null,fatura_valor:v,fatura_vencimento:vc,fatura_nf:nf||null,enviada_fin_em:new Date().toISOString(),enviada_fin_por:manQuem()},'fatura '+manBrl(v)+' vence '+manDt(vc)); },
-    'Enviada — acendeu o sino do financeiro',s.id); }
-async function manOmie(){ const s=manS(); const inf=manGv('man-x-inf').trim()||manQuem(), ref=manGv('man-x-omie').trim();
-  if(!await hogConfirma({titulo:'Marcar como LANÇADA NO OMIE?', texto:manBrl(s.fatura_valor)+' · '+manQuemFaz(s)+'\nInformado por: '+inf, ok:'📘 Confirmar'})) return;
-  await manExec(()=>manMover(s,'OMIE',{omie_lancado_em:new Date().toISOString(),omie_lancado_por:inf,omie_ref:ref||null},'lançada no Omie'+(ref?' ('+ref+')':'')+' · informado por '+inf),'Lançada no Omie',s.id); }
-async function manProgramar(){ const s=manS(); const d=manGv('man-x-prog'); if(!d) return toast('Informe a data programada','erro');
-  if(!await hogConfirma({titulo:'Pagamento programado para '+manDt(d)+'?', texto:manBrl(s.fatura_valor)+' · '+manQuemFaz(s), ok:'🗓️ Confirmar'})) return;
-  await manExec(()=>manMover(s,'PROGRAMADO',{pagto_programado_para:d},'pagamento programado para '+manDt(d)),'Pagamento programado — o responsável vê a data',s.id); }
-async function manReprogramar(){ const s=manS(); const r=await hogPergunta({titulo:'Mudar a data programada', campos:[{id:'d',rot:'Nova data',tipo:'data',valor:s.pagto_programado_para||'',obrigatorio:true}], ok:'Salvar'});
-  if(!r) return; await manExec(()=>manNota(s,'pagamento reprogramado de '+manDt(s.pagto_programado_para)+' para '+manDt(r.d),{pagto_programado_para:r.d}),'Data mudada',s.id); }
-async function manPagar(){ const s=manS(); const d=manGv('man-x-pago')||manIsoDia();
-  if(!await hogConfirma({titulo:'Marcar a #'+s.id+' como PAGA em '+manDt(d)+'?', texto:'A jornada fecha aqui.', ok:'✅ Paga'})) return;
-  await manExec(()=>manMover(s,'PAGA',{pago_em:d},'paga em '+manDt(d)),'✅ Paga — jornada completa',s.id); }
 
 // ═══ 👷 PRESTADORES DE SERVIÇO (v4.110, SQL 92) ═════════════════════════════
 // Ela (19/09): "preciso de uma lista de prestador de serviços, primeiro apelido e depois vincular a empresa".
@@ -23740,6 +23816,13 @@ async function manPrestAtivo(id, ativo){ const p=manPrestDe(id); if(!p) return;
     manDatalists(); manPrestTabela(); toast(ativo?'Reativado':'Desativado'); }
   catch(e){ toast('Erro: '+e.message,'erro'); } }
 
+async function manPrestPorNome(nome){
+  nome=(nome||'').trim(); if(!nome) return null;
+  let p=manPrest.find(x=>manNorm(x.apelido)===manNorm(nome)); if(p) return p;
+  if(!await hogConfirma({titulo:'Prestador novo', texto:'Cadastrar "'+nome+'" na lista de prestadores da manutenção?', ok:'➕ Cadastrar'})) return null;
+  try{ return await manPrestCriar(nome); }catch(e){ toast('Não consegui cadastrar: '+e.message,'erro'); return null; }
+}
+
 // ═══ 📑 CONTRATOS DE MANUTENÇÃO (v4.112, SQL 94) ═══════════════════════════
 // Ela (19/09): "listar os itens que estão inclusos no contrato e ter o espaço para orçamento de
 // peças ou questões fora do contrato". Contrato = prestador + vigência + valor + PDF + ITENS inclusos.
@@ -23768,72 +23851,12 @@ async function manStoragePut(p, caminho){
   return caminho;
 }
 
-// ── na ficha: escolher o contrato ao marcar "coberto por contrato"
-function manContrSeletor(s){
-  const ativos=manContr.filter(c=>c.ativo!==false);
-  if(!ativos.length) return '<div class="man-sub" style="margin-bottom:6px">Nenhum contrato cadastrado ainda (Manutenção › 📑 Contratos). Dá para seguir sem escolher.</div>';
-  const pre=ativos.find(c=>c.prestador_id&&c.prestador_id===s.prestador_id);
-  return '<div class="man-grade"><label class="man-rot">Contrato <select id="man-x-contr" onchange="manContrItensSel()"><option value="">— escolha o contrato —</option>'
-    +ativos.map(c=>'<option value="'+c.id+'"'+(pre&&pre.id===c.id?' selected':'')+'>'+manEsc(manContrNome(c.id))+(c.prestador_id?' · '+manEsc(manPrestNome(c.prestador_id)):'')+(manContrDias(c)!=null&&manContrDias(c)<0?' (VENCIDO)':'')+'</option>').join('')+'</select></label>'
-    +'<label class="man-rot">Item coberto <select id="man-x-citem">'+manContrItensOpts(pre?pre.id:null)+'</select></label></div>';
-}
 function manContrItensOpts(cid){
   const its=cid?manContrItensDe(cid):[];
   return '<option value="">'+(cid?(its.length?'— qual item? —':'— contrato sem itens listados —'):'— escolha o contrato —')+'</option>'
     +its.map(i=>'<option value="'+i.id+'">'+manEsc(i.descricao)+' ('+manEsc(manItemResumo(i))+')</option>').join('');
 }
 function manContrItensSel(){ const e=document.getElementById('man-x-citem'); if(e) e.innerHTML=manContrItensOpts(Number(manGv('man-x-contr'))||null); }
-
-// ── na ficha: orçamentos FORA DO CONTRATO (peças ou o que o contrato não cobre)
-function manForaBloco(s){
-  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
-  const fora=manAberta.orcs.filter(o=>o.fora_contrato);
-  let h='<div class="man-bloco"><div class="man-rot" style="margin-bottom:6px">🧩 Fora do contrato <span class="hg-dica" title="Peças ou serviço que o contrato não cobre. Cada orçamento tem a própria aprovação (quem autorizou). Só o que for aprovado aqui vai para a fatura; sem nada aprovado, a solicitação fecha sem custo.">?</span></div>';
-  fora.forEach(o=>{
-    h+='<div class="man-orc'+(o.situacao==='APROVADO'?' aprov':'')+'"><b style="flex:1">'+manEsc(o.descricao||'—')+'<span class="man-sub">'+manEsc(manOrcNome(o))+(o.prazo?' · '+manEsc(o.prazo):'')+'</span></b>'+manBrl(o.valor)
-      +(o.arquivo?' <a href="'+manEsc(manPublica(o.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')
-      +(o.situacao==='APROVADO'?' <span class="man-tag man-t-ok" title="autorizado por '+manEsc(o.aprovado_por||'')+' · '+manEsc(o.aprovado_como||'')+'">aprovado</span>':o.situacao==='REPROVADO'?' <span class="man-tag man-t-dev" title="'+manEsc(o.motivo||'')+'">reprovado</span>':' <span class="man-tag man-t-par">aguardando</span>')+'</div>';
-    if(o.situacao==='EM_ANALISE' && s.etapa!=='FATURA')
-      h+='<div class="man-grade" style="margin:6px 0 0"><label class="man-rot">Autorizado por <input id="man-fa-por-'+o.id+'" list="man-dl-nomes" placeholder="quem autorizou"></label>'
-        +'<label class="man-rot">Como <select id="man-fa-como-'+o.id+'"><option>WhatsApp</option><option>E-mail</option><option>Verbal</option><option>Presencial</option></select></label></div>'
-        +'<div class="man-linha">'+B('g p','✍️ Aprovar','manForaAprovar('+o.id+')')+B('n p','Reprovar','manForaReprovar('+o.id+')')+'</div>';
-  });
-  const pn=s.prestador_id?manPrestNome(s.prestador_id):'';
-  h+='<div class="man-grade" style="margin-top:8px"><label class="man-rot">O que é <input id="man-fo-desc" placeholder="peça ou serviço fora do escopo"></label><label class="man-rot">Valor <input id="man-fo-val" type="number" min="0" step="0.01" placeholder="R$"></label>'
-    +'<label class="man-rot">Prestador <input id="man-fo-prest" list="man-dl-prest" value="'+manEsc(pn)+'"></label><label class="man-rot">Prazo <input id="man-fo-prazo" placeholder="ex.: 5 dias"></label></div>'
-    +'<div class="man-linha">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manAnexoTmp(this,\'ORCAMENTO\')','application/pdf,image/*')+'<span id="man-x-orcarq" class="man-sub">'+(manTmpOrc?'📄 '+manEsc(manTmpOrc.nome):'sem arquivo')+'</span></div>'
-    +'<div class="man-linha">'+B('o p','➕ Incluir orçamento fora do contrato','manForaIncluir()')+'</div></div>';
-  return h;
-}
-async function manPrestPorNome(nome){
-  nome=(nome||'').trim(); if(!nome) return null;
-  let p=manPrest.find(x=>manNorm(x.apelido)===manNorm(nome)); if(p) return p;
-  if(!await hogConfirma({titulo:'Prestador novo', texto:'Cadastrar "'+nome+'" na lista de prestadores da manutenção?', ok:'➕ Cadastrar'})) return null;
-  try{ return await manPrestCriar(nome); }catch(e){ toast('Não consegui cadastrar: '+e.message,'erro'); return null; }
-}
-async function manForaIncluir(){ const s=manS(); const d=manGv('man-fo-desc').trim(), v=Number(manGv('man-fo-val')), prazo=manGv('man-fo-prazo').trim();
-  if(!d) return toast('Diga o que é (peça ou serviço)','erro'); if(!(v>0)) return toast('Informe o valor','erro');
-  const pn=manGv('man-fo-prest').trim(); let p=null; if(pn){ p=await manPrestPorNome(pn); if(!p) return; }
-  await manExec(async()=>{
-    let arq=null; if(manTmpOrc){ arq=await manSubir(manTmpOrc, s.id); manTmpOrc=null; }
-    await sbFetch('manut_orcamentos','POST',{solicitacao_id:s.id,prestador_id:p?p.id:(s.prestador_id||null),fora_contrato:true,descricao:d,valor:v,prazo:prazo||null,arquivo:arq,lancado_por:manQuem()});
-    await manNota(s,'orçamento fora do contrato: '+d+' '+manBrl(v)+(p?' · '+p.apelido:''));
-  },'Orçamento fora do contrato incluído — falta a aprovação',s.id); }
-async function manForaAprovar(oid){ const s=manS(); const o=manAberta.orcs.find(x=>x.id===oid); if(!o) return;
-  const por=manGv('man-fa-por-'+oid).trim(), como=manGv('man-fa-como-'+oid); if(!por) return toast('Diga quem autorizou','erro');
-  if(!await hogConfirma({titulo:'Aprovar o orçamento fora do contrato?', texto:(o.descricao||'')+' — '+manBrl(o.valor)+'\nAutorizado por: '+por+' ('+como+')', ok:'✍️ Aprovar'})) return;
-  await manExec(async()=>{
-    const r=await sbFetch('manut_orcamentos?id=eq.'+oid+'&situacao=eq.EM_ANALISE','PATCH',{situacao:'APROVADO',aprovado_por:por,aprovado_como:como,aprovado_data:manIsoDia(),decidido_por:manQuem(),decidido_em:new Date().toISOString()});
-    if(!r||!r.length) throw new Error('esse orçamento já tinha sido decidido — recarreguei');
-    await manNota(s,'fora do contrato APROVADO: '+(o.descricao||'')+' '+manBrl(o.valor)+' · autorizado por '+por+' ('+como+')');
-  },'Aprovado — entra na fatura',s.id); }
-async function manForaReprovar(oid){ const s=manS(); const o=manAberta.orcs.find(x=>x.id===oid); if(!o) return;
-  const m=await manMotivo('Reprovar: '+(o.descricao||''),'Por que foi reprovado?'); if(!m) return;
-  await manExec(async()=>{
-    const r=await sbFetch('manut_orcamentos?id=eq.'+oid+'&situacao=eq.EM_ANALISE','PATCH',{situacao:'REPROVADO',motivo:m,decidido_por:manQuem(),decidido_em:new Date().toISOString()});
-    if(!r||!r.length) throw new Error('esse orçamento já tinha sido decidido — recarreguei');
-    await manNota(s,'fora do contrato reprovado: '+(o.descricao||'')+' — '+m);
-  },'Reprovado',s.id); }
 
 // ── tela Manutenção › 📑 Contratos
 async function manContrCarregar(){
@@ -23942,49 +23965,8 @@ async function manItemRemover(id){ const it=manContrItens.find(x=>x.id===id); if
   try{ await sbFetch('manut_contrato_itens?id=eq.'+id,'DELETE'); manContrItens=manContrItens.filter(x=>x.id!==id); manContrRender(); }
   catch(e){ toast('Erro: '+e.message,'erro'); } }
 
-// ── 🔔 contadores e alertas ──────────────────────────────────────────────
-async function manAtualizarBadges(){
-  if(typeof SESSAO==='undefined' || !SESSAO || !sbUrl || !sbKey) return;
-  if(!podeAba('man_acomp') && !podeAba('man_fin') && !podeAba('man_pedir')) return;
-  try{
-    if(manSemTabela) return;
-    if(!manDeps.length) await manBase();
-    if(manSemTabela) return;
-    await manSolsCarregar();
-    const nA=manSols.filter(s=>!MAN_FIM.includes(s.etapa)&&!MAN_FIN.includes(s.etapa)&&(s.etapa==='SOLICITADA'||manAtraso(s)>0)).length;
-    const nF=manSols.filter(s=>s.etapa==='FATURA'||s.etapa==='OMIE'||(s.etapa==='PROGRAMADO'&&manAtraso(s)>0)).length;
-    const dep=solDepSel();
-    const nP=dep?manSols.filter(s=>s.departamento_id===dep&&s.etapa==='DEVOLVIDA').length:0;
-    solBadge('man_acomp', podeAba('man_acomp')?nA:0);
-    solBadge('man_fin', podeAba('man_fin')?nF:0);
-    solBadge('man_pedir', podeAba('man_pedir')?nP:0);
-    manAlertaN=(podeAba('man_acomp')?nA:0)+(podeAba('man_fin')&&!podeAba('man_acomp')?nF:0)
-      +(podeAba('man_contr')?manContr.filter(c=>c.ativo!==false&&manContrDias(c)!=null&&manContrDias(c)<=30).length:0);
-    if(typeof alAtualizarBadge==='function') alAtualizarBadge();
-    if(typeof mbSync==='function') mbSync();
-  }catch(e){}
-}
-setInterval(manAtualizarBadges, 90000);
-function manAlertaLinhas(){
-  const out=[]; if(typeof podeAba!=='function') return out;
-  const acomp=podeAba('man_acomp'), fin=podeAba('man_fin');
-  manSols.forEach(s=>{
-    if(MAN_FIM.includes(s.etapa) || s.etapa==='DEVOLVIDA') return;
-    const a=manAtraso(s), ehFin=MAN_FIN.includes(s.etapa);
-    if(!(acomp || (fin && ehFin))) return;
-    if(!(a>0 || s.etapa==='SOLICITADA' || (ehFin && s.etapa!=='PROGRAMADO'))) return;
-    out.push({ setor:'MANUTENCAO', chave:'m'+s.id,
-      titulo:'🔧 #'+s.id+' '+alEsc(s.o_que)+' — '+alEsc(s.local)+' '+(a?'<span style="color:var(--vermelho)">'+manTagAtraso(s).replace(/<[^>]+>/g,'').trim()+'</span>':''),
-      sub: manEt(s.etapa).rot+' · '+alEsc(manDepNome(s.departamento_id))+(s.responsavel?' · responsável '+alEsc(s.responsavel):' · sem responsável'),
-      acoes:'<button class="al-b claro" onclick="manFicha('+s.id+')">abrir →</button>' });
-  });
-  if(podeAba('man_contr')) manContr.forEach(c=>{ const d=manContrDias(c); if(c.ativo===false||d==null||d>30) return;   // v4.112
-    out.push({ setor:'MANUTENCAO', chave:'c'+c.id, titulo:'📑 Contrato '+(d<0?'VENCIDO há '+(-d)+' d':'vence em '+d+' d')+': '+alEsc(manContrNome(c.id)),
-      sub:(c.prestador_id?alEsc(manPrestNome(c.prestador_id))+' · ':'')+'fim da vigência '+manDt(c.vigencia_fim)+' — renovar ou encerrar',
-      acoes:'<button class="al-b claro" onclick="manContrEd='+c.id+';trocarAba(\'man_contr\')">abrir →</button>' }); });
-  return out;
-}
 </script>
+
 
 
 <script>
