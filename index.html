@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.113 · perfil Solicitante (pedir material e manutenção)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.114 · descrição de nota por marca (texto e pedido)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6547,7 +6547,14 @@ function coTextoGrupo(g, fid){
     return true;
   });
   if(!itens.length) return null;
-  const linhas = itens.map(it=>`• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${(it.descricao_nf&&it.descricao_nf.trim())||it.material_nome}`).join('\n');
+  // v4.114 — ela, 21/09: "cada marca tem seu tamanho diferente" (K2MED 80x80 × TECDESC 79X60) "e logo
+  // pode ter outros". O texto de cada fornecedor leva a descrição DELE (coluna "Descrição / apresentação"
+  // do cartão dele, que a memória de marca preenche no orçamento seguinte); sem ela, a descrição de NF do item.
+  const linhas = itens.map(it=>{
+    const o = (it.opcoes||[]).find(x=>x.fornecedor_id===fid);
+    const desc = (o&&o.apresentacao&&String(o.apresentacao).trim()) || (it.descricao_nf&&it.descricao_nf.trim()) || it.material_nome;
+    return `• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${desc}`;
+  }).join('\n');
   const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
   return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
 }
@@ -8118,6 +8125,20 @@ async function dePedidoPDF(pid){
   }catch(e){ /* sem os nomes o documento ainda sai, com "material #id" */ }
   const p=b.pedido, itens=b.itens||[];
   if(!itens.length){ toast('Este pedido não tem itens para imprimir.','erro'); return; }
+  // v4.114 — ela: "no pedido para o fornecedor precisa sair a descrição da nota". A ordem não tem
+  // coluna própria: a apresentação da marca escolhida vai gravada na observação ("Cotação #N — grupo X —
+  // <apresentação>") e a obsLimpa a descartava junto. Agora: apresentação da marca escolhida; sem ela,
+  // a descrição de NF do cadastro.
+  const descPed={};
+  try{
+    const mids=[...new Set(itens.map(o=>o.material_id).filter(Boolean))];
+    const cad=mids.length?((await sbFetch('materiais?select=id,descricao_nf&id=in.('+mids.join(',')+')'))||[]):[];
+    const dn={}; cad.forEach(m=>{ dn[m.id]=(m.descricao_nf||'').trim(); });
+    itens.forEach(o=>{
+      const mm=/Cota[çc][ãa]o #\d+ — grupo [^|]*? — ([^|]+)/.exec(String(o.observacao||''));
+      descPed[o.id]=(mm&&mm[1].trim()) || dn[o.material_id] || '';
+    });
+  }catch(e){ /* sem a descrição o pedido ainda sai com o nome do cadastro */ }
   // o que está digitado na tela vale mais que o que está gravado
   const campo=(id,alt)=>{ const el=document.getElementById(id+'-'+pid); return el?(el.value||'').trim():(alt||''); };
   const frete=parseFloat((document.getElementById('de-frete-'+pid)||{}).value)||Number(p.frete)||0;
@@ -8131,7 +8152,7 @@ async function dePedidoPDF(pid){
     const qtd=Number(o.qtd_a_comprar)||0, unit=Number(o.valor_unitario)||0;
     const sub=Math.max(0,(qtd*unit)-(Number(o.desconto)||0));
     totItens+=sub;
-    const desc=(o.descricao_nf||'').trim();
+    const desc=(descPed[o.id]||o.descricao_nf||'').trim();
     return '<tr>'
       +'<td>'+deNomeMat(o.material_id,o)+(desc?('<div style="font-size:9.5px;color:#666">'+desc+'</div>'):'')
         +(obsLimpa(o.observacao)?('<div style="font-size:9.5px;color:#666">'+obsLimpa(o.observacao)+'</div>'):'')+'</td>'
