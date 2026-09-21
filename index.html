@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.116 · orçamento no modelo do pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.117 · descrição da nota pré-preenchida e atualizada ao virar pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7358,7 +7358,7 @@ function coOfertaNova(i, it, fid, mat, ultimo){
       + '<input class="coN-in" style="width:110px" placeholder="marca" value="'+q(o.marca)+'" oninput="coSetOp('+i+','+fid+',\'marca\',this.value)"></td>'
     + (o.nao_tem
       ? '<td colspan="5" style="font-size:11.5px">não tem'+(o.observacao?' — '+q(o.observacao):'')+'</td>'
-      : '<td><input class="coN-in" placeholder="descrição / apresentação deste fornecedor" title="como ESTE fornecedor descreve e vende o item — vai no texto e no pedido dele" value="'+q(o.apresentacao)+'" oninput="coSetOp('+i+','+fid+',\'apresentacao\',this.value)"></td>'
+      : '<td><input class="coN-in" placeholder="descrição / apresentação deste fornecedor" title="'+((o.apresentacao||'').trim()?'como ESTE fornecedor descreve o item — vai no texto e no pedido dele':'veio do cadastro do produto — corrija se este fornecedor descreve diferente (cada marca tem sua medida)')+'" value="'+q((o.apresentacao||'').trim()||it.descricao_nf||'')+'" oninput="coSetOp('+i+','+fid+',\'apresentacao\',this.value)"></td>'
       + '<td class="n"><input class="coN-in num" style="width:54px" type="number" step="any" placeholder="vem" title="quantos vêm na embalagem deste fornecedor" value="'+(o.qtd_embalagem ?? it.qtd_kit ?? '')+'" oninput="coSetOp('+i+','+fid+',\'qtd_embalagem\',this.value)"></td>'
       + '<td class="n"><input class="coN-in num" type="number" step="any" placeholder="R$" title="preço da embalagem" value="'+(o.preco_total??'')+'" oninput="coSetOp('+i+','+fid+',\'preco_total\',this.value)"></td>'
       + '<td class="n un"><b id="co-unit-'+i+'-'+fid+'">'+(u!=null?coMoney(u):'—')+'</b></td>'
@@ -7599,6 +7599,7 @@ async function coFecharGrupo(g){
     // comparativo de um dos pedidos nascia vazio e caía no "mostrando a cotação
     // inteira" — que é a mistura que ela viu.
     const matsPorPedido = {};
+    const descCadastro = {};   // v4.117 — material_id → descrição de nota do escolhido
     let nPed=0, nItens=0;
     for(const fidStr of Object.keys(porForn)){
       const fid = Number(fidStr);
@@ -7627,6 +7628,13 @@ async function coFecharGrupo(g){
         pedidoId=p&&p[0]&&p[0].id; nPed++;
       }
       for(const {it,o} of porForn[fidStr]){
+        // v4.117 — ela, 21/09: "a descrição da nota venha pré-preenchida e se atualize ao virar pedido".
+        // A descrição do escolhido (a dele, senão a do cadastro) vai na ordem e atualiza o cadastro.
+        const descEsc = (o.apresentacao||'').trim() || (it.descricao_nf||'').trim();
+        if(descEsc && it.material_id){
+          const qd = Number(o.qtd_escolhida)||0, atual = descCadastro[it.material_id];
+          if(!atual || qd > atual.q) descCadastro[it.material_id] = { desc: descEsc, q: qd };
+        }
         // código universal por material × marca (fios etc.)
         let codigo=null;
         try{
@@ -7640,7 +7648,7 @@ async function coFecharGrupo(g){
           qtd_a_comprar: o.qtd_escolhida, qtd_comprada: o.qtd_escolhida,
           valor_unitario: coUnit(o), ultimo_valor_pago: null,
           marca_escolhida: o.marca||null, codigo_escolhido: codigo,
-          observacao: 'Cotação #'+coCotacaoId+' — grupo '+g + (o.apresentacao?(' — '+o.apresentacao):''),
+          observacao: 'Cotação #'+coCotacaoId+' — grupo '+g + (descEsc?(' — '+descEsc):''),
           ...(coObsCols ? { obs_produto: (it.obs_produto||'').trim()||null, obs_interna: (it.obs_interna||'').trim()||null } : {}),   // v4.116
         });
         nItens++;
@@ -7650,6 +7658,23 @@ async function coFecharGrupo(g){
         }
       }
     }
+    // v4.117 — o cadastro do produto passa a ter a descrição de nota de quem foi escolhido
+    try{
+      const mids = Object.keys(descCadastro);
+      if(mids.length){
+        const cad = (await sbFetch('materiais?select=id,descricao_nf&id=in.('+mids.join(',')+')'))||[];
+        let nDesc = 0;
+        for(const m of cad){
+          const nova = descCadastro[m.id] && descCadastro[m.id].desc;
+          if(nova && nova !== (m.descricao_nf||'').trim()){
+            await sbFetch('materiais?id=eq.'+m.id,'PATCH',{ descricao_nf: nova });
+            if(typeof ccCadastro==='object' && ccCadastro[m.id]) ccCadastro[m.id].descricao_nf = nova;
+            nDesc++;
+          }
+        }
+        if(nDesc) toast('📄 Descrição de nota atualizada no cadastro de '+nDesc+' item(ns).','sucesso');
+      }
+    }catch(e){ console.warn('descrição de nota no cadastro:', e); }
     // v4.88 — A FOTO DO COMPARATIVO VAI PARA DENTRO DO PEDIDO (SQL 86).
     // O comparativo da aprovação deixa de ser remontado a partir da cotação —
     // que continua viva, recebendo outros orçamentos, e que já perdeu linhas.
@@ -7660,7 +7685,7 @@ async function coFecharGrupo(g){
         ofertas: (it.opcoes||[])
           .filter(o=>o.fornecedor_id||o.fornecedor_nome||o.marca||o.preco_total!=null||o.nao_tem)
           .map(o=>({ fornecedor_id:o.fornecedor_id||null, fornecedor_nome:o.fornecedor_nome||coFornNomeById(o.fornecedor_id)||null,
-                     marca:o.marca||null, apresentacao:o.apresentacao||null, qtd_embalagem:o.qtd_embalagem??null,
+                     marca:o.marca||null, apresentacao:(o.apresentacao||'').trim()||it.descricao_nf||null, qtd_embalagem:o.qtd_embalagem??null,
                      preco_total:o.preco_total??null, preco_unitario:coUnit(o), escolhida:!!o.escolhida,
                      qtd_escolhida:o.qtd_escolhida??null, condicao_pagamento:o.condicao_pagamento||null,
                      prazo_entrega:o.prazo_entrega||null, nao_tem:!!o.nao_tem, observacao:o.observacao||null }))
