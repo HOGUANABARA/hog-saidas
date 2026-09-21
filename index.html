@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.114 · descrição de nota por marca (texto e pedido)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.115 · novo material pelo inventário administrativo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -19151,6 +19151,7 @@ async function alIgnorar(id){
       </select>
       <label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px"><input type="checkbox" id="adm-so-contados" onchange="admInvRender()"> só o que eu já preenchi</label>
       <span style="flex:1"></span>
+      <button onclick="admNovoMaterial()" title="Cadastra um item que ainda não está na lista; depois é só escrever a quantidade na coluna Contei" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">➕ Novo material</button>
       <button onclick="admImprimir()" title="Folha de contagem no papel, com o saldo de hoje e a coluna em branco para escrever à mão" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">🖨 Imprimir contagem</button>
       <button onclick="admExportar()" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">📄 Baixar planilha</button>
       <button id="adm-btn-gravar" onclick="admContagemRevisar()" style="border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">✔ Conferir e gravar contagem</button>
@@ -20621,6 +20622,81 @@ async function colaGravar(){
 // grava a diferença como ajuste de inventário, item por item, com quem contou.
 let admDados = [];
 let admContagem = {};   // material_id -> valor digitado (string)
+
+// v4.115 — NOVO MATERIAL DO ADMINISTRATIVO (pedido dela 21/09: "o botão de
+// criar novo material"). Cópia do ➕ Novo produto da higiene (hgNovoProduto):
+// mesma senha, mesma trava de nome repetido, mesmo modelo de unidade/preço.
+// Só muda o que é do administrativo: a classe (expediente ou impresso) e as
+// unidades. A quantidade NÃO vai aqui — o item aparece na lista e a
+// quantidade entra pela coluna Contei, como todo o resto do inventário.
+async function admNovoMaterial(){
+  if(!exigirSenhaCompras()) return;
+  if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
+  let fo='<option value="">— sem fornecedor —</option>';
+  coFornecedores.forEach(function(f){ fo+='<option value="'+f.id+'">'+hgEsc(f.nome)+'</option>'; });
+  const classeTela=(document.getElementById('adm-classe')||{}).value;
+  const CAMPO='width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--fonte);margin-top:5px';
+  const ROT='font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cinza-4);display:block;margin-top:13px';
+  let ov=document.getElementById('adm-nm-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='adm-nm-modal'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:var(--verde);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>➕ Novo material do administrativo</span><button onclick="admNovoFechar()" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">✕</button></div>'
+    +'<div style="padding:16px">'
+    +'<label style="'+ROT+';margin-top:0">Nome do material</label>'
+    +'<input type="text" id="adm-nm-nome" placeholder="ex: CANETA ESFEROGRAFICA PRETA" style="'+CAMPO+';text-transform:uppercase">'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Classe</label>'
+    +'<select id="adm-nm-classe" style="'+CAMPO+'"><option value="ADM_EXPEDIENTE">Expediente</option><option value="ADM_IMPRESSOS"'+(classeTela==='ADM_IMPRESSOS'?' selected':'')+'>Impresso da gráfica</option></select></div>'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'" title="a unidade em que o item é entregue ao departamento e contado no inventário">Unidade de CONSUMO</label>'
+    +'<select id="adm-nm-unid" style="'+CAMPO+'"><option>UNIDADE</option><option>PACOTE</option><option>CAIXA</option><option>BLOCO</option><option>ROLO</option><option>FOLHA</option><option>SACO</option></select></div>'
+    +'<div style="width:130px"><label style="'+ROT+'" title="quantas unidades de consumo vêm na caixa de compra">Un. por caixa</label>'
+    +'<input type="number" id="adm-nm-kit" value="1" min="1" style="'+CAMPO+'"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Código (opcional)</label><input type="text" id="adm-nm-cod" placeholder="ex: MOD. 026" style="'+CAMPO+'"></div>'
+    +'<div style="flex:1;min-width:150px"><label style="'+ROT+'">Marca (opcional)</label><input type="text" id="adm-nm-marca" style="'+CAMPO+';text-transform:uppercase"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:180px"><label style="'+ROT+'">Fornecedor</label><select id="adm-nm-forn" style="'+CAMPO+'">'+fo+'</select></div>'
+    +'<div style="width:150px"><label style="'+ROT+'">Preço da CAIXA (R$)</label><input type="text" id="adm-nm-preco" placeholder="opcional" style="'+CAMPO+';text-align:right"></div>'
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:12px;line-height:1.5">Depois de cadastrar, o item aparece na lista: escreva a quantidade na coluna <b>Contei</b> e clique em <b>Conferir e gravar contagem</b>. Sem preço, a próxima compra preenche.</div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    +'<button onclick="admNovoFechar()" style="border:1px solid var(--cinza-3);background:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--cinza-4)">Cancelar</button>'
+    +'<button onclick="admNovoSalvar()" style="border:none;background:var(--verde);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cadastrar ✓</button>'
+    +'</div></div></div>';
+  setTimeout(function(){ const i=document.getElementById('adm-nm-nome'); if(i) i.focus(); }, 50);
+}
+function admNovoFechar(){ const ov=document.getElementById('adm-nm-modal'); if(ov) ov.remove(); }
+async function admNovoSalvar(){
+  const nome=((document.getElementById('adm-nm-nome')||{}).value||'').trim().toUpperCase();
+  if(!nome){ toast('Escreva o nome do material.','erro'); return; }
+  const classe=(document.getElementById('adm-nm-classe')||{}).value||'ADM_EXPEDIENTE';
+  const unid=(document.getElementById('adm-nm-unid')||{}).value||'UNIDADE';
+  const kit=parseFloat((document.getElementById('adm-nm-kit')||{}).value)||1;
+  const cod=((document.getElementById('adm-nm-cod')||{}).value||'').trim()||null;
+  const marca=((document.getElementById('adm-nm-marca')||{}).value||'').trim().toUpperCase()||null;
+  const fid=parseInt((document.getElementById('adm-nm-forn')||{}).value,10)||null;
+  const preco=hgOrcNum((document.getElementById('adm-nm-preco')||{}).value);
+  try{
+    // nome é chave de casamento neste sistema: duplicado não entra
+    const dup=await sbFetch('materiais?select=id,nome,classe_compra,ativo&nome=ilike.'+encodeURIComponent(nome)+'&limit=1');
+    if(dup&&dup.length){ toast('Já existe um material com esse nome exato (id '+dup[0].id+', classe '+(dup[0].classe_compra||'—')+(dup[0].ativo===false?', inativo':'')+'). Use outro nome ou me chame para reativar/reclassificar.','erro'); return; }
+    const ins=await sbFetch('materiais','POST',{ nome:nome, codigo:cod, marca:marca, unidade_medida:unid, qtd_kit:kit,
+      ultimo_valor_pago:(preco&&preco>0)?((Number(kit)>1)?Math.round(preco/Number(kit)*100)/100:preco):null,
+      exibir_dashboard:false, classe_compra:classe, classe_confirmada:true, fornecedor_padrao_id:fid });
+    const mid=ins&&ins[0]&&ins[0].id;
+    if(!mid) throw new Error('o banco não retornou o material criado (RLS?)');
+    if(cod){
+      try{ await sbFetch('material_codigo','POST',{ material_id:mid, codigo:cod, fornecedor_id:fid, vigente:true }); }
+      catch(e){ toast('Material criado, mas o histórico de código não gravou: '+(e.message||e),'erro'); }
+    }
+    toast('✅ "'+nome+'" cadastrado no administrativo (id '+mid+') — escreva a quantidade na coluna Contei.','sucesso');
+    admNovoFechar();
+    admDados=[]; await admInvCarregar();
+  }catch(e){ toast('Erro ao cadastrar: '+(e.message||e),'erro'); }
+}
 
 async function admInvCarregar(){
   try{
