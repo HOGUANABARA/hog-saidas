@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.118 · manutenção: demanda · visita · custo · lote de pagamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.119 · manutenção: botão Tirar custo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23461,7 +23461,8 @@ function manFichaRender(){
   let c3='<div class="man-col"><h4>💰 Custos</h4><div class="man-bloco">'+(cs.length?cs.map(c=>{ const ds=manDemsDoCusto(c.id);
       return '<div class="man-orc'+(c.situacao==='APROVADO'?' aprov':'')+'"><b style="flex:1">'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+' · '+manEsc(c.descricao||'')
         +'<span class="man-sub">'+manRecebIcone(c)+manEsc(manReceb(c))+(ds.length>1?' · vale para '+ds.map(x=>'#'+x).join(' + '):'')+'</span></b>'+manBrl(c.valor)
-        +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
+        +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)
+        +(pode&&!c.lote_id?' <button class="man-b n p" onclick="manCusTirar('+c.id+')" title="tira o custo da(s) demanda(s); fica registrado no histórico">🗑 Tirar</button>':'')+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
     +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>'
     +'<details class="man-hist"><summary>Histórico ('+A.hist.length+')</summary><table style="width:100%;border-collapse:collapse"><tbody>'
     +[...A.hist].reverse().map(x=>'<tr><td>'+manDth(x.created_at)+'</td><td>'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')+'</tbody></table></details></div>';
@@ -23580,7 +23581,8 @@ function manCusRender(){
     h+='<tr class="'+(manCusAtraso(c)?'man-parada':'')+'"><td><b>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+'</b><span class="man-sub">'+manEsc(c.descricao||'')+(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank">📄</a>':'')+'</span></td>'
       +'<td>'+ds.map(x=>'<a href="#" onclick="manFicha('+x+');return false">#'+x+'</a>').join(' + ')+'</td><td>'+manRecebIcone(c)+manEsc(manReceb(c))+(c.empresa?'<span class="man-sub">'+manEsc(c.empresa)+'</span>':'')+'</td>'
       +'<td style="text-align:right">'+manBrl(c.valor)+'</td><td>'+manTagCus(c)+(c.aprovado_por?'<span class="man-sub">'+manEsc(c.aprovado_por)+' · '+manEsc(c.aprovado_como||'')+'</span>':'')+'</td>'
-      +'<td class="man-acoes">'+(c.situacao==='AGUARDANDO'?'<button class="man-b g p" onclick="manCusAprovar('+c.id+')">✍️ Aprovar</button> <button class="man-b n p" onclick="manCusReprovar('+c.id+')">Reprovar</button>':'')+'</td></tr>'; });
+      +'<td class="man-acoes">'+(c.situacao==='AGUARDANDO'?'<button class="man-b g p" onclick="manCusAprovar('+c.id+')">✍️ Aprovar</button> <button class="man-b n p" onclick="manCusReprovar('+c.id+')">Reprovar</button> ':'')
+        +(!c.lote_id?'<button class="man-b n p" onclick="manCusTirar('+c.id+')" title="tira o custo da(s) demanda(s); fica registrado no histórico">🗑 Tirar custo</button>':'')+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>';
   manCusPagoA(); manPreDem=null;
 }
@@ -23615,6 +23617,18 @@ async function manCusAprovar(id){ const c=manCustos.find(x=>x.id===id); if(!c) r
     if(!q||!q.length) throw new Error('esse custo já tinha sido decidido — recarreguei');
     for(const d of manDemsDoCusto(id)) await manNota(d,'custo aprovado: '+(c.descricao||MAN_TIPOS[c.tipo])+' '+manBrl(c.valor)+' · autorizado por '+r.por.trim()+' ('+r.como+')');
   },'Aprovado — já pode entrar num lote de pagamento'); }
+// v4.119 — ela: "coloca o botão de tirar custo". Só custo que ainda não entrou em lote de pagamento.
+async function manCusTirar(id){ const c=manCustos.find(x=>x.id===id); if(!c) return;
+  if(c.lote_id) return toast('Esse custo já está no lote #'+c.lote_id+' — desfaça o lote antes','erro');
+  const ds=manDemsDoCusto(id);
+  const m=await manMotivo('Tirar o custo: '+(c.descricao||MAN_TIPOS[c.tipo])+' — '+manBrl(c.valor)+'?','Por que está saindo (fica no histórico de '+ds.map(x=>'#'+x).join(', ')+')'); if(!m) return;
+  await manExec(async()=>{
+    const r=await sbFetch('manut_custos?id=eq.'+id+'&lote_id=is.null','PATCH',{motivo:'retirado: '+m}); // trava: confirma que ainda não entrou em lote
+    if(!r||!r.length) throw new Error('esse custo entrou num lote enquanto você olhava — recarreguei');
+    await sbFetch('manut_custos?id=eq.'+id+'&lote_id=is.null','DELETE');
+    const sobra=(await sbFetch('manut_custos?select=id&id=eq.'+id))||[]; if(sobra.length) throw new Error('não consegui tirar o custo');
+    for(const d of ds) await sbFetch('manut_historico','POST',{solicitacao_id:d,de_etapa:null,para_etapa:null,quem:manQuem(),motivo:'custo retirado: '+(MAN_TIPOS[c.tipo]||c.tipo)+' · '+(c.descricao||'')+' '+manBrl(c.valor)+' ('+manReceb(c)+') — '+m});
+  },'Custo retirado'); }
 async function manCusReprovar(id){ const c=manCustos.find(x=>x.id===id); if(!c) return;
   const m=await manMotivo('Reprovar: '+(c.descricao||MAN_TIPOS[c.tipo]),'Por que foi reprovado?'); if(!m) return;
   await manExec(async()=>{
