@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.120 · manutenção: ocorrência no histórico + data combinada</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.121 · manutenção: aviso da data combinada</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23114,8 +23114,14 @@ function manAtraso(s){
   return d>7?d:0;                                      // em andamento sem movimento
 }
 function manTagSit(s){ const t=MAN_SIT[s.situacao]||[s.situacao,'man-t-n']; return '<span class="man-tag '+t[1]+'">'+t[0]+(s.situacao==='RESOLVIDA'&&s.sem_cobranca?' · sem cobrança':'')+'</span>'; }
-function manTagAtraso(s){ const a=manAtraso(s); if(!a) return '';
-  return ' <span class="man-tag man-atraso" title="passou do prazo de atenção">⏰ '+(s.situacao==='ABERTA'?'aberta':'sem movimento')+' há '+a+' d</span>'; }
+// v4.121 — ela: "pode colocar o aviso da data combinada"
+function manComb(s){ if(!s.agendada_para||!(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')) return null;
+  return Math.round((Date.parse(manIsoDia())-Date.parse(manIsoDia(s.agendada_para)))/MAN_DIA); }
+function manTagComb(s){ const c=manComb(s); if(c==null||c<0) return '';
+  return c===0 ? ' <span class="man-tag man-t-sep" title="data que ficou combinada">📅 combinado para hoje</span>'
+               : ' <span class="man-tag man-atraso" title="a data que ficou combinada já passou">⏰ data combinada passou há '+c+' d</span>'; }
+function manTagAtraso(s){ const a=manAtraso(s);
+  return (a?' <span class="man-tag man-atraso" title="passou do prazo de atenção">⏰ '+(s.situacao==='ABERTA'?'aberta':'sem movimento')+' há '+a+' d</span>':'')+manTagComb(s); }
 function manCusAtraso(c){ if(c.situacao==='AGUARDANDO'){ const d=manDias(c.created_at); return d>3?d:0; }
   if(c.situacao==='APROVADO'&&!c.lote_id){ const d=manDias(c.decidido_em||c.created_at); return d>10?d:0; } return 0; }
 function manTagCus(c){ const l=c.lote_id?manLotes.find(x=>x.id===c.lote_id):null;
@@ -23354,7 +23360,7 @@ async function manAcompCarregar(){
 }
 const MAN_FILTROS={
   ABERTAS:  s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO',
-  PARADAS:  s=>manAtraso(s)>0,
+  PARADAS:  s=>manAtraso(s)>0||manComb(s)>0,
   ABERTA:   s=>s.situacao==='ABERTA',
   ANDAMENTO:s=>s.situacao==='ANDAMENTO',
   RESOLVIDA:s=>s.situacao==='RESOLVIDA',
@@ -23373,7 +23379,7 @@ function manAcompRender(){
   if(!lista.length) h+='<tr><td colspan="8" class="sol-vazio">Nada aqui.</td></tr>';
   lista.forEach(s=>{
     const cs=manCustosDe(s.id).filter(c=>c.situacao!=='REPROVADO'), nv=manVisitasDe(s.id).length, pend=cs.filter(c=>c.situacao==='AGUARDANDO').length;
-    h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
+    h+='<tr class="'+(manAtraso(s)||manComb(s)>0?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
       +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td><td class="man-ocm man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'').split(' — ')[0]+'</td>'
       +'<td>'+manTagSit(s)+manTagAtraso(s)+(s.agendada_para&&(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')?'<span class="man-sub">📅 combinado para '+manDt(s.agendada_para)+'</span>':'')+'</td><td class="man-ocm">'+(nv||'—')+'</td>'
       +'<td>'+(cs.length?manBrl(cs.reduce((t,c)=>t+Number(c.valor||0),0))+'<span class="man-sub">'+cs.length+' custo(s)'+(pend?' · '+pend+' aguardando':'')+'</span>':'—')+'</td>'
@@ -23740,7 +23746,7 @@ async function manAtualizarBadges(recarregar){
   try{
     if(recarregar!==false){ if(!manDeps.length) await manBase(); if(manSemTabela) return; await manDadosCarregar(); }
     const acomp=podeAba('man_acomp'), fin=podeAba('man_fin');
-    const nD=manSols.filter(s=>s.situacao==='ABERTA'||manAtraso(s)>0).length;
+    const nD=manSols.filter(s=>s.situacao==='ABERTA'||manAtraso(s)>0||(manComb(s)??-1)>=0).length;
     const nC=manCustos.filter(c=>c.situacao==='AGUARDANDO').length;
     const nL=manLotes.filter(l=>l.etapa==='FINANCEIRO'||l.etapa==='OMIE'||manLoteAtraso(l)>0).length;
     const nK=manContr.filter(c=>c.ativo!==false&&manContrDias(c)!=null&&manContrDias(c)<=30).length;
@@ -23754,7 +23760,7 @@ setInterval(manAtualizarBadges, 90000);
 function manAlertaLinhas(){
   const out=[]; if(typeof podeAba!=='function') return out;
   if(podeAba('man_acomp')){
-    manSols.forEach(s=>{ const a=manAtraso(s); if(!(s.situacao==='ABERTA'||a>0)) return;
+    manSols.forEach(s=>{ const a=manAtraso(s)||((manComb(s)??-1)>=0?1:0); if(!(s.situacao==='ABERTA'||a>0)) return;
       out.push({ setor:'MANUTENCAO', chave:'m'+s.id,
         titulo:'🔧 #'+s.id+' '+alEsc(s.o_que)+' — '+alEsc(s.local)+(a?' <span style="color:var(--vermelho)">'+manTagAtraso(s).replace(/<[^>]+>/g,'').trim()+'</span>':''),
         sub:(MAN_SIT[s.situacao]||[''])[0]+' · '+alEsc(manDepNome(s.departamento_id))+(s.responsavel?' · responsável '+alEsc(s.responsavel):''),
