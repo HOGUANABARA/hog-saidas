@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.124 · busca na compra de higiene/copa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.125 · manutenção: histórico com data e anotação do andamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -19146,7 +19146,7 @@ async function alIgnorar(id){
   .man-mi .pdf{width:92px;height:70px;display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--cinza-1);cursor:pointer}
   .man-mi .leg{background:#fff;color:var(--cinza-4);padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .man-mi .x{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer}
-  .man-semfoto{font-size:12px;color:var(--cinza-4);padding:10px;border:1.5px dashed var(--cinza-2);border-radius:8px;text-align:center}
+  .man-semfoto{font-size:12px;color:var(--cinza-4);padding:7px;border:1.5px dashed var(--cinza-2);border-radius:8px;text-align:center}
   .man-ov{position:fixed;inset:0;background:rgba(20,30,45,.45);display:none;z-index:900;align-items:center;justify-content:center}
   .man-ov.on{display:flex}
   .man-mdl{background:#fff;border-radius:12px;width:min(1240px,96vw);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -19160,10 +19160,16 @@ async function alIgnorar(id){
   .man-passo.feito{color:var(--verde)} .man-passo.feito:before,.man-passo.feito:after{background:var(--verde)}
   .man-passo.agora{color:var(--azul)} .man-passo.agora:before{background:var(--azul);box-shadow:0 0 0 4px var(--azul-claro)} .man-passo.agora:after{background:var(--verde)}
   .man-passo .d{display:block;font-weight:400;color:var(--cinza-4);font-size:10px}
-  .man-mb{padding:14px 18px;overflow:auto;display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:18px}
+  .man-mb{padding:14px 18px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(265px,1fr));gap:16px;align-content:start}
+  .man-full{min-width:0}
+  .man-hist-wrap{max-height:220px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px}
+  .man-hist-wrap table{width:100%;border-collapse:collapse}
+  .man-hist-wrap td{padding:5px 8px;border-bottom:1px solid var(--cinza-2);font-size:12.5px;vertical-align:top}
+  .man-hist-wrap tr:last-child td{border-bottom:none}
+  .man-hist-wrap td.q{white-space:nowrap;color:var(--cinza-4);width:1%}
   .man-col{min-width:0}
   .man-col h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--azul)}
-  .man-bloco{border:1.5px solid var(--cinza-2);border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:13px}
+  .man-bloco{border:1.5px solid var(--cinza-2);border-radius:9px;padding:9px 11px;margin-bottom:8px;font-size:13px}
   .man-bloco.agora{border-color:var(--azul);background:#F7FBFF}
   .man-par{display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:12.5px}
   .man-par span:first-child{color:var(--cinza-4)}
@@ -23285,11 +23291,13 @@ function manMiniaturas(ms, apagar){
 
 // ── gravação comum ───────────────────────────────────────────────────────
 // registra no histórico da demanda; campos (opcional) atualizam a demanda e renovam situacao_desde
-async function manNota(sid, motivo, campos, para){
+async function manNota(sid, motivo, campos, para, dataRef){
   const s=manSols.find(x=>x.id===sid);
   const body=Object.assign({updated_at:new Date().toISOString(), situacao_desde:new Date().toISOString()}, campos||{});
   const r=await sbFetch('manut_solicitacoes?id=eq.'+sid,'PATCH',body); if(r&&r[0]&&s) Object.assign(s,r[0]);
-  await sbFetch('manut_historico','POST',{solicitacao_id:sid,de_etapa:s?s.situacao:null,para_etapa:para||(r&&r[0]?r[0].situacao:null),quem:manQuem(),motivo});
+  const linha={solicitacao_id:sid,de_etapa:s?s.situacao:null,para_etapa:para||(r&&r[0]?r[0].situacao:null),quem:manQuem(),motivo};
+  if(dataRef) linha.data_ref=dataRef;   // v4.125 — data do que aconteceu, quando é diferente de hoje
+  await sbFetch('manut_historico','POST',linha);
 }
 // demanda que tinha só sido aberta passa a "em andamento" quando alguém mexe
 function manAndamento(sid){ const s=manSols.find(x=>x.id===sid); return (s&&s.situacao==='ABERTA')?{situacao:'ANDAMENTO'}:{}; }
@@ -23503,20 +23511,28 @@ function manFichaRender(){
         +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)
         +(pode&&!c.lote_id?' <button class="man-b n p" onclick="manCusTirar('+c.id+')" title="tira o custo da(s) demanda(s); fica registrado no histórico">🗑 Tirar</button>':'')+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
     +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>'
-    +(pode?'<h4 style="margin-top:10px">📝 Ocorrência</h4><div class="man-bloco"><label class="man-rot">Observação <textarea id="mo-txt" placeholder="o que aconteceu, o que foi falado com o prestador…"></textarea></label>'
-      +'<div class="man-linha"><label class="man-rot" style="flex:1">Data que ficou combinada <input id="mo-data" type="date" title="opcional — aparece na ficha e na lista de demandas"></label>'
-      +'<button class="man-b p" onclick="manOcorrencia()" style="align-self:flex-end">💾 Registrar no histórico</button></div></div>':'')
-    +'<details class="man-hist"><summary>Histórico ('+A.hist.length+')</summary><table style="width:100%;border-collapse:collapse"><tbody>'
-    +[...A.hist].reverse().map(x=>'<tr><td>'+manDth(x.created_at)+'</td><td>'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')+'</tbody></table></details></div>';
+    +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>';
+  // faixa de baixo — anotação do andamento + histórico com espaço (v4.125)
+  let c4='<div class="man-full"><h4>📝 Andamento do caso <span class="hg-dica" title="Cada anotação entra no histórico com a data do que aconteceu, quem registrou e o texto. A data combinada é opcional e aparece na ficha e na lista de demandas.">?</span></h4>';
+  if(pode) c4+='<div class="man-bloco agora"><div class="man-grade" style="grid-template-columns:1fr;margin-bottom:6px">'
+    +'<label class="man-rot">Data <input id="mo-quando" type="date" value="'+manIsoDia()+'" title="a data do que aconteceu — vale a de hoje ou uma anterior"></label>'
+    +'<label class="man-rot">Anotação — como está o caso <input id="mo-txt" placeholder="ex.: liguei para o prestador, vem instalar o HD na sexta"></label>'
+    +'<label class="man-rot">Data que ficou combinada <input id="mo-data" type="date" title="opcional"></label></div>'
+    +'<div class="man-linha" style="margin-top:0">'+B('g p','💾 Registrar no histórico','manOcorrencia()')+'</div></div>';
+  c4+='<div class="man-hist-wrap"><table><tbody>'
+    +(A.hist.length?[...A.hist].reverse().map(x=>'<tr><td class="q"><b>'+(x.data_ref?manDt(x.data_ref):manDt(x.created_at))+'</b><span class="man-sub">'+(x.data_ref?'lançado '+manDth(x.created_at):new Date(x.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))+'</span></td>'
+      +'<td class="q">'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')
+      :'<tr><td class="man-sub" style="padding:10px">Nada no histórico ainda.</td></tr>')
+    +'</tbody></table></div><div class="man-sub" style="margin-top:4px">'+A.hist.length+' registro(s) — o mais novo em cima</div></div>';
   document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
-    +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+'</div>';
+    +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+c4+'</div>';
 }
 async function manFichaReabrir(){ if(!manAberta) return; await manRecarregar(); await manFichaDados(); manFichaRender(); }
 // v4.120 — ela: "espaço para observação da ocorrência para colocar no histórico" + "data que ficou combinado"
-async function manOcorrencia(){ const id=manAberta.id; const txt=manGv('mo-txt').trim(), d=manGv('mo-data');
-  if(!txt && !d) return toast('Escreva a observação ou informe a data combinada','erro');
-  const motivo='ocorrência: '+(txt||'—')+(d?' · combinado para '+manDt(d):'');
-  try{ await manNota(id, motivo, Object.assign(d?{agendada_para:d+'T12:00:00'}:{}, manAndamento(id))); toast('Registrado no histórico'); }
+async function manOcorrencia(){ const id=manAberta.id; const txt=manGv('mo-txt').trim(), d=manGv('mo-data'), quando=manGv('mo-quando');
+  if(!txt && !d) return toast('Escreva a anotação ou informe a data combinada','erro');
+  const motivo=(txt||'—')+(d?' · combinado para '+manDt(d):'');
+  try{ await manNota(id, motivo, Object.assign(d?{agendada_para:d+'T12:00:00'}:{}, manAndamento(id)), null, quando||null); toast('Registrado no histórico'); }
   catch(e){ toast('Erro: '+e.message,'erro'); }
   await manFichaReabrir(); }
 async function manSalvarDem(){ const s=manSols.find(x=>x.id===manAberta.id); const v={local:manGv('me-local').trim(),o_que:manGv('me-oque').trim(),urgencia:manGv('me-urg'),
