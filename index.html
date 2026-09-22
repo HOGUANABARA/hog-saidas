@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.119 · manutenção: botão Tirar custo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.120 · manutenção: ocorrência no histórico + data combinada</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23375,7 +23375,7 @@ function manAcompRender(){
     const cs=manCustosDe(s.id).filter(c=>c.situacao!=='REPROVADO'), nv=manVisitasDe(s.id).length, pend=cs.filter(c=>c.situacao==='AGUARDANDO').length;
     h+='<tr class="'+(manAtraso(s)?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
       +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'</td><td class="man-ocm man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'').split(' — ')[0]+'</td>'
-      +'<td>'+manTagSit(s)+manTagAtraso(s)+'</td><td class="man-ocm">'+(nv||'—')+'</td>'
+      +'<td>'+manTagSit(s)+manTagAtraso(s)+(s.agendada_para&&(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')?'<span class="man-sub">📅 combinado para '+manDt(s.agendada_para)+'</span>':'')+'</td><td class="man-ocm">'+(nv||'—')+'</td>'
       +'<td>'+(cs.length?manBrl(cs.reduce((t,c)=>t+Number(c.valor||0),0))+'<span class="man-sub">'+cs.length+' custo(s)'+(pend?' · '+pend+' aguardando':'')+'</span>':'—')+'</td>'
       +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>';
   });
@@ -23435,7 +23435,8 @@ function manFichaRender(){
     +'<div class="man-linha">'+manBotaoUp('+ foto / vídeo do depois','manFichaArquivos(this,\'DEPOIS\')')+'<span class="hg-dica" title="a qualquer momento — não depende de orçamento nem de visita">?</span></div>'
     +'<div class="man-lgpd">🚫 nunca fotografar ou filmar paciente</div></div>';
   // coluna 2 — fechar, contrato, visitas
-  let c2='<div class="man-col"><h4>Situação</h4><div class="man-bloco agora">';
+  let c2='<div class="man-col"><h4>Situação</h4><div class="man-bloco agora">'
+    +(s.agendada_para&&!fim?'<div class="man-par" style="margin-bottom:6px"><span>📅 Combinado para</span><b>'+manDt(s.agendada_para)+'</b></div>':'');
   if(s.situacao==='RESOLVIDA') c2+='<div class="man-ok">✅ Resolvida'+(s.sem_cobranca?' — sem cobrança':'')+'<span class="man-sub">'+manDth(s.resolvida_em)+' · '+manEsc(s.resolvida_por||'')+'</span></div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
   else if(s.situacao==='CANCELADA') c2+='<div class="man-motivo">Cancelada</div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
   else if(pode) c2+='<div class="man-linha" style="margin-top:0">'+B('g','✅ Resolvida','manResolver(false)')+B('o','✅ Resolvida sem cobrança','manResolver(true)','consertado sem custo')+B('n p','✖ Cancelar','manCancelar()')+'</div>'
@@ -23464,12 +23465,22 @@ function manFichaRender(){
         +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)
         +(pode&&!c.lote_id?' <button class="man-b n p" onclick="manCusTirar('+c.id+')" title="tira o custo da(s) demanda(s); fica registrado no histórico">🗑 Tirar</button>':'')+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
     +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>'
+    +(pode?'<h4 style="margin-top:10px">📝 Ocorrência</h4><div class="man-bloco"><label class="man-rot">Observação <textarea id="mo-txt" placeholder="o que aconteceu, o que foi falado com o prestador…"></textarea></label>'
+      +'<div class="man-linha"><label class="man-rot" style="flex:1">Data que ficou combinada <input id="mo-data" type="date" title="opcional — aparece na ficha e na lista de demandas"></label>'
+      +'<button class="man-b p" onclick="manOcorrencia()" style="align-self:flex-end">💾 Registrar no histórico</button></div></div>':'')
     +'<details class="man-hist"><summary>Histórico ('+A.hist.length+')</summary><table style="width:100%;border-collapse:collapse"><tbody>'
     +[...A.hist].reverse().map(x=>'<tr><td>'+manDth(x.created_at)+'</td><td>'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')+'</tbody></table></details></div>';
   document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
     +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+'</div>';
 }
 async function manFichaReabrir(){ if(!manAberta) return; await manRecarregar(); await manFichaDados(); manFichaRender(); }
+// v4.120 — ela: "espaço para observação da ocorrência para colocar no histórico" + "data que ficou combinado"
+async function manOcorrencia(){ const id=manAberta.id; const txt=manGv('mo-txt').trim(), d=manGv('mo-data');
+  if(!txt && !d) return toast('Escreva a observação ou informe a data combinada','erro');
+  const motivo='ocorrência: '+(txt||'—')+(d?' · combinado para '+manDt(d):'');
+  try{ await manNota(id, motivo, Object.assign(d?{agendada_para:d+'T12:00:00'}:{}, manAndamento(id))); toast('Registrado no histórico'); }
+  catch(e){ toast('Erro: '+e.message,'erro'); }
+  await manFichaReabrir(); }
 async function manSalvarDem(){ const s=manSols.find(x=>x.id===manAberta.id); const v={local:manGv('me-local').trim(),o_que:manGv('me-oque').trim(),urgencia:manGv('me-urg'),
     departamento_id:Number(manGv('me-dep')),responsavel:manGv('me-resp').trim()||null,descricao:manGv('me-desc').trim()};
   if(!v.local||!v.o_que||!v.descricao) return toast('Onde, o quê e descrição não podem ficar em branco','erro');
