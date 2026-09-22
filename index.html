@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.122 · manutenção: tratativa, acionados, visita interna, retirada de item</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.123 · classe COPA valendo (copo por fardo)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5113,7 +5113,7 @@ const CC_PRIO = {
 // independente da classe. O antigo "consumo por paciente × previsão total" superestimava
 // 5–12× itens que não entram em toda cirurgia (bisturi 15 com 45 meses de estoque pedia
 // compra). A previsão de pacientes virou multiplicador: agenda 150 com média 123 ⇒ ×1,22.
-const CC_FORA_CC = ['LIMPEZA','ADM_EXPEDIENTE','ADM_IMPRESSOS'];
+const CC_FORA_CC = ['LIMPEZA','COPA','ADM_EXPEDIENTE','ADM_IMPRESSOS'];   // v4.123 — COPA passou a existir no cadastro (SQL 98)
 function ccFator(){ return (ccPrevisao && ccPrevisaoBase) ? ccPrevisao/ccPrevisaoBase : 1; }
 function ccRecorrente(r){
   if(CC_FORA_CC.includes(r.classe_compra)) return false;
@@ -13525,7 +13525,7 @@ async function pnCG_Render(){
   const itensCompra=await pnCG_ItensCompraDoMes(mes, compras);
   let compHig=0, compCC=0;
   const valNf={}; compras.forEach(n=>valNf[n.id]=0);
-  for(const it of itensCompra){ if(!(it.nota_fiscal_id in valNf)) continue; const v=Number(it.valor_item)||((Number(it.qtd)||0)*(Number(it.valor_unitario)||0)); valNf[it.nota_fiscal_id]+=0; const cls=(pnMatFull[it.material_id]||{}).classe_compra; if(cls==='LIMPEZA') compHig+=v; else compCC+=v; }
+  for(const it of itensCompra){ if(!(it.nota_fiscal_id in valNf)) continue; const v=Number(it.valor_item)||((Number(it.qtd)||0)*(Number(it.valor_unitario)||0)); valNf[it.nota_fiscal_id]+=0; const cls=(pnMatFull[it.material_id]||{}).classe_compra; if(cls==='LIMPEZA'||cls==='COPA') compHig+=v; else compCC+=v; }
   const semItens=compras.filter(n=>!itensCompra.some(i=>i.nota_fiscal_id===n.id));
   compCC+=0; // NFs de compra sem itens (ex.: instrumental antigo) ficam fora do split — aparecem no CME abaixo
   // compras CME (peças recebidas no mês)
