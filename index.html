@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.123 · classe COPA valendo (copo por fardo)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.124 · busca na compra de higiene/copa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -21702,8 +21702,14 @@ async function hgCompCarregar(){
   const per = hgUltimaContagem
     ? ('consumo apurado na contagem de <b>'+hgCtDataBr(hgUltimaContagem.data_contagem)+'</b>')
     : '<b>nenhuma contagem fechada ainda</b> — feche uma na aba Contagem para a sugestão acender';
+  // v4.124 — ela, 22/09: "preciso de uma aba de pesquisa de material... para procurar o pedido para comprar".
+  // A lista tem 36 itens nas duas listas; agora dá para achar o produto sem rolar. Filtra sem redesenhar,
+  // então o que já estava marcado continua marcado.
   let h='<div class="hg-nota">A sugestão é <b>repor o que foi consumido</b>: '+per+', menos o que sobrou no estoque. '
-       +'Marque os itens e use <b>Enviar p/ Orçar</b> — cada lista abre o seu próprio orçamento.</div>';
+       +'Marque os itens e use <b>Enviar p/ Orçar</b> — cada lista abre o seu próprio orçamento.</div>'
+       +'<div class="hg-filtros" style="margin-bottom:10px"><input type="text" id="hg-comp-busca" placeholder="🔍 Procurar produto para comprar (ex.: copo, álcool, papel)" oninput="hgCompFiltrar()" style="flex:1;min-width:240px">'
+       +'<label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px" title="esconde o que já tem de sobra e o que já está em orçamento ou pedido"><input type="checkbox" id="hg-comp-sofalta" onchange="hgCompFiltrar()"> só o que falta comprar</label>'
+       +'<span id="hg-comp-achou" style="font-size:12px;color:var(--cinza-4)"></span></div>';
 
   const listas=[
     { chave:'fixo',  rot:'🏭 HYGIBRAS — compra fixa', grupo:'HYGIBRAS',
@@ -21730,7 +21736,7 @@ async function hgCompCarregar(){
       const etapa=hgAndamento[r.material_id]||null;
       const ja=hgOrcTemItem(r.material_id)||!!etapa;
       const kit=Number(r.qtd_kit)||1;
-      h+='<tr'+(S.caixas>0?'':' style="opacity:.62"')+'>'
+      h+='<tr data-busca="'+hgEsc(String(r.material||'')+' '+String(r.codigo||'')+' '+String(r.unidade_medida||'')).toLowerCase()+'" data-falta="'+((S.caixas>0 && !ja)?'1':'0')+'"'+(S.caixas>0?'':' style="opacity:.62"')+'>'
         +'<td>'+(ja?'<span title="'+(etapa?('já está em '+etapa+' — não entra de novo'):'já está no Orçar')+'" style="font-size:11px">🧾</span>'
                   :'<input type="checkbox" class="hg-comp-chk hg-chk-'+L.chave+'" data-mid="'+r.material_id+'"'+(S.caixas>0?'':' data-vazio="1"')+'>')+'</td>'
         +'<td class="hg-prod">'+hgEsc(r.material)+'<span class="hg-sub">'+hgEsc(r.unidade_medida||'')+(kit>1?(' · '+kit+'/caixa'):'')
@@ -21750,9 +21756,29 @@ async function hgCompCarregar(){
   });
   document.getElementById('hg-comp-box').innerHTML=h;
 }
+// v4.124 — busca da tela de compras: esconde linha que não casa; não redesenha (mantém o que está marcado)
+function hgCompFiltrar(){
+  const cx=document.getElementById('hg-comp-busca'), so=document.getElementById('hg-comp-sofalta');
+  const q=((cx&&cx.value)||'').toLowerCase().trim(), soFalta=!!(so&&so.checked);
+  const partes=q.split(/\s+/).filter(Boolean);
+  let n=0, tot=0;
+  document.querySelectorAll('#hg-comp-box tbody tr[data-busca]').forEach(function(tr){
+    tot++;
+    const alvo=tr.getAttribute('data-busca')||'';
+    const ok = partes.every(function(p){ return alvo.indexOf(p)>=0; }) && (!soFalta || tr.getAttribute('data-falta')==='1');
+    tr.style.display = ok ? '' : 'none';
+    if(ok) n++;
+  });
+  const aviso=document.getElementById('hg-comp-achou');
+  if(aviso) aviso.textContent = (q||soFalta) ? (n+' de '+tot+' item(ns)') : '';
+}
 // v4.97 — marca só o que realmente falta comprar, e dentro de UMA lista
 function hgCompTodos(chave, on){
-  document.querySelectorAll('.hg-chk-'+chave).forEach(function(c){ c.checked = on && !c.dataset.vazio; });
+  document.querySelectorAll('.hg-chk-'+chave).forEach(function(c){
+    const tr=c.closest('tr');
+    if(tr && tr.style.display==='none') return;   // v4.124 — não marca o que a busca escondeu
+    c.checked = on && !c.dataset.vazio;
+  });
 }
 // v4.97 — cada lista abre o SEU orçamento: a da HYGIBRAS é pedido de contrato,
 // a do supermercado é cotação de preço. Regra dela: "as listas separadas, dois
