@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.126 · manutenção: filtro e relatório por prestador, modelos de orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.127 · manutenção: jornada cronológica e data combinada na visita</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23111,7 +23111,7 @@ const MAN_MAX=50*1024*1024;
 let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
-let manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
+let manHistOrdem='ASC', manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
 function manEsc(t){ return dptoEsc(t); }
 function manNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
@@ -23488,7 +23488,8 @@ function manFichaRender(){
       +'<div class="man-par"><span>Onde</span><b>'+manEsc(s.local)+'</b></div>'
       +'<div class="man-par"><span>Urgência</span><b class="man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'')+'</b></div>'
       +'<div class="man-par"><span>Responsável</span><span>'+manEsc(s.responsavel||'—')+'</span></div>'
-      +'<div class="man-par"><span>Aberta</span><span>'+manDth(s.created_at)+' · '+manEsc(s.aberta_por||'')+'</span></div>'
+      +'<div class="man-par"><span>Aberta em</span><b>'+new Date(s.created_at).toLocaleDateString('pt-BR')+'</b></div>'
+      +'<div class="man-par"><span></span><span class="man-sub" style="text-align:right">'+manDth(s.created_at)+' · '+manEsc(s.aberta_por||'')+' · '+(manDias(s.created_at)||0)+' dia(s) de jornada'+(s.resolvida_em?' até resolver':'')+'</span></div>'
       +'<div style="margin-top:6px;white-space:pre-wrap;font-size:13px">'+manEsc(s.descricao)+'</div>'
       +(pode?'<div class="man-linha">'+B('n p','✏️ Editar demanda','manAberta.edit=true;manFichaRender()','o que mudar fica no histórico')+'</div>':'');
   }
@@ -23539,11 +23540,13 @@ function manFichaRender(){
     +'<label class="man-rot">Anotação — como está o caso <input id="mo-txt" placeholder="ex.: liguei para o prestador, vem instalar o HD na sexta"></label>'
     +'<label class="man-rot">Data que ficou combinada <input id="mo-data" type="date" title="opcional"></label></div>'
     +'<div class="man-linha" style="margin-top:0">'+B('g p','💾 Registrar no histórico','manOcorrencia()')+'</div></div>';
-  c4+='<div class="man-hist-wrap"><table><tbody>'
-    +(A.hist.length?[...A.hist].reverse().map(x=>'<tr><td class="q"><b>'+(x.data_ref?manDt(x.data_ref):manDt(x.created_at))+'</b><span class="man-sub">'+(x.data_ref?'lançado '+manDth(x.created_at):new Date(x.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))+'</span></td>'
+  c4+='<div class="man-linha" style="margin:0 0 4px"><span class="man-rot" style="flex:1">⏱ Jornada da demanda — '+(manHistOrdem==='ASC'?'do começo para o fim':'o mais novo em cima')+'</span>'
+    +'<button class="man-b n p" onclick="manHistOrdem=(manHistOrdem===\'ASC\'?\'DESC\':\'ASC\');manFichaRender()">↕ Inverter a ordem</button></div>'
+   +'<div class="man-hist-wrap"><table><tbody>'
+    +(A.hist.length?(manHistOrdem==='ASC'?[...A.hist]:[...A.hist].reverse()).map(x=>'<tr><td class="q"><b>'+(x.data_ref?manDt(x.data_ref):manDt(x.created_at))+'</b><span class="man-sub">'+(x.data_ref?'lançado '+manDth(x.created_at):new Date(x.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))+'</span></td>'
       +'<td class="q">'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')
       :'<tr><td class="man-sub" style="padding:10px">Nada no histórico ainda.</td></tr>')
-    +'</tbody></table></div><div class="man-sub" style="margin-top:4px">'+A.hist.length+' registro(s) — o mais novo em cima</div></div>';
+    +'</tbody></table></div><div class="man-sub" style="margin-top:4px">'+A.hist.length+' registro(s) · aberta em '+manDt(s.created_at)+(s.resolvida_em?' · resolvida em '+manDt(s.resolvida_em):'')+'</div></div>';
   document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
     +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+c4+'</div>';
 }
@@ -23581,6 +23584,8 @@ async function manSalvarContrato(){ const s=manSols.find(x=>x.id===manAberta.id)
 // Ela (22/09): "vincular quem fará a tratativa e quais os prestadores serão acionados para orçamento
 // e finalmente quem fez a visita (se for interno) e quem retirou o item se foi impressora ou itens
 // que precisam de conserto externo".
+// v4.127 — o campo da volta combinada só aparece quando ficou "falta terminar" (e nunca é obrigatório)
+function manVisFicou(sid){ const w=document.getElementById('mv-dw'+sid); if(w) w.style.display=(manGv('mv-r'+sid)==='1')?'none':''; }
 function manVisTipo(){ const t=manGv('mv-tipo'), e=document.getElementById('mv-prest'), r=document.getElementById('mv-prest-rot'); if(!e) return;
   e.setAttribute('list', t==='INTERNO'?'man-dl-nomes':'man-dl-prest'); e.placeholder=t==='INTERNO'?'nome de quem fez':'apelido'; if(r) r.textContent=t==='INTERNO'?'Quem da equipe':'Prestador'; }
 async function manSalvarResp(){ const s=manSols.find(x=>x.id===manAberta.id); const r=manGv('mt-resp').trim();
@@ -23659,7 +23664,8 @@ function manVisRender(){
   abertas.forEach(s=>{ const fs=manVisFotos[s.id]||[];
     h+='<div class="man-chk"><input type="checkbox" id="mv-c'+s.id+'"'+(s.id===manPreDem?' checked':'')+'><div style="flex:1;min-width:0"><b>#'+s.id+' '+manEsc(s.o_que)+'</b> <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span>'
       +'<div class="man-grade" style="margin:4px 0 0"><label class="man-rot">O que fez <input id="mv-f'+s.id+'" placeholder="ex.: trocou o trinco" oninput="document.getElementById(\'mv-c'+s.id+'\').checked=true"></label>'
-      +'<label class="man-rot">Ficou <select id="mv-r'+s.id+'"><option value="0">falta terminar</option><option value="1">resolvida</option></select></label></div>'
+      +'<label class="man-rot">Ficou <select id="mv-r'+s.id+'" onchange="manVisFicou('+s.id+')"><option value="0">falta terminar</option><option value="1">resolvida</option></select></label>'
+      +'<label class="man-rot" id="mv-dw'+s.id+'">Volta combinada — opcional <input id="mv-d'+s.id+'" type="date" title="quando ficou combinado de terminar; pode deixar em branco"></label></div>'
       +'<div class="man-linha" style="margin:4px 0 0">'+manBotaoUp('📷 Fotos do depois','manVisArquivos(this,'+s.id+')')+(fs.length?'<span class="man-sub">'+fs.length+' arquivo(s)</span>':'')+'</div></div></div>';
   });
   h+='<div class="man-linha">'+'<button class="man-b g" onclick="manVisSalvar()">💾 Registrar visita</button></div></div>'
@@ -23669,6 +23675,7 @@ function manVisRender(){
     h+='<tr><td>'+manDt(v.data)+'</td><td><b>'+manEsc(manVisQuem(v))+'</b><span class="man-sub">'+manEsc(v.registrada_por||'')+'</span></td><td>'
       +its.map(i=>'<a href="#" onclick="manFicha('+i.solicitacao_id+');return false">'+manEsc(manDemCurta(i.solicitacao_id))+'</a> '+(i.resolveu?'<span class="man-tag man-t-ok">resolveu</span>':'<span class="man-tag man-t-sep">falta terminar</span>')+(i.feito?'<span class="man-sub">'+manEsc(i.feito)+'</span>':'')).join('<br>')+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>';
+  manSols.forEach(function(s){ if(document.getElementById('mv-r'+s.id)) manVisFicou(s.id); });   // v4.127 — esconde a volta combinada de quem ficou resolvida
 }
 async function manVisArquivos(input, sid){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'DEPOIS'); if(!p.length) return;
   (manVisFotos[sid]=manVisFotos[sid]||[]).push(...p); const c=document.getElementById('mv-c'+sid); const marc=c&&c.checked;
@@ -23678,7 +23685,7 @@ async function manVisArquivos(input, sid){ const fs=[...input.files]; input.valu
   document.getElementById('mv-prest').value=pr; document.getElementById('mv-data').value=dt; const cc=document.getElementById('mv-c'+sid); if(cc) cc.checked=true; toast('📷 '+p.length+' foto(s) para a #'+sid); }
 async function manVisSalvar(){
   const tipo=manGv('mv-tipo')||'PRESTADOR'; const pn=manGv('mv-prest').trim(); if(!pn) return toast(tipo==='INTERNO'?'Diga quem da equipe fez':'Diga qual prestador veio','erro');
-  const itens=manSols.filter(s=>(document.getElementById('mv-c'+s.id)||{}).checked).map(s=>({s, feito:manGv('mv-f'+s.id).trim(), res:manGv('mv-r'+s.id)==='1'}));
+  const itens=manSols.filter(s=>(document.getElementById('mv-c'+s.id)||{}).checked).map(s=>({s, feito:manGv('mv-f'+s.id).trim(), res:manGv('mv-r'+s.id)==='1', volta:manGv('mv-d'+s.id)}));
   if(!itens.length) return toast('Marque pelo menos uma demanda','erro');
   let p=null; if(tipo==='PRESTADOR'){ p=await manPrestPorNome(pn); if(!p) return; } const quem=p?p.apelido:pn+' (equipe interna)';
   const data=manGv('mv-data')||manIsoDia();
@@ -23689,7 +23696,8 @@ async function manVisSalvar(){
     for(const x of itens){
       const fs=manVisFotos[x.s.id]||[]; if(fs.length) await manSubirVarios(fs, x.s.id);
       const campos=x.res?{situacao:'RESOLVIDA',resolvida_em:new Date().toISOString(),resolvida_por:manQuem()}:{situacao:'ANDAMENTO'};
-      await manNota(x.s.id,'visita de '+quem+' em '+manDt(data)+': '+(x.feito||'—')+(x.res?' (resolveu)':' (falta terminar)')+(fs.length?' · '+fs.length+' foto(s)':''),campos,campos.situacao);
+      if(!x.res && x.volta) campos.agendada_para=x.volta+'T12:00:00';   // v4.127 — volta combinada, opcional
+      await manNota(x.s.id,'visita de '+quem+' em '+manDt(data)+': '+(x.feito||'—')+(x.res?' (resolveu)':' (falta terminar)')+(!x.res&&x.volta?' · volta combinada para '+manDt(x.volta):'')+(fs.length?' · '+fs.length+' foto(s)':''),campos,campos.situacao);
     }
     manVisFotos={}; manPreDem=null;
   },'Visita registrada em '+itens.length+' demanda(s)');
