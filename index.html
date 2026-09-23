@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.135 · o que voltou e ninguém cobrou tem lugar próprio</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.136 · retorno em várias vezes e baixa sem custo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15844,6 +15844,7 @@ async function rmCarregar(){
       sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,valor_total,data_emissao,status_pagamento,motivo_tratativa,natureza,remessa_id&status_pagamento=eq.PENDENTE_TRATATIVA&order=id.desc&limit=100'),
     ]);
     rmSaldo = saldo || []; rmSujos = sujos || []; rmRemessas = remessas || []; rmPend = pend || []; rmNfPend = nfPend || [];
+    await rmCarregarBaixas();   // v4.136 — o que ja foi baixado de cada item (descarte/extravio, sem custo)
     await rmCarregarDesgaste();
     await rmKitCarregar();   // v4.86 — o que tem dentro de cada kit que circula
     // v4.61 — histórico: remessas conferidas + notas de reprocessamento.
@@ -16923,16 +16924,17 @@ function rmRenderFora(){
     const dias = r.data_envio ? Math.round((Date.now()-new Date(r.data_envio+'T12:00:00').getTime())/86400000) : null;
     const linhas = itens.map(i=>`<tr>
         <td>${rmEsc(rmBem(i.bem_id))}</td>
-        <td style="text-align:center;font-weight:700;color:#6f42c1">${rmNum(i.qtd_enviada)}</td>
-        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-dev-${i.id}" value="${rmNum(i.qtd_enviada)}"></td>
+        <td style="text-align:center;font-weight:700;color:#6f42c1">${rmNum(i.qtd_enviada)}${(rmNum(i.qtd_devolvida)||rmBaixado(r.id,i.bem_id))?`<div style="font-size:11px;color:var(--cinza-4);font-weight:400">${rmNum(i.qtd_devolvida)?('já voltou '+rmNum(i.qtd_devolvida)):''}${(rmNum(i.qtd_devolvida)&&rmBaixado(r.id,i.bem_id))?' · ':''}${rmBaixado(r.id,i.bem_id)?('baixado '+rmBaixado(r.id,i.bem_id)):''}</div>`:''}</td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-dev-${i.id}" value="${rmAindaFora(r,i)}" title="o que está voltando AGORA — o que não voltou continua fora, para o próximo retorno"></td>
         <td style="text-align:center"><input class="rm-n" type="number" step="any" min="0" id="rm-rep-${i.id}" value="0" title="Voltou, mas o fornecedor reprovou (RNC): não entra em casa — sai do livro com o motivo"></td>
         <td><input type="text" id="rm-obs-${i.id}" placeholder="motivo · nº do RNC…" style="width:100%;min-width:150px;border:1.5px solid var(--cinza-2);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--fonte)"></td>
+        <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="esta peça não volta mais (não reprocessa ou extravio): sai do inventário de reprocessados, sem custo" onclick="rmBaixaSemCusto(${r.id}, ${i.id})">➖ não volta mais</button></td>
       </tr>`).join('');
     return `<div class="rm-card">
       <div class="rm-head roxo"><span>${rmRemessaTitulo(r)}</span>
         <span class="rm-count">enviada ${rmData(r.data_envio)}${dias!==null?` · ${dias} dia(s) fora`:''}</span></div>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou quanto?</th><th style="text-align:center" title="Voltou, mas o fornecedor reprovou (RNC) — sai do livro">Reprovada</th><th>Observação</th></tr></thead>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou quanto?</th><th style="text-align:center" title="Voltou, mas o fornecedor reprovou (RNC) — sai do livro">Reprovada</th><th>Observação</th><th></th></tr></thead>
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--cinza-5)">Confira item a item o que voltou. O que faltar vira pendência.</span>
@@ -17093,6 +17095,72 @@ async function rmSemCobranca(itemId){
   }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
+// ═══ v4.136 — O FLUXO QUE ELA DITOU (23/09) ═════════════════════════════════
+// "geramos a remessa com todos os itens; quando retornar, vamos dando baixa no que
+// retornou e cada quantidade de retorno com sua NF, até que fiquem os itens que não
+// geram mais reprocessamento. Esses itens não entram no custo de perda... a única coisa
+// que precisa é dar baixa no inventário de reprocessados, porque será descartado, mas não
+// tem custo. Após todos os itens da remessa forem tratados, fecha a remessa."
+// + "mesmo que seja extravio, não tem custo direto, tem saída do inventário e registro".
+// Então: retorno em VÁRIAS VEZES, baixa SEM VALOR, e a remessa só encerra quando nada
+// mais está fora nem esperando nota.
+let rmBaixasPorItem = {};   // 'remessaId-bemId' -> quantidade já baixada (descarte/extravio)
+async function rmCarregarBaixas(){
+  try{
+    const mv = (await sbFetch('remessa_mov?select=remessa_id,bem_id,d_fora,tipo&tipo=eq.PERDA&remessa_id=not.is.null&limit=2000'))||[];
+    rmBaixasPorItem = {};
+    mv.forEach(function(m){
+      const k = m.remessa_id+'-'+m.bem_id;
+      rmBaixasPorItem[k] = (rmBaixasPorItem[k]||0) + Math.abs(rmNum(m.d_fora));
+    });
+  }catch(e){ rmBaixasPorItem = {}; }
+}
+function rmBaixado(remessaId, bemId){ return rmBaixasPorItem[remessaId+'-'+bemId] || 0; }
+function rmAindaFora(r, i){
+  return Math.max(0, rmNum(i.qtd_enviada) - rmNum(i.qtd_devolvida) - rmBaixado(r.id, i.bem_id));
+}
+function rmTudoTratado(r){
+  const itens = r.remessa_itens||[];
+  const fora  = itens.some(i=>rmAindaFora(r,i) > 0);
+  const cobrar= itens.some(i=>rmNum(i.qtd_devolvida) > rmNum(i.qtd_faturada) && i.situacao!=='SEM_COBRANCA');
+  return !fora && !cobrar;
+}
+// baixa do inventário de reprocessados: SEM CUSTO, só saída e registro
+async function rmBaixaSemCusto(remessaId, itemId){
+  const r = (rmRemessas||[]).concat((typeof rmHist!=='undefined'?rmHist:[])||[]).find(x=>x.id===remessaId); if(!r) return;
+  const i = (r.remessa_itens||[]).find(x=>x.id===itemId); if(!i) return;
+  const fora = rmAindaFora(r,i);
+  if(fora<=0){ toast('Este item não tem peça fora para baixar.','erro'); return; }
+  const resp = await hogPergunta({
+    titulo:'Baixa do inventário — '+rmBem(i.bem_id),
+    texto:'Remessa '+(r.numero_bloco||('#'+r.id))+'. A peça sai do inventário de reprocessados, SEM custo: o custo já entrou quando a peça nova foi aberta e quando foi usada. Fica registrado quem baixou e o motivo.',
+    campos:[
+      { id:'qtd', rot:'Quantas peças', tipo:'numero', valor:fora, obrigatorio:true },
+      { id:'motivo', rot:'Motivo', tipo:'lista', valor:'NÃO REPROCESSA',
+        opcoes:[{v:'NÃO REPROCESSA',r:'Não gera mais reprocessamento — descartada'},
+                {v:'EXTRAVIO',r:'Extravio — não voltou'},
+                {v:'OUTRO',r:'Outro (explico abaixo)'}] },
+      { id:'obs', rot:'Observação', placeholder:'ex.: descartada pelo fornecedor, laudo 123' },
+    ], ok:'Dar baixa' });
+  if(!resp) return;
+  const q = Number(String(resp.qtd).replace(',','.'))||0;
+  if(q<=0 || q>fora){ toast('Quantidade inválida (fora: '+fora+').','erro'); return; }
+  if(!exigirAssinatura('Baixa no livro de remessas')) return;
+  if(!confirm('Baixar '+q+' de "'+rmBem(i.bem_id)+'"?\n\n• Sai do inventário de reprocessados (sem custo).\n• Motivo: '+resp.motivo+(resp.obs?(' — '+resp.obs):'')+'\n• Fica no livro, com o seu nome.')) return;
+  try{
+    await sbFetch('remessa_mov','POST',{ bem_id:i.bem_id, tipo:'PERDA', d_fora:-q, remessa_id:r.id,
+      data:new Date().toISOString().slice(0,10), registrado_por:rmQuem(),
+      observacao:'BAIXA SEM CUSTO — '+resp.motivo+(resp.obs?(' — '+resp.obs):'')+' — remessa '+(r.numero_bloco||('#'+r.id)) });
+    // pendência antiga do mesmo item, se houver, fica resolvida
+    const pend = (rmPend||[]).find(p=>p.remessa_id===r.id && p.bem_id===i.bem_id && p.status==='ABERTA');
+    if(pend){ try{ await sbFetch('remessa_pendencias?id=eq.'+pend.id,'PATCH',{ status:'RESOLVIDA_PERDA',
+      tratada_em:new Date().toISOString().slice(0,10), tratada_por:rmQuem(),
+      desfecho:'Baixa sem custo — '+resp.motivo }); }catch(e){} }
+    toast('➖ Baixa registrada (sem custo) ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro na baixa: '+(e.message||e),'erro'); }
+}
+
 function rmRenderPendFisica(){
   const box = document.getElementById('rm-pend-fisica');
   if(!rmMostra('PENDENCIA')){ box.innerHTML=''; return; }
@@ -17108,12 +17176,12 @@ function rmRenderPendFisica(){
       <td style="font-size:11px;color:${dias&&dias>15?'var(--vermelho)':'var(--cinza-4)'}">${rmData(p.aberta_em)}${dias!==null?` · ${dias} dia(s)`:''}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmPendVoltou(${p.id})">↩ voltou depois</button>
-        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmPendCusto(${p.id})" title="no fechamento do mês, o que sobrou vira custo do CC">💸 lançar no custo do CC</button>
+        <button class="rm-b perigo" style="padding:4px 9px;font-size:11px" onclick="rmBaixaSemCusto(${p.remessa_id}, ${p.remessa_item_id})" title="a peça não volta mais: sai do inventário de reprocessados, sem custo — o custo já entrou quando a peça nova foi aberta e quando foi usada">➖ não volta mais — baixar</button>
       </td></tr>`;
   }).join('');
   box.innerHTML = `<div class="rm-card">
     <div class="rm-head verm"><span>⚠️ Pendências de remessa — saiu e não voltou</span><span class="rm-count">${pendVis.length}</span></div>
-    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Problema <b>operacional</b>, do Centro Cirúrgico. Nada a ver com pagamento. A diferença fica <b>aqui</b> até o <b>fechamento do mês</b> — quando todas as saídas estiverem computadas, o que sobrou é lançado no <b>custo do CC</b> (💸). Se a peça aparecer antes, "voltou depois" devolve ao saldo.</div>
+    <div style="padding:9px 16px;background:var(--cinza-1);font-size:12px;color:var(--cinza-5)">Peça que saiu na remessa e ainda não voltou. Se aparecer, <b>"voltou depois"</b> devolve ao saldo. Se não volta mais (não reprocessa ou extravio), <b>"não volta mais — baixar"</b> tira do inventário de reprocessados <b>sem custo</b>: o custo já entrou quando a peça nova foi aberta e quando foi usada. Fica o registro de quem baixou e por quê.</div>
     <div style="overflow-x:auto"><table>
       <thead><tr><th>Item</th><th style="text-align:center">Falta</th><th>Remessa</th><th>Aberta em</th><th></th></tr></thead>
       <tbody>${linhas}</tbody></table></div></div>`;
@@ -18101,10 +18169,10 @@ async function rmRegistrarRetorno(remessaId){
     const rep = (elR && elR.value!=='') ? parseFloat(elR.value) : 0;
     const elO = document.getElementById('rm-obs-'+i.id);
     const obs = elO ? String(elO.value||'').trim() : '';
-    const env = rmNum(i.qtd_enviada);
+    const env = rmAindaFora(r, i);   // v4.136 — o retorno é do que AINDA está fora (dá para receber em várias vezes)
     if(isNaN(dev) || dev<0){ toast('Quantidade inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
     if(isNaN(rep) || rep<0){ toast('Quantidade reprovada inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
-    if(dev+rep > env){ toast('"'+rmBem(i.bem_id)+'": voltou '+dev+' + reprovada '+rep+' passa do que saiu ('+env+'). Confira.','erro'); return; }
+    if(dev+rep > env){ toast('"'+rmBem(i.bem_id)+'": voltou '+dev+' + reprovada '+rep+' passa do que ainda está fora ('+env+'). Confira.','erro'); return; }
     if(rep>0 && !obs){ toast('"'+rmBem(i.bem_id)+'": peça reprovada precisa do motivo na observação — o código ou o nº do RNC.','erro'); return; }
     dados.push({ item:i, dev, rep, obs, falta: env-dev-rep });
   }
@@ -18166,7 +18234,7 @@ async function rmRetornoExecutar(){
   const hoje = new Date().toISOString().slice(0,10);
   try{
     for(const {item,dev,rep,obs,falta} of dados){
-      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_devolvida:dev });
+      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_devolvida: rmNum(item.qtd_devolvida) + dev });   // v4.136 — soma os retornos
       const sufixo = obs ? ' — '+obs : '';
       if(dev>0){
         await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'RETORNO', d_fora:-dev, d_casa:dev, remessa_id:remessaId,
@@ -18179,17 +18247,20 @@ async function rmRetornoExecutar(){
         await sbFetch('remessa_mov','POST',{ bem_id:item.bem_id, tipo:'PERDA', d_fora:-(rep||0), remessa_id:remessaId,
           data:hoje, registrado_por:rmQuem(), observacao:'REPROVADA pelo fornecedor — remessa '+(r.numero_bloco||'#'+remessaId)+sufixo });
       }
-      if(falta>0){
-        await sbFetch('remessa_pendencias','POST',{ remessa_id:remessaId, remessa_item_id:item.id, bem_id:item.bem_id,
-          qtd:falta, status:'ABERTA', observacao:'Saiu na remessa '+(r.numero_bloco||'#'+remessaId)+' e não voltou'+sufixo });
-      }
+      // v4.136 — o que não voltou NÃO vira pendência: continua FORA, esperando o próximo
+      // retorno. Quando ela souber que não volta mais, usa "não volta mais — baixar".
     }
     // A lavanderia cobra valor fixo por mês, não por remessa: o ciclo físico
     // fecha aqui mesmo. A nota entra uma vez por mês, no card próprio.
     // A esterilizadora cobra por peça reprocessada, então espera a nota para conferir.
     const mensal = r.tipo === 'LAVANDERIA';
+    // v4.136 — só sai de "fora de casa" quando nada mais está fora; senão fica esperando o resto
+    const rAtual = Object.assign({}, r, { remessa_itens:(r.remessa_itens||[]).map(function(x){
+      const d = dados.find(function(y){ return y.item.id===x.id; });
+      return d ? Object.assign({}, x, { qtd_devolvida: rmNum(x.qtd_devolvida)+d.dev }) : x; }) });
+    const aindaFora = (rAtual.remessa_itens||[]).some(function(x){ return rmAindaFora(rAtual, x) > 0; });
     await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{
-      status: mensal ? 'CONFERIDA' : 'RETORNADA', data_retorno:hoje, recebido_por:rmQuem() });
+      status: aindaFora ? 'ENVIADA' : (mensal ? 'CONFERIDA' : 'RETORNADA'), data_retorno:hoje, recebido_por:rmQuem() });
     const fim = mensal ? 'A nota da lavanderia é mensal — lance no card do mês.' : 'Agora dê entrada na nota.';
     toast((faltantes.length ? `Baixa registrada — ${faltantes.length} pendência(s) aberta(s). ` : 'Baixa registrada ✓ — ') + fim,'sucesso');
     rmCarregar();
@@ -18352,7 +18423,12 @@ async function rmConferirNf(remessaId, parcial){
     }
     // v4.134 — nota parcial deixa a remessa aberta; a 1ª nota continua sendo a da remessa
     // (as outras ficam ligadas por notas_fiscais.remessa_id e aparecem no histórico)
-    const patchR = { status: parcial ? 'RETORNADA' : 'CONFERIDA' };
+    // v4.136 — encerra só quando nada está fora e nada falta cobrar
+    const itensAtual = (r.remessa_itens||[]).map(function(x){
+      const l = linhas.find(function(y){ return y.item.id===x.id; });
+      return l ? Object.assign({}, x, { qtd_faturada: l.fatTotal }) : x; });
+    const tudoOk = rmTudoTratado(Object.assign({}, r, { remessa_itens:itensAtual }));
+    const patchR = { status: tudoOk ? 'CONFERIDA' : 'RETORNADA' };
     if(!r.nota_fiscal_id) patchR.nota_fiscal_id = nfId;
     await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH', patchR);
     toast((travado ? 'Nota registrada e TRAVADA para pagamento ⚠️' : 'Nota registrada ✓')
