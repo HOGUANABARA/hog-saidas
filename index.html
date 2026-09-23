@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.136 · retorno em várias vezes e baixa sem custo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.137 · sem aviso de comprar peça nova</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -16790,6 +16790,10 @@ async function rmCarregarDesgaste(){
 
 function rmRenderDesgaste(){
   const box = document.getElementById('rm-desgaste'); if(!box) return;
+  // v4.137 — ela, 23/09: "só não precisa dar o aviso de peça nova para comprar".
+  // Com a v4.136 toda peça descartada vira baixa (sem custo), então este aviso ficaria
+  // aceso o tempo todo — e a decisão de comprar peça nova é dela, não do contador de perdas.
+  box.innerHTML = ''; return;
   const linhas = rmDesgaste
     .filter(d => rmBemPassa(d.bem_id))
     .filter(d => rmNum(d.perdidas_90d) > 0 || rmNum(d.pendencias_ha_mais_de_30d) > 0)
