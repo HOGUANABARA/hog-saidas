@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.134 · remessa aceita segunda nota antes de encerrar</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.135 · o que voltou e ninguém cobrou tem lugar próprio</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1598,6 +1598,7 @@ details[open] summary { margin-bottom: 6px; }
   <div id="rm-sujos"></div>
   <div id="rm-fora"></div>
   <div id="rm-aguardando-nf"></div>
+  <div id="rm-falta-cobrar"></div>
   <div id="rm-pend-fisica"></div>
   <div id="rm-pend-nf"></div>
   <div id="rm-nf-lavanderia"></div>
@@ -16833,6 +16834,7 @@ function rmRenderizar(){
     <div class="rm-tile"><span>Em casa</span><b style="color:var(--verde)">${casaTotal}</b></div>
     <div class="rm-tile"><span>Sujo, esperando envio</span><b style="color:#E67E22">${sujoTotal}</b></div>
     <div class="rm-tile"><span>Fora de casa</span><b style="color:#6f42c1">${foraTotal}</b></div>
+    <div class="rm-tile"><span>Falta cobrar</span><b style="color:${rmFaltaCobrar().length?'#B9770E':'var(--cinza-4)'}">${rmFaltaCobrar().length}</b></div>
     <div class="rm-tile"><span>Pendências físicas</span><b style="color:${rmPend.length?'var(--vermelho)':'var(--cinza-4)'}">${rmPend.length}</b></div>
     <div class="rm-tile"><span>Notas travadas</span><b style="color:${rmNfPend.length?'var(--vermelho)':'var(--cinza-4)'}">${rmNfPend.length}</b></div>`;
 
@@ -16844,6 +16846,7 @@ function rmRenderizar(){
   rmRenderMontagem();
   rmRenderFora();
   rmRenderAguardandoNf();
+  rmRenderFaltaCobrar();        // v4.135
   rmRenderPendFisica();
   rmRenderPendNf();
   rmRenderNotaLavanderia();
@@ -16978,11 +16981,116 @@ function rmRenderAguardandoNf(){
           <input id="rm-nf-num-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
         <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;color:var(--cinza-4);text-transform:uppercase">Emissão</label>
           <input type="date" id="rm-nf-emissao-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
-        <button class="rm-b claro" style="margin-left:auto" title="a nota entra, a remessa CONTINUA aberta e você pode lançar outra nota depois — é o caso de item que veio faltando e será cobrado em outra nota" onclick="rmConferirNf(${r.id}, true)">📄 Nota parcial — manter aberta</button>
-        <button class="rm-b verde" title="a nota entra e a remessa é encerrada; o que faltou continua como pendência para você tratar" onclick="rmConferirNf(${r.id})">✔ Entrada da nota e encerrar</button>
+        <button class="rm-b verde" style="margin-left:auto" title="a nota entra e a remessa é encerrada; peça que voltou e a nota não cobrou vai para a lista 'Falta cobrar', sem mexer nesta nota" onclick="rmConferirNf(${r.id})">✔ Conferir e dar entrada na nota</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// ═══ v4.135 — O QUE VOLTOU E NENHUMA NOTA COBROU ════════════════════════════
+// Ela, 23/09: "não fica bom esse processo, ele reabriu uma nota finalizada" +
+// "volte o fechamento da nota com os itens que eram, sem o cassete" +
+// "vamos arrumar o fluxo do que ficou de fora".
+// A nota fechada FICA FECHADA. A peça que voltou e não foi cobrada vira uma linha
+// nesta lista, que atravessa remessas encerradas ou não. Dali sai a nota complementar
+// (uma nota nova, ligada à mesma remessa) ou a marca de que não será cobrada.
+function rmFaltaCobrar(){
+  const todas = [].concat(rmRemessas||[], (typeof rmHist!=='undefined'?rmHist:[])||[]);
+  const vistos = new Set(); const linhas = [];
+  for(const r of todas){
+    if(vistos.has(r.id)) continue; vistos.add(r.id);
+    if(r.tipo==='MANUTENCAO' || r.tipo==='LAVANDERIA') continue;   // lavanderia é valor fixo no mês
+    if(!rmRemessaPassa(r)) continue;
+    for(const i of (r.remessa_itens||[])){
+      const dev = rmNum(i.qtd_devolvida), fat = rmNum(i.qtd_faturada);
+      if(i.situacao==='SEM_COBRANCA') continue;
+      if(dev > fat && r.status!=='RETORNADA') linhas.push({ r, i, falta: dev-fat });
+    }
+  }
+  return linhas;
+}
+function rmRenderFaltaCobrar(){
+  const box = document.getElementById('rm-falta-cobrar'); if(!box) return;
+  if(!rmMostra('NOTA')){ box.innerHTML=''; return; }
+  const linhas = rmFaltaCobrar();
+  if(!linhas.length){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="rm-card">
+    <div class="rm-head cinza"><span>🧾 Falta cobrar — voltou e nenhuma nota cobrou</span><span class="rm-count">${linhas.length}</span></div>
+    <div style="padding:9px 16px;background:#FEF9E7;font-size:12px;color:#7D6608;line-height:1.5">
+      Peça que <b>voltou do reprocessamento</b> e ficou de fora da nota — porque veio depois, foi entregue em outro dia
+      ou o fornecedor cobrou só parte. A nota já fechada <b>não muda</b>: daqui sai uma <b>nota complementar</b>,
+      ligada à mesma remessa. Se o fornecedor não for cobrar, marque <b>não será cobrado</b>.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Remessa</th><th>Item</th><th style="text-align:center">Voltou</th><th style="text-align:center">Já cobrado</th><th style="text-align:center">Falta cobrar</th><th></th></tr></thead>
+      <tbody>${linhas.map(({r,i,falta})=>`<tr>
+        <td>${rmEsc(r.numero_bloco||('#'+r.id))}<div style="font-size:11px;color:var(--cinza-4)">voltou ${rmData(r.data_retorno)}</div></td>
+        <td>${rmEsc(rmBem(i.bem_id))}</td>
+        <td style="text-align:center">${rmNum(i.qtd_devolvida)}</td>
+        <td style="text-align:center">${rmNum(i.qtd_faturada)}</td>
+        <td style="text-align:center;font-weight:800;color:#B9770E">${falta}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="rm-b verde" style="padding:4px 9px;font-size:11px" onclick="rmNotaComplementar(${i.id})">🧾 lançar nota</button>
+          <button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="o fornecedor não vai cobrar esta peça" onclick="rmSemCobranca(${i.id})">✖ não será cobrado</button>
+        </td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+function rmItemDe(itemId){
+  const todas = [].concat(rmRemessas||[], (typeof rmHist!=='undefined'?rmHist:[])||[]);
+  for(const r of todas) for(const i of (r.remessa_itens||[])) if(i.id===itemId) return { r, i };
+  return null;
+}
+async function rmNotaComplementar(itemId){
+  const alvo = rmItemDe(itemId); if(!alvo) return;
+  const { r, i } = alvo;
+  const falta = rmNum(i.qtd_devolvida) - rmNum(i.qtd_faturada);
+  const resp = await hogPergunta({
+    titulo: 'Nota complementar — '+rmBem(i.bem_id),
+    texto: 'Remessa '+(r.numero_bloco||('#'+r.id))+'. A nota que já está registrada não muda: esta é uma nota NOVA, ligada à mesma remessa.',
+    campos: [
+      { id:'num', rot:'Nº da nota', obrigatorio:true },
+      { id:'emissao', rot:'Emissão', tipo:'data', valor:new Date().toISOString().slice(0,10) },
+      { id:'qtd', rot:'Quantidade cobrada', tipo:'numero', valor:falta, obrigatorio:true },
+      { id:'valor', rot:'R$ por peça', tipo:'numero', valor:(i.valor_unitario!=null?i.valor_unitario:''), obrigatorio:true },
+    ], ok:'Lançar a nota' });
+  if(!resp) return;
+  const q = Number(String(resp.qtd).replace(',','.'))||0;
+  const v = Number(String(resp.valor).replace(',','.'))||0;
+  if(q<=0){ toast('Quantidade inválida.','erro'); return; }
+  if(q>falta && !confirm('Esta nota cobra '+q+', mas só faltavam '+falta+'. Continuar?')) return;
+  if(!confirm('Lançar a nota '+resp.num+' — '+q+' × '+rmMoney(v)+' = '+rmMoney(q*v)+'?\n\nA nota da remessa que já está fechada continua como está.')) return;
+  try{
+    const nfArr = await sbFetch('notas_fiscais','POST',{
+      fornecedor_id: r.fornecedor_id || null, numero_nf: String(resp.num).trim(),
+      data_emissao: resp.emissao || null, data_entrega: new Date().toISOString().slice(0,10),
+      valor_total: q*v, natureza:'SERVICO_REPROCESSAMENTO', confirmada:true,
+      status_pagamento:'LIBERADA', remessa_id:r.id, status:'ENTREGUE',
+      vencimentos_obs:'Nota complementar — remessa '+(r.numero_bloco||('#'+r.id))+' · '+rmBem(i.bem_id)+'. Não gera entrada de estoque.' });
+    const nfId = nfArr && nfArr[0] && nfArr[0].id;
+    const novoFat = rmNum(i.qtd_faturada) + q;
+    const dev = rmNum(i.qtd_devolvida), env = rmNum(i.qtd_enviada);
+    let situacao = 'OK';
+    if(env>dev && novoFat>dev) situacao='FALTA_COBRADA';
+    else if(env>dev)           situacao='FALTA_NAO_COBRADA';
+    else if(novoFat>dev)       situacao='COBRADO_A_MAIS';
+    await sbFetch('remessa_itens?id=eq.'+i.id,'PATCH',{ qtd_faturada:novoFat, valor_unitario:v, situacao });
+    await sbFetch('remessa_mov','POST',{ bem_id:i.bem_id, tipo:'CUSTO_SERVICO', remessa_id:r.id, nota_fiscal_id:nfId,
+      valor_unitario:v, registrado_por:rmQuem(),
+      observacao:'Reprocessamento cobrado na NF '+String(resp.num).trim()+' (nota complementar) — '+q+' un a '+rmMoney(v) });
+    const bemV=(rmBens||[]).find(b=>b.id===i.bem_id);
+    if(bemV && bemV.material_id && v>0){ try{ await sbFetch('materiais?id=eq.'+bemV.material_id,'PATCH',{ ultimo_valor_pago:v }); }catch(e){} }
+    toast('🧾 Nota complementar '+String(resp.num).trim()+' registrada ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro ao lançar a nota: '+(e.message||e),'erro'); }
+}
+async function rmSemCobranca(itemId){
+  const alvo = rmItemDe(itemId); if(!alvo) return;
+  const { r, i } = alvo;
+  if(!confirm('"'+rmBem(i.bem_id)+'" da remessa '+(r.numero_bloco||('#'+r.id))+': o fornecedor NÃO vai cobrar o reprocessamento desta(s) peça(s)?\n\nA linha sai da lista "Falta cobrar". A peça continua em casa, e nada muda no saldo.')) return;
+  try{
+    await sbFetch('remessa_itens?id=eq.'+i.id,'PATCH',{ situacao:'SEM_COBRANCA' });
+    toast('Marcado: não será cobrado ✓','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
 }
 
 function rmRenderPendFisica(){
@@ -17200,7 +17308,7 @@ function rmRenderHistorico(){
       <table style="width:100%">
         <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobrou</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th><th>Situação</th><th></th></tr></thead>
         <tbody>${sub}</tbody></table>
-      <div style="padding:8px 8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" onclick="rmCorrBloco(${r.id})">✏️ Corrigir nº do bloco</button><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="o fornecedor mandou outra nota desta mesma remessa: reabre para dar entrada nela" onclick="rmReabrirParaNota(${r.id})">🧾 Lançar outra nota</button><span style="font-size:11px;color:var(--cinza-4)">Correção não apaga nada: reaponta ou ajusta e deixa o motivo no livro.</span></div>
+      <div style="padding:8px 8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" onclick="rmCorrBloco(${r.id})">✏️ Corrigir nº do bloco</button><span style="font-size:11px;color:var(--cinza-4)">Correção não apaga nada: reaponta ou ajusta e deixa o motivo no livro.</span></div>
       ${(r.recebido_por||r.enviado_por)?`<div style="font-size:11px;color:var(--cinza-4);padding:6px 8px 0">${r.enviado_por?'Enviado por '+rmEsc(r.enviado_por):''}${(r.enviado_por&&r.recebido_por)?' · ':''}${r.recebido_por?'recebido por '+rmEsc(r.recebido_por):''}</div>`:''}
     </td></tr>`;
   }).join('');
