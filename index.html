@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.131 · manutenção: custo por departamento e por espaço</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.132 · histórico de compras da planilha na ficha</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -13967,10 +13967,15 @@ async function pnFichaCompras(mid){
       try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc'))||[]; }catch(e){}
     }
     const fNome=id=>{ const f=(coFornecedores||[]).find(x=>x.id===id); return f?f.nome:(id?('fornecedor #'+id):'—'); };
-    const [its, ords] = await Promise.all([
+    // v4.132 — ela, 23/09: "na ficha do material, gostaria de ver o histórico de compras, mesmo que for
+    // da minha planilha... preciso desse rastreio". compras_historico (SQL 99) traz o que foi comprado
+    // ANTES do sistema: ordens de compra mensais (nov/25 a fev/26) e a planilha base. Só rastro: não é
+    // nota, não mexe em estoque.
+    const [its, ords, hist] = await Promise.all([
       sbFetch('nf_itens?select=id,nota_fiscal_id,qtd,valor_unitario,valor_item,descricao_nf&material_id=eq.'+mid+'&order=id.desc&limit=12'),
       sbFetch('ordens_compra?select=id,pedido_id,fornecedor_compra_id,fornecedor_id,valor_unitario,qtd_a_comprar,situacao,marca_escolhida,data_pedido,created_at&material_id=eq.'+mid
              +'&situacao=in.(PENDENTE)&order=id.desc&limit=8'),
+      sbFetch('compras_historico?select=*&material_id=eq.'+mid+'&order=data_entrega.desc.nullslast,id.desc&limit=30').catch(function(){ return []; }),
     ]);
     const linhas=[];
     const nids=[...new Set((its||[]).map(i=>i.nota_fiscal_id).filter(Boolean))];
@@ -13988,9 +13993,27 @@ async function pnFichaCompras(mid){
         origem:'Pedido #'+(o.pedido_id||o.id), real:false });
     }
     if(!linhas.length){
-      el.innerHTML='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhuma nota nem pedido em aberto deste item no app. '
+      el.innerHTML='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhuma nota, pedido em aberto ou compra de planilha deste item. '
         +'O <b>último valor pago</b> do cadastro, acima, é a única referência que existe — veio da planilha antiga.</div>';
       return;
+    }
+    // v4.132 — as compras da planilha; quando só existe o mês ("02/26", "JUN/26"), vira o 1º dia do mês para ordenar
+    const MESPT={JAN:'01',FEV:'02',MAR:'03',ABR:'04',MAI:'05',JUN:'06',JUL:'07',AGO:'08',SET:'09',OUT:'10',NOV:'11',DEZ:'12'};
+    const dataDoMes=function(m){
+      const t=String(m||'').trim().toUpperCase();
+      let mm=/^(\d{2})\/(\d{2})$/.exec(t);                 // 02/26
+      if(mm) return '20'+mm[2]+'-'+mm[1]+'-01';
+      mm=/^([A-Z]{3})\/(\d{2})$/.exec(t);                  // JUN/26
+      if(mm && MESPT[mm[1]]) return '20'+mm[2]+'-'+MESPT[mm[1]]+'-01';
+      mm=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+      if(mm) return t;
+      return '';
+    };
+    for(const h of (hist||[])){
+      linhas.push({ data:(h.data_entrega||h.data_emissao||dataDoMes(h.mes)||''), forn:h.fornecedor||'—',
+        desc:[h.marca, h.descricao_nf||h.material_nome].filter(Boolean).join(' · '),
+        qtd:h.qtd, unit:h.valor_unitario, planilha:true,
+        origem:(h.nf_numero?('NF '+h.nf_numero):(h.origem||'planilha'))+(h.unidade?(' · '+h.unidade):''), real:true });
     }
     linhas.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     const th=t=>'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">'+t+'</th>';
@@ -13999,17 +14022,18 @@ async function pnFichaCompras(mid){
       +'<thead><tr style="background:var(--cinza-1)">'+th('Quando')+th('Fornecedor')+th('Marca / descrição')+thr('Qtd')+thr('R$/un')+th('De onde')+'</tr></thead><tbody>'
       + linhas.map(function(l){
           const td='padding:5px 8px;border-bottom:1px solid var(--cinza-2)';
-          return '<tr'+(l.real?'':' style="background:#FEF9E7"')+'>'
+          return '<tr'+(l.planilha?' style="background:#F4F8FC"':(l.real?'':' style="background:#FEF9E7"'))+'>'
             +'<td style="'+td+'">'+dt(l.data)+'</td>'
             +'<td style="'+td+'">'+String(l.forn||'—')+'</td>'
             +'<td style="'+td+';color:var(--cinza-5)">'+String(l.desc||'—')+'</td>'
             +'<td style="'+td+';text-align:right">'+(l.qtd??'—')+'</td>'
-            +'<td style="'+td+';text-align:right;font-weight:700;color:'+(l.real?'var(--verde)':'#B9770E')+'">'+money(l.unit)+'</td>'
-            +'<td style="'+td+';font-size:11.5px;color:var(--cinza-4)">'+l.origem+(l.real?'':' · <b>ainda não chegou</b>')+'</td></tr>';
+            +'<td style="'+td+';text-align:right;font-weight:700;color:'+(l.planilha?'var(--azul)':(l.real?'var(--verde)':'#B9770E'))+'">'+money(l.unit)+'</td>'
+            +'<td style="'+td+';font-size:11.5px;color:var(--cinza-4)">'+l.origem+(l.planilha?' · <b>da planilha</b>':(l.real?'':' · <b>ainda não chegou</b>'))+'</td></tr>';
         }).join('')
       +'</tbody></table>'
       +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Verde = <b>nota fiscal</b>, compra que aconteceu. '
-      +'Amarelo = <b>pedido sem nota</b>, preço combinado que ainda não virou compra. Linha cancelada não entra.</div>';
+      +'Amarelo = <b>pedido sem nota</b>, preço combinado que ainda não virou compra. '
+      +'Azul = <b>compra da planilha</b>, anterior ao sistema (ordens de compra mensais e planilha base). Linha cancelada não entra.</div>';
   }catch(e){
     el.innerHTML='<div style="font-size:12px;color:var(--vermelho)">Não consegui ler as compras: '+(e.message||e)+'</div>';
   }
