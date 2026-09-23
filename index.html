@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.133 · saída do CC sem copa/limpeza + caminho da copa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.134 · remessa aceita segunda nota antes de encerrar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -16951,11 +16951,16 @@ function rmRenderAguardandoNf(){
     const itens = r.remessa_itens||[];
     const linhas = itens.map(i=>{
       const env = rmNum(i.qtd_enviada), dev = rmNum(i.qtd_devolvida), falta = env-dev;
+      // v4.134 — ela, 23/09: "depois da entrada parcial na nota... o sistema considerou perda, não dando
+      // a opção de lançar uma segunda NF antes de encerrar a remessa". Agora a remessa aceita mais de uma
+      // nota: o campo já vem com o que AINDA falta cobrar (o que a nota anterior cobrou fica registrado).
+      const jaFat = rmNum(i.qtd_faturada);
+      const aCobrar = Math.max(0, dev - jaFat);
       return `<tr>
-        <td>${rmEsc(rmBem(i.bem_id))}${falta>0?` <span class="rm-tag falta">faltaram ${falta}</span>`:''}</td>
+        <td>${rmEsc(rmBem(i.bem_id))}${falta>0?` <span class="rm-tag falta">faltaram ${falta}</span>`:''}${jaFat>0?` <span class="rm-tag" title="cobrado em nota anterior desta remessa">já cobrado ${jaFat}</span>`:''}</td>
         <td style="text-align:center">${env}</td>
         <td style="text-align:center;font-weight:700">${dev}</td>
-        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-fat-${i.id}" value="${dev}" title="quantidade que a nota está cobrando"></td>
+        <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-fat-${i.id}" value="${aCobrar}" title="quantidade que ESTA nota está cobrando (o que nota anterior já cobrou fica ao lado do item)"></td>
         <td style="text-align:center"><input class="rm-n" type="number" step="0.01" id="rm-val-${i.id}" placeholder="R$/un"></td>
       </tr>`;
     }).join('');
@@ -16973,7 +16978,8 @@ function rmRenderAguardandoNf(){
           <input id="rm-nf-num-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
         <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;color:var(--cinza-4);text-transform:uppercase">Emissão</label>
           <input type="date" id="rm-nf-emissao-${r.id}" style="border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)"></div>
-        <button class="rm-b verde" style="margin-left:auto" onclick="rmConferirNf(${r.id})">✔ Conferir e dar entrada na nota</button>
+        <button class="rm-b claro" style="margin-left:auto" title="a nota entra, a remessa CONTINUA aberta e você pode lançar outra nota depois — é o caso de item que veio faltando e será cobrado em outra nota" onclick="rmConferirNf(${r.id}, true)">📄 Nota parcial — manter aberta</button>
+        <button class="rm-b verde" title="a nota entra e a remessa é encerrada; o que faltou continua como pendência para você tratar" onclick="rmConferirNf(${r.id})">✔ Entrada da nota e encerrar</button>
       </div>
     </div>`;
   }).join('');
@@ -17194,7 +17200,7 @@ function rmRenderHistorico(){
       <table style="width:100%">
         <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobrou</th><th style="text-align:right">R$/un</th><th style="text-align:right">Total</th><th>Situação</th><th></th></tr></thead>
         <tbody>${sub}</tbody></table>
-      <div style="padding:8px 8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" onclick="rmCorrBloco(${r.id})">✏️ Corrigir nº do bloco</button><span style="font-size:11px;color:var(--cinza-4)">Correção não apaga nada: reaponta ou ajusta e deixa o motivo no livro.</span></div>
+      <div style="padding:8px 8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" onclick="rmCorrBloco(${r.id})">✏️ Corrigir nº do bloco</button><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="o fornecedor mandou outra nota desta mesma remessa: reabre para dar entrada nela" onclick="rmReabrirParaNota(${r.id})">🧾 Lançar outra nota</button><span style="font-size:11px;color:var(--cinza-4)">Correção não apaga nada: reaponta ou ajusta e deixa o motivo no livro.</span></div>
       ${(r.recebido_por||r.enviado_por)?`<div style="font-size:11px;color:var(--cinza-4);padding:6px 8px 0">${r.enviado_por?'Enviado por '+rmEsc(r.enviado_por):''}${(r.enviado_por&&r.recebido_por)?' · ':''}${r.recebido_por?'recebido por '+rmEsc(r.recebido_por):''}</div>`:''}
     </td></tr>`;
   }).join('');
@@ -18154,7 +18160,16 @@ async function rmPendCusto(pendId){
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 
-async function rmConferirNf(remessaId){
+// v4.134 — segunda nota de uma remessa já encerrada (item que veio faltando e foi cobrado depois)
+async function rmReabrirParaNota(remessaId){
+  if(!confirm('Lançar outra nota desta remessa?\n\nA remessa volta para "falta dar entrada na nota". A nota já lançada continua registrada; o que cada nota cobrou é somado item a item.')) return;
+  try{
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'RETORNADA' });
+    toast('Remessa reaberta — lance a nota em "Voltou — falta dar entrada na nota".','sucesso');
+    rmCarregar();
+  }catch(e){ toast('Não consegui reabrir: '+(e.message||e),'erro'); }
+}
+async function rmConferirNf(remessaId, parcial){
   const r = rmRemessas.find(x=>x.id===remessaId); if(!r) return;
   const itens = (r.remessa_itens||[]);
   const numero = (document.getElementById('rm-nf-num-'+remessaId)||{}).value;
@@ -18169,21 +18184,31 @@ async function rmConferirNf(remessaId){
     const val = valEl ? parseFloat(valEl.value) : NaN;
     if(isNaN(fat) || fat<0){ toast('Quantidade cobrada inválida em "'+rmBem(i.bem_id)+'".','erro'); return; }
     const dev = rmNum(i.qtd_devolvida), env = rmNum(i.qtd_enviada);
+    const jaFat = rmNum(i.qtd_faturada);            // v4.134 — o que notas anteriores desta remessa já cobraram
+    const fatTotal = jaFat + fat;
     let situacao = 'OK';
-    if(env>dev && fat>dev) situacao = 'FALTA_COBRADA';        // caso B — trava o pagamento
-    else if(env>dev)       situacao = 'FALTA_NAO_COBRADA';    // caso A — só pendência física
-    else if(fat>dev)       situacao = 'COBRADO_A_MAIS';
+    if(env>dev && fatTotal>dev) situacao = 'FALTA_COBRADA';        // caso B — trava o pagamento
+    else if(env>dev)            situacao = 'FALTA_NAO_COBRADA';    // caso A — só pendência física
+    else if(fatTotal>dev)       situacao = 'COBRADO_A_MAIS';
     if(situacao==='FALTA_COBRADA' || situacao==='COBRADO_A_MAIS'){
-      travas.push(`${rmBem(i.bem_id)}: voltaram ${dev}, a nota cobra ${fat}`);
+      travas.push(`${rmBem(i.bem_id)}: voltaram ${dev}, as notas cobram ${fatTotal}`);
     }
     total += fat * (isNaN(val)?0:val);
-    linhas.push({ item:i, fat, val:isNaN(val)?null:val, situacao });
+    linhas.push({ item:i, fat, fatTotal, val:isNaN(val)?null:val, situacao });
   }
 
   const travado = travas.length > 0;
-  const msg = travado
-    ? `A nota ${numero} cobra item que não voltou:\n\n${travas.join('\n')}\n\nOs itens que chegaram entram normalmente, mas a NOTA FICA TRAVADA para pagamento até o administrativo resolver.\n\nConfirmar?`
-    : `Dar entrada na nota ${numero} — total ${rmMoney(total)}?\n\nConferência bateu: o que a nota cobra é o que voltou. ✓`;
+  // v4.134 — o que ainda falta cobrar depois desta nota (o que voltou e nenhuma nota cobrou)
+  const aCobrarDepois = linhas.filter(l=>l.fatTotal < rmNum(l.item.qtd_devolvida))
+                              .map(l=>`${rmBem(l.item.bem_id)}: faltam cobrar ${rmNum(l.item.qtd_devolvida)-l.fatTotal}`);
+  const fecho = parcial
+    ? `\n\n📄 NOTA PARCIAL: a remessa CONTINUA ABERTA e você pode lançar outra nota depois.`
+    : (aCobrarDepois.length
+        ? `\n\n⚠️ A remessa será ENCERRADA, mas ainda há item que voltou e nenhuma nota cobrou:\n${aCobrarDepois.join('\n')}\nSe outra nota ainda vem, use "Nota parcial — manter aberta".`
+        : `\n\nA remessa será encerrada.`);
+  const msg = (travado
+    ? `A nota ${numero} cobra item que não voltou:\n\n${travas.join('\n')}\n\nOs itens que chegaram entram normalmente, mas a NOTA FICA TRAVADA para pagamento até o administrativo resolver.`
+    : `Dar entrada na nota ${numero} — total ${rmMoney(total)}?\n\nConferência bateu: o que a nota cobra é o que voltou. ✓`) + fecho + `\n\nConfirmar?`;
   if(!confirm(msg)) return;
 
   try{
@@ -18202,8 +18227,8 @@ async function rmConferirNf(remessaId){
       vencimentos_obs: 'Serviço de reprocessamento — remessa '+(r.numero_bloco||'#'+remessaId)+'. Não gera entrada de estoque.',
     });
     const nfId = nfArr && nfArr[0] && nfArr[0].id;
-    for(const {item,fat,val,situacao} of linhas){
-      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_faturada:fat, valor_unitario:val, situacao });
+    for(const {item,fat,fatTotal,val,situacao} of linhas){
+      await sbFetch(`remessa_itens?id=eq.${item.id}`,'PATCH',{ qtd_faturada:fatTotal, valor_unitario:val, situacao });
       // v4.26 — o valor cobrado na volta ATUALIZA o valor de referência da
       // peça: é ele que valoriza as cirurgias (retroativo, pois o painel
       // consulta o valor vigente na hora de calcular)
@@ -18217,8 +18242,13 @@ async function rmConferirNf(remessaId){
           observacao:'Reprocessamento cobrado na NF '+numero.trim()+' — '+fat+' un a '+rmMoney(val) });
       }
     }
-    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH',{ status:'CONFERIDA', nota_fiscal_id:nfId });
-    toast(travado ? 'Nota registrada e TRAVADA para pagamento ⚠️' : 'Nota conferida e registrada ✓','sucesso');
+    // v4.134 — nota parcial deixa a remessa aberta; a 1ª nota continua sendo a da remessa
+    // (as outras ficam ligadas por notas_fiscais.remessa_id e aparecem no histórico)
+    const patchR = { status: parcial ? 'RETORNADA' : 'CONFERIDA' };
+    if(!r.nota_fiscal_id) patchR.nota_fiscal_id = nfId;
+    await sbFetch(`remessas?id=eq.${remessaId}`,'PATCH', patchR);
+    toast((travado ? 'Nota registrada e TRAVADA para pagamento ⚠️' : 'Nota registrada ✓')
+      + (parcial ? ' — remessa segue aberta para a próxima nota.' : ' — remessa encerrada.'),'sucesso');
     rmCarregar();
   }catch(e){ toast('Erro ao registrar a nota: '+e.message,'erro'); }
 }
