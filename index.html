@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.130 · manutenção: custo por departamento (com o predial separado)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.131 · manutenção: custo por departamento e por espaço</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23733,8 +23733,11 @@ const MAN_FCUS={ PENDENTES:c=>c.situacao==='AGUARDANDO'||(c.situacao==='APROVADO
 // pediu — vai para a linha 🏢 PREDIAL (marca da v4.129). Custo que vale para várias demandas é
 // dividido igualmente entre elas (rateio), senão o mesmo valor apareceria em dois setores.
 let manDepRelOn=false, manDepDias=180;
-function manDepChave(s){ return s.predial?'PREDIAL':('D'+s.departamento_id); }
-function manDepRot(k){ return k==='PREDIAL'?'🏢 Predial (estrutura)':manDepNome(Number(String(k).slice(1))); }
+let manDepPor='DEP';   // v4.131 — DEP = por departamento · LOCAL = por espaço da empresa
+function manDepChave(s){ return manDepPor==='LOCAL' ? ('L'+(s.local||'—')) : (s.predial?'PREDIAL':('D'+s.departamento_id)); }
+function manDepRot(k){ if(String(k).charAt(0)==='L') return String(k).slice(1);
+  return k==='PREDIAL'?'🏢 Predial (estrutura)':manDepNome(Number(String(k).slice(1))); }
+function manDepTitulo(){ return manDepPor==='LOCAL'?'Custo por espaço':'Custo por departamento'; }
 function manDepRelDados(){
   const grupos={}, add=(k,campo,v,c,sid)=>{ const g=grupos[k]=grupos[k]||{aguardando:0,aprovado:0,emlote:0,pago:0,total:0,dems:new Set(),itens:[]};
     g[campo]+=v; g.total+=v; g.dems.add(sid); g.itens.push({c,sid,v}); };
@@ -23755,7 +23758,9 @@ function manDepRelRender(){
   const chaves=Object.keys(G).sort((a,b)=>G[b].total-G[a].total);
   const som=f=>chaves.reduce((t,k)=>t+G[k][f],0);
   let h='<div class="man-linha" style="margin-top:0">'+B('n p','‹ Voltar para os custos','manDepRelOn=false;manCusRender()')
-   +'<b style="font-size:15px;color:var(--azul)">📊 Custo por departamento</b>'
+   +'<b style="font-size:15px;color:var(--azul)">📊 '+manDepTitulo()+'</b>'
+   +'<button class="man-b '+(manDepPor==='DEP'?'':'n ')+'p" onclick="manDepPor=\'DEP\';manDepRelRender()">por departamento</button>'
+   +'<button class="man-b '+(manDepPor==='LOCAL'?'':'n ')+'p" onclick="manDepPor=\'LOCAL\';manDepRelRender()" title="soma pelo espaço da empresa onde é o problema">por espaço</button>'
    +'<span style="margin-left:auto"></span>'+per.map(([d,r])=>'<button class="man-b '+(manDepDias===d?'':'n ')+'p" onclick="manDepDias='+d+';manDepRelRender()">'+r+'</button>').join('')
    +B('o p','🖨 Imprimir','manDepRelImprimir()')+'</div>'
    +'<div class="man-kpis"><div class="man-k fixo"><span class="r">Total no período</span><b style="font-size:16px">'+manBrl(som('total'))+'</b></div>'
@@ -23763,7 +23768,7 @@ function manDepRelRender(){
    +'<div class="man-k fixo"><span class="r">Aprovado sem lote</span><b style="font-size:16px">'+manBrl(som('aprovado'))+'</b></div>'
    +'<div class="man-k fixo"><span class="r">Em lote</span><b style="font-size:16px">'+manBrl(som('emlote'))+'</b></div>'
    +'<div class="man-k fixo"><span class="r">Pago</span><b style="font-size:16px">'+manBrl(som('pago'))+'</b></div></div>'
-   +'<table class="hg-tab man-tab"><thead><tr><th>Departamento</th><th class="man-ocm">Demandas</th><th style="text-align:right">Aguardando</th><th style="text-align:right">Aprovado</th><th class="man-ocs" style="text-align:right">Em lote</th><th style="text-align:right">Pago</th><th style="text-align:right">Total</th></tr></thead><tbody>';
+   +'<table class="hg-tab man-tab"><thead><tr><th>'+(manDepPor==='LOCAL'?'Espaço':'Departamento')+'</th><th class="man-ocm">Demandas</th><th style="text-align:right">Aguardando</th><th style="text-align:right">Aprovado</th><th class="man-ocs" style="text-align:right">Em lote</th><th style="text-align:right">Pago</th><th style="text-align:right">Total</th></tr></thead><tbody>';
   if(!chaves.length) h+='<tr><td colspan="7" class="sol-vazio">Nenhum custo no período.</td></tr>';
   chaves.forEach(k=>{ const g=G[k];
     h+='<tr><td><b>'+manEsc(manDepRot(k))+'</b><details style="margin-top:2px"><summary style="cursor:pointer;font-size:11px;color:var(--cinza-4)">ver os custos</summary>'
@@ -23774,7 +23779,8 @@ function manDepRelRender(){
       +'<td style="text-align:right">'+(g.pago?manBrl(g.pago):'—')+'</td><td style="text-align:right"><b>'+manBrl(g.total)+'</b></td></tr>'; });
   h+='<tr><td><b>Total</b></td><td class="man-ocm"></td><td style="text-align:right"><b>'+manBrl(som('aguardando'))+'</b></td><td style="text-align:right"><b>'+manBrl(som('aprovado'))+'</b></td>'
    +'<td class="man-ocs" style="text-align:right"><b>'+manBrl(som('emlote'))+'</b></td><td style="text-align:right"><b>'+manBrl(som('pago'))+'</b></td><td style="text-align:right"><b>'+manBrl(som('total'))+'</b></td></tr>'
-   +'</tbody></table><div class="man-sub" style="margin-top:6px">Custo que vale para mais de uma demanda é dividido igualmente entre elas. O que está marcado 🏢 predial sai do departamento que pediu. Custo reprovado não entra.</div>';
+   +'</tbody></table><div class="man-sub" style="margin-top:6px">Custo que vale para mais de uma demanda é dividido igualmente entre elas. '
+   +(manDepPor==='LOCAL'?'Cada demanda soma no espaço onde está o problema (Onde).':'O que está marcado 🏢 predial sai do departamento que pediu.')+' Custo reprovado não entra.</div>';
   box.innerHTML=h;
 }
 function manDepRelImprimir(){
@@ -23784,18 +23790,18 @@ function manDepRelImprimir(){
     return '<tr><td>'+manEsc(manDepRot(k))+'</td><td style="text-align:center">'+g.dems.size+'</td><td style="text-align:right">'+manBrl(g.aguardando)+'</td>'
       +'<td style="text-align:right">'+manBrl(g.aprovado)+'</td><td style="text-align:right">'+manBrl(g.emlote)+'</td><td style="text-align:right">'+manBrl(g.pago)+'</td>'
       +'<td style="text-align:right"><b>'+manBrl(g.total)+'</b></td></tr>'; }).join('');
-  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custo de manutenção por departamento</title>'
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custo de manutenção — '+manDepTitulo()+'</title>'
     +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin:0}'
     +'table{width:100%;border-collapse:collapse;margin-top:10px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:6px;border-bottom:1px solid #bbb}'
     +'td{padding:6px;border-bottom:1px solid #e3e3e3}tfoot td{font-weight:bold;background:#f6f9fc}'
     +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:8px}small{color:#666}@media print{@page{margin:14mm}}</style></head><body>'
-    +'<div class="cab"><h1>Custo de manutenção por departamento</h1>'
+    +'<div class="cab"><h1>Custo de manutenção — '+(manDepPor==='LOCAL'?'por espaço':'por departamento')+'</h1>'
     +'<div><small>Hospital dos Olhos Guanabara · '+per+' · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
-    +'<table><thead><tr><th>Departamento</th><th style="text-align:center">Demandas</th><th style="text-align:right">Aguardando</th><th style="text-align:right">Aprovado</th>'
+    +'<table><thead><tr><th>'+(manDepPor==='LOCAL'?'Espaço':'Departamento')+'</th><th style="text-align:center">Demandas</th><th style="text-align:right">Aguardando</th><th style="text-align:right">Aprovado</th>'
     +'<th style="text-align:right">Em lote</th><th style="text-align:right">Pago</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="7">Nenhum custo no período.</td></tr>')+'</tbody>'
     +'<tfoot><tr><td>Total</td><td></td><td style="text-align:right">'+manBrl(som('aguardando'))+'</td><td style="text-align:right">'+manBrl(som('aprovado'))+'</td>'
     +'<td style="text-align:right">'+manBrl(som('emlote'))+'</td><td style="text-align:right">'+manBrl(som('pago'))+'</td><td style="text-align:right">'+manBrl(som('total'))+'</td></tr></tfoot></table>'
-    +'<p><small>Custo que vale para mais de uma demanda é dividido igualmente entre elas. O que está marcado como predial sai do departamento que pediu. Custo reprovado não entra.</small></p>'
+    +'<p><small>Custo que vale para mais de uma demanda é dividido igualmente entre elas. '+(manDepPor==='LOCAL'?'Cada demanda soma no espaço onde está o problema.':'O que está marcado como predial sai do departamento que pediu.')+' Custo reprovado não entra.</small></p>'
     +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
 }
 function manCusRender(){
@@ -23815,7 +23821,7 @@ function manCusRender(){
    +dems.map(s=>'<label class="man-chk" style="padding:3px 0"><input type="checkbox" class="mc-dem" value="'+s.id+'"'+(s.id===manPreDem?' checked':'')+'> <span>#'+s.id+' '+manEsc(s.o_que)+' <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span></span></label>').join('')+'</div>'
    +'<div class="man-linha"><button class="man-b g" onclick="manCusSalvar()">➕ Lançar custo</button></div></div>';
   const n=k=>manCustos.filter(MAN_FCUS[k]).length;
-  h+='<div class="man-linha" style="margin-top:12px"><button class="man-b o p" onclick="manDepRelOn=true;manCusRender()" title="quanto a manutenção custou em cada departamento, com o predial separado">📊 Custo por departamento</button></div>'
+  h+='<div class="man-linha" style="margin-top:12px"><button class="man-b o p" onclick="manDepRelOn=true;manCusRender()" title="quanto a manutenção custou em cada departamento ou em cada espaço da empresa">📊 Custo por departamento / espaço</button></div>'
    +'<div class="man-kpis">'+[['PENDENTES','Pendentes'],['AGUARDANDO','Aguardando aprovação'],['SEMLOTE','Aprovados sem lote'],['EMLOTE','Em lote'],['REPROVADO','Reprovados'],['TODOS','Todos']]
     .map(([k,r])=>'<div class="man-k'+(manFiltroCus===k?' on':'')+'" onclick="manFiltroCus=\''+k+'\';manCusRender()"><span class="r">'+r+'</span><b>'+n(k)+'</b></div>').join('')+'</div>'
    +'<table class="hg-tab man-tab"><thead><tr><th>Tipo · o que é</th><th>Demandas</th><th>Pago a</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>';
