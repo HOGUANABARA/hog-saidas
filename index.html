@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.127 · manutenção: jornada cronológica e data combinada na visita</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.128 · manutenção: visita escolhe a demanda por lista</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23111,7 +23111,7 @@ const MAN_MAX=50*1024*1024;
 let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
-let manHistOrdem='ASC', manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
+let manHistOrdem='ASC', manVisSel=[], manVisCab={}, manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
 function manEsc(t){ return dptoEsc(t); }
 function manNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
@@ -23651,42 +23651,51 @@ async function manVisCarregar(){
   box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
   await manBase(); if(manSemTabela){ box.innerHTML=manAviso(); return; }
   try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
-  manVisFotos={}; manDatalists(); manVisRender();
+  manVisFotos={}; manVisSel=[]; manVisCab={}; manDatalists(); manVisRender();
 }
 function manVisRender(){
   const box=document.getElementById('man-vis-box'); if(!box) return;
-  const abertas=manSols.filter(s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO'||s.id===manPreDem).sort((a,b)=>(b.id===manPreDem)-(a.id===manPreDem)||b.id-a.id);
+  if(manPreDem && !manVisSel.some(x=>x.sid===manPreDem)){ manVisSel.push({sid:manPreDem,feito:'',res:'0',volta:''}); manPreDem=null; }
+  const abertas=manSols.filter(s=>(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')&&!manVisSel.some(x=>x.sid===s.id)).sort((a,b)=>b.id-a.id);
   let h='<div class="man-bloco agora"><div class="man-grade"><label class="man-rot">Quem fez <select id="mv-tipo" onchange="manVisTipo()"><option value="PRESTADOR">👷 prestador</option><option value="INTERNO">🏢 equipe interna</option></select></label>'
-   +'<label class="man-rot"><span id="mv-prest-rot">Prestador</span><input id="mv-prest" list="man-dl-prest" placeholder="apelido"></label>'
-   +'<label class="man-rot">Data <input id="mv-data" type="date" value="'+manIsoDia()+'"></label></div>'
-   +'<div class="man-rot" style="margin-bottom:4px">O que ele atendeu nesta visita</div>';
-  if(!abertas.length) h+='<div class="man-sub">Nenhuma demanda em aberto.</div>';
-  abertas.forEach(s=>{ const fs=manVisFotos[s.id]||[];
-    h+='<div class="man-chk"><input type="checkbox" id="mv-c'+s.id+'"'+(s.id===manPreDem?' checked':'')+'><div style="flex:1;min-width:0"><b>#'+s.id+' '+manEsc(s.o_que)+'</b> <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span>'
-      +'<div class="man-grade" style="margin:4px 0 0"><label class="man-rot">O que fez <input id="mv-f'+s.id+'" placeholder="ex.: trocou o trinco" oninput="document.getElementById(\'mv-c'+s.id+'\').checked=true"></label>'
-      +'<label class="man-rot">Ficou <select id="mv-r'+s.id+'" onchange="manVisFicou('+s.id+')"><option value="0">falta terminar</option><option value="1">resolvida</option></select></label>'
-      +'<label class="man-rot" id="mv-dw'+s.id+'">Volta combinada — opcional <input id="mv-d'+s.id+'" type="date" title="quando ficou combinado de terminar; pode deixar em branco"></label></div>'
-      +'<div class="man-linha" style="margin:4px 0 0">'+manBotaoUp('📷 Fotos do depois','manVisArquivos(this,'+s.id+')')+(fs.length?'<span class="man-sub">'+fs.length+' arquivo(s)</span>':'')+'</div></div></div>';
+   +'<label class="man-rot"><span id="mv-prest-rot">Prestador</span><input id="mv-prest" list="man-dl-prest" placeholder="apelido" value="'+manEsc(manVisCab.prest||'')+'"></label>'
+   +'<label class="man-rot">Data <input id="mv-data" type="date" value="'+manEsc(manVisCab.data||manIsoDia())+'"></label>'
+   +'<label class="man-rot">Demanda atendida <select id="mv-add" onchange="manVisAdd(this.value)"><option value="">— escolha para incluir —</option>'
+   + abertas.map(s=>'<option value="'+s.id+'">#'+s.id+' · '+manEsc(s.o_que)+' — '+manEsc(s.local)+'</option>').join('')+'</select></label></div>';
+  if(!manVisSel.length) h+='<div class="man-sub">Escolha na lista acima o que o prestador atendeu nesta visita. Dá para incluir várias.</div>';
+  manVisSel.forEach((x,ix)=>{ const s=manSols.find(y=>y.id===x.sid)||{}; const fs=manVisFotos[x.sid]||[];
+    h+='<div class="man-bloco" style="margin:8px 0 0"><div class="man-linha" style="margin:0 0 4px"><b style="flex:1">#'+x.sid+' '+manEsc(s.o_que||'')+' <span class="man-sub" style="display:inline">'+manEsc(s.local||'')+'</span></b>'
+      +'<button class="man-b n p" onclick="manVisTirar('+ix+')">✖ Tirar</button></div>'
+      +'<div class="man-grade" style="margin:0"><label class="man-rot">O que fez <input id="mv-f'+x.sid+'" value="'+manEsc(x.feito||'')+'" placeholder="ex.: trocou o trinco"></label>'
+      +'<label class="man-rot">Ficou <select id="mv-r'+x.sid+'" onchange="manVisFicou('+x.sid+')"><option value="0"'+(x.res==='1'?'':' selected')+'>falta terminar</option><option value="1"'+(x.res==='1'?' selected':'')+'>resolvida</option></select></label>'
+      +'<label class="man-rot" id="mv-dw'+x.sid+'">Volta combinada — opcional <input id="mv-d'+x.sid+'" type="date" value="'+manEsc(x.volta||'')+'" title="quando ficou combinado de terminar; pode deixar em branco"></label></div>'
+      +'<div class="man-linha" style="margin:4px 0 0">'+manBotaoUp('📷 Fotos do depois','manVisArquivos(this,'+x.sid+')')+(fs.length?'<span class="man-sub">'+fs.length+' arquivo(s)</span>':'')+'</div></div>';
   });
-  h+='<div class="man-linha">'+'<button class="man-b g" onclick="manVisSalvar()">💾 Registrar visita</button></div></div>'
-   +'<div class="card-titulo" style="margin-top:14px">Visitas registradas</div><table class="hg-tab man-tab"><thead><tr><th>Data</th><th>Prestador</th><th>Demandas atendidas</th></tr></thead><tbody>';
+  h+='<div class="man-linha"><button class="man-b g"'+(manVisSel.length?'':' disabled')+' onclick="manVisSalvar()">💾 Registrar visita</button>'
+   +(manVisSel.length?'<span class="man-sub">'+manVisSel.length+' demanda(s) nesta visita</span>':'')+'</div></div>'
+   +'<div class="card-titulo" style="margin-top:14px">Visitas registradas</div><table class="hg-tab man-tab"><thead><tr><th>Data</th><th>Quem fez</th><th>Demandas atendidas</th></tr></thead><tbody>';
   if(!manVisitas.length) h+='<tr><td colspan="3" class="sol-vazio">Nenhuma visita ainda.</td></tr>';
   manVisitas.slice(0,40).forEach(v=>{ const its=manVisItens.filter(i=>i.visita_id===v.id);
     h+='<tr><td>'+manDt(v.data)+'</td><td><b>'+manEsc(manVisQuem(v))+'</b><span class="man-sub">'+manEsc(v.registrada_por||'')+'</span></td><td>'
       +its.map(i=>'<a href="#" onclick="manFicha('+i.solicitacao_id+');return false">'+manEsc(manDemCurta(i.solicitacao_id))+'</a> '+(i.resolveu?'<span class="man-tag man-t-ok">resolveu</span>':'<span class="man-tag man-t-sep">falta terminar</span>')+(i.feito?'<span class="man-sub">'+manEsc(i.feito)+'</span>':'')).join('<br>')+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>';
-  manSols.forEach(function(s){ if(document.getElementById('mv-r'+s.id)) manVisFicou(s.id); });   // v4.127 — esconde a volta combinada de quem ficou resolvida
+  const tp=document.getElementById('mv-tipo'); if(tp){ tp.value=manVisCab.tipo||'PRESTADOR'; manVisTipo(); }
+  manVisSel.forEach(x=>manVisFicou(x.sid));
 }
+// guarda o que já foi digitado antes de redesenhar a tela
+function manVisColeta(){
+  manVisCab={tipo:manGv('mv-tipo')||manVisCab.tipo, prest:document.getElementById('mv-prest')?manGv('mv-prest'):manVisCab.prest, data:document.getElementById('mv-data')?manGv('mv-data'):manVisCab.data};
+  manVisSel.forEach(x=>{ if(document.getElementById('mv-f'+x.sid)){ x.feito=manGv('mv-f'+x.sid); x.res=manGv('mv-r'+x.sid); x.volta=manGv('mv-d'+x.sid); } });
+}
+function manVisAdd(v){ const id=Number(v); if(!id) return; manVisColeta(); if(!manVisSel.some(x=>x.sid===id)) manVisSel.push({sid:id,feito:'',res:'0',volta:''}); manVisRender(); }
+function manVisTirar(ix){ manVisColeta(); const x=manVisSel[ix]; if(x) delete manVisFotos[x.sid]; manVisSel.splice(ix,1); manVisRender(); }
 async function manVisArquivos(input, sid){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'DEPOIS'); if(!p.length) return;
-  (manVisFotos[sid]=manVisFotos[sid]||[]).push(...p); const c=document.getElementById('mv-c'+sid); const marc=c&&c.checked;
-  const keep={}; manSols.forEach(s=>{ const f=document.getElementById('mv-f'+s.id); if(f) keep[s.id]=[f.value,manGv('mv-r'+s.id),(document.getElementById('mv-c'+s.id)||{}).checked]; });
-  const pr=manGv('mv-prest'), dt=manGv('mv-data'), tp=manGv('mv-tipo'); manVisRender(); document.getElementById('mv-tipo').value=tp; manVisTipo();
-  Object.keys(keep).forEach(k=>{ const [f,r,c]=keep[k]; const ef=document.getElementById('mv-f'+k); if(ef){ ef.value=f; document.getElementById('mv-r'+k).value=r; document.getElementById('mv-c'+k).checked=c; } });
-  document.getElementById('mv-prest').value=pr; document.getElementById('mv-data').value=dt; const cc=document.getElementById('mv-c'+sid); if(cc) cc.checked=true; toast('📷 '+p.length+' foto(s) para a #'+sid); }
+  (manVisFotos[sid]=manVisFotos[sid]||[]).push(...p); manVisColeta(); manVisRender(); toast('📷 '+p.length+' foto(s) para a #'+sid); }
 async function manVisSalvar(){
   const tipo=manGv('mv-tipo')||'PRESTADOR'; const pn=manGv('mv-prest').trim(); if(!pn) return toast(tipo==='INTERNO'?'Diga quem da equipe fez':'Diga qual prestador veio','erro');
-  const itens=manSols.filter(s=>(document.getElementById('mv-c'+s.id)||{}).checked).map(s=>({s, feito:manGv('mv-f'+s.id).trim(), res:manGv('mv-r'+s.id)==='1', volta:manGv('mv-d'+s.id)}));
-  if(!itens.length) return toast('Marque pelo menos uma demanda','erro');
+  manVisColeta();
+  const itens=manVisSel.map(x=>({s:manSols.find(y=>y.id===x.sid)||{id:x.sid,o_que:''}, feito:(x.feito||'').trim(), res:x.res==='1', volta:x.volta}));
+  if(!itens.length) return toast('Escolha pelo menos uma demanda na lista','erro');
   let p=null; if(tipo==='PRESTADOR'){ p=await manPrestPorNome(pn); if(!p) return; } const quem=p?p.apelido:pn+' (equipe interna)';
   const data=manGv('mv-data')||manIsoDia();
   if(!await hogConfirma({titulo:'Registrar a visita de '+quem+' ('+manDt(data)+')?', texto:itens.map(x=>'#'+x.s.id+' '+x.s.o_que+' — '+(x.res?'RESOLVIDA':'falta terminar')).join('\n'), ok:'💾 Registrar'})) return;
@@ -23699,7 +23708,7 @@ async function manVisSalvar(){
       if(!x.res && x.volta) campos.agendada_para=x.volta+'T12:00:00';   // v4.127 — volta combinada, opcional
       await manNota(x.s.id,'visita de '+quem+' em '+manDt(data)+': '+(x.feito||'—')+(x.res?' (resolveu)':' (falta terminar)')+(!x.res&&x.volta?' · volta combinada para '+manDt(x.volta):'')+(fs.length?' · '+fs.length+' foto(s)':''),campos,campos.situacao);
     }
-    manVisFotos={}; manPreDem=null;
+    manVisFotos={}; manPreDem=null; manVisSel=[]; manVisCab={};
   },'Visita registrada em '+itens.length+' demanda(s)');
 }
 
