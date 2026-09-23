@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.132 · histórico de compras da planilha na ficha</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.133 · saída do CC sem copa/limpeza + caminho da copa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -467,6 +467,7 @@ details[open] summary { margin-bottom: 6px; }
     <div class="mb-dd">
       <div class="mbi" data-ref="aba-btn-registro" onclick="mbFechar();trocarAba('registro')">Saída Cirúrgica <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-diversas" onclick="mbFechar();trocarAba('diversas')">Saídas Diversas <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">☕ Saída de Copa / Limpeza <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-aprovacao" onclick="mbFechar();trocarAba('aprovacao')">🔒 Aprovação de Saídas <span class="mb-badge"></span></div>
     </div>
   </div>
@@ -2378,6 +2379,27 @@ function aplicarUsuarioNosSelects(){
 // ── ESTADO ────────────────────────────────────────────────────
 let sbUrl = '', sbKey = '';
 let todosOsMateriais = [];
+// v4.133 — ela, 23/09: "saídas diversas dá a opção de sair café, que é da copa, precisa ajustar".
+// O que é de COPA, LIMPEZA ou escritório não sai pelo CC: sai pela tela de Higiene/Copa (contagem
+// apura o consumo; "outra saída" resolve perda, vencimento ou item que foi para outro setor).
+const SAIDA_FORA_DO_CC = { LIMPEZA:'🧼 Limpeza', COPA:'☕ Copa', ADM_EXPEDIENTE:'🗂️ Escritório', ADM_IMPRESSOS:'🗂️ Impressos' };
+let matClassePorNome = {};   // NOME (normalizado) -> classe_compra
+async function carregarClassesMateriais(){
+  if(Object.keys(matClassePorNome).length) return;
+  try{
+    const ms = (await sbFetch('materiais?select=nome,classe_compra&classe_compra=in.(LIMPEZA,COPA,ADM_EXPEDIENTE,ADM_IMPRESSOS)&limit=2000')) || [];
+    ms.forEach(function(m){ matClassePorNome[normNome(m.nome)] = m.classe_compra; });
+  }catch(e){}
+}
+function classeForaDoCC(nome){ return SAIDA_FORA_DO_CC[matClassePorNome[normNome(nome)]] || null; }
+function avisoForaDoCC(nomes){
+  const grupos = [...new Set(nomes.map(classeForaDoCC).filter(Boolean))];
+  if(!grupos.length) return '';
+  return '<div class="busca-item" style="background:#FEF9E7;color:#7D6608;cursor:default" '
+    + 'title="a contagem de Higiene/Copa apura o consumo; na mesma tela, cada item tem o botão de saída para perda, vencimento ou outro setor">'
+    + '🚫 Escondi o que é de ' + grupos.join(' e ') + ' — a saída desses itens é na tela de <b>Higiene / Copa</b>. '
+    + '<u style="cursor:pointer" onclick="trocarAba(\'hig_inv\')">abrir Higiene / Copa →</u></div>';
+}
 let tiposCirurgia = []; // [{tipo, modalidade, pacientes, protocolo}]
 let materiaisTabela = []; // [{nome, origem}]
 let pendentes = [];
@@ -3104,10 +3126,13 @@ async function filtrarExtras() {
   const jaAdicionados = new Set(materiaisTabela.map(m => m.nome));
 
   // Busca normalizada (ignora parênteses, vírgulas, espaços múltiplos)
-  const achados = fonte.filter(n => normNome(n).includes(termoN)).slice(0, 12);
+  carregarClassesMateriais();   // v4.133
+  const achadosTodos = fonte.filter(n => normNome(n).includes(termoN));
+  const avisoCC = avisoForaDoCC(achadosTodos);
+  const achados = achadosTodos.filter(n => !classeForaDoCC(n)).slice(0, 12);
 
   if (!achados.length) {
-    div.innerHTML = '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
+    div.innerHTML = avisoCC || '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
   } else {
     div.innerHTML = achados.map(n => {
       if (jaAdicionados.has(n)) {
@@ -4670,14 +4695,17 @@ function filtrarDiversas() {
   const div = document.getElementById('resultado-busca-div');
   if (!termo || termo.length < 2) { div.style.display = 'none'; return; }
   const jaAdd = new Set(itensDiversas.map(m => m.nome));
-  let lista = (todosOsMateriais.length ? todosOsMateriais : [])
-    .filter(n => n.toLowerCase().includes(termo) && !jaAdd.has(n)).slice(0, 10);
+  carregarClassesMateriais();   // v4.133 — para saber o que é de copa/limpeza/escritório
+  const achadosTodos = (todosOsMateriais.length ? todosOsMateriais : [])
+    .filter(n => n.toLowerCase().includes(termo) && !jaAdd.has(n));
+  const aviso = avisoForaDoCC(achadosTodos);
+  let lista = achadosTodos.filter(n => !classeForaDoCC(n)).slice(0, 10);
   if (!lista.length) {
-    div.innerHTML = '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
+    div.innerHTML = aviso || '<div class="busca-item" style="color:var(--cinza-4)">Nenhum material encontrado.</div>';
   } else {
     div.innerHTML = lista.map(n =>
       `<div class="busca-item" onclick="addDiversa('${n.replace(/'/g,"\\'")}')">${n}</div>`
-    ).join('');
+    ).join('') + aviso;
   }
   div.style.display = 'block';
 }
@@ -20772,7 +20800,7 @@ function hgInvRender(){
           +(hgCtEhCopa(r.material_id)?'passar para 🧼 limpeza':'passar para ☕ copa')
           +' — é isso que decide em qual linha de custo o consumo dele entra">'
           +(hgCtEhCopa(r.material_id)?'🧼':'☕')+'</button> '
-        +'<button onclick="hgSaidaAbrir('+r.material_id+')" title="perda, vencimento, descarte ou item que foi para outro setor — o consumo normal sai pela contagem" class="hg-ct-outra">outra saída</button></td>'
+        +'<button onclick="hgSaidaAbrir('+r.material_id+')" title="saída deste item: para a copa, para outro setor, perda, vencimento ou descarte — o consumo do dia a dia sai pela contagem" class="hg-ct-outra">➖ dar saída</button></td>'
       +'</tr>';
   });
   h+='</tbody></table>';
