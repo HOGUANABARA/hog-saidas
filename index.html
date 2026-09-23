@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.128 · manutenção: visita escolhe a demanda por lista</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.129 · manutenção: demanda predial (problema geral da estrutura)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -23410,6 +23410,7 @@ const MAN_FILTROS={
   ABERTA:   s=>s.situacao==='ABERTA',
   ANDAMENTO:s=>s.situacao==='ANDAMENTO',
   RESOLVIDA:s=>s.situacao==='RESOLVIDA',
+  PREDIAL:  s=>!!s.predial&&s.situacao!=='CANCELADA',
   RES_SEM:  s=>s.situacao==='RESOLVIDA'&&!manTemCusto(s.id),
   RES_COM:  s=>s.situacao==='RESOLVIDA'&&manTemCusto(s.id),
   CANCELADA:s=>s.situacao==='CANCELADA'
@@ -23419,7 +23420,7 @@ function manAcompRender(){
   const box=document.getElementById('man-acomp-box'); if(!box) return;
   const n=k=>manSols.filter(MAN_FILTROS[k]).length;
   const grupos=[['ABERTAS','Em aberto'],['PARADAS','⏰ Paradas',true],['ABERTA','📨 Abertas'],['ANDAMENTO','🔧 Em andamento'],
-    ['RESOLVIDA','✅ Resolvidas'],['RES_SEM','✅ sem custo lançado'],['RES_COM','✅ com custo'],['CANCELADA','Canceladas']];
+    ['PREDIAL','🏢 Predial'],['RESOLVIDA','✅ Resolvidas'],['RES_SEM','✅ sem custo lançado'],['RES_COM','✅ com custo'],['CANCELADA','Canceladas']];
   const f=MAN_FILTROS[manFiltro]||MAN_FILTROS.ABERTAS;
   const lista=manSols.filter(f).filter(s=>!manFiltroPrest||manEnvolvidos(s.id).includes(Number(manFiltroPrest)))
     .sort((a,b)=>(manAtraso(b)>0)-(manAtraso(a)>0) || (a.urgencia==='PARADO'?0:1)-(b.urgencia==='PARADO'?0:1) || b.id-a.id).slice(0,300);
@@ -23434,7 +23435,8 @@ function manAcompRender(){
   if(!lista.length) h+='<tr><td colspan="8" class="sol-vazio">Nada aqui'+(manFiltroPrest?' para '+manEsc(manPrestNome(Number(manFiltroPrest))):'')+'.</td></tr>';
   lista.forEach(s=>{
     const cs=manCustosDe(s.id).filter(c=>c.situacao!=='REPROVADO'), nv=manVisitasDe(s.id).length, pend=cs.filter(c=>c.situacao==='AGUARDANDO').length;
-    h+='<tr class="'+(manAtraso(s)||manComb(s)>0?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
+    h+='<tr class="'+(manAtraso(s)||manComb(s)>0?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b>'+(s.predial?' <span class="man-tag man-t-n" title="problema geral da estrutura — o custo não é do departamento que pediu">🏢 predial</span>':'')
+      +'<span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
       +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'<span class="man-sub man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'').split(' — ')[0]+'</span></td>'
       +'<td>'+(s.responsavel?manEsc(s.responsavel):'<span class="man-sub">— definir</span>')+'</td><td>'+manEnvolvidosRot(s.id)+'</td>'
       +'<td>'+manTagSit(s)+manTagAtraso(s)+(manRetir.some(r=>r.solicitacao_id===s.id&&!r.devolvido_em)?' <span class="man-tag man-t-par" title="item retirado para conserto externo, ainda não voltou">📦 item fora</span>':'')+(s.agendada_para&&(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')?'<span class="man-sub">📅 combinado para '+manDt(s.agendada_para)+'</span>':'')+'</td>'
@@ -23480,7 +23482,8 @@ function manFichaRender(){
       +'<label class="man-rot">O quê <input id="me-oque" value="'+manEsc(s.o_que)+'"></label>'
       +'<label class="man-rot">Urgência <select id="me-urg">'+Object.keys(MAN_URG).map(k=>'<option value="'+k+'"'+(s.urgencia===k?' selected':'')+'>'+MAN_URG[k]+'</option>').join('')+'</select></label>'
       +'<label class="man-rot">Departamento <select id="me-dep">'+manDeps.map(d=>'<option value="'+d.id+'"'+(d.id===s.departamento_id?' selected':'')+'>'+manEsc(d.nome)+'</option>').join('')+'</select></label>'
-      +'<label class="man-rot" style="grid-column:1/-1">Responsável pelo acompanhamento <input id="me-resp" list="man-dl-nomes" value="'+manEsc(s.responsavel||'')+'"></label></div>'
+      +'<label class="man-rot" style="grid-column:1/-1">Responsável pelo acompanhamento <input id="me-resp" list="man-dl-nomes" value="'+manEsc(s.responsavel||'')+'"></label>'
+      +'<label class="man-rot" style="grid-column:1/-1;text-transform:none;font-weight:400;font-size:13px"><input type="checkbox" id="me-predial"'+(s.predial?' checked':'')+' style="width:auto;margin-right:6px"> 🏢 Problema geral da estrutura (predial) — o custo não é do departamento que pediu</label></div>'
       +'<label class="man-rot">Descrição <textarea id="me-desc">'+manEsc(s.descricao)+'</textarea></label>'
       +'<div class="man-linha">'+B('g p','💾 Salvar','manSalvarDem()')+B('n p','Cancelar','manAberta.edit=false;manFichaRender()')+'</div>';
   } else {
@@ -23548,7 +23551,8 @@ function manFichaRender(){
       :'<tr><td class="man-sub" style="padding:10px">Nada no histórico ainda.</td></tr>')
     +'</tbody></table></div><div class="man-sub" style="margin-top:4px">'+A.hist.length+' registro(s) · aberta em '+manDt(s.created_at)+(s.resolvida_em?' · resolvida em '+manDt(s.resolvida_em):'')+'</div></div>';
   document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
-    +manTagSit(s)+manTagAtraso(s)+'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+c4+'</div>';
+    +manTagSit(s)+manTagAtraso(s)+(s.predial?' <span class="man-tag man-t-n" title="problema geral da estrutura">🏢 predial</span>':'')
+    +'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+c4+'</div>';
 }
 async function manFichaReabrir(){ if(!manAberta) return; await manRecarregar(); await manFichaDados(); manFichaRender(); }
 // v4.120 — ela: "espaço para observação da ocorrência para colocar no histórico" + "data que ficou combinado"
@@ -23561,9 +23565,11 @@ async function manOcorrencia(){ const id=manAberta.id; const txt=manGv('mo-txt')
 async function manSalvarDem(){ const s=manSols.find(x=>x.id===manAberta.id); const v={local:manGv('me-local').trim(),o_que:manGv('me-oque').trim(),urgencia:manGv('me-urg'),
     departamento_id:Number(manGv('me-dep')),responsavel:manGv('me-resp').trim()||null,descricao:manGv('me-desc').trim()};
   if(!v.local||!v.o_que||!v.descricao) return toast('Onde, o quê e descrição não podem ficar em branco','erro');
-  const rot={local:'onde',o_que:'o quê',urgencia:'urgência',departamento_id:'departamento',responsavel:'responsável',descricao:'descrição'};
+  v.predial=!!(document.getElementById('me-predial')||{}).checked;
+  const rot={local:'onde',o_que:'o quê',urgencia:'urgência',departamento_id:'departamento',responsavel:'responsável',descricao:'descrição',predial:'predial'};
   const mud=Object.keys(v).filter(k=>String(v[k]??'')!==String(s[k]??'')); if(!mud.length){ manAberta.edit=false; return manFichaRender(); }
-  try{ await manNota(s.id,'editada: '+mud.map(k=>rot[k]+(k==='descricao'?'':' → '+(k==='departamento_id'?manDepNome(v[k]):(k==='urgencia'?(MAN_URG[v[k]]||'').split(' — ')[0]:v[k]||'—')))).join('; '),v);
+  const rotv=k=>k==='predial'?(v.predial?'sim':'não'):(k==='departamento_id'?manDepNome(v[k]):(k==='urgencia'?(MAN_URG[v[k]]||'').split(' — ')[0]:v[k]||'—'));
+  try{ await manNota(s.id,'editada: '+mud.map(k=>rot[k]+(k==='descricao'?'':' → '+rotv(k))).join('; '),v);
     manAberta.edit=false; toast('Demanda salva — a mudança ficou no histórico'); await manFichaReabrir(); }
   catch(e){ toast('Erro: '+e.message,'erro'); } }
 async function manFichaArquivos(input, fase){ const id=manAberta.id; const fs=[...input.files]; input.value=''; const p=await manPreparar(fs, fase); if(!p.length) return;
@@ -24016,7 +24022,7 @@ function manPrestRelRender(){
     const papel=[manAcion.some(a=>a.solicitacao_id===s.id&&a.prestador_id===p.id)?'acionado':'',
       manVisItens.some(i=>i.solicitacao_id===s.id&&(manVisitas.find(v=>v.id===i.visita_id)||{}).prestador_id===p.id)?'visitou':'', meus.length?'custo':''].filter(Boolean).join(' · ');
     h+='<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+' · aberta '+manDt(s.created_at)+'</span></td>'
-      +'<td>'+manTagSit(s)+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?'<span class="man-sub">sem custo lançado</span>':'')+'</td><td>'+manEsc(papel||'—')+'</td>'
+      +'<td>'+manTagSit(s)+(s.predial?' <span class="man-tag man-t-n">🏢</span>':'')+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?'<span class="man-sub">sem custo lançado</span>':'')+'</td><td>'+manEsc(papel||'—')+'</td>'
       +'<td style="text-align:right">'+(meus.length?manBrl(D.soma(meus)):'—')+'</td><td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>'; });
   h+='</tbody></table><div class="card-titulo" style="margin-top:14px">Custos</div><table class="hg-tab man-tab"><thead><tr><th>Quando</th><th>O que é</th><th>Demandas</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>';
   if(!D.cus.length) h+='<tr><td colspan="5" class="sol-vazio">Nenhum custo no período.</td></tr>';
