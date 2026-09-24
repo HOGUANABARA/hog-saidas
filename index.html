@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.140 · o ✕ tira o fornecedor mesmo, e a idade é do orçamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.141 · total da compra na ficha</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -13950,7 +13950,7 @@ function pnFichaHtml(){
     </div>
     <div id="pf-onde-${m.id}" style="margin-top:14px"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--cinza-2);padding-top:12px">
-      <div style="font-size:13px">Saldo no Estoque Geral: <b style="${saldo!=null&&saldo<0?'color:var(--vermelho)':''}">${saldo!=null?saldo.toLocaleString('pt-BR'):'—'}</b>
+      <div style="font-size:13px">Saldo no Estoque Geral: <b id="pf-saldo-${m.id}" style="${saldo!=null&&saldo<0?'color:var(--vermelho)':''}">${saldo!=null?saldo.toLocaleString('pt-BR'):'—'}</b>
         <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:6px 10px;font-size:11px;margin-left:8px" onclick="pnCorrigirSaldo(${m.id})">✔ corrigir saldo 🔒</button></div>
       <button class="pn-btn pn-btn-azul" onclick="pnFichaSalvar(${m.id})">💾 Salvar ficha</button>
     </div>
@@ -14048,6 +14048,18 @@ async function pnFichaOnde(mid){
     h+='<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:9px">'
       +'<b style="font-size:20px;color:var(--azul)">'+(saldoVivo!=null?saldoVivo.toLocaleString('pt-BR'):'—')+'</b>'
       +'<span style="font-size:12.5px;color:var(--cinza-5)">no <b>Estoque Geral</b> — é este que a saída baixa</span></div>';
+    // v4.140 — ela, 24/09: a ficha dizia "12 no Estoque Geral" no topo e
+    // "Saldo no Estoque Geral: —" no rodapé. São duas fontes: o topo lê `estoque`
+    // do banco agora, o rodapé lê `ccDados` (vw_compras_classes), que só está
+    // carregado depois de a aba Comprar abrir — pela ficha do Inventário vinha
+    // vazio. Quando o rodapé estiver sem número, ele recebe o do banco.
+    if(saldoVivo!=null){
+      const elS=document.getElementById('pf-saldo-'+mid);
+      if(elS && (elS.textContent||'').trim()==='—'){
+        elS.textContent = saldoVivo.toLocaleString('pt-BR');
+        if(saldoVivo<0) elS.style.color='var(--vermelho)';
+      }
+    }
 
     if(fisicos.length){
       h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
@@ -14150,15 +14162,23 @@ async function pnFichaCompras(mid){
     const nids=[...new Set((its||[]).map(i=>i.nota_fiscal_id).filter(Boolean))];
     const nfs = nids.length ? ((await sbFetch('notas_fiscais?select=id,numero_nf,fornecedor_id,data_emissao,data_entrega&id=in.('+nids.join(',')+')&limit=100'))||[]) : [];
     const nfDe=id=>nfs.find(n=>n.id===id)||null;
+    // v4.140 — ela, 24/09: "achei mais uma inconsistência" — na ficha da LÂMINA 11
+    // aparecia R$ 285,00 numa linha e R$ 3,79 na outra. Não é erro de carga: a
+    // ordem de 02/26 comprou 1 CAIXA a R$ 285 e a de 11/25 comprou 100 LÂMINAS a
+    // R$ 3,79 — a planilha conta ora a caixa, ora a unidade. O que faltava na tela
+    // era o TOTAL, que põe as duas na mesma régua (R$ 285 × R$ 379 por 100 lâminas).
+    const totalDe=(t,q,u)=>{ if(t!=null&&t!=='') return Number(t);
+      const qq=Number(q), uu=Number(u); return (isNaN(qq)||isNaN(uu))?null:qq*uu; };
     for(const i of (its||[])){
       const n=nfDe(i.nota_fiscal_id);
       linhas.push({ data:(n&&(n.data_entrega||n.data_emissao))||'', forn:fNome(n&&n.fornecedor_id),
-        desc:i.descricao_nf||'', qtd:i.qtd, unit:i.valor_unitario,
+        desc:i.descricao_nf||'', qtd:i.qtd, unit:i.valor_unitario, total:totalDe(i.valor_item,i.qtd,i.valor_unitario),
         origem:'NF '+((n&&n.numero_nf)||('#'+i.nota_fiscal_id)), real:true });
     }
     for(const o of (ords||[])){
       linhas.push({ data:(o.data_pedido||o.created_at||''), forn:fNome(o.fornecedor_compra_id||o.fornecedor_id),
         desc:o.marca_escolhida||'', qtd:o.qtd_a_comprar, unit:o.valor_unitario,
+        total:totalDe(null,o.qtd_a_comprar,o.valor_unitario),
         origem:'Pedido #'+(o.pedido_id||o.id), real:false });
     }
     if(!linhas.length){
@@ -14181,14 +14201,16 @@ async function pnFichaCompras(mid){
     for(const h of (hist||[])){
       linhas.push({ data:(h.data_entrega||h.data_emissao||dataDoMes(h.mes)||''), forn:h.fornecedor||'—',
         desc:[h.marca, h.descricao_nf||h.material_nome].filter(Boolean).join(' · '),
-        qtd:h.qtd, unit:h.valor_unitario, planilha:true,
+        qtd:h.qtd, unit:h.valor_unitario, total:totalDe(h.valor_total,h.qtd,h.valor_unitario), planilha:true,
         origem:(h.nf_numero?('NF '+h.nf_numero):(h.origem||'planilha'))+(h.unidade?(' · '+h.unidade):''), real:true });
     }
     linhas.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     const th=t=>'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">'+t+'</th>';
     const thr=t=>'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">'+t+'</th>';
+    const mat = (typeof pnMatFull!=='undefined' && pnMatFull[mid]) || null;
+    const kit = mat ? Number(mat.qtd_kit)||0 : 0;
     el.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
-      +'<thead><tr style="background:var(--cinza-1)">'+th('Quando')+th('Fornecedor')+th('Marca / descrição')+thr('Qtd')+thr('R$/un')+th('De onde')+'</tr></thead><tbody>'
+      +'<thead><tr style="background:var(--cinza-1)">'+th('Quando')+th('Fornecedor')+th('Marca / descrição')+thr('Qtd')+thr('R$/un')+thr('Total')+th('De onde')+'</tr></thead><tbody>'
       + linhas.map(function(l){
           const td='padding:5px 8px;border-bottom:1px solid var(--cinza-2)';
           return '<tr'+(l.planilha?' style="background:#F4F8FC"':(l.real?'':' style="background:#FEF9E7"'))+'>'
@@ -14197,9 +14219,14 @@ async function pnFichaCompras(mid){
             +'<td style="'+td+';color:var(--cinza-5)">'+String(l.desc||'—')+'</td>'
             +'<td style="'+td+';text-align:right">'+(l.qtd??'—')+'</td>'
             +'<td style="'+td+';text-align:right;font-weight:700;color:'+(l.planilha?'var(--azul)':(l.real?'var(--verde)':'#B9770E'))+'">'+money(l.unit)+'</td>'
+            +'<td style="'+td+';text-align:right;color:var(--cinza-5)">'+money(l.total)+'</td>'
             +'<td style="'+td+';font-size:11.5px;color:var(--cinza-4)">'+l.origem+(l.planilha?' · <b>da planilha</b>':(l.real?'':' · <b>ainda não chegou</b>'))+'</td></tr>';
         }).join('')
       +'</tbody></table>'
+      +(kit>1 ? '<div style="font-size:11.5px;color:#7D6608;background:#FEF9E7;border-left:3px solid #D4AC0D;padding:6px 9px;margin-top:6px">'
+        +'⚠️ Este item é <b>'+String(mat.unidade_medida||'pacote')+'</b> com <b>'+kit.toLocaleString('pt-BR')+'</b> por dentro. '
+        +'Na ordem de compra a quantidade às vezes é a <b>caixa</b> e às vezes a <b>unidade</b> — <b>compare pelo Total</b>, '
+        +'não pelo R$/un. O <b>último valor pago</b> do cadastro é sempre por unidade de saída.</div>' : '')
       +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Verde = <b>nota fiscal</b>, compra que aconteceu. '
       +'Amarelo = <b>pedido sem nota</b>, preço combinado que ainda não virou compra. '
       +'Azul = <b>compra da planilha</b>, anterior ao sistema (ordens de compra mensais e planilha base). Linha cancelada não entra.</div>';
