@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.139 · imprimir consumo por médico</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.140 · o ✕ tira o fornecedor mesmo, e a idade é do orçamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6299,6 +6299,7 @@ function coNovoGrupo(){
   const nome = prompt('Nome do novo grupo de orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
   if(!nome||!nome.trim()) return;
   coGrupoAtual = nome.trim(); if(!coFornGrupo[coGrupoAtual]) coFornGrupo[coGrupoAtual]=[];
+  coGrupoCriado[coGrupoAtual] = new Date().toISOString(); coSalvarGruposCriado();   // v4.140
   coGrupoAberto = coGrupoAtual; try{ localStorage.setItem('hog_orc_aberto', coGrupoAberto); }catch(e){}   // v4.116 — o novo já abre
   coAtualizaLabelGrupo(); coRender();
   toast('Grupo "'+coGrupoAtual+'" ativo.','sucesso');
@@ -6309,6 +6310,7 @@ function coRenomearGrupo(g){
   const n = novo.trim();
   coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')===g) it.grupo=n; });
   if(coFornGrupo[g]){ coFornGrupo[n]=coFornGrupo[g]; delete coFornGrupo[g]; }
+  if(coGrupoCriado[g]){ coGrupoCriado[n]=coGrupoCriado[g]; delete coGrupoCriado[g]; coSalvarGruposCriado(); }   // v4.140
   if(coGrupoAtual===g) coGrupoAtual=n;
   coRender();
 }
@@ -6366,9 +6368,10 @@ function coOpVazia(slot){
            condicao_pagamento:'', prazo_entrega:'', nao_tem:false, observacao:'' };
 }
 async function coAbrir(id){
-  const cab = await sbFetch(`cotacoes?select=id,fornecedores_grupo,created_at,criado_por&id=eq.${id}&limit=1`);
+  const cab = await sbFetch(`cotacoes?select=*&id=eq.${id}&limit=1`);
   coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
   coCotInfo = (cab && cab[0]) ? { criado_em:cab[0].created_at, criado_por:cab[0].criado_por } : {};   // v4.70
+  if(cab && cab[0] && 'grupos_criado_em' in cab[0]){ coGruposCol = true; coGrupoCriado = cab[0].grupos_criado_em || {}; }   // v4.140
   await coCarregarJaComprados(id);
   const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&fechado=is.false&order=id.asc`);
   coCotacaoId = id;
@@ -6434,6 +6437,21 @@ function coNova(){
 }
 let coSnapshotUndo = null;
 let coCotInfo = {};   // v4.70 — {criado_em, criado_por} da cotação aberta (idade do grupo)
+// v4.140 — ela, 24/09: "esse pedido acabou de ser montado, porque apresenta atraso?".
+// O "aberto há N dias" do cartão vinha da COTAÇÃO (a #32 tem semanas), não do orçamento
+// que ela acabou de montar dentro dela. Agora cada orçamento tem a sua data, guardada em
+// cotacoes.grupos_criado_em (SQL 103). Sem a coluna, o cartão diz de quem é a idade.
+let coGrupoCriado = {};    // { 'MS JAU': '2026-09-24T...' }
+let coGruposCol = null;    // a coluna existe? (null = ainda não perguntei)
+async function coGruposSondar(){
+  coGruposCol = false;
+  try{ await sbFetch('cotacoes?select=grupos_criado_em&limit=1'); coGruposCol = true; }catch(e){ coGruposCol = false; }
+  coRender();
+}
+async function coSalvarGruposCriado(){
+  if(!coGruposCol || !coCotacaoId) return;
+  try{ await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ grupos_criado_em: coGrupoCriado }); }catch(e){}
+}
 async function coPuxarAlerta(){
   try{
     if(!ccDados.length){ await acCarregar(); }
@@ -6634,9 +6652,32 @@ async function coNovoFornecedor(g, sugestao){
     coRender();
   }catch(e){ toast('Erro ao cadastrar fornecedor: '+e.message,'erro'); }
 }
+// v4.140 — ela, 24/09: "não consigo tirar o nome da LUZITANA".
+// O ✕ tirava o fornecedor da lista do grupo, mas o coRender devolvia na hora: desde a
+// v4.70, quem tem OFERTA gravada no orçamento volta para o grupo (era para não esconder
+// oferta de cotação antiga). Resultado: fornecedor que já recebeu o texto do WhatsApp
+// nunca saía. Agora o ✕ tira o fornecedor E apaga a oferta dele NESTE orçamento — que é
+// o que "tirar do orçamento" quer dizer. Se houver preço ou escolha, pergunta antes.
 function coRemFornGrupo(g, fid){
+  const nome = coFornNomeById(fid);
+  const alvos = [];
+  coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')!==g) return;
+    (it.opcoes||[]).forEach(o=>{ if(o.fornecedor_id===fid) alvos.push(o); }); });
+  const preenchidas = alvos.filter(o=> o.nao_tem || (coUnit(o)!=null && Number(coUnit(o))>0)
+    || String(o.marca||'').trim() || String(o.apresentacao||'').trim() || String(o.observacao||'').trim());
+  const escolhidas = alvos.filter(o=>o.escolhida);
+  if(escolhidas.length){
+    if(!confirm('"'+nome+'" está ESCOLHIDO em '+escolhidas.length+' item(ns) do orçamento "'+g+'".\n\nTirar o fornecedor apaga a escolha e a oferta dele aqui. Continuar?')) return;
+  } else if(preenchidas.length){
+    if(!confirm('Tirar "'+nome+'" do orçamento "'+g+'"?\n\nA oferta dele (marca, descrição, preço) em '+preenchidas.length+' item(ns) sai junto. Os outros fornecedores não mudam.')) return;
+  }
+  coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')!==g) return;
+    it.opcoes = (it.opcoes||[]).map(o=> o.fornecedor_id===fid ? coOpVazia(o.slot) : o); });
   coFornGrupo[g] = (coFornGrupo[g]||[]).filter(x=>x!==fid);
+  delete coTextosAbertos[coTxKey(g,fid)];
+  coDraftAgendar(); coAutoAgendar();   // grava sozinho: senão ele volta na próxima abertura
   coRender();
+  toast('"'+nome+'" saiu do orçamento "'+g+'".','sucesso');
 }
 // v4.6 — o texto diz de qual rodada se trata e leva SÓ os itens daquele
 // fornecedor: fica de fora o que ele já disse que não tem e o que foi marcado
@@ -7224,6 +7265,12 @@ function coRender(){
     return;
   }
   if(coObsCols===null) coObsSondar();   // v4.116
+  if(coGruposCol===null) coGruposSondar();   // v4.140
+  if(coGruposCol){                            // v4.140 — orçamento sem data própria passa a ter a partir de hoje
+    let faltou = false;
+    for(const g of ordem) if(!coGrupoCriado[g]){ coGrupoCriado[g] = new Date().toISOString(); faltou = true; }
+    if(faltou) coSalvarGruposCriado();
+  }
   for(const g of ordemVis){ html += coCardGrupo(g, porGrupo[g]||[]); }
   for(const g of []){
     const idxs=porGrupo[g]||[];
@@ -7302,14 +7349,16 @@ function coCardGrupo(g, idxs){
   const ge = g.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const fids = coFornGrupo[g]||[];
   const aberto = !!coOrcFoco || coGrupoAberto===g;
-  const idade = coCotInfo.criado_em ? Math.round((Date.now()-new Date(coCotInfo.criado_em).getTime())/86400000) : null;
+  const nasc = coGrupoCriado[g] || coCotInfo.criado_em;          // v4.140 — a data DESTE orçamento
+  const nascDoGrupo = !!coGrupoCriado[g];
+  const idade = nasc ? Math.round((Date.now()-new Date(nasc).getTime())/86400000) : null;
   const semPreco = idxs.filter(i=>!(coItens[i].opcoes||[]).some(o=>!o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length;
   const E = coEscolhas(idxs);
   const nomes = fids.length ? fids.map(coFornNomeById).join(' × ') : 'sem fornecedor ainda';
   const cab = '<div class="coN-cab" onclick="coAlternarGrupo(\''+ge+'\')" title="'+(aberto?'recolher':'abrir este orçamento')+'">'
     + '<span>'+(aberto?'▾':'▸')+'</span> 🗂️ <b>'+coEsc(g)+'</b>'
     + '<span class="sub">· '+coEsc(nomes)+(coCotacaoId?' · Cotação #'+coCotacaoId:'')+'</span>'
-    + (idade!==null?'<span class="sub'+(idade>=3?' idade alerta':'')+'" title="dias desde a abertura da cotação">aberto há '+idade+' dia(s)'+(semPreco?' · '+semPreco+' sem preço':'')+'</span>':'')
+    + (idade!==null?'<span class="sub'+(idade>=3?' idade alerta':'')+'" title="'+(nascDoGrupo?'dias desde que ESTE orçamento foi aberto':'dias desde a abertura da cotação — este orçamento ainda não tem data própria')+'">'+(nascDoGrupo?(idade===0?'aberto hoje':'aberto há '+idade+' dia(s)'):'cotação aberta há '+idade+' dia(s)')+(semPreco?' · '+semPreco+' sem preço':'')+'</span>':'')
     + '<span class="chip">'+idxs.length+' item(ns) · escolhidos '+E.nEsc+'/'+idxs.length+(E.tot?' · '+coMoney(E.tot):'')+'</span></div>';
   if(!aberto) return '<div class="coN-card fechado">'+cab+'</div>';
   const nPreco = fid => idxs.filter(i=>(coItens[i].opcoes||[]).some(o=>o.fornecedor_id===fid && !o.nao_tem && coUnit(o)!=null && Number(coUnit(o))>0)).length;
