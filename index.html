@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.138 · ficha mostra a data do inventário</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.139 · imprimir consumo por médico</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -12267,6 +12267,8 @@ function pnCirTiposTodas(marcar){
   pnCirTiposPrevia();
 }
 let pnCirAberto = null;
+// v4.139 — o recorte que está na tela agora, guardado para a impressão
+let pnCirUlt = null;
 
 function pnCirSet(campo, valor){
   pnCirF[campo] = valor;
@@ -12401,6 +12403,13 @@ function pnCirurgias(){
     return { ...g, nPer:g.periodos.size, pac, porPac: pac>0 ? g.custo/pac : null };
   }).sort((a,b)=>b.custo-a.custo);
 
+  // v4.139 — guarda o recorte para o 🖨 Imprimir: é exatamente o que está na
+  // tela (mesmo filtro, mesmo agrupamento), com os itens de cada médico já
+  // calculados — no papel eles saem todos, não só o que ela abriu no clique.
+  pnCirUlt = { lista, termo, custoTot, qtdTot, pacientes, nPer: periodosSet.size,
+               agrupar: pnCirF.agrupar, medico: pnCirF.medico,
+               tipos: (pnCirF.tipos||[]).slice(), de: pnCirF.de, ate: pnCirF.ate };
+
   // ── lista de períodos (é o que responde "onde este material foi usado") ──
   const porPeriodo = {};
   for (const m of movs){
@@ -12493,7 +12502,9 @@ function pnCirurgias(){
     ${pnCirF.agrupar!=='periodo' ? `
     <div class="pn-card">
       <div class="pn-ct"><span>📊 ${pnCirF.agrupar==='medico'?'Por médico':pnCirF.agrupar==='cirurgia'?'Por tipo de cirurgia':'Por médico e cirurgia'} (${lista.length})</span>
-        <span class="pn-funcao">clique na linha para ver os itens</span></div>
+        <span class="pn-funcao">clique na linha para ver os itens
+          <button class="pn-btn" style="margin-left:10px" onclick="pnCirImprimir()"
+            title="Imprime o que está no filtro: cada ${pnCirF.agrupar==='cirurgia'?'cirurgia':'médico'} com os materiais embaixo">🖨 Imprimir esta lista</button></span></div>
       ${lista.length?`<table class="pn-tb">
         <thead><tr><th>${pnCirF.agrupar==='ambos'?'Médico · Cirurgia':(pnCirF.agrupar==='medico'?'Médico':'Cirurgia')}</th>
           <th class="num">Períodos</th><th class="num">Pacientes</th><th class="num">Unid.</th>
@@ -12536,6 +12547,63 @@ function pnCirurgias(){
     </div>`;
 }
 function pnCirAbrir(k){ pnCirAberto = (pnCirAberto === k) ? null : k; pnCirurgias(); }
+
+// v4.139 — ela, 24/09: "preciso de um botão impressão para essa tela, com o nome
+// do médico e os materiais que foram selecionados". Sai no papel o mesmo recorte
+// da tela — filtro no topo, um bloco por médico (ou por cirurgia, conforme o
+// "Ver por"), com os materiais dele abertos embaixo e o total no rodapé.
+// Padrão de impressão do HOG, o mesmo do romaneio e do pedido de compra.
+function pnCirImprimir(){
+  const r = pnCirUlt;
+  if(!r || !r.lista || !r.lista.length){ toast('Nada para imprimir com esse filtro.','erro'); return; }
+  const esc  = s => rmEsc(s);
+  const br   = d => d ? String(d).slice(0,10).split('-').reverse().join('/') : '';
+  const hoje = br(new Date().toISOString().slice(0,10));
+  const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : '';
+  const titulo = r.agrupar==='medico'   ? 'Consumo por médico'
+               : r.agrupar==='cirurgia' ? 'Consumo por tipo de cirurgia'
+               :                          'Consumo por médico e cirurgia';
+  const periodoTxt = (r.de||r.ate) ? ((r.de?br(r.de):'início')+' a '+(r.ate?br(r.ate):'hoje')) : 'todo o período';
+  const filtros = [];
+  if(r.termo)  filtros.push('<div><b>Material:</b> '+esc(r.termo)+'</div>');
+  if(r.medico) filtros.push('<div><b>Médico:</b> '+esc(r.medico)+'</div>');
+  if(r.tipos && r.tipos.length) filtros.push('<div><b>Cirurgia:</b> '+esc(r.tipos.join(' · '))+'</div>');
+  filtros.push('<div><b>Período:</b> '+esc(periodoTxt)+'</div>');
+
+  const blocos = r.lista.map(function(g){
+    const itens = Object.values(g.itens).sort((a,b)=>b.custo-a.custo);
+    return '<div class="grupo"><h2>'+esc(g.k)+'</h2>'
+      +'<div class="resumo">'+g.nPer+' período(s) · '+(g.pac||0)+' paciente(s) · '
+        +g.qtd.toLocaleString('pt-BR')+' unidade(s) · <b>'+pnMoney(g.custo)+'</b>'
+        +(g.porPac!=null ? ' · '+pnMoney(g.porPac)+' por paciente' : '')+'</div>'
+      +'<table style="width:100%"><thead><tr><th>Material</th><th class="qn">Unid.</th><th class="vl">Custo</th></tr></thead>'
+      +'<tbody>'+itens.map(it=>'<tr><td>'+esc(it.nome)+'</td>'
+        +'<td class="qn">'+it.qtd.toLocaleString('pt-BR')+'</td>'
+        +'<td class="vl">'+pnMoney(it.custo)+'</td></tr>').join('')+'</tbody>'
+      +'<tfoot><tr><td style="text-align:right">Total</td><td class="qn">'+g.qtd.toLocaleString('pt-BR')+'</td>'
+      +'<td class="vl">'+pnMoney(g.custo)+'</td></tr></tfoot></table></div>';
+  }).join('');
+
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title>'
+    +rmCssImpressao()
+    +'<style>.grupo{margin-bottom:16px;page-break-inside:avoid}'
+    +'.grupo h2{font-size:14px;color:#1B4F72;margin:0 0 3px;border-bottom:1px solid #DDE5EC;padding-bottom:3px}'
+    +'.resumo{font-size:11px;color:#555;margin-bottom:4px}'
+    +'td.qn,th.qn{text-align:right;width:62px}td.vl,th.vl{text-align:right;width:92px}'
+    +'tfoot td{background:#F5F7FA}</style></head><body>'
+    +'<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+    +'<div class="sub">Centro Cirúrgico · '+esc(titulo)+'</div></div>'
+    +'<div class="num">Custo no filtro<b>'+pnMoney(r.custoTot)+'</b>'
+    +r.nPer+' período(s) · '+r.pacientes+' paciente(s)</div></div>'
+    +'<div class="blocos"><div class="bloco"><h2>Filtro</h2>'+filtros.join('')+'</div>'
+    +'<div class="bloco"><h2>No recorte</h2><div>'+r.lista.length+' '
+      +(r.agrupar==='cirurgia'?'cirurgia(s)':'médico(s)')+' · '
+      +r.qtdTot.toLocaleString('pt-BR')+' unidade(s)<br>'
+      +'<span style="font-size:11px;color:#555">Emitido por '+esc(quem||'—')+' em '+hoje+'</span></div></div></div>'
+    +blocos
+    +'<div class="rodape">HOG Saídas · '+esc(titulo)+' · o custo usa o último valor pago de hoje · impresso em '+hoje+'</div>'
+    +'</body></html>');
+}
 
 // ── SALDO & PREÇO — o que o Financeiro e a Diretoria enxergam ──
 // Sem cobertura, sem projeção, sem média: só o que é fato hoje.
