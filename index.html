@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.137 · sem aviso de comprar peça nova</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.138 · ficha mostra a data do inventário</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -13893,6 +13893,25 @@ async function pnFichaOnde(mid){
     const nomeLocal=id=>{ const l=locais.find(x=>x.id===id); return l?l.nome:('local #'+id); };
     const tipoLocal=id=>{ const l=locais.find(x=>x.id===id); return l?l.tipo:''; };
     const dt=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+    // v4.138 — ela, 24/09: "cadê o último inventário que foi em agosto?". O número
+    // da prateleira ERA o da contagem de 31/08; a DATA é que estava velha: a coluna
+    // vinha de estoque.updated_at, e o PATCH do saldo no fechamento não mexe nessa
+    // coluna (só a movimentação mexe, por dentro da fn_atualiza_saldo). Agora a data
+    // é a do inventário FECHADO que contou aquele item naquele local — a verdade.
+    let contagemLoc={};
+    try{
+      const [invs, its] = await Promise.all([
+        sbFetch('inventarios?select=id,data_contagem,mes_referencia&status=eq.fechado&order=data_contagem.desc.nullslast&limit=60'),
+        sbFetch('inventario_itens?select=inventario_id,local_id,qtd_contada&material_id=eq.'+mid+'&limit=500')
+      ]);
+      const dataDo={}; for(const iv of (invs||[])) dataDo[iv.id]=String(iv.data_contagem||iv.mes_referencia||'').slice(0,10);
+      for(const it of (its||[])){
+        const d=dataDo[it.inventario_id]; if(!d) continue;            // contagem ainda aberta não vale
+        const c=contagemLoc[it.local_id];
+        if(!c || d>c.data) contagemLoc[it.local_id]={ data:d, qtd:Number(it.qtd_contada)||0 };
+        else if(d===c.data) c.qtd += Number(it.qtd_contada)||0;       // linhas por marca somam
+      }
+    }catch(e){}
     const geral=est.find(e=>tipoLocal(e.local_id)==='virtual');
     const fisicos=est.filter(e=>tipoLocal(e.local_id)!=='virtual' && Number(e.saldo)!==0)
                      .sort((a,b)=>Number(b.saldo)-Number(a.saldo));
@@ -13919,11 +13938,15 @@ async function pnFichaOnde(mid){
         +'<th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Local</th>'
         +'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Contado</th>'
         +'<th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;color:var(--cinza-4)">Quando</th></tr></thead><tbody>'
-        + fisicos.map(e=>'<tr><td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2)">'+nomeLocal(e.local_id)+'</td>'
+        + fisicos.map(function(e){
+            const c=contagemLoc[e.local_id];
+            const quando = c ? dt(c.data) : dt(e.updated_at);
+            return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--cinza-2)">'+nomeLocal(e.local_id)+'</td>'
             +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);font-weight:700">'+Number(e.saldo).toLocaleString('pt-BR')+'</td>'
-            +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);color:var(--cinza-4)">'+dt(e.updated_at)+'</td></tr>').join('')
+            +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--cinza-2);color:var(--cinza-4)">'+quando+'</td></tr>'; }).join('')
         +'</tbody></table>'
-        +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Estes são a <b>foto da última contagem</b> de cada local, não saldo vivo — por isso não se somam ao Estoque Geral.</div>';
+        +'<div style="font-size:11.5px;color:var(--cinza-4);margin-top:6px">Estes são a <b>foto da última contagem</b> de cada local, não saldo vivo — por isso não se somam ao Estoque Geral. '
+        +'A data é a do <b>inventário</b> que contou o item naquele local.</div>';
     } else {
       h+='<div style="font-size:12.5px;color:var(--cinza-4)">Nenhum local físico com contagem para este item.</div>';
     }
