@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.141 · total da compra na ficha</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.142 · copa e limpeza têm tela própria de saída</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
     <div class="mb-dd">
       <div class="mbi" data-ref="aba-btn-registro" onclick="mbFechar();trocarAba('registro')">Saída Cirúrgica <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-diversas" onclick="mbFechar();trocarAba('diversas')">Saídas Diversas <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-hig_inv" onclick="mbFechar();trocarAba('hig_inv')">☕ Saída de Copa / Limpeza <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-saida_hc" onclick="mbFechar();trocarAba('saida_hc')">☕🧼 Saída de Copa e Limpeza <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-aprovacao" onclick="mbFechar();trocarAba('aprovacao')">🔒 Aprovação de Saídas <span class="mb-badge"></span></div>
     </div>
   </div>
@@ -567,6 +567,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-saidas">
         <div class="hs-item ativa" id="aba-btn-registro" onclick="trocarAba('registro')">Saída Cirúrgica</div>
         <div class="hs-item" id="aba-btn-diversas" onclick="trocarAba('diversas')">Saídas Diversas</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-saida_hc" onclick="trocarAba('saida_hc')">☕🧼 Copa e Limpeza</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-aprovacao" onclick="trocarAba('aprovacao')">🔒 Aprovação de Saídas <span id="badge-pend" style="background:#E74C3C;color:white;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
       </div>
     </div>
@@ -2043,7 +2044,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -2072,7 +2073,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
   }
 };
 
@@ -2169,7 +2170,7 @@ function exigirAssinatura(ato){
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
-                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv',
+                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc',
                     'sol_pedir','sol_sep','sol_ent','sol_compra','departamentos',
                     'man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'];
 
@@ -2397,9 +2398,9 @@ function avisoForaDoCC(nomes){
   const grupos = [...new Set(nomes.map(classeForaDoCC).filter(Boolean))];
   if(!grupos.length) return '';
   return '<div class="busca-item" style="background:#FEF9E7;color:#7D6608;cursor:default" '
-    + 'title="a contagem de Higiene/Copa apura o consumo; na mesma tela, cada item tem o botão de saída para perda, vencimento ou outro setor">'
-    + '🚫 Escondi o que é de ' + grupos.join(' e ') + ' — a saída desses itens é na tela de <b>Higiene / Copa</b>. '
-    + '<u style="cursor:pointer" onclick="trocarAba(\'hig_inv\')">abrir Higiene / Copa →</u></div>';
+    + 'title="café, copo, detergente e afins não saem pelo centro cirúrgico: têm tela própria, no menu Saídas">'
+    + '🚫 Escondi o que é de ' + grupos.join(' e ') + ' — a saída desses itens é na tela <b>☕🧼 Copa e Limpeza</b>. '
+    + '<u style="cursor:pointer" onclick="trocarAba(\'saida_hc\')">abrir Copa e Limpeza →</u></div>';
 }
 let tiposCirurgia = []; // [{tipo, modalidade, pacientes, protocolo}]
 let materiaisTabela = []; // [{nome, origem}]
@@ -4898,7 +4899,8 @@ function trocarAba(aba) {
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'].forEach(function(a){
+  if (aba==='saida_hc') { shcCarregar(); }   // v4.142
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -19800,6 +19802,24 @@ async function alIgnorar(id){
   </div>
 </div>
 
+<!-- ═══ v4.142 — SAÍDA DE COPA E LIMPEZA: TELA PRÓPRIA ═══════════════════════
+     Ela, 24/09: "não tenho um ambiente para dar saída nos itens de copa e limpeza".
+     A busca é a tela; o formulário é o mesmo modal da contagem. ═══ -->
+<div id="aba-saida_hc" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">☕🧼 Saída de Copa e Limpeza
+      <span class="hg-dica" title="O consumo do dia a dia (o que a limpeza gasta na clínica inteira) é apurado pela CONTAGEM, não aqui. Esta tela é para a saída que tem um evento: um fardo de copo que foi para a copa, material que foi para outro setor, perda, vencimento, descarte ou empréstimo. Toda saída daqui passa por Aprovações — o saldo só muda depois de aprovada, e dá para desfazer lá.">?</span></div>
+    <div class="hg-nota">Procure o produto, clique em <b>➖ dar saída</b> e diga quanto saiu e para onde.
+      O consumo do dia a dia continua saindo pela <b>contagem</b> — aqui entra o que tem evento: foi para um setor, perdeu, venceu ou foi descartado.</div>
+    <div class="hg-filtros">
+      <input type="text" id="shc-busca" placeholder="🔍 Buscar o produto que saiu — café, copo, detergente…" oninput="shcRender()" style="flex:1;min-width:240px">
+      <button onclick="trocarAba('hig_inv')" title="a contagem é o que apura o consumo do período e joga no custo" style="border:1.5px solid var(--azul-medio,#AED6F1);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--azul);background:var(--azul-claro)">🧮 Ir para a contagem</button>
+    </div>
+    <div id="shc-lista"></div>
+    <div id="shc-ultimas"></div>
+  </div>
+</div>
+
 <div id="aba-hig_comp" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">🛒 Compras de Higiene</div>
@@ -21689,6 +21709,92 @@ async function admContagemGravar(){
   await admInvCarregar();
 }
 
+// ═══ v4.142 — SAÍDA DE COPA E LIMPEZA TEM TELA PRÓPRIA ══════════════════
+// Ela, 24/09: "não tenho um ambiente para dar saída nos itens de copa e limpeza".
+// Desde a v4.133 esses itens saíram da Saída Diversa do CC (café não sai pelo centro
+// cirúrgico) e o único caminho que restou foi o botão no fim da linha da CONTAGEM —
+// uma tabela de 8 colunas, que ninguém acha quando só se quer dar uma baixa.
+// Agora a saída tem tela: menu Saídas › ☕🧼 Copa e Limpeza. A busca é a tela e o
+// formulário é o MESMO modal da contagem — um só caminho de gravação, uma só regra.
+// O consumo do dia a dia continua sendo apurado pela contagem (v4.95).
+let shcUlt = [];
+function shcAtivo(){ const p=document.getElementById('aba-saida_hc'); return !!p && p.style.display!=='none'; }
+async function shcCarregar(){
+  await hgCarregarDados();
+  await hgCtCarregarClasses();
+  await shcCarregarUltimas();
+  shcRender();
+}
+async function shcCarregarUltimas(){
+  try{
+    const ids = hgDados.map(function(r){ return r.material_id; }).filter(Boolean);
+    if(!ids.length){ shcUlt=[]; return; }
+    shcUlt = (await sbFetch('movimentacoes?select=id,material_id,qtd,destino_saida_geral,registrado_por,observacao,aprovado,created_at'
+      + '&tipo=eq.SAIDA_GERAL&material_id=in.('+ids.join(',')+')&order=id.desc&limit=20')) || [];
+  }catch(e){ shcUlt=[]; }
+}
+function shcNome(mid){ const r=hgDados.find(function(x){ return x.material_id===mid; }); return r ? r.material : ('material #'+mid); }
+function shcDataBr(d){ if(!d) return '—'; const x=new Date(d); return x.toLocaleDateString('pt-BR')+' '+x.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function shcRender(){
+  const box = document.getElementById('shc-lista'); if(!box) return;
+  const termo = ((document.getElementById('shc-busca')||{}).value||'').trim().toLowerCase();
+  const achados = hgDados.filter(function(r){
+    if(!termo) return true;
+    return String(r.material||'').toLowerCase().indexOf(termo)>=0 || String(r.codigo||'').toLowerCase().indexOf(termo)>=0;
+  }).sort(function(a,b){
+    const ca=hgCtEhCopa(a.material_id)?1:0, cb=hgCtEhCopa(b.material_id)?1:0;
+    if(ca!==cb) return ca-cb;
+    return String(a.material||'').localeCompare(String(b.material||''));
+  });
+  if(!hgDados.length){ box.innerHTML='<div style="padding:22px;text-align:center;color:var(--cinza-4)">Carregando os itens de copa e limpeza…</div>'; return; }
+  if(!achados.length){
+    box.innerHTML='<div style="padding:22px;text-align:center;color:var(--cinza-4)">Nenhum produto de copa ou limpeza com <b>'+hgEsc(termo)+'</b>. '
+      +'Se o item existe mas está em outra lista, ele não é de copa/limpeza — a saída dele é pelo CC ou pelo Administrativo.</div>';
+    return;
+  }
+  let h='<table class="hg-tab"><thead><tr><th>Código</th><th>Produto</th><th class="hg-num">Tem hoje</th><th></th></tr></thead><tbody>';
+  let secaoAtual=null;
+  achados.forEach(function(r){
+    const secao = hgCtEhCopa(r.material_id) ? 'COPA' : 'LIMPEZA';
+    if(secao!==secaoAtual){
+      const n = achados.filter(function(x){ return (hgCtEhCopa(x.material_id)?'COPA':'LIMPEZA')===secao; }).length;
+      h+='<tr class="hg-ct-secao"><td colspan="4">'+(secao==='COPA'?'☕ COPA':'🧼 LIMPEZA')
+        +' <span style="font-weight:400;opacity:.75">· '+n+' item(ns)</span></td></tr>';
+      secaoAtual=secao;
+    }
+    const cod = r.codigo ? '<span class="hg-cod">'+hgEsc(r.codigo)+'</span>' : '<span class="hg-cod vazio">s/cód</span>';
+    const sub = [ hgEsc(r.unidade_medida||''), (Number(r.qtd_kit)>1?(r.qtd_kit+'/caixa'):'') ].filter(Boolean).join(' · ');
+    const saldo = Number(r.saldo)||0;
+    h+='<tr><td>'+cod+'</td>'
+      +'<td class="hg-prod">'+hgEsc(r.material)+(sub?'<span class="hg-sub">'+sub+'</span>':'')+'</td>'
+      +'<td class="hg-num"'+(saldo<=0?' style="color:var(--vermelho);font-weight:700"':'')+'>'+hgN(saldo)+' '+hgEsc(hgUnRot(r))+'</td>'
+      +'<td style="text-align:right;white-space:nowrap">'
+        +'<button class="hg-ct-outra" title="registrar quanto saiu deste item e para onde foi" onclick="hgSaidaAbrir('+r.material_id+')">➖ dar saída</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  box.innerHTML=h;
+  shcRenderUltimas();
+}
+function shcRenderUltimas(){
+  const box=document.getElementById('shc-ultimas'); if(!box) return;
+  if(!shcUlt.length){ box.innerHTML=''; return; }
+  let h='<div style="margin-top:22px"><div class="card-titulo" style="font-size:14px">🧾 Últimas saídas registradas'
+    +' <span class="hg-dica" title="as 20 últimas saídas de itens de copa e limpeza, inclusive as lançadas pela contagem ou pela entrega de pedidos">?</span></div>'
+    +'<table class="hg-tab"><thead><tr><th>Quando</th><th>Produto</th><th class="hg-num">Quanto</th><th>Para onde</th><th>Quem registrou</th><th>Situação</th></tr></thead><tbody>';
+  shcUlt.forEach(function(m){
+    h+='<tr><td style="white-space:nowrap">'+shcDataBr(m.created_at)+'</td>'
+      +'<td class="hg-prod">'+hgEsc(shcNome(m.material_id))+(m.observacao?'<span class="hg-sub">'+hgEsc(m.observacao)+'</span>':'')+'</td>'
+      +'<td class="hg-num">'+hgN(Math.abs(Number(m.qtd)||0))+'</td>'
+      +'<td>'+hgEsc(m.destino_saida_geral||'—')+'</td>'
+      +'<td>'+hgEsc(m.registrado_por||'—')+'</td>'
+      +'<td>'+(m.aprovado
+          ? '<span style="color:var(--verde);font-weight:700">aprovada</span>'
+          : '<span style="color:#B9770E;font-weight:700" title="o saldo só muda depois da aprovação">aguardando aprovação</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  box.innerHTML=h;
+}
+
 // ═══ v4.40 — SAÍDA PELA PRÓPRIA ABA DE HIGIENE / COPA ═══════════════════
 // Antes só dava para dar baixa pela Saída Diversa do CC, que lista o catálogo
 // cirúrgico inteiro. Item de higiene e de copa que sai para outro setor
@@ -21773,7 +21879,9 @@ async function hgSaidaGravar(){
       observacao:'Higiene/Copa — '+dest+' — '+data+(obs?(' · '+obs):'') });
     toast('Saída de '+hgN(qtd)+' × '+r.material+' registrada ✓ — aguardando aprovação','sucesso');
     hgSaidaFechar();
-    await hgInvCarregar();
+    // v4.142 — quem está na tela de saída não precisa da contagem recarregando por baixo
+    if(typeof shcAtivo==='function' && shcAtivo()){ await hgCarregarDados(); await shcCarregarUltimas(); shcRender(); }
+    else await hgInvCarregar();
   }catch(e){
     const msg=String(e.message||e);
     // 22P02 = o destino não existe no enum do banco. Erro de configuração, não da pessoa —
