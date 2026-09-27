@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.142 · copa e limpeza têm tela própria de saída</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.143 · cadastrar a lavanderia na hora de montar a remessa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -18185,12 +18185,81 @@ async function rmEscolherFornecedor(tipo){
     const pb = t.padrao && (b.nome||'').toUpperCase().includes(t.padrao) ? 0 : 1;
     return pa - pb || (a.nome||'').localeCompare(b.nome||'');
   });
-  return await pkEscolher({
+  const esc = await pkEscolher({
     titulo: t.pergunta || 'Para qual fornecedor?',
     subtitulo: aviso,
     itens: ordenada.map(f=>({ id:f.id, nome:f.nome,
       meta: (t.padrao && (f.nome||'').toUpperCase().includes(t.padrao)) ? 'padrão' : '' })),
+    novoLabel: '➕ Cadastrar ' + ((t.curto||'fornecedor').toLowerCase()),   // v4.143
   });
+  if(esc && esc.__novo) return await rmNovoFornecedor(tipo, esc.termo);
+  return esc;
+}
+
+// ═══ v4.143 — CADASTRAR O FORNECEDOR NA HORA DE MONTAR A REMESSA ════════
+// Ela, 27/09: "preciso de botão para criar fornecedor no controle de remessas de
+// lavanderia para gerar a remessa". Antes era preciso sair, ir ao cadastro, marcar
+// "faz lavanderia" e voltar — com a remessa por montar.
+// Duas travas que vêm junto:
+//  · o fornecedor novo JÁ NASCE MARCADO para o serviço do tipo (faz_lavanderia,
+//    faz_oxido_etileno ou faz_manutencao_inst). Sem isso ele ficaria fora da lista
+//    curta da v4.12 e a próxima remessa não o encontraria.
+//  · nome repetido não vira cadastro novo: se já existe, o app oferece MARCAR o que
+//    está lá (é assim que "STERILENO" e "STERILENO LTDA" nasceriam separados).
+async function rmNovoFornecedor(tipo, sugestao){
+  const t = rmTipo(tipo);
+  const rot = (t.curto || 'fornecedor').toLowerCase();
+  let todos = rmFornsServico;
+  if(!todos){
+    try{ todos = (await sbFetch('fornecedores?select=id,nome,faz_oxido_etileno,faz_lavanderia,faz_manutencao_inst&order=nome.asc&limit=2000')) || [];
+         rmFornsServico = todos; }
+    catch(e){ todos = []; }
+  }
+  const r = await hogPergunta({
+    titulo: 'Cadastrar ' + rot,
+    texto: 'O fornecedor entra no cadastro já marcado como quem faz ' + rot
+         + ' — é isso que o coloca na lista das próximas remessas.',
+    campos: [
+      { id:'nome',    rot:'Nome do fornecedor', valor:String(sugestao||'').toUpperCase(), obrigatorio:true },
+      { id:'tel',     rot:'Telefone (opcional)' },
+      { id:'contato', rot:'Pessoa de contato (opcional)' },
+    ], ok:'Cadastrar' });
+  if(!r) return null;
+  const n = String(r.nome||'').trim().toUpperCase();
+  if(!n){ toast('O fornecedor precisa de um nome.','erro'); return null; }
+  const norm = (typeof pkNorm==='function') ? pkNorm : (x=>(''+x).toUpperCase().replace(/[^A-Z0-9]/g,''));
+  const igual = todos.find(x=>norm(x.nome)===norm(n));
+  if(igual){
+    if(igual[t.marca]){ toast('"'+igual.nome+'" já estava cadastrado — usando ele.',''); return { id:igual.id, nome:igual.nome }; }
+    if(!confirm('"'+igual.nome+'" já está no cadastro, mas não está marcado como quem faz '+rot+'.\n\nMarcar agora e usar este fornecedor nesta remessa?')) return null;
+    try{
+      const p = {}; p[t.marca] = true;
+      await sbFetch('fornecedores?id=eq.'+igual.id,'PATCH',p);
+      igual[t.marca] = true;
+      toast('"'+igual.nome+'" marcado para '+rot+' ✓','sucesso');
+      return { id:igual.id, nome:igual.nome };
+    }catch(e){ toast('Não consegui marcar o fornecedor: '+(e.message||e),'erro'); return null; }
+  }
+  const parecidos = todos.filter(function(x){
+    const a=norm(x.nome), b=norm(n);
+    return a.length>3 && b.length>3 && (a.indexOf(b)>=0 || b.indexOf(a)>=0);
+  });
+  if(parecidos.length && !confirm('⚠️ Já existe fornecedor com nome parecido:\n\n'
+      + parecidos.map(x=>'• '+x.nome).join('\n')
+      + '\n\nCadastrar "'+n+'" assim mesmo cria um SEGUNDO cadastro, e as remessas e notas ficam divididas entre os dois.\n\nCadastrar assim mesmo?')) return null;
+  try{
+    const corpo = { nome:n, ativo:true };
+    corpo[t.marca] = true;
+    const tel = String(r.tel||'').trim();       if(tel) corpo.telefone = tel;
+    const ct  = String(r.contato||'').trim();   if(ct)  corpo.contato  = ct;
+    const arr = await sbFetch('fornecedores','POST',corpo);
+    const novo = arr && arr[0];
+    if(!novo || !novo.id) throw new Error('o banco não devolveu o cadastro');
+    rmFornsServico = null;                                    // a lista curta se refaz sozinha
+    if(Array.isArray(coFornecedores)) coFornecedores.push({ id:novo.id, nome:n });
+    toast('"'+n+'" cadastrado e marcado para '+rot+' ✓','sucesso');
+    return { id:novo.id, nome:n };
+  }catch(e){ toast('Erro ao cadastrar o fornecedor: '+(e.message||e),'erro'); return null; }
 }
 
 async function rmMontarRemessa(){
