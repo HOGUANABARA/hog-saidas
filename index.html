@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.143 · cadastrar a lavanderia na hora de montar a remessa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.144 · a aprovação marca o que destoa dos períodos iguais</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3622,6 +3622,7 @@ async function carregarPendentes() {
     }
     atualizarBadge();
     try{ await hogPadraoCarregar(); }catch(e){}   // v4.58 — padrão p/ os chips ⚠
+    try{ await apdRefCarregar(); }catch(e){}      // v4.144 — comparação com os períodos correspondentes
     renderizarPendentes();
   } catch(e) {}
 }
@@ -3639,6 +3640,129 @@ async function carregarPendentes() {
 // Quando o período não tem `qtd_pacientes`, NÃO se calcula nada: a tela diz
 // que a informação falta. Dividir por zero, ou fingir 1 paciente, produziria
 // um número que parece certo e não é.
+// ═══ v4.144 — FLAGS NA APROVAÇÃO: O QUE DESTOA DOS PERÍODOS IGUAIS ═══════
+// Ela, 27/09: "na aprovação das saídas, preciso de flags conforme tem no dash
+// indicando que tem alguma diferença dos outros períodos correspondentes".
+// A régua é a mesma do Dashboard — o histórico da própria casa, nada de cadastro
+// novo — só que aqui a comparação é PERÍODO A PERÍODO e por PACIENTE, que é como
+// ela já lê o cartão desde a v4.11b.
+//
+// Período correspondente = mesmo tipo de cirurgia (classificação validada do
+// hogTipoCir) nos últimos 180 dias, entre as saídas JÁ APROVADAS. Quando o mesmo
+// médico tem 3+ períodos daquele tipo, a base é a dele — é mais justa, porque
+// protocolo varia de médico para médico. Período sem nº de pacientes fica fora da
+// base e não recebe flag: sem denominador não há comparação honesta.
+//
+// Três flags, todas em cima do consumo POR PACIENTE:
+//   🚩 2,5×      saiu mais que o dobro do comum (e a diferença vale ao menos meia
+//                unidade por paciente, para não apitar em item de 1 em 1)
+//   🚩 abaixo    item que aparece em quase todo período igual veio com menos de 40%
+//   🚩 novo aqui material que não aparece em nenhum período igual
+// E no cabeçalho, o que ficou de fora: material presente em 80%+ dos períodos
+// iguais e que ninguém lançou aqui.
+// Nada trava. A flag é para olhar antes de assinar.
+const APD_REF_DIAS = 180;
+let apdRef = null, apdMatNome = {};
+async function apdRefCarregar(){
+  if(apdRef) return apdRef;
+  apdRef = { bases:{} };
+  try{
+    const desde = new Date(Date.now() - APD_REF_DIAS*86400000).toISOString().slice(0,10);
+    const pers = (await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,modalidade,paciente_de,medicos(nome),tipos_cirurgia(nome)'
+      + '&data=gte.' + desde + '&limit=2000')) || [];
+    const info = {}, ids = [];
+    for(const p of pers){
+      const pac = Number(p.qtd_pacientes)||0; if(!pac) continue;       // sem denominador não entra
+      info[p.id] = { tipo: hogTipoCir(p,'—'), medico: String((p.medicos&&p.medicos.nome)||'—').toUpperCase(), pac };
+      ids.push(p.id);
+    }
+    if(!ids.length) return apdRef;
+    const movs = (await sbFetch('movimentacoes?select=material_id,qtd,periodo_cirurgico_id&aprovado=eq.true'
+      + '&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA)&periodo_cirurgico_id=in.(' + ids.join(',') + ')&limit=20000')) || [];
+    const porPeriodo = {};
+    for(const m of movs){
+      const pid = m.periodo_cirurgico_id; if(!info[pid]) continue;
+      const d = porPeriodo[pid] = porPeriodo[pid] || {};
+      d[m.material_id] = (d[m.material_id]||0) + Math.abs(Number(m.qtd)||0);
+    }
+    const bases = apdRef.bases;
+    for(const pid of Object.keys(porPeriodo)){
+      const i = info[pid], d = porPeriodo[pid];
+      for(const chave of ['T|'+i.tipo, 'T|'+i.tipo+'|M|'+i.medico]){
+        const b = bases[chave] = bases[chave] || { periodos:0, pac:0, mat:{} };
+        b.periodos++; b.pac += i.pac;
+        for(const mid of Object.keys(d)){
+          const mm = b.mat[mid] = b.mat[mid] || { qtd:0, periodos:0 };
+          mm.qtd += d[mid]; mm.periodos++;
+        }
+      }
+    }
+    // nome dos materiais — o cabeçalho precisa dizer QUAL item ficou de fora
+    const mids = new Set();
+    for(const k of Object.keys(bases)) for(const mid of Object.keys(bases[k].mat)) mids.add(Number(mid));
+    if(mids.size){
+      try{
+        const ms = (await sbFetch('materiais?select=id,nome&id=in.(' + [...mids].join(',') + ')&limit=5000')) || [];
+        ms.forEach(m=>{ apdMatNome[m.id] = m.nome; });
+      }catch(e){}
+    }
+  }catch(e){}
+  return apdRef;
+}
+function apdNum(v){ return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:2}); }
+function apdBase(p){
+  if(!apdRef || !p || !p.periodo) return null;
+  const tipo = hogTipoCir(p.periodo,'—');
+  const med  = String((p.periodo.medicos && p.periodo.medicos.nome)||'—').toUpperCase();
+  const comMed = apdRef.bases['T|'+tipo+'|M|'+med];
+  if(comMed && comMed.periodos >= 3) return { b:comMed, rot:tipo+' com '+med };
+  const soTipo = apdRef.bases['T|'+tipo];
+  if(soTipo && soTipo.periodos >= 2) return { b:soTipo, rot:tipo };
+  return null;
+}
+function apdFlagItem(p, it){
+  const base = apdBase(p); if(!base) return null;
+  const pac = Number(p.periodo && p.periodo.qtd_pacientes)||0; if(!pac) return null;
+  const b = base.b, mm = b.mat[it.material_id];
+  const porPac = (Number(it.qtd)||0) / pac;
+  if(!mm){
+    if(b.periodos < 3) return null;
+    return { txt:'novo aqui',
+      tit:'"'+(it.nome||'este item')+'" não aparece em nenhum dos '+b.periodos+' períodos de '+base.rot
+        +' dos últimos '+APD_REF_DIAS+' dias. Pode ser material novo no protocolo — ou lançamento no período errado.' };
+  }
+  const media = b.pac > 0 ? mm.qtd/b.pac : 0;
+  const pres  = mm.periodos / b.periodos;
+  if(media > 0 && porPac > media*2 && (porPac-media) >= 0.5)
+    return { txt:apdNum(porPac/media)+'× o comum',
+      tit:apdNum(porPac)+' por paciente aqui · o comum em '+base.rot+' é '+apdNum(media)
+        +' por paciente ('+b.periodos+' período(s)). Confira a quantidade antes de aprovar.' };
+  if(media > 0 && pres >= 0.7 && porPac < media*0.4)
+    return { txt:'abaixo do comum',
+      tit:apdNum(porPac)+' por paciente aqui · o comum em '+base.rot+' é '+apdNum(media)
+        +' por paciente, e o item aparece em '+mm.periodos+' dos '+b.periodos+' períodos. Pode ter ficado quantidade por lançar.' };
+  return null;
+}
+function apdFaltando(p){
+  const base = apdBase(p); if(!base) return [];
+  const b = base.b; if(b.periodos < 3) return [];
+  const tem = new Set((p.itens||[]).map(x=>Number(x.material_id)));
+  const faltam = [];
+  for(const mid of Object.keys(b.mat)){
+    if(tem.has(Number(mid))) continue;
+    const mm = b.mat[mid];
+    if(mm.periodos / b.periodos >= 0.8)
+      faltam.push({ mid:Number(mid), nome: apdMatNome[mid] || ('material #'+mid), n:mm.periodos, de:b.periodos });
+  }
+  return faltam.sort((a,b2)=>b2.n-a.n);
+}
+function apdChip(fl){
+  if(!fl) return '';
+  return ' <span title="'+String(fl.tit).replace(/"/g,'&quot;')+'" '
+    + 'style="background:#FEF9E7;color:#B9770E;border:1px solid #F5D76E;border-radius:10px;padding:1px 7px;'
+    + 'font-size:10.5px;font-weight:800;white-space:nowrap;cursor:help">🚩 '+fl.txt+'</span>';
+}
+
 function apdMeta(p, ehDiversa, tipos, data){
   const sep = ' &nbsp;·&nbsp; ';
   if (ehDiversa) {
@@ -3670,11 +3794,23 @@ function apdMeta(p, ehDiversa, tipos, data){
     avisosPadrao.length ? `<b style="color:#B9770E">⚠ fora do comum: ${avisosPadrao.join(' · ')}</b>` : null,
   ].filter(Boolean).join(sep);
 
+  // v4.144 — o que destoa dos períodos correspondentes
+  const base   = (typeof apdBase==='function') ? apdBase(p) : null;
+  const flags  = base ? p.itens.map(it=>apdFlagItem(p,it)).filter(Boolean) : [];
+  const faltam = base ? apdFaltando(p) : [];
+  const comparacao = base
+    ? [ `<span title="a comparação é com ${base.b.periodos} período(s) de ${base.rot} nos últimos ${APD_REF_DIAS} dias, sempre por paciente" style="color:var(--cinza-4)">📐 comparado com ${base.b.periodos} período(s) de ${base.rot}</span>`,
+        flags.length  ? `<b style="color:#B9770E" title="${flags.map(f=>String(f.tit).replace(/"/g,'&quot;')).join(' | ')}">🚩 ${flags.length} item(ns) fora do padrão</b>` : '',
+        faltam.length ? `<b style="color:#B9770E" title="aparece(m) em ${faltam[0].de} período(s) iguais e não foi(ram) lançado(s) aqui">🕳 não lançado: ${faltam.slice(0,3).map(x=>x.nome).join(' · ')}${faltam.length>3?' +'+(faltam.length-3):''}</b>` : '',
+      ].filter(Boolean).join(sep)
+    : '<span style="color:var(--cinza-4)" title="ainda não há períodos iguais aprovados o bastante para comparar (mínimo de 2 do mesmo tipo de cirurgia, com nº de pacientes informado)">📐 sem período correspondente para comparar</span>';
+
   const porPac = pac > 0
     ? `<b style="color:var(--azul)">📊 ${(totalItens/pac).toLocaleString('pt-BR',{maximumFractionDigits:1})} por paciente</b>`
     : '<span style="color:var(--cinza-4)">📊 sem pacientes, não dá para calcular o consumo por paciente</span>';
 
   return `<div class="info-meta">${contexto}</div>` +
+         `<div class="info-meta">${comparacao}</div>` +
          `<div class="info-meta">📦 ${p.itens.length} itens${sep}${totalItens.toLocaleString('pt-BR')} unidades${sep}${porPac}${sep}` +
          `👤 ${p.registrado_por || 'Equipe CC'}${sep}` +
          `<span style="color:var(--azul)">✏️ quantidades editáveis</span></div>`;
@@ -3710,9 +3846,10 @@ function renderizarPendentes() {
       const saldo = saldosCache[(it.nome||'').toUpperCase()];
       const saldoTxt = (saldo === undefined || saldo === null) ? '—' : saldo;
       const saldoCor = (saldo !== undefined && saldo !== null && saldo < it.qtd) ? 'color:#922B21;font-weight:700' : 'color:var(--cinza-4)';
+      const flItem = (typeof apdFlagItem==='function') ? apdFlagItem(p, it) : null;   // v4.144
       linhas += `
         <tr>
-          <td>${it.nome}</td>
+          <td>${it.nome}${apdChip(flItem)}</td>
           <td style="text-align:center;font-size:12px;${saldoCor}" title="Saldo atual em estoque">${saldoTxt}</td>
           <td style="text-align:right">
             <input type="number" min="0" value="${it.qtd}"
