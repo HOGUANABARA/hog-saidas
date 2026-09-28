@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.147 · empréstimo grava na língua do banco (ENTRADA / SAIDA)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.148 · o campo Material mostra o cadastro inteiro</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -12200,6 +12200,86 @@ function pnDiasDesde(d){ if(!d) return null; return Math.round((new Date(pnHojeS
 // v4.27 — PREÇO EM TRATATIVA: compra pontual/emergencial cara não retroage.
 // Enquanto a negociação não fecha, meses PASSADOS usam o preço anterior;
 // só o mês atual mostra o preço novo (evita leitura errada da gestão).
+// ═══ v4.148 — O CAMPO MATERIAL MOSTRA O QUE O CADASTRO SABE ══════════════
+// Ela, 28/09, lançando o empréstimo: "no campo material, seria importante vir
+// a informação completa que está no cadastro também".
+// Duas frentes: a lista de sugestões ganha uma etiqueta (marca · descrição da
+// nota · embalagem · saldo · último valor) e, ao escolher, o formulário mostra
+// a ficha embaixo — inclusive o lote que já está em casa, que é o que evita
+// digitar um lote que não existe.
+function pnMatLabel(m){
+  if(!m) return '';
+  const p = [];
+  if(m.marca) p.push(String(m.marca));
+  if(m.descricao_nf && m.descricao_nf!==m.nome) p.push(String(m.descricao_nf));
+  if(Number(m.qtd_kit)>1) p.push('vem '+m.qtd_kit+(m.unidade_medida?(' '+String(m.unidade_medida).toLowerCase()):'')+'/embalagem');
+  else if(m.unidade_medida) p.push(String(m.unidade_medida).toLowerCase());
+  const saldo = pnSaldoDe(m.id);
+  if(saldo!==null) p.push('saldo '+saldo);
+  if(Number(m.ultimo_valor_pago)>0) p.push('últ. '+pnMoeda(Number(m.ultimo_valor_pago)));
+  return p.join(' · ');
+}
+function pnSaldoDe(mid){
+  try{
+    const r = (typeof ccDados!=='undefined' && ccDados) ? ccDados.find(x=>x.material_id===mid) : null;
+    if(r && r.saldo!=null) return Number(r.saldo);
+  }catch(e){}
+  return null;
+}
+function pnMoeda(v){ return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function pnUltimaCompraDe(mid){
+  let ult = null;
+  for(const e of (pnEntradas||[])){
+    if(e.material_id!==mid) continue;
+    if(!ult || String(e.created_at||'') > String(ult.created_at||'')) ult = e;
+  }
+  return ult;
+}
+function pnLotesDe(mid){
+  return (pnLotes||[]).filter(l=>l.material_id===mid && (Number(l.qtd)||0)>0)
+    .sort((a,b)=>String(a.validade||'').localeCompare(String(b.validade||'')));
+}
+// a ficha que aparece embaixo do campo Material, no empréstimo
+function pnEmpFicha(){
+  const box = document.getElementById('pn-emp-ficha'); if(!box) return;
+  const nome = ((document.getElementById('pn-emp-mat')||{}).value||'').trim();
+  if(!nome){ box.innerHTML=''; return; }
+  const mid = pnNomeId[pnN(nome)];
+  if(!mid){
+    box.innerHTML = '<span style="color:var(--vermelho);font-weight:700">⚠ este nome não está no cadastro</span> '
+      + '<span style="color:var(--cinza-4)">— escolha um item da lista; o empréstimo precisa apontar para o material certo.</span>';
+    return;
+  }
+  const m = (typeof pnMatFull!=='undefined' && pnMatFull) ? pnMatFull[mid] : null;
+  if(!m){ box.innerHTML=''; return; }
+  const saldo = pnSaldoDe(mid);
+  const ult = pnUltimaCompraDe(mid);
+  const lotes = pnLotesDe(mid);
+  const forn = (m.fornecedor_padrao_id && typeof coFornecedores!=='undefined' && coFornecedores)
+    ? (coFornecedores.find(f=>f.id===m.fornecedor_padrao_id)||{}).nome : '';
+  const p = [];
+  p.push('<b style="color:var(--azul)">'+String(m.nome)+'</b>');
+  if(m.marca) p.push('🏷️ '+m.marca);
+  if(m.descricao_nf && m.descricao_nf!==m.nome) p.push('🧾 '+m.descricao_nf);
+  p.push('📦 '+(Number(m.qtd_kit)>1 ? ('vem '+m.qtd_kit+' por embalagem · saída por '+String(m.unidade_medida||'unidade').toLowerCase())
+                                    : String(m.unidade_medida||'unidade').toLowerCase()));
+  if(saldo!==null) p.push('📊 saldo '+saldo);
+  if(Number(m.ultimo_valor_pago)>0) p.push('💰 últ. valor '+pnMoeda(m.ultimo_valor_pago)
+    + (ult&&ult.created_at?(' <span style="color:var(--cinza-4)">('+pnData(String(ult.created_at).slice(0,10))+')</span>'):''));
+  else p.push('<span style="color:var(--vermelho);font-weight:700">💰 sem valor no cadastro</span>');
+  if(forn) p.push('🏪 '+forn);
+  if(m.classe_compra) p.push('🗂️ '+m.classe_compra);
+  let h = '<div style="line-height:1.7">'+p.join(' &nbsp;·&nbsp; ')+'</div>';
+  if(lotes.length){
+    h += '<div style="margin-top:4px;color:var(--cinza-4)">🔒 em casa: '
+      + lotes.slice(0,3).map(l=>(l.lote||'sem lote')+(l.validade?(' val. '+pnData(l.validade)):'')+' ('+(Number(l.qtd)||0)+')').join(' · ')
+      + (lotes.length>3?(' +'+(lotes.length-3)):'') + '</div>';
+  } else if(m.controla_lote){
+    h += '<div style="margin-top:4px;color:#B9770E;font-weight:700">🔒 este item controla lote e não há nenhum registrado — preencha lote e validade.</div>';
+  }
+  box.innerHTML = h;
+}
+
 function pnCusto(materialId, qtd, mes){
   const m=pnUvp[materialId]; if(!m) return 0;
   let v=m.uvp||0;
@@ -12994,7 +13074,11 @@ async function pnCarregar(){
       // declarados no cadastro (ex.: entraram por inventário, sem NF)
       for(const m of mats) if(m.somente_amostra) pnAmostraOnly.add(m.id);
     }
-    document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${m.nome}">`).join('');
+    // v4.148 — ela, 28/09: "no campo material, seria importante vir a informação
+    // completa que está no cadastro também". O `value` continua sendo só o nome
+    // (é por ele que o campo resolve o material); o resto vai no `label`, que o
+    // navegador mostra ao lado na lista.
+    document.getElementById('pn-mat-datalist').innerHTML=mats.map(m=>`<option value="${String(m.nome||'').replace(/"/g,'&quot;')}" label="${pnMatLabel(m).replace(/"/g,'&quot;')}">`).join('');
     pnPeriodos=(await sbFetch('periodos_cirurgicos?select=id,data,qtd_pacientes,protocolo,modalidade,fellow,paciente_de,reembolso_por_paciente,medico_trouxe_bisturi,medicos(nome),tipos_cirurgia(nome)&order=data.desc&limit=1000'))||[];
     const perMap={}; for(const p of pnPeriodos) perMap[p.id]=p;
     const movs=(await sbFetch('movimentacoes?select=id,qtd,material_id,tipo,created_at,periodo_cirurgico_id,registrado_por,destino_saida_geral,departamento_id&aprovado=eq.true&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&qtd=lt.0&order=id.desc&limit=5000'))||[];
@@ -14608,7 +14692,7 @@ function pnEmprestimos(){
       <div class="pn-ct">➕ Registrar empréstimo <span style="font-size:10px;font-weight:600;text-transform:none;color:var(--cinza-4)">movimenta o Estoque Geral na hora</span></div>
       <div class="pn-emp-form">
         <div class="pn-sc"><label>Direção</label><select id="pn-emp-dir"><option value="EMPRESTAMOS">📤 Emprestamos (sai do nosso estoque)</option><option value="PEGAMOS">📥 Pegamos (entra no nosso estoque)</option></select></div>
-        <div class="pn-sc" style="flex:1;min-width:200px"><label>Material</label><input id="pn-emp-mat" list="pn-mat-datalist" placeholder="digite o nome…"></div>
+        <div class="pn-sc" style="flex:1;min-width:200px"><label>Material</label><input id="pn-emp-mat" list="pn-mat-datalist" placeholder="digite o nome…" oninput="pnEmpFicha()" onchange="pnEmpFicha()"></div>
         <div class="pn-sc"><label>Parceiro</label><input id="pn-emp-parc" placeholder="clínica/hospital" style="width:150px"></div>
         <div class="pn-sc"><label>Qtd</label><input id="pn-emp-qtd" type="number" min="0.1" step="any" style="width:70px"></div>
         <div class="pn-sc"><label>Combinado p/</label><input id="pn-emp-data" type="date"></div>
@@ -14616,6 +14700,7 @@ function pnEmprestimos(){
         <div class="pn-sc"><label>Validade</label><input id="pn-emp-val" type="date" style="width:150px"></div>
         <button class="pn-btn pn-btn-azul" onclick="pnEmpRegistrar()">Registrar</button>
       </div>
+      <div id="pn-emp-ficha" style="padding:2px 4px 10px;font-size:12px;color:var(--cinza-5)"></div>
       <table class="pn-tb"><thead><tr><th>Direção</th><th>Material</th><th>Lote · validade</th><th>Parceiro</th><th class="num">Qtd</th><th class="num">Pendente</th><th>Combinado p/</th><th>Status</th><th></th></tr></thead><tbody>
       ${pend.length?pend.map(e=>{
         const falta=e.qtd-(e.qtd_devolvida||0);
