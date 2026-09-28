@@ -341,6 +341,22 @@ details[open] summary { margin-bottom: 6px; }
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .comp-header img { display: block !important; }
+  /* ═══ v4.146 — A FICHA SAÍA 4 VEZES ═══════════════════════════════════
+     Ela, 28/09: "a impressão no botão do gasto cirúrgico na tela da aprovação
+     está quadruplicando; era para ter uma ficha, está criando o arquivo com 4
+     fichas iguais".
+     Motivo: `visibility:hidden` esconde mas NÃO tira o espaço — o documento
+     continuava com a altura do app inteiro, ou seja, várias páginas. E o modal
+     era impresso com `position:fixed`, que o navegador REPETE em cada página.
+     Quatro páginas de app = quatro fichas.
+     Agora o botão joga a ficha para o fim do body (compImprimir), o resto some
+     de verdade com display:none e a ficha imprime no fluxo — uma vez só. */
+  body.imprimindo-ficha > *:not(#modal-revisao){ display: none !important; }
+  body.imprimindo-ficha #modal-revisao{
+    position: static !important; display: block !important; inset: auto !important;
+    width: auto !important; height: auto !important; overflow: visible !important;
+    padding: 0 !important; margin: 0 !important; background: #fff !important;
+  }
 }
 
 
@@ -451,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.145 · empréstimo com lote, validade e histórico</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.146 · reprocessado na aprovação e ficha que imprime uma vez</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1926,7 +1942,7 @@ details[open] summary { margin-bottom: 6px; }
     </div>
     <div class="modal-acoes">
       <button class="btn btn-secundario" onclick="fecharRevisao()">← Voltar e Editar</button>
-      <button class="btn btn-primario" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+      <button class="btn btn-primario" onclick="compImprimir()">🖨️ Imprimir / Salvar PDF</button>
       <button class="btn btn-verde" id="btn-confirmar-envio" onclick="confirmarEnvio()">✓ Confirmar e Enviar</button>
     </div>
   </div>
@@ -3371,6 +3387,27 @@ function abrirRevisao() {
   document.getElementById('modal-revisao').classList.add('visivel');
 }
 
+// v4.146 — ver o comentário no @media print: a ficha ia para o papel uma vez
+// por página de app que ficava "escondida" atrás dela. Aqui ela sai da moldura,
+// imprime sozinha no body e volta para o lugar quando a impressão termina.
+function compImprimir(){
+  const m = document.getElementById('modal-revisao');
+  if(!m){ window.print(); return; }
+  const pai = m.parentNode, ref = m.nextSibling;
+  document.body.appendChild(m);
+  document.body.classList.add('imprimindo-ficha');
+  let devolvido = false;
+  const voltar = function(){
+    if(devolvido) return; devolvido = true;
+    document.body.classList.remove('imprimindo-ficha');
+    if(ref && ref.parentNode===pai) pai.insertBefore(m, ref); else pai.appendChild(m);
+    window.removeEventListener('afterprint', voltar);
+  };
+  window.addEventListener('afterprint', voltar);
+  try{ window.print(); }catch(e){}
+  setTimeout(voltar, 3000);   // navegador que não dispara afterprint não deixa a tela quebrada
+}
+
 function fecharRevisao() {
   document.getElementById('modal-revisao').classList.remove('visivel');
 }
@@ -3617,6 +3654,7 @@ async function carregarPendentes() {
     }
     // Ordenar itens de cada grupo pela ordem do formulário (categorias)
     pendentes = Object.values(grupos);
+    try{ await aprCarregarReproc(); }catch(e){}   // v4.146 — o que saiu pelo livro de remessas
     for (const g of pendentes) {
       g.itens = ordenarMateriais(g.itens);
     }
@@ -3721,6 +3759,7 @@ function apdBase(p){
   return null;
 }
 function apdFlagItem(p, it){
+  if(it && it.reproc) return null;   // v4.146 — a base de comparação não enxerga o livro de remessas
   const base = apdBase(p); if(!base) return null;
   const pac = Number(p.periodo && p.periodo.qtd_pacientes)||0; if(!pac) return null;
   const b = base.b, mm = b.mat[it.material_id];
@@ -3838,7 +3877,8 @@ function renderizarPendentes() {
     let ultimaCat = null;
     let linhas = '';
     p.itens.forEach((it, k) => {
-      const cat = ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS';
+      const cat = it.reproc ? 'REPROCESSADOS — não baixam estoque, vão para a fila de remessa'   // v4.146
+        : (ordemCat[(it.nome||'').toUpperCase().replace(/[()]/g,'').replace(/\s+/g,' ').trim()] || 'EXTRAS');
       if (cat !== ultimaCat) {
         linhas += `<tr><td colspan="3" style="background:#EBF5FB;padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#1B4F72">## ${cat}</td></tr>`;
         ultimaCat = cat;
@@ -3847,10 +3887,14 @@ function renderizarPendentes() {
       const saldoTxt = (saldo === undefined || saldo === null) ? '—' : saldo;
       const saldoCor = (saldo !== undefined && saldo !== null && saldo < it.qtd) ? 'color:#922B21;font-weight:700' : 'color:var(--cinza-4)';
       const flItem = (typeof apdFlagItem==='function') ? apdFlagItem(p, it) : null;   // v4.144
+      const chipReproc = it.reproc   // v4.146
+        ? ' <span title="peça que circula: não baixa estoque. Saiu para a cirurgia e foi para a fila de remessa (livro de reprocessamento). Ajustar aqui corrige a fila e o livro." '
+          + 'style="background:#EBF5FB;color:#1B4F72;border:1px solid #AED6F1;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:800;white-space:nowrap;cursor:help">🔁 livro de remessas</span>'
+        : '';
       linhas += `
         <tr>
-          <td>${it.nome}${apdChip(flItem)}</td>
-          <td style="text-align:center;font-size:12px;${saldoCor}" title="Saldo atual em estoque">${saldoTxt}</td>
+          <td>${it.nome}${chipReproc}${apdChip(flItem)}</td>
+          <td style="text-align:center;font-size:12px;${it.reproc?'color:var(--cinza-4)':saldoCor}" title="${it.reproc?'peça reprocessada: o saldo dela é o do livro de remessas, não o do estoque':'Saldo atual em estoque'}">${it.reproc?'🔁':saldoTxt}</td>
           <td style="text-align:right">
             <input type="number" min="0" value="${it.qtd}"
               style="width:70px;border:1.5px solid var(--cinza-2);border-radius:5px;padding:4px 6px;font-size:13px;text-align:center;outline:none;font-family:var(--fonte)"
@@ -3942,6 +3986,59 @@ async function aprIncluirItem(i){
   }catch(e){ toast('Erro ao incluir: '+e.message,'erro'); }
 }
 
+// ═══ v4.146 — O REPROCESSADO APARECE NA TELA DE APROVAÇÃO ════════════════
+// Ela, 28/09, com o cartão do Dr Pietro (FACO NACIONAL, 23/09) na mão:
+// "erro — tela de ajuste não consta o material reprocessado; no dash conta
+// somente a reprocessada".
+// Ela tinha razão, e a causa é de desenho: desde a v4.6, peça que CIRCULA
+// (ponteira, cânula, kit de vitrectomia) não baixa estoque — ela não foi
+// consumida, ficou suja. A saída dela vai para `remessa_sujos` (com o período
+// cirúrgico junto) e para o livro de remessas, nunca para `movimentacoes`.
+// O Dashboard já lia as duas fontes (v4.26); a aprovação lia só as
+// movimentações — então o item que ela mais quer conferir era justamente o
+// que não estava lá para ajustar.
+// Agora ele entra no cartão, na sua própria seção, com a quantidade editável:
+// o ajuste vai para `remessa_sujos` e o livro recebe o acerto correspondente,
+// para o saldo de "em casa × sujo" não sair torto.
+let aprBens = null;
+async function aprCarregarReproc(){
+  const ids = pendentes.filter(g=>g.periodo && g.periodo.id).map(g=>g.periodo.id);
+  if(!ids.length) return;
+  if(!aprBens){
+    try{ aprBens = (await sbFetch('remessa_bens?select=id,nome,material_id&limit=500')) || []; }
+    catch(e){ aprBens = []; }
+  }
+  let sujos = [];
+  try{
+    sujos = (await sbFetch('remessa_sujos?select=id,bem_id,qtd,periodo_cirurgico_id,registrado_por'
+      + '&periodo_cirurgico_id=in.(' + ids.join(',') + ')&limit=2000')) || [];
+  }catch(e){ return; }
+  for(const su of sujos){
+    const g = pendentes.find(x=>x.periodo && x.periodo.id===su.periodo_cirurgico_id); if(!g) continue;
+    const bem = (aprBens||[]).find(b=>b.id===su.bem_id);
+    g.itens.push({ id:'s'+su.id, sujoId:su.id, reproc:true,
+      nome: bem ? bem.nome : ('peça #'+su.bem_id),
+      material_id: bem ? bem.material_id : null,
+      qtd: Math.abs(Number(su.qtd)||0), editado:false });
+  }
+}
+async function aprAjustarSujo(it){
+  const nova = Math.abs(Number(it.qtd)||0);
+  try{
+    const achado = (await sbFetch('remessa_sujos?select=id,qtd,bem_id&id=eq.'+it.sujoId)) || [];
+    const a = achado[0]; if(!a) return;
+    const antes = Math.abs(Number(a.qtd)||0);
+    const delta = nova - antes;
+    if(delta === 0) return;
+    const quem = (SESSAO ? SESSAO.nome : 'Gestora');
+    if(nova > 0) await sbFetch('remessa_sujos?id=eq.'+it.sujoId,'PATCH',{ qtd:nova });
+    else         await sbFetch('remessa_sujos?id=eq.'+it.sujoId,'DELETE');
+    // o livro acerta junto: o que deixou de ser usado volta para "em casa"
+    await sbFetch('remessa_mov','POST',{ bem_id:a.bem_id, tipo:'USO', d_casa:-delta, d_sujo:delta,
+      registrado_por:quem, observacao:'Qtd ajustada na aprovação — '+antes+' → '+nova });
+  }catch(e){ toast('Não consegui ajustar a peça do livro: '+(e.message||e),'erro'); }
+}
+
 function editarQtdPendente(i, k, val) {
   const qtd = parseFloat(val);
   if (isNaN(qtd) || qtd < 0) return;
@@ -3955,6 +4052,7 @@ async function aprovar(i) {
   if (sbUrl && sbKey && p.itens?.length) {
     try {
       for (const it of p.itens) {
+        if (it.reproc){ if(it.editado) await aprAjustarSujo(it); continue; }   // v4.146 — vive no livro, não em movimentações
         const patch = {
           aprovado: true, aprovado_por: (SESSAO ? SESSAO.nome : 'Gestora'),
           aprovado_por_id: (SESSAO ? SESSAO.id : null), aprovado_em: new Date().toISOString(),
