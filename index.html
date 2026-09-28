@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.148 · o campo Material mostra o cadastro inteiro</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.149 · empréstimo movimenta o estoque com o tipo que o banco conhece</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14858,12 +14858,24 @@ async function pnEmpRegistrar(){
     const e=await sbFetch('emprestimos','POST',corpo);
     if(!e||!e.length) throw new Error('sem permissão (RLS)');
     const localId=await getEstoqueGeralId();
-    await sbFetch('movimentacoes','POST',{ tipo:'EMPRESTIMO', material_id:mid, local_id:localId,
-      qtd: dir==='EMPRESTAMOS'?-qtd:qtd, aprovado:true, registrado_por:quem,
-      aprovado_por:quem, aprovado_em:new Date().toISOString(),
-      observacao:`Empréstimo #${e[0].id} — ${dir==='EMPRESTAMOS'?'para':'de'} ${parc}`
-        + (lote?` · lote ${lote}`:'') + (val?` · val. ${val}`:'')
-        + (dataC?` · combinado p/ ${dataC}`:'') });
+    // v4.149 — o tipo da movimentação é do enum `tipo_movimento_enum`, que já tem
+    // EMPRESTIMO_SAIDA e EMPRESTIMO_ENTRADA desde sempre. O app mandava 'EMPRESTIMO',
+    // que não existe: a movimentação morria no 22P02 DEPOIS do empréstimo já gravado,
+    // e sobrava registro sem estoque movimentado (foi o que aconteceu com os #3 e #4).
+    // Agora, se a movimentação falhar, o empréstimo é desfeito — nada fica pela metade.
+    try{
+      await sbFetch('movimentacoes','POST',{
+        tipo: dir==='EMPRESTAMOS' ? 'EMPRESTIMO_SAIDA' : 'EMPRESTIMO_ENTRADA',
+        material_id:mid, local_id:localId,
+        qtd: dir==='EMPRESTAMOS'?-qtd:qtd, aprovado:true, registrado_por:quem,
+        aprovado_por:quem, aprovado_em:new Date().toISOString(),
+        observacao:`Empréstimo #${e[0].id} — ${dir==='EMPRESTAMOS'?'para':'de'} ${parc}`
+          + (lote?` · lote ${lote}`:'') + (val?` · val. ${val}`:'')
+          + (dataC?` · combinado p/ ${dataC}`:'') });
+    }catch(errMov){
+      try{ await sbFetch('emprestimos?id=eq.'+e[0].id,'DELETE'); }catch(e2){}
+      throw new Error('o estoque não aceitou a movimentação, então o empréstimo foi desfeito — '+(errMov.message||errMov));
+    }
     // v4.145 — o lote acompanha o material: entra com ele, sai com ele
     if(dir==='PEGAMOS') await pnEmpLoteEntrada(mid, lote, val, qtd);
     else                await pnEmpLoteBaixa(mid, lote, val, qtd);
@@ -14881,7 +14893,7 @@ async function pnEmpDevolver(id){
   if(!q||q<=0||q>falta){ toast('Quantidade inválida.','erro'); return; }
   try{
     const localId=await getEstoqueGeralId();
-    await sbFetch('movimentacoes','POST',{ tipo:'EMPRESTIMO_DEVOLUCAO', material_id:e.material_id, local_id:localId,
+    await sbFetch('movimentacoes','POST',{ tipo:'DEVOLUCAO', material_id:e.material_id, local_id:localId,   // v4.149 — 'EMPRESTIMO_DEVOLUCAO' não existe no enum
       qtd: pnEmpSai(e)?q:-q, aprovado:true, registrado_por:(SESSAO?SESSAO.nome:'Evelise (Gestora)'),
       aprovado_por:'Evelise (Gestora)', aprovado_em:new Date().toISOString(),
       observacao:`Devolução empréstimo #${e.id} — ${e.parceiro}` });
