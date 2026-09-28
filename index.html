@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.149 · empréstimo movimenta o estoque com o tipo que o banco conhece</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.150 · manutenção: custo unificado não conta duas vezes, e as datas que importam</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -24218,6 +24218,34 @@ function manAviso(){
 }
 // ligações
 function manCustosDe(sid){ const ids=manCustoDem.filter(x=>x.solicitacao_id===sid).map(x=>x.custo_id); return manCustos.filter(c=>ids.includes(c.id)); }
+// ═══ v4.150 — CUSTO QUE COBRE VÁRIAS DEMANDAS NÃO CONTA DUAS VEZES ════════
+// Ela, 28/09: "quando unifiquei demandas no mesmo valor, ele duplicou no
+// relatório do prestador". É o caso real do custo #11 (R$ 250) ligado às
+// demandas 4, 8 e 9: a coluna de custos somava o valor CHEIO em cada linha,
+// e R$ 250 viravam R$ 750 aos olhos de quem lê.
+// Agora a linha da demanda mostra o que é só dela e, ao lado, o que é
+// compartilhado — dizendo com quais demandas. O total continua saindo da
+// lista de custos, onde cada custo aparece uma vez só.
+function manNDemsDoCusto(cid){ return manDemsDoCusto(cid).length; }
+function manCustosSep(sid, filtro){
+  const todos=manCustosDe(sid).filter(c=>c.situacao!=='REPROVADO').filter(c=>!filtro||filtro(c));
+  const so=todos.filter(c=>manNDemsDoCusto(c.id)<=1), comp=todos.filter(c=>manNDemsDoCusto(c.id)>1);
+  const soma=a=>a.reduce((t,c)=>t+Number(c.valor||0),0);
+  return { todos, so, comp, vSo:soma(so), vComp:soma(comp), soma };
+}
+function manCompartTxt(sid, comp){
+  if(!comp.length) return '';
+  const outras=[...new Set(comp.flatMap(c=>manDemsDoCusto(c.id)).filter(x=>x!==sid))];
+  return '🔗 '+manBrl(comp.reduce((t,c)=>t+Number(c.valor||0),0))+' compartilhado'
+    + (outras.length?(' com #'+outras.join(' #')):'');
+}
+// as duas datas que ela pediu: quando foi pedido e quando ficou pronto
+function manDtPedido(s){ return manDt(s.created_at); }
+function manDtFim(s){ return s.resolvida_em ? manDt(s.resolvida_em) : (s.executada_em?manDt(s.executada_em):''); }
+function manDatasSub(s){
+  const fim=manDtFim(s);
+  return 'pedida '+manDtPedido(s)+(fim?' · pronta '+fim:(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO'?' · em aberto':''));
+}
 function manDemsDoCusto(cid){ return manCustoDem.filter(x=>x.custo_id===cid).map(x=>x.solicitacao_id).sort((a,b)=>a-b); }
 function manVisitasDe(sid){ return manVisItens.filter(i=>i.solicitacao_id===sid).map(i=>({i, v:manVisitas.find(v=>v.id===i.visita_id)})).filter(x=>x.v).sort((a,b)=>String(b.v.data).localeCompare(String(a.v.data))); }
 function manReceb(c){ return c.pago_a==='FORNECEDOR' ? (c.loja||'—') : manPrestNome(c.prestador_id); }
@@ -24523,11 +24551,15 @@ function manAcompRender(){
   lista.forEach(s=>{
     const cs=manCustosDe(s.id).filter(c=>c.situacao!=='REPROVADO'), nv=manVisitasDe(s.id).length, pend=cs.filter(c=>c.situacao==='AGUARDANDO').length;
     h+='<tr class="'+(manAtraso(s)||manComb(s)>0?'man-parada':'')+'"><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b>'+(s.predial?' <span class="man-tag man-t-n" title="problema geral da estrutura — o custo não é do departamento que pediu">🏢 predial</span>':'')
-      +'<span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+'</span></td>'
+      +'<span class="man-sub">'+manEsc(s.local)+(s.contrato_id?' · 📑 contrato':'')+' · '+manDatasSub(s)+'</span></td>'
       +'<td class="man-ocm">'+manEsc(manDepNome(s.departamento_id))+'<span class="man-sub man-u-'+s.urgencia+'">'+(MAN_URG[s.urgencia]||'').split(' — ')[0]+'</span></td>'
       +'<td>'+(s.responsavel?manEsc(s.responsavel):'<span class="man-sub">— definir</span>')+'</td><td>'+manEnvolvidosRot(s.id)+'</td>'
       +'<td>'+manTagSit(s)+manTagAtraso(s)+(manRetir.some(r=>r.solicitacao_id===s.id&&!r.devolvido_em)?' <span class="man-tag man-t-par" title="item retirado para conserto externo, ainda não voltou">📦 item fora</span>':'')+(s.agendada_para&&(s.situacao==='ABERTA'||s.situacao==='ANDAMENTO')?'<span class="man-sub">📅 combinado para '+manDt(s.agendada_para)+'</span>':'')+'</td>'
-      +'<td>'+(cs.length?manBrl(cs.reduce((t,c)=>t+Number(c.valor||0),0))+'<span class="man-sub">'+cs.length+' custo(s)'+(pend?' · '+pend+' aguardando':'')+(nv?' · '+nv+' visita(s)':'')+'</span>'
+      +'<td>'+(cs.length?((function(){ const S=manCustosSep(s.id);   // v4.150
+          return (S.vSo?manBrl(S.vSo):'<span class="man-sub">—</span>')
+            +'<span class="man-sub">'+cs.length+' custo(s)'+(pend?' · '+pend+' aguardando':'')+(nv?' · '+nv+' visita(s)':'')+'</span>'
+            +(S.comp.length?'<span class="man-sub" title="custo que cobre mais de uma demanda: some uma vez só, na lista de custos">'+manCompartTxt(s.id,S.comp)+'</span>':'');
+        })())
         :(s.situacao==='RESOLVIDA'?'<span class="man-sub">sem custo lançado</span>':'—'))+'</td>'
       +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>';
   });
@@ -24989,7 +25021,7 @@ function manFinRender(){
   const recs={}; livres.forEach(c=>{ const k=manRecebChave(c); (recs[k]=recs[k]||{rot:manRecebIcone(c)+manReceb(c),itens:[]}).itens.push(c); });
   const chaves=Object.keys(recs); if(!chaves.includes(manLoteReceb)) manLoteReceb=chaves[0]||'';
   const pode=podeAba('man_acomp');
-  let h='';
+  let h='<div class="man-linha" style="margin-top:0"><button class="man-b o p" title="folha para o financeiro: o que ele precisa programar, o que já está programado e o que já foi pago" onclick="manFinRelImprimir()">🖨 Relatório para o financeiro</button></div>';   // v4.150
   if(pode){
     h+='<div class="man-bloco agora"><div class="man-rot" style="margin-bottom:6px">🧾 Gerar lote de pagamento <span class="hg-dica" title="Junta custos aprovados de um mesmo recebedor (de uma ou várias demandas) numa cobrança só. O lote vai para o financeiro lançar no Omie.">?</span></div>';
     if(!chaves.length) h+='<span class="man-sub">Nenhum custo aprovado esperando lote.</span>';
@@ -25023,6 +25055,79 @@ function manFinRender(){
       +'<td><span class="man-tag '+t[1]+'">'+t[0]+'</span>'+(at?' <span class="man-tag man-atraso">⏰ '+at+' d</span>':'')+(l.pagto_programado_para?'<span class="man-sub">🗓️ '+manDt(l.pagto_programado_para)+'</span>':'')+(l.pago_em?'<span class="man-sub">pago '+manDt(l.pago_em)+'</span>':'')+'</td>'
       +'<td class="man-acoes">'+prox+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>'; manLoteSoma();
+}
+// ═══ v4.150 — A FOLHA DO FINANCEIRO ══════════════════════════════════════
+// Ela, 28/09: "preciso de um relatório que o financeiro compreenda o que precisa
+// programar pagamento e o que já foi pago (informado pelo financeiro)".
+// Três blocos, na ordem em que o dinheiro anda:
+//   1. A PROGRAMAR — lote já no financeiro (a lançar no Omie ou lançado sem data)
+//   2. PROGRAMADO  — tem data marcada
+//   3. PAGO        — com a data que o próprio financeiro informou
+// E, no fim, o que ainda NÃO chegou ao financeiro: custo aprovado sem lote —
+// para ninguém cobrar pagamento de algo que a manutenção ainda não encaminhou.
+// Cada linha diz de qual demanda veio e quando o serviço ficou pronto, porque é
+// isso que o financeiro pergunta quando o prestador liga.
+function manFinDems(loteId){
+  const cs=manCustos.filter(c=>c.lote_id===loteId);
+  return [...new Set(cs.flatMap(c=>manDemsDoCusto(c.id)))];
+}
+function manFinLinhaDems(ids){
+  return ids.map(function(id){
+    const s=manSols.find(x=>x.id===id); if(!s) return '#'+id;
+    const fim=manDtFim(s);
+    return '#'+id+' '+manEsc(s.o_que)+(fim?(' <small>(pronta '+fim+')</small>'):' <small>(em aberto)</small>');
+  }).join('<br>');
+}
+function manFinRelImprimir(){
+  const ativos=manLotes.filter(l=>l.etapa!=='CANCELADO');
+  const soma=a=>a.reduce((t,l)=>t+Number(l.total||0),0);
+  const aProgramar=ativos.filter(l=>l.etapa==='FINANCEIRO'||l.etapa==='OMIE');
+  const programado=ativos.filter(l=>l.etapa==='PROGRAMADO').sort((a,b)=>String(a.pagto_programado_para||'').localeCompare(String(b.pagto_programado_para||'')));
+  const pagos=ativos.filter(l=>l.etapa==='PAGO'&&manDias(l.pago_em||l.etapa_desde)<=90)
+    .sort((a,b)=>String(b.pago_em||'').localeCompare(String(a.pago_em||'')));
+  const semLote=manCustos.filter(c=>c.situacao==='APROVADO'&&!c.lote_id);
+  const linhaLote=function(l, extra){
+    return '<tr><td><b>'+(l.pago_a==='FORNECEDOR'?'🏪 ':'👷 ')+manEsc(manLoteNomeReceb(l))+'</b>'
+      +(l.fatura_empresa?('<br><small>'+manEsc(l.fatura_empresa)+'</small>'):'')+'</td>'
+      +'<td>lote #'+l.id+(l.fatura_nf?('<br><small>NF '+manEsc(l.fatura_nf)+'</small>'):'')
+        +(l.omie_ref?('<br><small>Omie '+manEsc(l.omie_ref)+'</small>'):'')+'</td>'
+      +'<td>'+manFinLinhaDems(manFinDems(l.id))+'</td>'
+      +'<td>'+(extra||'—')+'</td>'
+      +'<td style="text-align:right"><b>'+manBrl(l.total)+'</b></td></tr>';
+  };
+  const bloco=function(titulo, aviso, lotes, extraFn){
+    return '<h3>'+titulo+'</h3><p><small>'+aviso+'</small></p>'
+      +'<table><thead><tr><th>Quem recebe</th><th>Lote · nota</th><th>De qual demanda</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>'
+      +(lotes.length?lotes.map(l=>linhaLote(l, extraFn(l))).join(''):'<tr><td colspan="5">— nada aqui —</td></tr>')
+      +'</tbody><tfoot><tr class="tot"><td colspan="4">Total</td><td style="text-align:right">'+manBrl(soma(lotes))+'</td></tr></tfoot></table>';
+  };
+  const semLoteHtml=semLote.length
+    ? '<h3>Ainda não encaminhado ao financeiro</h3><p><small>Custo já aprovado pela gestão que ainda não virou lote — <b>não programar</b>: está aqui só para você saber o que vem pela frente.</small></p>'
+      +'<table><thead><tr><th>Quem recebe</th><th>O que é</th><th>De qual demanda</th><th style="text-align:right">Valor</th></tr></thead><tbody>'
+      +semLote.map(c=>'<tr><td>'+manEsc(manReceb(c))+'</td><td>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+' — '+manEsc(c.descricao||'')+'</td>'
+        +'<td>'+manFinLinhaDems(manDemsDoCusto(c.id))+'</td><td style="text-align:right">'+manBrl(c.valor)+'</td></tr>').join('')
+      +'</tbody><tfoot><tr class="tot"><td colspan="3">Total</td><td style="text-align:right">'
+        +manBrl(semLote.reduce((t,c)=>t+Number(c.valor||0),0))+'</td></tr></tfoot></table>'
+    : '';
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Manutenção — folha do financeiro</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin:0}'
+    +'h3{font-size:13px;margin:16px 0 0}p{margin:3px 0 0}small{color:#666}'
+    +'table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid #bbb}'
+    +'td{padding:5px 6px;border-bottom:1px solid #e3e3e3;vertical-align:top}.tot{font-weight:bold;background:#fafafa}'
+    +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:10px}@media print{@page{margin:14mm}}</style></head><body>'
+    +'<div class="cab"><h1>Manutenção — o que pagar</h1>'
+    +'<div><b>Hospital dos Olhos Guanabara</b> · folha para o financeiro</div>'
+    +'<div><small>Emitida em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
+    +'<p><b>A programar:</b> '+manBrl(soma(aProgramar))+' &nbsp;·&nbsp; <b>Programado:</b> '+manBrl(soma(programado))
+      +' &nbsp;·&nbsp; <b>Pago (90 dias):</b> '+manBrl(soma(pagos))+'</p>'
+    + bloco('1. A programar', 'Serviço aprovado e encaminhado. O financeiro lança no Omie e marca a data de pagamento.', aProgramar,
+        function(l){ return l.fatura_vencimento?('vence '+manDt(l.fatura_vencimento)):'<small>sem vencimento na nota</small>'; })
+    + bloco('2. Pagamento programado', 'Já tem data marcada. Quando pagar, avise a manutenção para dar baixa.', programado,
+        function(l){ return '🗓️ '+manDt(l.pagto_programado_para); })
+    + bloco('3. Pago nos últimos 90 dias', 'Baixa dada com a data que o financeiro informou.', pagos,
+        function(l){ return '✅ '+manDt(l.pago_em); })
+    + semLoteHtml
+    +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
 }
 function manLoteSoma(){ const e=document.getElementById('ml-tot'); if(!e) return; const t=[...document.querySelectorAll('.ml-c:checked')].reduce((s,x)=>s+Number((manCustos.find(c=>c.id==x.value)||{}).valor||0),0); e.value=manBrl(t); }
 async function manLoteArquivo(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1),'FATURA'); if(!p.length) return; manTmpFat=p[0]; const e=document.getElementById('ml-arq'); if(e) e.textContent='📄 '+p[0].nome; }
@@ -25181,14 +25286,17 @@ function manPrestRelRender(){
    +'<div class="man-k fixo'+(D.aprov.length?' al':'')+'"><span class="r">Aprovado sem lote</span><b>'+D.aprov.length+'</b><span class="man-sub">'+manBrl(D.soma(D.aprov))+'</span></div>'
    +'<div class="man-k fixo"><span class="r">Em lote</span><b>'+D.emLote.length+'</b><span class="man-sub">'+manBrl(D.soma(D.emLote))+'</span></div>'
    +'<div class="man-k fixo"><span class="r">Pago</span><b>'+D.pagos.length+'</b><span class="man-sub">'+manBrl(D.soma(D.pagos))+'</span></div></div>'
-   +'<div class="card-titulo">Demandas</div><table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th>Situação</th><th>Papel</th><th style="text-align:right">Custos dele</th><th></th></tr></thead><tbody>';
-  if(!D.dems.length) h+='<tr><td colspan="6" class="sol-vazio">Nada no período.</td></tr>';
-  D.dems.forEach(s=>{ const meus=manCustosDe(s.id).filter(c=>c.prestador_id===p.id&&c.situacao!=='REPROVADO');
+   +'<div class="card-titulo">Demandas</div><table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th>Papel</th><th style="text-align:right">Custos dele <span class="hg-dica" title="valor dos custos DESTA demanda. Custo que cobre mais de uma demanda aparece marcado com 🔗 e só entra uma vez no total, na tabela de custos abaixo.">?</span></th><th></th></tr></thead><tbody>';
+  if(!D.dems.length) h+='<tr><td colspan="8" class="sol-vazio">Nada no período.</td></tr>';
+  D.dems.forEach(s=>{ const S=manCustosSep(s.id, c=>c.prestador_id===p.id);   // v4.150
+    const meus=S.todos;
     const papel=[manAcion.some(a=>a.solicitacao_id===s.id&&a.prestador_id===p.id)?'acionado':'',
       manVisItens.some(i=>i.solicitacao_id===s.id&&(manVisitas.find(v=>v.id===i.visita_id)||{}).prestador_id===p.id)?'visitou':'', meus.length?'custo':''].filter(Boolean).join(' · ');
-    h+='<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+' · aberta '+manDt(s.created_at)+'</span></td>'
+    h+='<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+'</span></td>'
+      +'<td>'+manDtPedido(s)+'</td><td>'+(manDtFim(s)||'<span class="man-sub">—</span>')+'</td>'
       +'<td>'+manTagSit(s)+(s.predial?' <span class="man-tag man-t-n">🏢</span>':'')+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?'<span class="man-sub">sem custo lançado</span>':'')+'</td><td>'+manEsc(papel||'—')+'</td>'
-      +'<td style="text-align:right">'+(meus.length?manBrl(D.soma(meus)):'—')+'</td><td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>'; });
+      +'<td style="text-align:right">'+(S.vSo?manBrl(S.vSo):'—')+(S.comp.length?'<span class="man-sub">'+manCompartTxt(s.id,S.comp)+'</span>':'')+'</td>'
+      +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>'; });
   h+='</tbody></table><div class="card-titulo" style="margin-top:14px">Custos</div><table class="hg-tab man-tab"><thead><tr><th>Quando</th><th>O que é</th><th>Demandas</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>';
   if(!D.cus.length) h+='<tr><td colspan="5" class="sol-vazio">Nenhum custo no período.</td></tr>';
   D.cus.forEach(c=>{ h+='<tr><td>'+manDt(c.created_at)+'</td><td><b>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+'</b><span class="man-sub">'+manEsc(c.descricao||'')+'</span></td>'
@@ -25198,9 +25306,11 @@ function manPrestRelRender(){
 function manPrestRelImprimir(){
   const p=manPrestDe(manRelPrest); if(!p) return; const D=manRelDados(p.id);
   const per=manRelDias?('últimos '+manRelDias+' dias'):'todo o período';
-  const linhas=D.dems.map(s=>{ const meus=manCustosDe(s.id).filter(c=>c.prestador_id===p.id&&c.situacao!=='REPROVADO');
-    return '<tr><td>'+s.id+'</td><td>'+manEsc(s.o_que)+'<br><small>'+manEsc(s.local)+'</small></td><td>'+(MAN_SIT[s.situacao]||[''])[0]+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?' (sem custo)':'')+'</td>'
-      +'<td style="text-align:right">'+(meus.length?manBrl(D.soma(meus)):'—')+'</td></tr>'; }).join('');
+  const linhas=D.dems.map(s=>{ const S=manCustosSep(s.id, c=>c.prestador_id===p.id);   // v4.150
+    return '<tr><td>'+s.id+'</td><td>'+manEsc(s.o_que)+'<br><small>'+manEsc(s.local)+'</small></td>'
+      +'<td>'+manDtPedido(s)+'</td><td>'+(manDtFim(s)||'—')+'</td>'
+      +'<td>'+(MAN_SIT[s.situacao]||[''])[0]+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?' (sem custo)':'')+'</td>'
+      +'<td style="text-align:right">'+(S.vSo?manBrl(S.vSo):'—')+(S.comp.length?'<br><small>'+manCompartTxt(s.id,S.comp).replace(/<[^>]*>/g,'')+'</small>':'')+'</td></tr>'; }).join('');
   const cus=D.cus.map(c=>'<tr><td>'+manDt(c.created_at)+'</td><td>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+' — '+manEsc(c.descricao||'')+'</td><td>'+manDemsDoCusto(c.id).map(x=>'#'+x).join(' + ')+'</td>'
     +'<td style="text-align:right">'+manBrl(c.valor)+'</td><td>'+(c.lote_id?((manLotes.find(l=>l.id===c.lote_id)||{}).etapa==='PAGO'?'pago':'em lote #'+c.lote_id):(c.situacao==='APROVADO'?'aprovado':c.situacao.toLowerCase()))+'</td></tr>').join('');
   hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório — '+manEsc(p.apelido)+'</title>'
@@ -25213,7 +25323,9 @@ function manPrestRelImprimir(){
     +'<div><small>Hospital dos Olhos Guanabara · '+per+' · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
     +'<p><b>'+D.dems.length+'</b> demanda(s) · <b>'+D.vis.length+'</b> visita(s) · aguardando aprovação <b>'+manBrl(D.soma(D.aguard))+'</b>'
     +' · aprovado sem lote <b>'+manBrl(D.soma(D.aprov))+'</b> · em lote <b>'+manBrl(D.soma(D.emLote))+'</b> · pago <b>'+manBrl(D.soma(D.pagos))+'</b></p>'
-    +'<h3 style="font-size:13px;margin:12px 0 0">Demandas</h3><table><thead><tr><th>#</th><th>O quê</th><th>Situação</th><th style="text-align:right">Custos dele</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="4">—</td></tr>')+'</tbody></table>'
+    +'<h3 style="font-size:13px;margin:12px 0 0">Demandas</h3>'
+    +'<p style="margin:4px 0 0"><small>🔗 = custo que cobre mais de uma demanda: entra uma vez só, na tabela de custos.</small></p>'
+    +'<table><thead><tr><th>#</th><th>O quê</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th style="text-align:right">Custos dele</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="6">—</td></tr>')+'</tbody></table>'
     +'<h3 style="font-size:13px;margin:14px 0 0">Custos</h3><table><thead><tr><th>Quando</th><th>O que é</th><th>Demandas</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>'+(cus||'<tr><td colspan="5">—</td></tr>')
     +'</tbody><tfoot><tr class="tot"><td colspan="3">Total no período</td><td style="text-align:right">'+manBrl(D.soma(D.cus.filter(c=>c.situacao!=='REPROVADO')))+'</td><td></td></tr></tfoot></table>'
     +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
