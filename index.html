@@ -451,7 +451,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.144 · a aprovação marca o que destoa dos períodos iguais</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.145 · empréstimo com lote, validade e histórico</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14514,9 +14514,11 @@ function pnEmprestimos(){
         <div class="pn-sc"><label>Parceiro</label><input id="pn-emp-parc" placeholder="clínica/hospital" style="width:150px"></div>
         <div class="pn-sc"><label>Qtd</label><input id="pn-emp-qtd" type="number" min="0.1" step="any" style="width:70px"></div>
         <div class="pn-sc"><label>Combinado p/</label><input id="pn-emp-data" type="date"></div>
+        <div class="pn-sc"><label>Lote</label><input id="pn-emp-lote" placeholder="do rótulo" style="width:120px"></div>
+        <div class="pn-sc"><label>Validade</label><input id="pn-emp-val" type="date" style="width:150px"></div>
         <button class="pn-btn pn-btn-azul" onclick="pnEmpRegistrar()">Registrar</button>
       </div>
-      <table class="pn-tb"><thead><tr><th>Direção</th><th>Material</th><th>Parceiro</th><th class="num">Qtd</th><th class="num">Pendente</th><th>Combinado p/</th><th>Status</th><th></th></tr></thead><tbody>
+      <table class="pn-tb"><thead><tr><th>Direção</th><th>Material</th><th>Lote · validade</th><th>Parceiro</th><th class="num">Qtd</th><th class="num">Pendente</th><th>Combinado p/</th><th>Status</th><th></th></tr></thead><tbody>
       ${pend.length?pend.map(e=>{
         const falta=e.qtd-(e.qtd_devolvida||0);
         const atrasado=e.data_combinada&&e.data_combinada<hoje;
@@ -14524,13 +14526,117 @@ function pnEmprestimos(){
         const stChip=atrasado?`<span class="pn-chip pc-verm">⏰ ATRASADO ${dias}d</span>`:((e.qtd_devolvida||0)>0?`<span class="pn-chip pc-ama">🤝 PARCIAL (${e.qtd_devolvida} devolv.)</span>`:'<span class="pn-chip pc-azul">🔄 PENDENTE</span>');
         return `<tr><td>${e.direcao==='EMPRESTAMOS'?'📤 Emprestamos':'📥 Pegamos'}</td>
           <td style="font-weight:600">${pnUvp[e.material_id]?pnUvp[e.material_id].nome:('#'+e.material_id)}</td>
+          <td>${pnEmpLoteTxt(e)}</td>
           <td>${e.parceiro||'—'}</td><td class="num">${e.qtd}</td><td class="num"><b>${falta}</b></td>
           <td>${pnData(e.data_combinada)}</td><td>${stChip}</td>
           <td><button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:6px 10px;font-size:11px" onclick="pnEmpDevolver(${e.id})">✔ Devolução</button></td></tr>`;
-      }).join(''):'<tr><td colspan="8" class="pn-empty">Nenhum empréstimo pendente. ✓</td></tr>'}
+      }).join(''):'<tr><td colspan="9" class="pn-empty">Nenhum empréstimo pendente. ✓</td></tr>'}
       </tbody></table>
       <div class="pn-nota">A devolução (parcial ou total) gera a movimentação de volta no Estoque Geral automaticamente.</div>
-    </div>`;
+    </div>
+    ${pnEmpHistorico()}`;
+  pnEmpAvisoColunas();
+}
+
+// ═══ v4.145 — EMPRÉSTIMO: LOTE, VALIDADE E HISTÓRICO ════════════════════
+// Ela, 28/09: "fiz uma inclusão de material emprestado e não tem histórico ou
+// espaço para colocar lote e validade".
+// Investigando, o buraco era maior: o app gravava `data_combinada`, coluna que
+// NÃO existe na tabela `emprestimos` — todo registro morria no 42703 e a tela
+// voltava vazia. Por isso "não tem histórico": nunca houve registro nenhum.
+// Agora o app pergunta ao banco quais colunas existem antes de gravar (assim
+// volta a registrar mesmo sem o SQL 104), grava data do empréstimo, lote,
+// validade e quem registrou quando as colunas existirem, e a tela passa a ter
+// o extrato completo — devolvidos inclusive.
+// Material que ENTRA emprestado vira lote no estoque, igual ao recebimento de
+// nota; material que SAI emprestado baixa do lote informado. Sem lote informado
+// nada disso acontece: o saldo é movimentado como antes.
+let pnEmpCols = null;
+async function pnEmpColsOk(){
+  if(pnEmpCols) return pnEmpCols;
+  const nomes = ['data_combinada','lote','validade','registrado_por','data_emprestimo','data_devolucao'];
+  pnEmpCols = {};
+  try{
+    await sbFetch('emprestimos?select='+nomes.join(',')+'&limit=1');
+    nomes.forEach(c=>{ pnEmpCols[c]=true; });
+  }catch(e){
+    for(const c of nomes){
+      try{ await sbFetch('emprestimos?select='+c+'&limit=1'); pnEmpCols[c]=true; }
+      catch(e2){ pnEmpCols[c]=false; }
+    }
+  }
+  return pnEmpCols;
+}
+function pnEmpAvisoColunas(){
+  pnEmpColsOk().then(function(c){
+    const falta = ['lote','validade','data_combinada','registrado_por'].filter(x=>!c[x]);
+    if(!falta.length) return;
+    const el=document.getElementById('pn-sec-emprestimos'); if(!el) return;
+    const nota=document.createElement('div');
+    nota.className='pn-nota';
+    nota.style.cssText='background:#FEF9E7;color:#7D6608;border-radius:8px;padding:10px 14px;margin-top:10px';
+    nota.innerHTML='⚠️ O banco ainda não tem '+falta.map(x=>'<b>'+x+'</b>').join(', ')
+      +' na tabela de empréstimos — o registro grava sem esses dados. Rode <b>sql/104_emprestimo_lote_validade.sql</b> para guardar lote, validade, data combinada e quem registrou.';
+    el.appendChild(nota);
+  });
+}
+function pnEmpLoteTxt(e){
+  const l=(e.lote||'').trim();
+  const v=e.validade?pnData(e.validade):'';
+  if(!l && !v) return '<span style="color:var(--cinza-4)">—</span>';
+  return (l||'sem lote') + (v?('<span style="color:var(--cinza-4)"> · val. '+v+'</span>'):'');
+}
+function pnEmpHistorico(){
+  const todos=(pnEmp||[]).slice(0,60);
+  if(!todos.length) return '';
+  return `<div class="pn-card">
+    <div class="pn-ct">📜 Histórico de empréstimos <span style="font-size:10px;font-weight:600;text-transform:none;color:var(--cinza-4)">tudo o que entrou e saiu emprestado, devolvidos inclusive</span></div>
+    <table class="pn-tb"><thead><tr><th>Registrado</th><th>Direção</th><th>Material</th><th>Lote · validade</th><th>Parceiro</th><th class="num">Qtd</th><th class="num">Devolvido</th><th>Combinado p/</th><th>Status</th><th>Quem</th></tr></thead><tbody>
+    ${todos.map(e=>{
+      const st=e.status==='DEVOLVIDO' ? '<span class="pn-chip pc-verd">✔ devolvido</span>'
+             : e.status==='CANCELADO' ? '<span class="pn-chip">cancelado</span>'
+             : '<span class="pn-chip pc-azul">🔄 pendente</span>';
+      return `<tr><td style="white-space:nowrap">${pnData(e.data_emprestimo||e.created_at)}</td>
+        <td>${e.direcao==='EMPRESTAMOS'?'📤 Emprestamos':'📥 Pegamos'}</td>
+        <td style="font-weight:600">${pnUvp[e.material_id]?pnUvp[e.material_id].nome:('#'+e.material_id)}</td>
+        <td>${pnEmpLoteTxt(e)}</td>
+        <td>${e.parceiro||'—'}</td>
+        <td class="num">${e.qtd}</td>
+        <td class="num">${e.qtd_devolvida||0}</td>
+        <td>${pnData(e.data_combinada)}</td>
+        <td>${st}</td>
+        <td style="color:var(--cinza-4)">${e.registrado_por||'—'}</td></tr>`;
+    }).join('')}
+    </tbody></table>
+    <div class="pn-nota">O que entrou emprestado com lote vira lote no estoque, e some de lá quando é devolvido — é assim que a validade do material de outra casa continua sendo vigiada enquanto ele está aqui.</div>
+  </div>`;
+}
+// entrada/baixa do lote que acompanha o empréstimo
+async function pnEmpLoteEntrada(mid, lote, validade, qtd){
+  if(!lote && !validade) return;
+  try{
+    await loteLocalOk();
+    const localId = await getEstoqueGeralId();
+    await sbFetch('lotes','POST', loteCom({ material_id:mid, lote:(lote||'—'), validade:(validade||null),
+      qtd:qtd, status:'ativo' }, localId));
+  }catch(e){ toast('Estoque movimentado, mas não consegui gravar o lote: '+(e.message||e),'erro'); }
+}
+async function pnEmpLoteBaixa(mid, lote, validade, qtd){
+  if(!lote && !validade) return;
+  try{
+    let f='lotes?select=id,qtd&material_id=eq.'+mid+'&status=eq.ativo';
+    if(lote) f+='&lote=eq.'+encodeURIComponent(lote);
+    if(validade) f+='&validade=eq.'+validade;
+    const achados=(await sbFetch(f+'&order=id.asc'))||[];
+    let resta=qtd;
+    for(const l of achados){
+      if(resta<=0) break;
+      const tira=Math.min(Number(l.qtd)||0, resta);
+      const novo=(Number(l.qtd)||0)-tira;
+      await sbFetch('lotes?id=eq.'+l.id,'PATCH',{ qtd:novo, status: novo>0?'ativo':'consumido' });
+      resta-=tira;
+    }
+  }catch(e){ toast('Estoque movimentado, mas não consegui baixar o lote: '+(e.message||e),'erro'); }
 }
 async function pnEmpRegistrar(){
   const dir=document.getElementById('pn-emp-dir').value;
@@ -14538,22 +14644,42 @@ async function pnEmpRegistrar(){
   const parc=document.getElementById('pn-emp-parc').value.trim();
   const qtd=parseFloat(document.getElementById('pn-emp-qtd').value);
   const dataC=document.getElementById('pn-emp-data').value||null;
+  const lote=((document.getElementById('pn-emp-lote')||{}).value||'').trim();      // v4.145
+  const val =((document.getElementById('pn-emp-val') ||{}).value||'')||null;       // v4.145
   const mid=pnNomeId[pnN(nome)];
   if(!mid){ toast('Material não encontrado no catálogo — escolha da lista.','erro'); return; }
   if(!qtd||qtd<=0){ toast('Informe a quantidade.','erro'); return; }
   if(!parc){ toast('Informe o parceiro.','erro'); return; }
-  if(!confirm(`${dir==='EMPRESTAMOS'?'📤 Emprestar':'📥 Pegar emprestado'} ${qtd}× ${nome} — ${parc}?\n\nIsso ${dir==='EMPRESTAMOS'?'TIRA':'COLOCA'} a quantidade do Estoque Geral agora.`)) return;
+  // v4.145 — material que controla lote não deveria entrar sem rastro; avisa, não trava
+  if(!lote && !val && !confirm('Sem lote e sem validade.\n\nMaterial emprestado costuma vir com rótulo — sem esses dados o alerta de vencimento não enxerga este item enquanto ele estiver aqui.\n\nRegistrar assim mesmo?')) return;
+  if(!confirm(`${dir==='EMPRESTAMOS'?'📤 Emprestar':'📥 Pegar emprestado'} ${qtd}× ${nome} — ${parc}?`
+    +`${lote||val?`\nLote ${lote||'—'}${val?' · validade '+val.split('-').reverse().join('/'):''}`:''}`
+    +`\n\nIsso ${dir==='EMPRESTAMOS'?'TIRA':'COLOCA'} a quantidade do Estoque Geral agora.`)) return;
   try{
-    const e=await sbFetch('emprestimos','POST',{ direcao:dir, material_id:mid, parceiro:parc, qtd:qtd, qtd_devolvida:0, data_combinada:dataC, status:'PENDENTE' });
+    const cols = await pnEmpColsOk();
+    const corpo = { direcao:dir, material_id:mid, parceiro:parc, qtd:qtd, qtd_devolvida:0, status:'PENDENTE' };
+    const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : 'Evelise (Gestora)';
+    if(cols.data_combinada) corpo.data_combinada = dataC;
+    if(cols.data_emprestimo) corpo.data_emprestimo = new Date().toISOString().slice(0,10);
+    if(cols.lote && lote)    corpo.lote = lote;
+    if(cols.validade && val) corpo.validade = val;
+    if(cols.registrado_por)  corpo.registrado_por = quem;
+    const e=await sbFetch('emprestimos','POST',corpo);
     if(!e||!e.length) throw new Error('sem permissão (RLS)');
     const localId=await getEstoqueGeralId();
     await sbFetch('movimentacoes','POST',{ tipo:'EMPRESTIMO', material_id:mid, local_id:localId,
-      qtd: dir==='EMPRESTAMOS'?-qtd:qtd, aprovado:true, registrado_por:'Evelise (Gestora)',
-      aprovado_por:'Evelise (Gestora)', aprovado_em:new Date().toISOString(),
-      observacao:`Empréstimo #${e[0].id} — ${dir==='EMPRESTAMOS'?'para':'de'} ${parc}` });
+      qtd: dir==='EMPRESTAMOS'?-qtd:qtd, aprovado:true, registrado_por:quem,
+      aprovado_por:quem, aprovado_em:new Date().toISOString(),
+      observacao:`Empréstimo #${e[0].id} — ${dir==='EMPRESTAMOS'?'para':'de'} ${parc}`
+        + (lote?` · lote ${lote}`:'') + (val?` · val. ${val}`:'')
+        + (dataC?` · combinado p/ ${dataC}`:'') });
+    // v4.145 — o lote acompanha o material: entra com ele, sai com ele
+    if(dir==='PEGAMOS') await pnEmpLoteEntrada(mid, lote, val, qtd);
+    else                await pnEmpLoteBaixa(mid, lote, val, qtd);
     toast('Empréstimo registrado — estoque movimentado ✓','sucesso');
+    ['pn-emp-mat','pn-emp-parc','pn-emp-qtd','pn-emp-lote'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     pnEmp.unshift(e[0]); pnEmprestimos(); pnAlertas();
-  }catch(er){ toast('Erro: '+er.message,'erro'); }
+  }catch(er){ toast('Erro: '+(er.message||er),'erro'); }
 }
 async function pnEmpDevolver(id){
   const e=pnEmp.find(x=>x.id===id); if(!e) return;
@@ -14570,8 +14696,15 @@ async function pnEmpDevolver(id){
       observacao:`Devolução empréstimo #${e.id} — ${e.parceiro}` });
     const novaDev=(e.qtd_devolvida||0)+q;
     const novoSt=novaDev>=e.qtd?'DEVOLVIDO':'PENDENTE';
-    await sbFetch(`emprestimos?id=eq.${id}`,'PATCH',{ qtd_devolvida:novaDev, status:novoSt });
-    e.qtd_devolvida=novaDev; e.status=novoSt;
+    const patch={ qtd_devolvida:novaDev, status:novoSt };
+    const cols=await pnEmpColsOk();                                   // v4.145
+    if(novoSt==='DEVOLVIDO' && cols.data_devolucao) patch.data_devolucao=new Date().toISOString().slice(0,10);
+    await sbFetch(`emprestimos?id=eq.${id}`,'PATCH',patch);
+    // v4.145 — devolver o que pegamos tira o lote daqui; receber de volta o que
+    // emprestamos devolve o lote para a nossa prateleira
+    if(e.direcao==='PEGAMOS') await pnEmpLoteBaixa(e.material_id, e.lote, e.validade, q);
+    else                      await pnEmpLoteEntrada(e.material_id, e.lote, e.validade, q);
+    e.qtd_devolvida=novaDev; e.status=novoSt; if(patch.data_devolucao) e.data_devolucao=patch.data_devolucao;
     toast('Devolução registrada — estoque movimentado ✓','sucesso');
     pnEmprestimos(); pnAlertas();
   }catch(er){ toast('Erro: '+er.message,'erro'); }
