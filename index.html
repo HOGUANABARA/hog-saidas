@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.146 · reprocessado na aprovação e ficha que imprime uma vez</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.147 · empréstimo grava na língua do banco (ENTRADA / SAIDA)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14597,7 +14597,7 @@ function pnEmprestimos(){
   const pend=pnEmp.filter(e=>e.status!=='DEVOLVIDO'&&e.status!=='CANCELADO');
   const hoje=new Date().toISOString().slice(0,10);
   const atras=pend.filter(e=>e.data_combinada && e.data_combinada<hoje);
-  const sai=pend.filter(e=>e.direcao==='EMPRESTAMOS'), peg=pend.filter(e=>e.direcao==='PEGAMOS');
+  const sai=pend.filter(pnEmpSai), peg=pend.filter(e=>!pnEmpSai(e));
   el.innerHTML = `
     <div class="pn-kpis">
       <div class="pn-kpi k-alerta"><div class="pn-kl">Pendentes</div><div class="pn-kv">${pend.length}</div><div class="pn-ks">${atras.length} atrasado(s)</div></div>
@@ -14622,7 +14622,7 @@ function pnEmprestimos(){
         const atrasado=e.data_combinada&&e.data_combinada<hoje;
         const dias=atrasado?Math.round((new Date(hoje)-new Date(e.data_combinada))/86400000):0;
         const stChip=atrasado?`<span class="pn-chip pc-verm">⏰ ATRASADO ${dias}d</span>`:((e.qtd_devolvida||0)>0?`<span class="pn-chip pc-ama">🤝 PARCIAL (${e.qtd_devolvida} devolv.)</span>`:'<span class="pn-chip pc-azul">🔄 PENDENTE</span>');
-        return `<tr><td>${e.direcao==='EMPRESTAMOS'?'📤 Emprestamos':'📥 Pegamos'}</td>
+        return `<tr><td>${pnEmpSai(e)?'📤 Emprestamos':'📥 Pegamos'}</td>
           <td style="font-weight:600">${pnUvp[e.material_id]?pnUvp[e.material_id].nome:('#'+e.material_id)}</td>
           <td>${pnEmpLoteTxt(e)}</td>
           <td>${e.parceiro||'—'}</td><td class="num">${e.qtd}</td><td class="num"><b>${falta}</b></td>
@@ -14649,6 +14649,14 @@ function pnEmprestimos(){
 // Material que ENTRA emprestado vira lote no estoque, igual ao recebimento de
 // nota; material que SAI emprestado baixa do lote informado. Sem lote informado
 // nada disso acontece: o saldo é movimentado como antes.
+// v4.147 — ela, 28/09, ao lançar o primeiro empréstimo:
+//   'violates check constraint "emprestimos_direcao_check"'.
+// A tabela só aceita direcao 'ENTRADA' ou 'SAIDA' (check do banco); o app
+// falava 'PEGAMOS'/'EMPRESTAMOS' — o segundo erro escondido pelo primeiro
+// (o `data_combinada` inexistente, v4.145). Agora o app grava na língua do
+// banco e lê os dois vocabulários, para o dia em que aparecer registro antigo.
+function pnEmpSai(e){ const d=String((e&&e.direcao)||''); return d==='SAIDA' || d==='EMPRESTAMOS'; }
+function pnEmpDirBanco(dir){ return dir==='EMPRESTAMOS' ? 'SAIDA' : 'ENTRADA'; }
 let pnEmpCols = null;
 async function pnEmpColsOk(){
   if(pnEmpCols) return pnEmpCols;
@@ -14695,7 +14703,7 @@ function pnEmpHistorico(){
              : e.status==='CANCELADO' ? '<span class="pn-chip">cancelado</span>'
              : '<span class="pn-chip pc-azul">🔄 pendente</span>';
       return `<tr><td style="white-space:nowrap">${pnData(e.data_emprestimo||e.created_at)}</td>
-        <td>${e.direcao==='EMPRESTAMOS'?'📤 Emprestamos':'📥 Pegamos'}</td>
+        <td>${pnEmpSai(e)?'📤 Emprestamos':'📥 Pegamos'}</td>
         <td style="font-weight:600">${pnUvp[e.material_id]?pnUvp[e.material_id].nome:('#'+e.material_id)}</td>
         <td>${pnEmpLoteTxt(e)}</td>
         <td>${e.parceiro||'—'}</td>
@@ -14755,7 +14763,7 @@ async function pnEmpRegistrar(){
     +`\n\nIsso ${dir==='EMPRESTAMOS'?'TIRA':'COLOCA'} a quantidade do Estoque Geral agora.`)) return;
   try{
     const cols = await pnEmpColsOk();
-    const corpo = { direcao:dir, material_id:mid, parceiro:parc, qtd:qtd, qtd_devolvida:0, status:'PENDENTE' };
+    const corpo = { direcao:pnEmpDirBanco(dir), material_id:mid, parceiro:parc, qtd:qtd, qtd_devolvida:0, status:'PENDENTE' };
     const quem = (typeof SESSAO!=='undefined' && SESSAO && SESSAO.nome) ? SESSAO.nome : 'Evelise (Gestora)';
     if(cols.data_combinada) corpo.data_combinada = dataC;
     if(cols.data_emprestimo) corpo.data_emprestimo = new Date().toISOString().slice(0,10);
@@ -14789,7 +14797,7 @@ async function pnEmpDevolver(id){
   try{
     const localId=await getEstoqueGeralId();
     await sbFetch('movimentacoes','POST',{ tipo:'EMPRESTIMO_DEVOLUCAO', material_id:e.material_id, local_id:localId,
-      qtd: e.direcao==='EMPRESTAMOS'?q:-q, aprovado:true, registrado_por:'Evelise (Gestora)',
+      qtd: pnEmpSai(e)?q:-q, aprovado:true, registrado_por:(SESSAO?SESSAO.nome:'Evelise (Gestora)'),
       aprovado_por:'Evelise (Gestora)', aprovado_em:new Date().toISOString(),
       observacao:`Devolução empréstimo #${e.id} — ${e.parceiro}` });
     const novaDev=(e.qtd_devolvida||0)+q;
@@ -14800,7 +14808,7 @@ async function pnEmpDevolver(id){
     await sbFetch(`emprestimos?id=eq.${id}`,'PATCH',patch);
     // v4.145 — devolver o que pegamos tira o lote daqui; receber de volta o que
     // emprestamos devolve o lote para a nossa prateleira
-    if(e.direcao==='PEGAMOS') await pnEmpLoteBaixa(e.material_id, e.lote, e.validade, q);
+    if(!pnEmpSai(e)) await pnEmpLoteBaixa(e.material_id, e.lote, e.validade, q);
     else                      await pnEmpLoteEntrada(e.material_id, e.lote, e.validade, q);
     e.qtd_devolvida=novaDev; e.status=novoSt; if(patch.data_devolucao) e.data_devolucao=patch.data_devolucao;
     toast('Devolução registrada — estoque movimentado ✓','sucesso');
