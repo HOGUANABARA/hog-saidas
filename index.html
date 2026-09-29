@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.150 · manutenção: custo unificado não conta duas vezes, e as datas que importam</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.151 · manutenção em 4 telas, e mão de obra só vai ao financeiro depois de pronta</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -550,9 +550,7 @@ details[open] summary { margin-bottom: 6px; }
     <div class="mb-dd">
       <div class="mbi" data-ref="aba-btn-man_pedir" onclick="mbFechar();trocarAba('man_pedir')">📨 Pedir manutenção <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-man_acomp" onclick="mbFechar();manFiltro='ABERTAS';trocarAba('man_acomp')">📋 Demandas <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-man_vis" onclick="mbFechar();trocarAba('man_vis')">🔧 Visitas</div>
-      <div class="mbi" data-ref="aba-btn-man_cus" onclick="mbFechar();trocarAba('man_cus')">💰 Custos e orçamentos <span class="mb-badge"></span></div>
-      <div class="mbi" data-ref="aba-btn-man_fin" onclick="mbFechar();trocarAba('man_fin')">💳 Lotes de pagamento <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-man_pag" onclick="mbFechar();trocarAba('man_pag')">💰 Pagamentos <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-man_prest" onclick="mbFechar();trocarAba('man_prest')">👷 Prestadores de serviço</div>
       <div class="mbi" data-ref="aba-btn-man_contr" onclick="mbFechar();manContrEd=null;trocarAba('man_contr')">📑 Contratos</div>
     </div>
@@ -633,9 +631,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="hs-lista" id="hs-l-man">
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_pedir" onclick="trocarAba('man_pedir')">📨 Pedir manutenção <span id="badge-man_pedir" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_acomp" onclick="manFiltro='ABERTAS';trocarAba('man_acomp')">📋 Demandas <span id="badge-man_acomp" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_vis" onclick="trocarAba('man_vis')">🔧 Visitas</div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_cus" onclick="trocarAba('man_cus')">💰 Custos e orçamentos <span id="badge-man_cus" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
-        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_fin" onclick="trocarAba('man_fin')">💳 Lotes de pagamento <span id="badge-man_fin" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_pag" onclick="trocarAba('man_pag')">💰 Pagamentos <span id="badge-man_pag" style="background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_prest" onclick="trocarAba('man_prest')">👷 Prestadores de serviço</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-man_contr" onclick="manContrEd=null;trocarAba('man_contr')">📑 Contratos</div>
       </div>
@@ -2060,7 +2056,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_contr']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -2089,7 +2085,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr']
+           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_contr']
   }
 };
 
@@ -2188,7 +2184,7 @@ const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remess
                     'inventario','historico','ocorrencias','usuarios',
                     'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc',
                     'sol_pedir','sol_sep','sol_ent','sol_compra','departamentos',
-                    'man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'];
+                    'man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_contr'];
 
 function aplicarPermissoes(){
   for (const aba of ABAS_TODAS){
@@ -5135,7 +5131,9 @@ function trocarAba(aba) {
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
   if (aba==='painel'){ pnCarregar(); }
   if (aba==='saida_hc') { shcCarregar(); }   // v4.142
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_prest','man_contr'].forEach(function(a){
+  if (aba==='man_pag') { manPagAbrir(); }   // v4.151 — custos e lotes na mesma tela
+  if (aba==='man_acomp') { setTimeout(manVisNaDemanda, 80); }
+  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_contr'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -20204,6 +20202,20 @@ async function alIgnorar(id){
     <div id="man-fin-box"></div>
   </div>
 </div>
+<!-- ═══ v4.151 — PAGAMENTOS: custo e lote na mesma tela ═══════════════════
+     Ela, 28/09: "o fluxo não está legal, está sujo" — sete telas para uma coisa
+     que é duas: o que se combina (custo) e o que se paga (lote). As telas antigas
+     continuam existindo; aqui elas são trazidas para dentro, uma pílula cada. -->
+<div id="aba-man_pag" class="container" style="display:none">
+  <div class="man-linha" style="margin:0 0 10px">
+    <button class="man-b p" id="man-pag-b-custos" onclick="manPagVer('custos')">💰 Combinado com o prestador</button>
+    <button class="man-b n p" id="man-pag-b-lotes" onclick="manPagVer('lotes')">💳 O que vai ao financeiro</button>
+    <span class="man-sub" style="margin-left:auto">peça pode ser paga antes; mão de obra vai depois que o serviço termina</span>
+  </div>
+  <div id="man-pag-custos"></div>
+  <div id="man-pag-lotes" style="display:none"></div>
+</div>
+
 <div id="aba-man_prest" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">👷 Prestadores de serviço
@@ -25014,6 +25026,42 @@ async function manFinCarregar(){
   try{ await manDadosCarregar(); }catch(e){ box.innerHTML='<div class="sol-aviso">Erro: '+manEsc(e.message)+'</div>'; return; }
   manTmpFat=null; manDatalists(); manFinRender(); manAtualizarBadges(false);
 }
+// ═══ v4.151 — MENOS TELAS, MESMO CONTEÚDO ═══════════════════════════════
+// Ela, 28/09: "vamos ajustar a aba manutenção, o fluxo não está legal, está sujo"
+// — e aprovou juntar as telas. O menu tinha sete entradas para um fluxo que é
+// simples: a demanda anda (visitas), o dinheiro anda (custo → lote).
+// Agora: Pedir · Demandas (com as Visitas dentro) · Pagamentos (custo + lote) ·
+// Prestadores · Contratos. Nada foi reescrito: os cards antigos são MOVIDOS para
+// dentro das telas novas, então cada botão continua sendo o mesmo botão.
+let manPagAba='custos';
+function manPagMover(){
+  const dC=document.getElementById('man-pag-custos'), dL=document.getElementById('man-pag-lotes');
+  const cC=document.querySelector('#aba-man_cus > .card'), cL=document.querySelector('#aba-man_fin > .card');
+  if(dC && cC && cC.parentElement!==dC) dC.appendChild(cC);
+  if(dL && cL && cL.parentElement!==dL) dL.appendChild(cL);
+}
+function manPagVer(qual){
+  manPagAba=qual;
+  const dC=document.getElementById('man-pag-custos'), dL=document.getElementById('man-pag-lotes');
+  const bC=document.getElementById('man-pag-b-custos'), bL=document.getElementById('man-pag-b-lotes');
+  if(dC) dC.style.display = qual==='custos' ? '' : 'none';
+  if(dL) dL.style.display = qual==='lotes'  ? '' : 'none';
+  if(bC) bC.className = 'man-b '+(qual==='custos'?'':'n ')+'p';
+  if(bL) bL.className = 'man-b '+(qual==='lotes'?'':'n ')+'p';
+  if(qual==='lotes' && typeof manFinCarregar==='function') manFinCarregar();
+  if(qual==='custos' && typeof manCusCarregar==='function') manCusCarregar();
+}
+async function manPagAbrir(){
+  manPagMover();
+  manPagVer(manPagAba);
+}
+// as visitas passam a morar embaixo das demandas: é ali que se olha o andamento
+function manVisNaDemanda(){
+  const alvo=document.querySelector('#aba-man_acomp');
+  const card=document.querySelector('#aba-man_vis > .card');
+  if(!alvo || !card) return;
+  if(card.parentElement!==alvo){ alvo.appendChild(card); if(typeof manVisCarregar==='function') manVisCarregar(); }
+}
 function manLoteNomeReceb(l){ return l.pago_a==='FORNECEDOR'?(l.loja||'—'):manPrestNome(l.prestador_id); }
 function manFinRender(){
   const box=document.getElementById('man-fin-box'); if(!box) return;
@@ -25131,9 +25179,36 @@ function manFinRelImprimir(){
 }
 function manLoteSoma(){ const e=document.getElementById('ml-tot'); if(!e) return; const t=[...document.querySelectorAll('.ml-c:checked')].reduce((s,x)=>s+Number((manCustos.find(c=>c.id==x.value)||{}).valor||0),0); e.value=manBrl(t); }
 async function manLoteArquivo(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1),'FATURA'); if(!p.length) return; manTmpFat=p[0]; const e=document.getElementById('ml-arq'); if(e) e.textContent='📄 '+p[0].nome; }
+// ═══ v4.151 — MÃO DE OBRA SÓ VAI AO FINANCEIRO DEPOIS DE PRONTA ══════════
+// Regra dela, 28/09: "a aprovação libera para o financeiro APÓS TERMINAR" — e,
+// no mesmo fôlego, "às vezes as peças são pagas antes da MO". Então a trava é
+// por tipo: peça e material passam a qualquer momento; mão de obra de demanda
+// que ainda não está pronta só passa com um motivo escrito, que fica no
+// histórico da demanda.
+function manDemaAberta(s){ return s && s.situacao!=='RESOLVIDA' && s.situacao!=='CANCELADA'; }
+function manMoSemFim(custos){
+  const fora=[];
+  for(const c of custos){
+    if(c.tipo!=='MAO_DE_OBRA') continue;
+    for(const id of manDemsDoCusto(c.id)){
+      const s=manSols.find(x=>x.id===id);
+      if(manDemaAberta(s)) fora.push({c, s});
+    }
+  }
+  return fora;
+}
 async function manLoteGerar(){
   const ids=[...document.querySelectorAll('.ml-c:checked')].map(x=>Number(x.value)); if(!ids.length) return toast('Marque os custos','erro');
   const cs=ids.map(id=>manCustos.find(c=>c.id===id)), c0=cs[0], tot=cs.reduce((s,c)=>s+Number(c.valor||0),0);
+  // v4.151 — a trava do serviço não terminado
+  let justif=null;
+  const fora=manMoSemFim(cs);
+  if(fora.length){
+    justif=await manMotivo('Mão de obra de serviço que ainda não terminou',
+      fora.map(x=>'• '+(x.c.descricao||MAN_TIPOS[x.c.tipo])+' — demanda #'+x.s.id+' ('+(MAN_SIT[x.s.situacao]||[''])[0].toLowerCase()+')').join('\n')
+      +'\n\nO combinado é mandar a mão de obra ao financeiro depois que o serviço termina (peça e material podem ir antes).\nSe for mandar assim mesmo, escreva o motivo — ele fica no histórico da demanda.');
+    if(!justif) return;
+  }
   const venc=manGv('ml-venc'), nf=manGv('ml-nf').trim(), emp=manGv('ml-emp').trim();
   if(!await hogConfirma({titulo:'Gerar lote para '+manReceb(c0)+' — '+manBrl(tot)+'?', texto:cs.map(c=>'• '+(c.descricao||MAN_TIPOS[c.tipo])+' '+manBrl(c.valor)).join('\n')+(venc?'\nVence '+manDt(venc):'')+(nf?'\nNF '+nf:''), ok:'🧾 Gerar e mandar ao financeiro'})) return;
   await manExec(async()=>{
@@ -25145,6 +25220,10 @@ async function manLoteGerar(){
     if(manTmpFat){ const cam=await manStoragePut(manTmpFat,'lotes/'+l.id+'/fatura-'+Date.now()+'.'+(manTmpFat.ext||'pdf')); await sbFetch('manut_lotes?id=eq.'+l.id,'PATCH',{arquivo:cam}); manTmpFat=null; }
     const dems=[...new Set(ids.flatMap(id=>manDemsDoCusto(id)))];
     for(const d of dems) await sbFetch('manut_historico','POST',{solicitacao_id:d,de_etapa:null,para_etapa:null,quem:manQuem(),motivo:'lote de pagamento #'+l.id+' gerado ('+manReceb(c0)+' · '+manBrl(tot)+')'});
+    if(justif){   // v4.151 — por que a mão de obra foi antes do fim
+      for(const x of manMoSemFim(cs)) await sbFetch('manut_historico','POST',{solicitacao_id:x.s.id,de_etapa:null,para_etapa:null,quem:manQuem(),
+        motivo:'mão de obra enviada ao financeiro antes de o serviço terminar — motivo: '+justif});
+    }
   },'Lote gerado — acendeu o sino do financeiro'); }
 async function manLoteNota(l, motivo){ const dems=[...new Set(manCustos.filter(c=>c.lote_id===l.id).flatMap(c=>manDemsDoCusto(c.id)))];
   for(const d of dems) await sbFetch('manut_historico','POST',{solicitacao_id:d,de_etapa:null,para_etapa:null,quem:manQuem(),motivo:'lote #'+l.id+': '+motivo}); }
@@ -25176,6 +25255,8 @@ async function manAtualizarBadges(recarregar){
     const nL=manLotes.filter(l=>l.etapa==='FINANCEIRO'||l.etapa==='OMIE'||manLoteAtraso(l)>0).length;
     const nK=manContr.filter(c=>c.ativo!==false&&manContrDias(c)!=null&&manContrDias(c)<=30).length;
     solBadge('man_acomp', acomp?nD:0); solBadge('man_cus', podeAba('man_cus')?nC:0); solBadge('man_fin', fin?nL:0); solBadge('man_pedir', 0);
+    // v4.151 — o menu agora tem uma entrada só para dinheiro: ela acende pelos dois
+    solBadge('man_pag', (podeAba('man_pag')?((podeAba('man_cus')?nC:0)+(fin?nL:0)):0));
     manAlertaN=(acomp?nD+nC:0)+(fin?nL:0)+(podeAba('man_contr')?nK:0);
     if(typeof alAtualizarBadge==='function') alAtualizarBadge();
     if(typeof mbSync==='function') mbSync();
