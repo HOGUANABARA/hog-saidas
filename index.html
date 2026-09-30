@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.151 · manutenção em 4 telas, e mão de obra só vai ao financeiro depois de pronta</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.152 · contagem sem as planilhas do Estoque Geral e do Administrativo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11553,12 +11553,14 @@ let invContagensPorLocal = []; // todas as contagens lidas da planilha: [{materi
 
 async function invCarregar(){
   if(!invLocais.length){
-    invLocais = (await sbFetch('locais?select=id,nome&order=nome.asc')) || [];
+    // v4.152 — o tipo vem junto: sem ele o ivLocaisFisicos tratava ESTOQUE GERAL e
+    // ADMINISTRATIVO (virtuais) como prateleira e ofereciam planilha de contagem
+    invLocais = (await sbFetch('locais?select=id,nome,tipo&order=nome.asc')) || [];
     const selAjuste = document.getElementById('inv-ajuste-local');
     const selExport = document.getElementById('inv-export-local');
     for(const l of invLocais){
       selAjuste.innerHTML += `<option value="${l.id}">${l.nome}</option>`;
-      selExport.innerHTML += `<option value="${l.id}">${l.nome}</option>`;
+      if((l.tipo||'fisico')!=='virtual') selExport.innerHTML += `<option value="${l.id}">${l.nome}</option>`;
     }
   }
   if(!coFornecedores.length){
@@ -11687,7 +11689,8 @@ function invNomeAbaSeguro(nome, usados){
 async function invExportar(){
   try{
     const localId = document.getElementById('inv-export-local').value;
-    const locaisAlvo = localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais;
+    const locaisAlvo = (localId ? invLocais.filter(l=>String(l.id)===localId) : invLocais)
+      .filter(l=>(l.tipo||'fisico')!=='virtual');   // v4.152 — local virtual não se conta
 
     // v4.52d — a planilha do CC é SÓ do centro cirúrgico: higiene, copa e
     // escritório têm inventário próprio e ficam fora (regra da gestão, 02/09).
