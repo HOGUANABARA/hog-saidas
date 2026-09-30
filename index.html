@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.152 · contagem sem as planilhas do Estoque Geral e do Administrativo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.153 · planilha de contagem: cada lote uma vez só e CONTAGEM somando os lotes</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11703,7 +11703,16 @@ async function invExportar(){
     let lotesPorMat = {};
     try{
       const lts = (await sbFetch('lotes?select=material_id,lote,validade,qtd&status=eq.ativo&order=validade.asc&limit=1000')) || [];
-      for(const l of lts){ (lotesPorMat[l.material_id]=lotesPorMat[l.material_id]||[]).push(l); }
+      // v4.153 — o mesmo lote vive em uma linha por local (SQL 71); na planilha ele
+      // aparece UMA vez por material, senão a equipe divide a contagem entre colunas iguais.
+      // Junta pelo NÚMERO do lote (fica a validade mais próxima — a lista vem por validade):
+      // o soro ampola tinha o mesmo lote gravado com validades de um dia de diferença.
+      const vistos = new Set();
+      for(const l of lts){
+        const k = l.material_id+'|'+String(l.lote||'').trim().toUpperCase();
+        if(vistos.has(k)) continue; vistos.add(k);
+        (lotesPorMat[l.material_id]=lotesPorMat[l.material_id]||[]).push(l);
+      }
     }catch(e){}
     // v4.52 — saldo do Estoque Geral no dia do download. A ordem das colunas é a
     // que a gestora usa nas planilhas de agosto (SALDO SISTEMA antes da FOTO), e a
@@ -11755,19 +11764,28 @@ async function invExportar(){
       const linhas = [HDR];
       for(const m of materiaisDoLocal){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
-        let loteCols = ['','','','','','','','',''];
+        // v4.153 — QTD sai VAZIA de verdade (null), não texto "": com "" a soma dos
+        // lotes na CONTAGEM dava #VALOR! no Excel (geladeira, 30/09)
+        let loteCols = ['','',null,'','',null,'','',null];
         if(m.controla_lote){
           const lts = (lotesPorMat[m.id]||[]).slice(0,3);
           loteCols = [];
           for(let k=0;k<3;k++){
             const l = lts[k];
-            loteCols.push(l?(l.lote||''):'', l?dataCel(l.validade):'', '');
+            loteCols.push(l?(l.lote||''):'', l?dataCel(l.validade):'', null);
           }
         }   // sem controla_lote: lotes saem em branco (v4.52 — fim dos risquinhos)
         const saldoHoje = geralId!=null ? (saldoMap[m.id+'_'+geralId] ?? 0) : '';
         linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldoHoje, saldo, '', ...loteCols, '']);
       }
       const ws = XLSX.utils.aoa_to_sheet(linhas, {cellDates:true});
+      // v4.153 — CONTAGEM já vem com a soma dos lotes (QTD 1 + QTD 2 + QTD 3) e fica
+      // em branco enquanto nenhuma QTD for preenchida (em branco = não contado, não zero).
+      // Item sem lote: digita direto na CONTAGEM, por cima da fórmula.
+      for(let R=1; R<linhas.length; R++){
+        const n = R+1;
+        ws[XLSX.utils.encode_cell({r:R,c:7})] = { t:'s', v:'', f:`IF(COUNT(K${n},N${n},Q${n})=0,"",SUM(K${n},N${n},Q${n}))` };
+      }
       // v4.52 — larguras e visual copiados da planilha do inventário de julho
       // (ARSENAL 30/07): LOTE 3 escondido como lá, filtro no cabeçalho.
       ws['!cols'] = [{wch:3.9},{wch:6.6},{wch:22.7},{wch:11.7},{wch:34.8},{wch:14},{wch:12.8},{wch:11.8},
