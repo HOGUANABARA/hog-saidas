@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.153 · planilha de contagem: cada lote uma vez só e CONTAGEM somando os lotes</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.154 · inventário: possível erro marcado, itens em devolução, marca por linha e confirmação que reapura</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11695,7 +11695,14 @@ async function invExportar(){
     // v4.52d — a planilha do CC é SÓ do centro cirúrgico: higiene, copa e
     // escritório têm inventário próprio e ficam fora (regra da gestão, 02/09).
     // Item sem classe continua entrando (o or= preserva classe_compra nula).
-    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,controla_lote&ativo=eq.true&or=(classe_compra.is.null,classe_compra.not.in.(ADM_IMPRESSOS,ADM_EXPEDIENTE,LIMPEZA,COPA))&order=nome.asc&limit=1000')) || [];
+    const materiais = (await sbFetch('materiais?select=id,nome,descricao_nf,marca,unidade_medida,qtd_kit,controla_lote,controla_remessa&ativo=eq.true&or=(classe_compra.is.null,classe_compra.not.in.(ADM_IMPRESSOS,ADM_EXPEDIENTE,LIMPEZA,COPA))&order=nome.asc&limit=1000')) || [];
+    // v4.154 — itens com devolução/troca em aberto: a planilha avisa na OBSERVAÇÃO
+    // (caixa recusada continua na casa, mas não é estoque — inventário #9)
+    const devolPorMat = {};
+    try{
+      const ocs = (await sbFetch('ocorrencias?select=id,material_id,numero_nf&status=eq.aberta&material_id=not.is.null&limit=500')) || [];
+      for(const o of ocs){ (devolPorMat[o.material_id]=devolPorMat[o.material_id]||[]).push('#'+o.id+(o.numero_nf?' NF '+o.numero_nf:'')); }
+    }catch(e){}
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
     for(const e of estoqueRows) saldoMap[e.material_id+'_'+e.local_id] = e.saldo;
@@ -11754,13 +11761,32 @@ async function invExportar(){
       base.sort((a,b)=>a.nome.localeCompare(b.nome));
       return base;
     }
+    // v4.154 — item com saldo que não cai em NENHUM local (gaze não estéril e sonda de
+    // vitre nova ficaram fora de todas as planilhas no inventário #9) entra na planilha
+    // do ARSENAL. Reprocessado (livro de remessas) continua de fora.
+    const semLocal = [];
+    try{
+      const fisicos = invLocais.filter(l=>(l.tipo||'fisico')!=='virtual');
+      const cobertos = new Set();
+      for(const l of fisicos) for(const m of invMateriaisDoLocal(l)) cobertos.add(m.id);
+      for(const m of materiais){
+        if(cobertos.has(m.id) || m.controla_remessa) continue;
+        const sg = geralId!=null ? Number(saldoMap[m.id+'_'+geralId]||0) : 0;
+        if(sg!==0) semLocal.push(m);
+      }
+    }catch(e){}
 
-    const HDR = ['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF', hdrSaldoHoje, 'FOTO ÚLT. CONTAGEM','CONTAGEM',
+    const HDR =['ID','LOCAL','MATERIAL','MARCA','DESCRIÇÃO NF', hdrSaldoHoje, 'FOTO ÚLT. CONTAGEM','CONTAGEM',
                  'LOTE 1','VAL 1','QTD 1','LOTE 2','VAL 2','QTD 2','LOTE 3','VAL 3','QTD 3','OBSERVAÇÃO'];
     const wb = XLSX.utils.book_new();
     const nomesUsados = new Set();
     for(const local of locaisAlvo){
       const materiaisDoLocal = invMateriaisDoLocal(local);
+      const extras = new Set();
+      if(normNome(local.nome)===normNome('ARSENAL')){
+        for(const m of semLocal){ materiaisDoLocal.push(m); extras.add(m.id); }
+        materiaisDoLocal.sort((a,b)=>a.nome.localeCompare(b.nome));
+      }
       const linhas = [HDR];
       for(const m of materiaisDoLocal){
         const saldo = saldoMap[m.id+'_'+local.id] ?? 0;
@@ -11776,7 +11802,19 @@ async function invExportar(){
           }
         }   // sem controla_lote: lotes saem em branco (v4.52 — fim dos risquinhos)
         const saldoHoje = geralId!=null ? (saldoMap[m.id+'_'+geralId] ?? 0) : '';
-        linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldoHoje, saldo, '', ...loteCols, '']);
+        const obsLinha = [
+          devolPorMat[m.id] ? '↩ EM DEVOLUÇÃO/TROCA (ocorrência '+devolPorMat[m.id].join(', ')+') — o que está separado NÃO conta como estoque' : '',
+          extras.has(m.id) ? 'sem local definido — diga onde está' : '' ].filter(Boolean).join(' · ');
+        // v4.154 — MARCA POR LINHA: item sem controle de lote com mais de uma marca no
+        // cadastro ("ATRAMAT / BIOLINE") sai com uma linha por marca. Antes a gestora
+        // usava as colunas de LOTE para separar as quantidades. A subida já soma as
+        // linhas do mesmo ID (v4.52c) e não trata a MARCA dessas linhas como correção.
+        const marcas = (!m.controla_lote && /\//.test(m.marca||'')) ? String(m.marca).split('/').map(s=>s.trim()).filter(Boolean) : [];
+        if(marcas.length > 1){
+          marcas.forEach((mc, i) => linhas.push([m.id, local.nome, m.nome, mc, m.descricao_nf||'', saldoHoje, i===0?saldo:'', '', ...loteCols, i===0?obsLinha:'']));
+        } else {
+          linhas.push([m.id, local.nome, m.nome, m.marca||'', m.descricao_nf||'', saldoHoje, saldo, '', ...loteCols, obsLinha]);
+        }
       }
       const ws = XLSX.utils.aoa_to_sheet(linhas, {cellDates:true});
       // v4.153 — CONTAGEM já vem com a soma dos lotes (QTD 1 + QTD 2 + QTD 3) e fica
@@ -15814,17 +15852,26 @@ async function ivSubirLocal(localId, file){
       }
       // lotes (3 blocos) quando existirem — cada coluna pelo próprio nome
       const lotes=[];
+      let zeroEscrito=false;   // v4.154 — um 0 digitado na QTD vale como contagem zero
       for(let k=0;k<3;k++){
         if(iLote[k]<0) continue;
         const lote=String(r[iLote[k]]??'').trim();
         const val=iVal[k]>=0 ? r[iVal[k]] : null;
         const q=parseFloat(iQtd[k]>=0 ? r[iQtd[k]] : NaN);
+        if(!isNaN(q) && q===0) zeroEscrito=true;
         if(lote && lote!=='—' && !isNaN(q) && q>0) lotes.push({lote, validade:invParseDataCel?invParseDataCel(val):null, qtd:q});
       }
       const somaLotes=lotes.reduce((s,l)=>s+l.qtd,0);
       let cont=parseFloat(r[iCont]);
       if(isNaN(cont) && somaLotes>0) cont=somaLotes;
+      // v4.154 — antes "S LOTE · QTD 0" deixava a linha como NÃO CONTADA (captopril e
+      // diazepan da caixa de emergência, inventário #9)
+      if(isNaN(cont) && zeroEscrito) cont=0;
       if(isNaN(cont)){ ignoradas++; continue; }
+      // v4.154 — linha por MARCA (mesmo ID em várias linhas): guarda quanto era de cada
+      // marca, do jeito que a gestora fazia à mão nas colunas de lote
+      const marcaLinha = (vezesId[mid]||0)>1 && iMarca>=0 ? String(r[iMarca]??'').trim() : '';
+      if(marcaLinha && !lotes.length && cont>0) lotes.push({ lote:marcaLinha, validade:null, qtd:cont });
       regs.push({ inventario_id:ivAtual.id, material_id:mid, local_id:localId, qtd_contada:cont,
                   contado_por:quem, contado_em:new Date().toISOString(),
                   lotes: lotes.length?lotes:null });
@@ -15851,12 +15898,23 @@ async function ivSubirLocal(localId, file){
         correcoes.slice(0,6).map(c=>`• ${c.nome} — ${c.campo==='marca'?'marca':'descrição NF'}: "${c.de}" → "${c.para}"`).join('\n') +
         (correcoes.length>6?`\n• +${correcoes.length-6}`:'')
       : '';
-    if(!confirm(`${local.nome}: ${regs.length} item(ns) contados${ignoradas?` (${ignoradas} linha(s) em branco ignoradas)`:''}.${avisoNao}${avisoCorr}\n\nGravar esta contagem?`)) return;
+    if(!confirm(`${local.nome}: ${regs.length} item(ns) contados${ignoradas?` (${ignoradas} linha(s) em branco ignoradas)`:''}.${avisoNao}\n\nGravar esta contagem?`)) return;
+    // v4.154 — MARCA/DESCRIÇÃO diferente do cadastro NÃO corrige mais sozinha: no
+    // inventário #9 a planilha trazia a marca CONTADA na prateleira e a subida ia
+    // trocar "ATRAMAT / BIOLINE" por "BIOLINE" em 14 itens. Agora é pergunta à parte,
+    // com a lista inteira, e Cancelar sobe só as contagens.
+    let aplicarCorr = false;
+    if(correcoes.length){
+      aplicarCorr = confirm(`A planilha de ${local.nome} traz ${correcoes.length} diferença(s) de MARCA ou DESCRIÇÃO em relação ao cadastro:\n\n` +
+        correcoes.slice(0,14).map(c=>`• ${c.nome} — ${c.campo==='marca'?'marca':'descrição NF'}: "${c.de}" → "${c.para}"`).join('\n') +
+        (correcoes.length>14?`\n• +${correcoes.length-14}`:'') +
+        `\n\nOK = CORRIGIR o cadastro com o que está na planilha\nCancelar = subir só as contagens (o cadastro fica como está)`);
+    }
     // recontagem: limpa o local antes
     await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}`,'DELETE');
     for(let i=0;i<regs.length;i+=50) await sbFetch('inventario_itens','POST', regs.slice(i,i+50));
     let nCorr=0;
-    for(const c of correcoes){
+    for(const c of (aplicarCorr?correcoes:[])){
       try{ await sbFetch(`materiais?id=eq.${c.material_id}`,'PATCH',{ [c.campo]: c.para }); nCorr++; }catch(e){}
     }
     toast(`${local.nome}: ${regs.length} contagem(ns) gravada(s) ✓`+(nCorr?` · ${nCorr} correção(ões) de cadastro aplicada(s)`:''),'sucesso');
@@ -15932,6 +15990,49 @@ async function ivApurar(){
       linhas.push({ mid, nome:nome(mid), contado:null, sistema:sis, dif:null,
                     tipo: sis<0?'NEGATIVO':'NAO_CONTADO', locais:'—', lotes:[], controla:controla.has(mid) });
     }
+    // ═══ v4.154 — "⚠ POSSÍVEL ERRO" (pedido da gestão no inventário #9) ═══════
+    // Nem toda diferença é perda ou sobra. Estes sinais apontaram, à mão, quase
+    // tudo o que era erro de contagem ou de lançamento em setembro/2026:
+    //  · inverteu o ajuste do inventário anterior (iodopovidona +12 → −11)
+    //  · falta maior que tudo o que saiu lançado no período (campo mesa G, seringa 0,5)
+    //  · falta espelhada por sobra de item parecido (bisturi 2.75 nacional × import)
+    //  · item com devolução/troca em aberto (fio da MS Jaú, seringa da Rio Clarense)
+    // Só leitura; se qualquer consulta falhar, a apuração segue sem as marcas.
+    try{
+      const ants=(await sbFetch(`inventarios?select=id,fechado_em,data_contagem,observacao&status=eq.fechado&id=lt.${ivAtual.id}&order=id.desc&limit=6`))||[];
+      const ant=ants.find(a=>!/HIGIENE|COPA/i.test(a.observacao||''));
+      const ajAnt={}, consumo={};
+      if(ant){
+        const ajs=(await sbFetch(`movimentacoes?select=material_id,qtd&tipo=eq.AJUSTE_INVENTARIO&observacao=like.${encodeURIComponent('Inventário #'+ant.id+' de%')}&limit=2000`))||[];
+        for(const a of ajs) ajAnt[a.material_id]=(ajAnt[a.material_id]||0)+(Number(a.qtd)||0);
+        if(ant.fechado_em){
+          const sd=(await sbFetch(`movimentacoes?select=material_id,qtd&aprovado=eq.true&qtd=lt.0&tipo=in.(SAIDA_CIRURGIA,SAIDA_EXTRA,SAIDA_GERAL)&created_at=gte.${encodeURIComponent(ant.fechado_em)}&limit=10000`))||[];
+          for(const s of sd) consumo[s.material_id]=(consumo[s.material_id]||0)+Math.abs(Number(s.qtd)||0);
+        }
+      }
+      const devol={};
+      try{
+        const ocs=(await sbFetch('ocorrencias?select=id,material_id&status=eq.aberta&material_id=not.is.null&limit=500'))||[];
+        for(const o of ocs) (devol[o.material_id]=devol[o.material_id]||[]).push('#'+o.id);
+      }catch(e){}
+      const raiz=n=>String(n||'').toUpperCase().replace(/\(.*?\)/g,'').trim().split(/\s+/).slice(0,2).join(' ');
+      for(const l of linhas){
+        const al=[];
+        if(devol[l.mid]) al.push('↩ devolução/troca em aberto (ocorrência '+devol[l.mid].join(', ')+')');
+        if(l.dif!==null && Math.abs(l.dif)>0.0001){
+          const a=ajAnt[l.mid]||0;
+          if(a && Math.sign(a)!==Math.sign(l.dif) && Math.abs(a)>=2 && Math.abs(l.dif)>=2)
+            al.push('desfaz o ajuste do inventário anterior ('+(a>0?'+':'')+ivN(a)+')');
+          if(ant && ant.fechado_em && l.dif<0 && Math.abs(l.dif)>=3 && Math.abs(l.dif)>(consumo[l.mid]||0))
+            al.push('falta maior que tudo o que saiu lançado no período ('+ivN(consumo[l.mid]||0)+')');
+          if(Math.abs(l.dif)>=3){
+            const par=linhas.find(o=>o!==l && o.dif!==null && Math.abs(o.dif+l.dif)<0.0001 && raiz(o.nome)===raiz(l.nome));
+            if(par) al.push('espelha a '+(par.dif>0?'sobra':'falta')+' de '+par.nome);
+          }
+        }
+        l.alertas=al;
+      }
+    }catch(e){ console.warn('possível erro (apuração):', e); }
     linhas.sort((a,b)=>Math.abs(b.dif||0)-Math.abs(a.dif||0));
     ivDiverg=linhas; ivFiltroTipo='';
     ivRenderDivergencias();
@@ -15970,7 +16071,7 @@ function ivRenderDivergencias(){
           <th style="background:var(--cinza-1)"></th>
         </tr></thead>
         <tbody>${its.map(l=>`<tr>
-          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);font-weight:600">${l.nome}${l.controla?' <span style="font-size:9px;color:#B7950B">🔒 lote</span>':''}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);font-weight:600">${l.nome}${l.controla?' <span style="font-size:9px;color:#B7950B">🔒 lote</span>':''}${(l.alertas||[]).map(a=>`<div style="font-size:10.5px;font-weight:700;color:#9C5700;background:#FFF4D6;border-radius:5px;padding:2px 7px;margin-top:3px;display:inline-block">⚠ possível erro — ${a}</div>`).join('<br>')}</td>
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">${l.contado===null?'—':ivN(l.contado)}</td>
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">${ivN(l.sistema)}</td>
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right;font-weight:800;color:${l.dif===null?'var(--cinza-4)':(l.dif<0?'var(--vermelho)':(l.dif>0?'var(--azul)':'var(--verde)'))}">${l.dif===null?'—':(l.dif>0?'+':'')+ivN(l.dif)}</td>
@@ -16062,6 +16163,15 @@ async function ivConfirmar(){
   if(!exigirAssinatura('Confirmar inventário (vira o saldo base)')) return;
   const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
   if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  // v4.154 — a confirmação aplicava a apuração QUE ESTAVA NA TELA. No inventário #9 o
+  // saldo de um item mudou entre o Apurar e o Confirmar e o ajuste saiu em dobro
+  // (Avastin 0,015). Agora ela relê contagens e saldos na hora, antes de perguntar.
+  try{
+    ivItens=(await sbFetch(`inventario_itens?select=*&inventario_id=eq.${ivAtual.id}&limit=5000`))||[];
+    ivDiverg=null;
+    await ivApurar();
+  }catch(e){ toast('Não consegui reapurar antes de confirmar: '+e.message,'erro'); return; }
+  if(!ivDiverg){ toast('Não consegui reapurar antes de confirmar.','erro'); return; }
   const ajustar=ivDiverg.filter(l=>l.contado!==null && l.dif!==null && Math.abs(l.dif)>0.0001);
   const naoContados=ivDiverg.filter(l=>l.tipo==='NAO_CONTADO').length;
   if(!confirm(`CONFIRMAR O INVENTÁRIO DE ${ivData(ivAtual.data_contagem)}\n\n`+
@@ -16107,15 +16217,21 @@ async function ivConfirmar(){
     // 3) lotes contados viram a foto de lotes DAQUELE LOCAL (v4.51)
     //    o catch mudo daqui escondia justamente a perda de lote de outro local
     await loteLocalOk();
+    // v4.154 — este passo não tinha contador: no inventário #9 uma gravação ficou
+    // pendurada e a tela parou em "aplicando ajustes… 98 de 98" sem dizer onde estava
+    const comLote=ivItens.filter(it=>(it.lotes||[]).some(x=>x.lote&&x.validade&&x.qtd>0));
+    feito = 0;
     for(const it of ivItens){
       const lts=(it.lotes||[]).filter(x=>x.lote&&x.validade&&x.qtd>0);
       if(!lts.length) continue;
+      progresso('gravando lotes… '+(++feito)+' de '+comLote.length);
       try{
         await sbFetch(loteFiltroContagem(it.material_id, it.local_id, geralId),'PATCH',{ status:'baixado' });
         await sbFetch('lotes','POST', lts.map(x=>loteCom({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' }, it.local_id)));
       }catch(e){ toast('⚠ Lote não gravado de "'+(typeof rcNomeMaterial==='function'?rcNomeMaterial(it.material_id):it.material_id)+'": '+(e.message||e),'erro'); }
     }
     // 4) fecha
+    progresso('fechando a contagem…');
     await sbFetch(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'fechado', fechado_por:quem, fechado_em:agora });
     toast(`Inventário de ${ivData(ivAtual.data_contagem)} confirmado ✓ — ${ajustar.length} ajuste(s). Já pode lançar as saídas.`,'sucesso');
     ivCarregar();
