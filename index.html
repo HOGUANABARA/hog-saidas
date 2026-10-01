@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.154 · inventário: possível erro marcado, itens em devolução, marca por linha e confirmação que reapura</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.155 · devolução tira do estoque, falta vira saída cirúrgica pelo botão, livro do DML acompanha a contagem</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4992,6 +4992,28 @@ async function enviarDiversas() {
   if (!data)        { toast('Informe a data.', 'erro'); return; }
   if (!destino)     { toast('Selecione o destino da saída.', 'erro'); return; }
   if (!itens.length){ toast('Adicione pelo menos um material com quantidade.', 'erro'); return; }
+
+  // v4.155 — SAÍDA POR PACOTE lançada como "1". No inventário #9 a gaze não estéril
+  // (pacote de 500) e o lençol (pacote de 10) saíram com quantidade 1 e viraram falta.
+  // Antes de enviar, compara com o que este item costuma sair em saída diversa: se a
+  // quantidade for muito menor que o costume, pergunta. Não trava — só avisa.
+  try {
+    const mats = itens.map(it => ({ it, mat: resolverMaterial(it.nome) })).filter(x => x.mat);
+    if (mats.length) {
+      const hist = (await sbFetch(`movimentacoes?select=material_id,qtd&tipo=eq.SAIDA_GERAL&aprovado=eq.true&qtd=lt.0&material_id=in.(${mats.map(x=>x.mat.id).join(',')})&order=id.desc&limit=600`)) || [];
+      const porMat = {};
+      for (const h of hist) { (porMat[h.material_id] = porMat[h.material_id] || []).push(Math.abs(Number(h.qtd) || 0)); }
+      const estranhos = [];
+      for (const x of mats) {
+        const v = (porMat[x.mat.id] || []).filter(q => q > 0).slice(0, 12).sort((a, b) => a - b);
+        if (v.length < 2) continue;
+        const mediana = v[Math.floor(v.length / 2)], q = parseFloat(x.it.qtd);
+        if (mediana >= 5 && q * 5 <= mediana) estranhos.push(`• ${x.mat.nome}: você lançou ${q} — costuma sair ${mediana}`);
+      }
+      if (estranhos.length && !confirm('⚠ Quantidade bem menor que o costume:\n\n' + estranhos.join('\n')
+          + '\n\nSe saiu o PACOTE inteiro, lance a quantidade de UNIDADES do pacote.\n\nOK = enviar assim mesmo · Cancelar = voltar e corrigir')) return;
+    }
+  } catch (e) { console.warn('conferência de quantidade (saída diversa):', e); }
 
   if (!confirm(`Enviar ${itens.length} item(ns) para aprovação?\nDestino: ${destino} — Data: ${data.split('-').reverse().join('/')}`)) return;
 
@@ -11700,8 +11722,8 @@ async function invExportar(){
     // (caixa recusada continua na casa, mas não é estoque — inventário #9)
     const devolPorMat = {};
     try{
-      const ocs = (await sbFetch('ocorrencias?select=id,material_id,numero_nf&status=eq.aberta&material_id=not.is.null&limit=500')) || [];
-      for(const o of ocs){ (devolPorMat[o.material_id]=devolPorMat[o.material_id]||[]).push('#'+o.id+(o.numero_nf?' NF '+o.numero_nf:'')); }
+      const ocs = (await sbFetch('ocorrencias?select=*&status=eq.aberta&material_id=not.is.null&limit=500')) || [];
+      for(const o of ocs){ (devolPorMat[o.material_id]=devolPorMat[o.material_id]||[]).push('#'+o.id+(o.numero_nf?' NF '+o.numero_nf:'')+(Number(o.qtd_separada)>0?' · '+Number(o.qtd_separada)+' un separadas':'')); }
     }catch(e){}
     const estoqueRows = (await sbFetch(`estoque?select=material_id,local_id,saldo&limit=5000`)) || [];
     const saldoMap = {};
@@ -15125,6 +15147,7 @@ function pnSimEnviarFaltas(){
       <div class="oc-c"><label>Material (se houver)</label><input id="oc-material" list="pn-mat-datalist" placeholder="digite o nome…"></div>
       <div class="oc-c"><label>Nº da NF (se houver)</label><input id="oc-nf" placeholder="ex: 4432"></div>
       <div class="oc-c" id="oc-valor-box" style="display:none"><label id="oc-valor-label">Valor (R$)</label><input id="oc-valor" type="number" step="0.01" min="0"></div>
+      <div class="oc-c"><label title="Devolução ou troca: quantas unidades ficam separadas. Elas saem do estoque na hora — não são perda nem consumo — e voltam se a ocorrência for cancelada.">↩ Unidades separadas (saem do estoque)</label><input id="oc-qtd-sep" type="number" step="any" min="0" placeholder="devolução ou troca"></div>
       <div class="oc-c"><label>Combinado para</label><input id="oc-data" type="date"></div>
       <div class="oc-c"><label>Registrado por</label><select id="oc-por"></select></div>
       <div class="oc-c" style="grid-column:1/-1"><label>Ação combinada / observação</label>
@@ -15215,11 +15238,20 @@ async function ocRegistrar(){
   const acao=document.getElementById('oc-acao').value.trim()||s.acao;
   if(s.valor && (!valor||valor<=0)){ toast('Informe o '+s.valor.toLowerCase()+'.','erro'); return; }
   if(k==='VALOR_ERRADO_CREDITO' && !fornId){ toast('Crédito precisa do fornecedor.','erro'); return; }
+  // v4.155 — unidades separadas para devolução/troca saem do estoque utilizável
+  const qtdSep=parseFloat(String((document.getElementById('oc-qtd-sep')||{}).value||'').replace(',','.'))||0;
+  if(qtdSep>0 && !matId){ toast('Para separar unidades do estoque, escolha o material.','erro'); return; }
+  if(qtdSep>0 && !confirm(`${qtdSep} un de "${matNome}" vão SAIR do estoque agora, como item em devolução/troca.\n\nNão é perda nem consumo: se a ocorrência for cancelada, ou se o item ficar na casa, elas voltam.\n\nRegistrar?`)) return;
   try{
-    const oc=await sbFetch('ocorrencias','POST',{ situacao:k, fornecedor_id:fornId, material_id:matId,
-      numero_nf:nf, valor, data_prometida:dataC, criado_por:por, acao_aplicada:acao, status:'aberta' });
+    const corpo={ situacao:k, fornecedor_id:fornId, material_id:matId,
+      numero_nf:nf, valor, data_prometida:dataC, criado_por:por, acao_aplicada:acao, status:'aberta' };
+    const oc=await sbFetch('ocorrencias','POST',corpo);
     if(!oc||!oc.length) throw new Error('sem permissão (RLS) ou SQL da v3.9 não rodado');
     const idNovo=oc[0].id;
+    if(qtdSep>0){
+      try{ await ocMoverSeparadas(Object.assign({}, oc[0], {qtd_separada:null}), -qtdSep, 'separadas para devolução/troca'); }
+      catch(e){ toast('Ocorrência registrada, mas as unidades NÃO saíram do estoque: '+e.message+' (rode o SQL 108)','erro'); }
+    }
     if(k==='VALOR_ERRADO_CREDITO'){
       await sbFetch('creditos_fornecedor','POST',{ fornecedor_id:fornId, valor,
         origem:'Ocorrência #'+idNovo+(nf?(' — NF '+nf):''), ocorrencia_id:idNovo, status:'ABERTO' });
@@ -15227,7 +15259,7 @@ async function ocRegistrar(){
     } else {
       toast('Ocorrência registrada ✓','sucesso');
     }
-    ['oc-situacao','oc-fornecedor','oc-material','oc-nf','oc-valor','oc-data','oc-acao'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+    ['oc-situacao','oc-fornecedor','oc-material','oc-nf','oc-valor','oc-data','oc-acao','oc-qtd-sep'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
     document.getElementById('oc-valor-box').style.display='none';
     await ocCarregar();
     // (a) v4.43 — qualquer ocorrência com valor pergunta se o dinheiro volta.
@@ -15238,6 +15270,29 @@ async function ocRegistrar(){
     }
   }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
+// ═══ v4.155 — ITEM EM DEVOLUÇÃO/TROCA COM QUANTIDADE (SQL 108) ═══════════════
+// Pedido da gestão no inventário #9: caixa recusada ou separada para troca
+// continua na casa, mas NÃO é estoque. Sem isto ela ficava no saldo e virava
+// falta em todo inventário (seringa da Rio Clarense: 32 em agosto, 69 em setembro).
+// delta < 0 separa (sai do Estoque Geral); delta > 0 devolve ao estoque.
+// O movimento é AJUSTE_INVENTARIO com observação própria — fica fora do custo e
+// fora da linha "Diferenças de inventário" do Painel.
+async function ocMoverSeparadas(o, delta, motivo){
+  if(!o || !o.material_id || !delta) return null;
+  const geralId=await getEstoqueGeralId();
+  const quem=o.criado_por||(SESSAO&&SESSAO.nome)||'';
+  const obs=`Ocorrência #${o.id} — item EM DEVOLUÇÃO/TROCA: ${Math.abs(delta)} un ${motivo}`
+    +(o.fornecedor_id?` (${ocForn(o.fornecedor_id)}${o.numero_nf?', NF '+o.numero_nf:''})`:'')+'. Não é perda nem consumo';
+  const mv=await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:o.material_id, local_id:geralId,
+    qtd:delta, aprovado:false, registrado_por:quem, observacao:obs });
+  const mid=mv&&mv[0]&&mv[0].id;
+  if(!mid) throw new Error('o movimento não foi gravado');
+  await sbFetch(`movimentacoes?id=eq.${mid}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:new Date().toISOString() });
+  const nova=Math.max(0,(Number(o.qtd_separada)||0)-delta);   // separar soma; devolver abate
+  await sbFetch(`ocorrencias?id=eq.${o.id}`,'PATCH',{ qtd_separada: nova||null, mov_baixa_id: delta<0?mid:(o.mov_baixa_id||null) });
+  return mid;
+}
+
 function ocRender(){
   const abertas=ocLista.filter(o=>o.status==='aberta');
   const fechadas=ocLista.filter(o=>o.status!=='aberta');
@@ -15249,7 +15304,7 @@ function ocRender(){
       return `<div class="oc-pend ${atrasada?'atrasada':''}">
         <div style="flex:1;min-width:240px">
           <div class="oc-pt">#${o.id} · ${ocRot(o.situacao)}</div>
-          <div class="oc-pd">🏪 ${ocForn(o.fornecedor_id)}${o.material_id?(' · 📦 '+ocMat(o.material_id)):''}${o.numero_nf?(' · NF '+o.numero_nf):''}${o.valor?(' · <b>'+ocMoney(o.valor)+'</b>'):''}
+          <div class="oc-pd">🏪 ${ocForn(o.fornecedor_id)}${o.material_id?(' · 📦 '+ocMat(o.material_id)):''}${o.numero_nf?(' · NF '+o.numero_nf):''}${o.valor?(' · <b>'+ocMoney(o.valor)+'</b>'):''}${Number(o.qtd_separada)>0?(' · <span class="oc-chip occ-ama" title="Unidades separadas para devolução ou troca: fora do estoque utilizável">↩ '+Number(o.qtd_separada).toLocaleString('pt-BR')+' un fora do estoque</span>'):''}
           <br>➜ ${o.acao_aplicada||'—'}
           <br><span style="font-size:11px">aberta há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
         </div>
@@ -15346,6 +15401,15 @@ function ocResolver(id){
     bloco = `<div style="margin-top:14px;${HGS_AVISO}">Esta ocorrência tem <b>${ocMoney(o.valor)}</b> registrado e <b>nenhum crédito ligado</b>. `
       + `Se esse valor volta do fornecedor, feche com o botão <b>💳 Gerar crédito</b> antes de resolver — senão o dinheiro sai do controle.</div>`;
   }
+  // v4.155 — unidades separadas: ao resolver, ou foram embora (continuam fora) ou ficaram na casa (voltam)
+  if(Number(o.qtd_separada)>0){
+    bloco += `<div style="margin-top:14px;${HGS_AVISO}">↩ Há <b>${Number(o.qtd_separada).toLocaleString('pt-BR')} un</b> de ${ocMat(o.material_id)||'material'} separadas, fora do estoque. O que aconteceu com elas?`
+      + `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px;font-weight:400">`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="SAIU" checked><span><b>Foram para o fornecedor</b> (devolvidas ou trocadas) — continuam fora do estoque. O que vier em troca entra pela nota.</span></label>`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="VOLTA"><span><b>Ficaram na casa e vão ser usadas</b> — voltam para o estoque agora.</span></label>`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="DESCARTE"><span><b>Ficaram na casa e não têm uso</b> — continuam fora do estoque (descarte).</span></label>`
+      + `</div></div>`;
+  }
   ocAbrirModal('✔ Resolver ocorrência #'+id,
      `<div style="font-size:13px;color:var(--cinza-4)">${ocRot(o.situacao)} · 🏪 ${ocForn(o.fornecedor_id)}${o.numero_nf?(' · NF '+o.numero_nf):''}</div>`
     +`<div style="margin-top:14px"><label style="${HGS_LBL}">Como foi resolvida</label>`
@@ -15370,7 +15434,15 @@ async function ocResolverGravar(){
       await sbFetch(`creditos_fornecedor?id=eq.${cred.id}`,'PATCH',{ status:'CANCELADO',
         origem:(cred.origem||'')+' · cancelado ao resolver a ocorrência' });
     }
-    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:txt,
+    const oSep=ocLista.find(x=>x.id===id);
+    const fimSep=(document.querySelector('input[name="oc-sep-fim"]:checked')||{}).value||null;
+    let txtSep='';
+    if(oSep && Number(oSep.qtd_separada)>0){
+      const n=Number(oSep.qtd_separada);
+      if(fimSep==='VOLTA'){ await ocMoverSeparadas(oSep, n, 'voltaram ao estoque ao resolver'); txtSep=` · ${n} un voltaram ao estoque`; }
+      else txtSep = fimSep==='DESCARTE' ? ` · ${n} un ficaram fora do estoque (sem uso)` : ` · ${n} un foram para o fornecedor`;
+    }
+    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:txt+txtSep,
       resolvido_em:new Date().toISOString() });
     ocFecharModal();
     toast('Ocorrência #'+id+' resolvida ✓'+(cred&&escolha==='BAIXAR'?' · crédito baixado':'')
@@ -15418,8 +15490,12 @@ async function ocGerarCreditoGravar(){
   }
 }
 async function ocCancelar(id){
-  if(!confirm('Cancelar a ocorrência #'+id+'?')) return;
-  try{ await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'cancelada', resolvido_em:new Date().toISOString() });
+  const oC=ocLista.find(x=>x.id===id);
+  const nSep=oC?Number(oC.qtd_separada)||0:0;
+  if(!confirm('Cancelar a ocorrência #'+id+'?'+(nSep>0?`\n\nAs ${nSep} un separadas VOLTAM para o estoque.`:''))) return;
+  try{
+    if(nSep>0) await ocMoverSeparadas(oC, nSep, 'voltaram ao estoque — ocorrência cancelada');
+    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'cancelada', resolvido_em:new Date().toISOString() });
     toast('Cancelada.','sucesso'); ocCarregar(); }catch(e){ toast('Erro: '+e.message,'erro'); }
 }
 async function ocCreditoManual(){
@@ -16001,6 +16077,7 @@ async function ivApurar(){
     try{
       const ants=(await sbFetch(`inventarios?select=id,fechado_em,data_contagem,observacao&status=eq.fechado&id=lt.${ivAtual.id}&order=id.desc&limit=6`))||[];
       const ant=ants.find(a=>!/HIGIENE|COPA/i.test(a.observacao||''));
+      window.ivAntFechado = ant ? ant.fechado_em : null;   // v4.155 — início do período, usado no rateio
       const ajAnt={}, consumo={};
       if(ant){
         const ajs=(await sbFetch(`movimentacoes?select=material_id,qtd&tipo=eq.AJUSTE_INVENTARIO&observacao=like.${encodeURIComponent('Inventário #'+ant.id+' de%')}&limit=2000`))||[];
@@ -16012,8 +16089,8 @@ async function ivApurar(){
       }
       const devol={};
       try{
-        const ocs=(await sbFetch('ocorrencias?select=id,material_id&status=eq.aberta&material_id=not.is.null&limit=500'))||[];
-        for(const o of ocs) (devol[o.material_id]=devol[o.material_id]||[]).push('#'+o.id);
+        const ocs=(await sbFetch('ocorrencias?select=*&status=eq.aberta&material_id=not.is.null&limit=500'))||[];
+        for(const o of ocs) (devol[o.material_id]=devol[o.material_id]||[]).push('#'+o.id+(Number(o.qtd_separada)>0?' · '+Number(o.qtd_separada)+' un já fora do estoque':' · sem quantidade separada: o que estiver na casa está no saldo'));
       }catch(e){}
       const raiz=n=>String(n||'').toUpperCase().replace(/\(.*?\)/g,'').trim().split(/\s+/).slice(0,2).join(' ');
       for(const l of linhas){
@@ -16037,6 +16114,46 @@ async function ivApurar(){
     ivDiverg=linhas; ivFiltroTipo='';
     ivRenderDivergencias();
   }catch(e){ alvo.innerHTML='<div style="text-align:center;padding:18px;color:var(--vermelho)">Erro: '+e.message+'</div>'; }
+}
+
+// ═══ v4.155 — FALTA QUE É CONSUMO NÃO LANÇADO → SAÍDA CIRÚRGICA RATEADA ═══════
+// Regra da gestão (inventário #9): item usado em muitos períodos, com falta
+// coerente com o movimento, não é diferença de inventário — é custo cirúrgico
+// que ficou sem lançamento. A falta é dividida entre os períodos que usaram o
+// item desde o último inventário, na proporção do que cada um lançou (maiores
+// restos fecham o inteiro). Em #9 isso foi feito à mão pelo SQL 105.
+async function ivRatearCirurgia(mid){
+  const l=(ivDiverg||[]).find(x=>x.mid===mid);
+  if(!l || !(l.dif<0)){ toast('Só dá para ratear item com falta.','erro'); return; }
+  if(!exigirAssinatura('Confirmar inventário (vira o saldo base)')) return;
+  const quem=(document.getElementById('inv-registrado-por')||{}).value||'';
+  if(!quem){ toast('Selecione "Registrado por" no topo da aba.','erro'); return; }
+  const falta=-l.dif;
+  try{
+    const geralId=await getEstoqueGeralId();
+    const desde=window.ivAntFechado||ivAtual.created_at;
+    const mv=(await sbFetch(`movimentacoes?select=periodo_cirurgico_id,qtd&material_id=eq.${mid}&tipo=eq.SAIDA_CIRURGIA&aprovado=eq.true&qtd=lt.0&periodo_cirurgico_id=not.is.null&created_at=gte.${encodeURIComponent(desde)}&limit=2000`))||[];
+    const porPer={}; for(const m of mv) porPer[m.periodo_cirurgico_id]=(porPer[m.periodo_cirurgico_id]||0)+Math.abs(Number(m.qtd)||0);
+    const pers=Object.keys(porPer).map(Number);
+    if(!pers.length){ toast('Nenhum período cirúrgico usou "'+l.nome+'" desde o último inventário — não há como ratear. Se foi uso geral, lance uma saída diversa.','erro'); return; }
+    const total=pers.reduce((s,p)=>s+porPer[p],0);
+    const inteiro=Math.abs(falta-Math.round(falta))<0.0001;
+    let partes=pers.map(p=>({ p, exato: falta*porPer[p]/total }));
+    if(inteiro){
+      partes.forEach(x=>{ x.q=Math.floor(x.exato); x.r=x.exato-x.q; });
+      let resto=Math.round(falta)-partes.reduce((s,x)=>s+x.q,0);
+      partes.slice().sort((a,b)=>b.r-a.r||a.p-b.p).forEach(x=>{ if(resto>0){ x.q++; resto--; } });
+    } else partes.forEach(x=>{ x.q=Math.round(x.exato*100)/100; });
+    partes=partes.filter(x=>x.q>0);
+    if(!confirm(`"${l.nome}" — falta de ${ivN(falta)}\n\nVira SAÍDA CIRÚRGICA, dividida entre ${partes.length} período(s) que usaram o item desde o último inventário (de ${pers.length} no total, ${ivN(total)} lançadas).\n\n• entra no custo cirúrgico do médico e do tipo de cirurgia de cada período\n• sai da lista de diferenças de inventário\n\nLançar?`)) return;
+    const agora=new Date().toISOString();
+    const obs=`Consumo apurado no inventário #${ivAtual.id} (${ivData(ivAtual.data_contagem)}) — rateio da falta de ${ivN(falta)} un entre os períodos que usaram o item`;
+    const linhas=partes.map(x=>({ tipo:'SAIDA_CIRURGIA', material_id:mid, local_id:geralId, qtd:-x.q, periodo_cirurgico_id:x.p,
+      aprovado:true, aprovado_por:quem, aprovado_em:agora, registrado_por:quem, observacao:obs }));
+    for(let i=0;i<linhas.length;i+=50) await sbFetch('movimentacoes','POST', linhas.slice(i,i+50));
+    toast(`"${l.nome}": ${ivN(falta)} lançada(s) como saída cirúrgica em ${partes.length} período(s) ✓`,'sucesso');
+    await ivApurar();
+  }catch(e){ toast('Erro ao ratear: '+e.message,'erro'); }
 }
 
 function ivContaPorTipo(){
@@ -16077,7 +16194,7 @@ function ivRenderDivergencias(){
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right;font-weight:800;color:${l.dif===null?'var(--cinza-4)':(l.dif<0?'var(--vermelho)':(l.dif>0?'var(--azul)':'var(--verde)'))}">${l.dif===null?'—':(l.dif>0?'+':'')+ivN(l.dif)}</td>
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);font-size:11px;color:var(--cinza-4)">${l.locais}</td>
           <td style="padding:6px 9px;border-bottom:1px solid var(--cinza-1);text-align:right">
-            <button class="inv-btn" style="background:var(--azul-claro);color:var(--azul);padding:4px 8px;font-size:10px" onclick="ivCorrigir(${l.mid})">✎ recontar</button></td>
+            ${(t==='FALTA'||t==='USADO_APOS')?`<button class="inv-btn" style="background:#EAF7EE;color:var(--verde);padding:4px 8px;font-size:10px;margin-right:4px" title="A falta é consumo que não foi lançado: vira saída cirúrgica, dividida entre os períodos que usaram este item desde o último inventário — e aparece no custo cirúrgico" onclick="ivRatearCirurgia(${l.mid})">➜ saída cirúrgica</button>`:''}<button class="inv-btn" style="background:var(--azul-claro);color:var(--azul);padding:4px 8px;font-size:10px" onclick="ivCorrigir(${l.mid})">✎ recontar</button></td>
         </tr>`).join('')}</tbody></table></div>`;
   }).join('');
 
@@ -16184,9 +16301,18 @@ async function ivConfirmar(){
   // agora vira o contador do progresso e trava o clique duplo.
   const btnConf=(function(){ for(const b of document.querySelectorAll('button')){ if((b.getAttribute('onclick')||'')==='ivConfirmar()') return b; } return null; })();
   const progresso=t=>{ if(btnConf){ btnConf.disabled=true; btnConf.textContent='⏳ '+t; } };
+  // v4.155 — TEMPO-LIMITE. No inventário #9 uma gravação ficou pendurada para sempre
+  // e a tela não saía do lugar. Agora cada chamada tem 45 s; se estourar, a confirmação
+  // para com erro e o botão volta. Clicar de novo é SEGURO: ela reapura antes de aplicar,
+  // então o que já entrou não entra outra vez (fotos e lotes são regravados iguais).
+  const F=(...a)=>Promise.race([ sbFetch(...a),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('o banco não respondeu em 45 s — clique em Confirmar de novo, ela continua de onde parou')),45000)) ]);
   try{
     const geralId=await getEstoqueGeralId();
     const agora=new Date().toISOString();
+    // ajuste desta contagem que ficou criado e NÃO aprovado numa tentativa anterior:
+    // apaga antes de recomeçar (não mexeu no saldo, e aprovado depois viraria duplicata)
+    try{ await F(`movimentacoes?tipo=eq.AJUSTE_INVENTARIO&aprovado=eq.false&observacao=like.${encodeURIComponent('Inventário #'+ivAtual.id+' de%')}`,'DELETE'); }catch(e){}
     // 1) foto de alocação por local — v4.52c: linhas por MARCA do mesmo item no
     // mesmo local SOMAM na foto (antes a última linha sobrescrevia as outras)
     const fotoPorChave = {};
@@ -16200,19 +16326,19 @@ async function ivConfirmar(){
       progresso('gravando fotos… '+(++feito)+' de '+chavesFoto.length);
       const par = k.split('_');
       const matId = Number(par[0]), locId = Number(par[1]);
-      const e=await sbFetch(`estoque?select=id&material_id=eq.${matId}&local_id=eq.${locId}&limit=1`);
-      if(e&&e.length) await sbFetch(`estoque?id=eq.${e[0].id}`,'PATCH',{ saldo: fotoPorChave[k] });
-      else await sbFetch('estoque','POST',{ material_id:matId, local_id:locId, saldo:fotoPorChave[k] });
+      const e=await F(`estoque?select=id&material_id=eq.${matId}&local_id=eq.${locId}&limit=1`);
+      if(e&&e.length) await F(`estoque?id=eq.${e[0].id}`,'PATCH',{ saldo: fotoPorChave[k] });
+      else await F('estoque','POST',{ material_id:matId, local_id:locId, saldo:fotoPorChave[k] });
     }
     // 2) ajustes no Estoque Geral
     feito = 0;
     for(const l of ajustar){
       progresso('aplicando ajustes… '+(++feito)+' de '+ajustar.length);
-      const mv=await sbFetch('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:l.mid, local_id:geralId,
+      const mv=await F('movimentacoes','POST',{ tipo:'AJUSTE_INVENTARIO', material_id:l.mid, local_id:geralId,
         qtd:l.dif, aprovado:false, registrado_por:quem,
         observacao:`Inventário #${ivAtual.id} de ${ivData(ivAtual.data_contagem)} — contado ${ivN(l.contado)} · sistema ${ivN(l.sistema)}` });
       const id=mv&&mv[0]&&mv[0].id;
-      if(id) await sbFetch(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora });
+      if(id) await F(`movimentacoes?id=eq.${id}`,'PATCH',{ aprovado:true, aprovado_por:quem, aprovado_em:agora });
     }
     // 3) lotes contados viram a foto de lotes DAQUELE LOCAL (v4.51)
     //    o catch mudo daqui escondia justamente a perda de lote de outro local
@@ -16226,13 +16352,34 @@ async function ivConfirmar(){
       if(!lts.length) continue;
       progresso('gravando lotes… '+(++feito)+' de '+comLote.length);
       try{
-        await sbFetch(loteFiltroContagem(it.material_id, it.local_id, geralId),'PATCH',{ status:'baixado' });
-        await sbFetch('lotes','POST', lts.map(x=>loteCom({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' }, it.local_id)));
+        await F(loteFiltroContagem(it.material_id, it.local_id, geralId),'PATCH',{ status:'baixado' });
+        await F('lotes','POST', lts.map(x=>loteCom({ material_id:it.material_id, lote:x.lote, validade:x.validade, qtd:x.qtd, status:'ativo' }, it.local_id)));
       }catch(e){ toast('⚠ Lote não gravado de "'+(typeof rcNomeMaterial==='function'?rcNomeMaterial(it.material_id):it.material_id)+'": '+(e.message||e),'erro'); }
     }
+    // 3b) v4.155 — LIVRO DO DML acompanha a contagem. O livro (guardar/retirar) é uma
+    // conta à parte da foto por local; depois do inventário #9 a gestora teve de acertá-lo
+    // à mão, item por item. Para cada material CONTADO na planilha do DML, o livro recebe
+    // o movimento que falta para chegar ao contado. Sem o livro no banco, nada acontece.
+    try{
+      const dmlLoc=(invLocais||[]).find(l=>normNome(l.nome)==='DML');
+      if(dmlLoc){
+        const cDml={};
+        for(const it of ivItens){ if(it.local_id===dmlLoc.id) cDml[it.material_id]=(cDml[it.material_id]||0)+(Number(it.qtd_contada)||0); }
+        const livro={};
+        ((await F('vw_dml_saldo?select=material_id,saldo_dml&limit=2000'))||[]).forEach(r=>livro[r.material_id]=Number(r.saldo_dml)||0);
+        const acertos=Object.keys(cDml).map(Number).map(mid=>({mid, d:cDml[mid]-(livro[mid]||0)})).filter(x=>Math.abs(x.d)>0.0001);
+        feito=0;
+        for(const a of acertos){
+          progresso('acertando o livro do DML… '+(++feito)+' de '+acertos.length);
+          await F('dml_movimentos','POST',{ material_id:a.mid, qtd:Math.abs(a.d), sentido:a.d>0?'GUARDAR':'RETIRAR',
+            observacao:`Inventário #${ivAtual.id} de ${ivData(ivAtual.data_contagem)} — livro acertado pela contagem do DML`,
+            registrado_por:quem, registrado_por_id:(SESSAO?SESSAO.id:null) });
+        }
+      }
+    }catch(e){ console.warn('livro do DML não acertado:', e); toast('⚠ O livro do DML não foi acertado pela contagem: '+(e.message||e),'erro'); }
     // 4) fecha
     progresso('fechando a contagem…');
-    await sbFetch(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'fechado', fechado_por:quem, fechado_em:agora });
+    await F(`inventarios?id=eq.${ivAtual.id}`,'PATCH',{ status:'fechado', fechado_por:quem, fechado_em:agora });
     toast(`Inventário de ${ivData(ivAtual.data_contagem)} confirmado ✓ — ${ajustar.length} ajuste(s). Já pode lançar as saídas.`,'sucesso');
     ivCarregar();
     if(typeof invCarregar==='function') invCarregar();
