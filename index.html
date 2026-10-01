@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.155 · devolução tira do estoque, falta vira saída cirúrgica pelo botão, livro do DML acompanha a contagem</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.156 · pedido de material: folha de separação para imprimir</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -21657,6 +21657,7 @@ function solSepRender(){
         }).join('')
       +'</tbody></table><div class="sol-acoes">'
       +'<button class="btn btn-verde" onclick="solEntregar('+p.id+')">📦 Entregar</button>'
+      +'<button class="btn btn-secundario" onclick="solImprimir('+p.id+')" title="folha para separar na prateleira: o que falta entregar, o saldo e espaço para anotar o que foi separado">🖨 Imprimir pedido</button>'
       +'<button class="btn btn-secundario" onclick="solDevolver('+p.id+')">↩ Devolver para refazer</button>'
       +'<button class="hg-ct-outra" onclick="solEncerrar('+p.id+')" title="o que faltou não vai ser entregue">✖ encerrar o que falta</button>'
       +'</div></div>';
@@ -21672,6 +21673,52 @@ function solSepRender(){
   }
   box.innerHTML=h;
 }
+// ═══ v4.156 — FOLHA DE SEPARAÇÃO DO PEDIDO (pedido da gestão, 01/10) ══════════
+// "para separação é importante uma tela de impressão do pedido para facilitar".
+// Quem separa leva a folha à prateleira: o que FALTA entregar de cada item, o saldo,
+// uma coluna em branco para anotar o que separou e as assinaturas de quem separou e
+// de quem recebeu. Mesmo padrão de impressão do HOG (hogImprimir + rmCssImpressao).
+function solImprimir(pid){
+  const p=solAbertos.find(x=>x.id===pid); if(!p){ toast('Pedido não encontrado.','erro'); return; }
+  const its=p.solicitacao_itens||[];
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const quem=solQuem()||'—';
+  let n=0, linhas='';
+  its.forEach(function(i){
+    const aberto=Math.max(0,(Number(i.qtd)||0)-(Number(i.qtd_entregue)||0));
+    const it=i.material_id?solItem(i.material_id):null;
+    const un=it?String(it.unidade_medida||it.unidade||'').toLowerCase():'';
+    const s=i.material_id?solSaldo(i.material_id):null;
+    n++;
+    linhas+='<tr><td class="n">'+n+'</td>'
+      +'<td class="t">'+solEsc(solNomeItem(i))+(i.material_id?'':' <span style="font-size:10px;color:#B03A2E">— item novo, fora do cadastro</span>')
+        +(un?'<span style="display:block;font-size:10px;color:#666">'+solEsc(un)+'</span>':'')+'</td>'
+      +'<td class="q" style="font-weight:normal;color:#222">'+solN(i.qtd)+'</td>'
+      +'<td class="q" style="font-weight:normal;color:#222">'+solN(i.qtd_entregue)+'</td>'
+      +'<td class="q">'+(aberto>0?solN(aberto):'✓')+'</td>'
+      +'<td class="q" style="font-weight:normal;color:'+(s!==null&&s<aberto?'#B03A2E':'#222')+'">'+(s===null?'—':solN(s))+'</td>'
+      +'<td class="c"></td><td style="width:26px;text-align:center">☐</td></tr>';
+  });
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+    +'<title>Pedido de material #'+p.id+' — '+solEsc(solDep(p.departamento_id))+'</title>'+rmCssImpressao()+'</head><body>'
+    +'<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+      +'<div class="sub">Administrativo · Pedido de material — folha de separação</div></div>'
+      +'<div class="num">PEDIDO<b>#'+p.id+'</b>'+solEsc(solDep(p.departamento_id))+'</div></div>'
+    +'<div style="font-size:11.5px;margin:6px 0 10px;line-height:1.6">'
+      +'<b>Departamento:</b> '+solEsc(solDep(p.departamento_id))
+      +' &nbsp;·&nbsp; <b>Pedido em:</b> '+solData(p.created_at)
+      +(p.solicitante?' &nbsp;·&nbsp; <b>Pedido por:</b> '+solEsc(p.solicitante):'')
+      +' &nbsp;·&nbsp; <b>Situação:</b> '+solEsc(SOL_ROT[p.status]||p.status)
+      +(p.observacao?'<br><b>Observação:</b> '+solEsc(p.observacao):'')+'</div>'
+    +'<table style="width:100%"><thead><tr><th>#</th><th>Item</th><th class="q">Pedido</th><th class="q">Já entregue</th>'
+      +'<th class="q">Falta entregar</th><th class="q">Saldo</th><th class="c">Separei</th><th></th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table>'
+    +'<div class="ass"><div>Separado por</div><div>Recebido por (departamento)</div></div>'
+    +'<div class="rodape">HOG Saídas · folha de separação · emitida por '+solEsc(quem)+' em '+hoje
+      +' · depois de separar, volte à tela <b>Separação & entrega</b>, ajuste a coluna <b>Entregar agora</b> com o que saiu de verdade e clique em <b>Entregar</b>.</div>'
+    +'</body></html>');
+}
+
 async function solEntregar(pid){
   const p=solAbertos.find(x=>x.id===pid); if(!p) return;
   const vai=[];
