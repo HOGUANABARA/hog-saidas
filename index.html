@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.157 · ficha de saída: óculos de gel na seção PLÁSTICA</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.158 · material para cirurgia externa: saída, papel e custo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -798,7 +798,8 @@ details[open] summary { margin-bottom: 6px; }
   <div id="aba-diversas" style="display:none">
   <div id="iv-aviso-saidas2" style="display:none;background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7a6408"></div>
     <div class="card">
-      <div class="card-titulo">1. Dados da Saída</div>
+      <div class="card-titulo">1. Dados da Saída
+        <button class="btn btn-secundario btn-sm" style="margin-left:auto" title="o que saiu daqui para cirurgias fora do HOG, com o custo de cada uma" onclick="cexRelatorio()">🏥 Relatório de cirurgia externa</button></div>
       <div class="grid-3">
         <div class="campo">
           <label>👤 Quem está registrando</label>
@@ -812,7 +813,7 @@ details[open] summary { margin-bottom: 6px; }
         </div>
         <div class="campo">
           <label>Destino da Saída</label>
-          <select id="sel-destino-div">
+          <select id="sel-destino-div" onchange="cexMostrar()">
             <option value="">Selecione...</option>
             <option value="CONSULTÓRIOS">🏥 Consultórios</option>
             <option value="USO CC">🔧 Uso CC</option>
@@ -822,7 +823,32 @@ details[open] summary { margin-bottom: 6px; }
             <option value="DESCARTE">🗑️ Descarte</option>
             <option value="EMPRESTIMO">🤝 Empréstimo</option>
             <option value="AUTORREFRATOR">👁️ Autorrefrator</option>
+            <option value="CIRURGIA EXTERNA">🏥 Cirurgia externa (fora do HOG)</option>
           </select>
+        </div>
+      </div>
+      <!-- v4.158 — material que vai para uma cirurgia FORA do HOG precisa de papel
+           para viajar e de custo separado depois. Estes campos só aparecem quando o
+           destino é "Cirurgia externa". -->
+      <div id="cex-bloco" style="display:none;margin-top:12px;border-top:1px solid var(--cinza-2);padding-top:12px">
+        <div class="grid-3">
+          <div class="campo"><label>🩺 Médico da cirurgia</label>
+            <input type="text" id="cex-medico" list="cex-medicos" placeholder="quem vai operar"></div>
+          <div class="campo"><label>🏥 Onde vai ser</label>
+            <input type="text" id="cex-hospital" placeholder="hospital / day hospital"></div>
+          <div class="campo"><label>📅 Data da cirurgia</label>
+            <input type="date" id="cex-data"></div>
+        </div>
+        <div class="grid-3" style="margin-top:8px">
+          <div class="campo"><label>🧾 Nº do atendimento no Externo <span style="font-weight:400;color:var(--cinza-4)">(opcional)</span></label>
+            <input type="text" id="cex-atend" placeholder="para amarrar com o faturamento"></div>
+          <div class="campo" style="grid-column:span 2"><label>👤 Paciente <span style="font-weight:400;color:var(--cinza-4)">(só para o documento impresso — não fica gravado no estoque)</span></label>
+            <input type="text" id="cex-paciente" placeholder="nome do paciente"></div>
+        </div>
+        <datalist id="cex-medicos"></datalist>
+        <div style="font-size:12px;color:#7D6608;background:var(--amarelo-claro,#FEF9E7);border-radius:8px;padding:9px 12px;margin-top:10px;line-height:1.5">
+          Ao enviar, o sistema oferece a <b>folha de remessa</b> para imprimir: materiais com <b>lote e validade</b>,
+          quem entregou e espaço para quem recebe assinar. O custo aparece no relatório <b>Cirurgia externa</b>.
         </div>
       </div>
     </div>
@@ -4977,9 +5003,145 @@ function renderizarDiversas() {
 function limparFormDiv() {
   itensDiversas = [];
   document.getElementById('sel-destino-div').value = '';
+  ['cex-medico','cex-hospital','cex-atend','cex-paciente'].forEach(function(id){ const e=document.getElementById(id); if(e) e.value=''; });   // v4.158
+  if (typeof cexMostrar==='function') cexMostrar();
   document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
   renderizarDiversas();
   limparBuscaDiv();
+}
+
+// ═══ v4.158 — MATERIAL PARA CIRURGIA FORA DO HOG ═════════════════════════
+// Ela, 05/10, com o caso do Dr. Heryberto no Day Hospital: "material que será
+// usado na cirurgia precisa de um documento especial E dar saída no estoque do
+// HOG; como integrar e gerar o relatório — custo para cirurgia externa".
+// Até aqui não havia caminho: todos os destinos são de dentro de casa, e o custo
+// ficava misturado no "uso CC". Agora:
+//   · destino próprio CIRURGIA EXTERNA (enum do banco, SQL de 05/10);
+//   · a saída carrega médico, hospital, data e o nº do atendimento do Externo na
+//     observação — o paciente fica SÓ no papel (a regra de setembro é que saída
+//     diversa não guarda paciente);
+//   · a folha de remessa sai na hora, com lote e validade de cada item.
+function cexMostrar(){
+  const sel=document.getElementById('sel-destino-div'), box=document.getElementById('cex-bloco');
+  if(!sel||!box) return;
+  const ehCex = sel.value==='CIRURGIA EXTERNA';
+  box.style.display = ehCex ? '' : 'none';
+  if(ehCex){
+    const d=document.getElementById('cex-data'); if(d && !d.value) d.value=(document.getElementById('inp-data-div')||{}).value||new Date().toISOString().slice(0,10);
+    cexMedicos();
+  }
+}
+async function cexMedicos(){
+  const dl=document.getElementById('cex-medicos'); if(!dl || dl.children.length) return;
+  try{
+    const ms=(await sbFetch('medicos?select=nome&order=nome.asc&limit=200'))||[];
+    dl.innerHTML=ms.map(m=>'<option value="'+String(m.nome||'').replace(/"/g,'&quot;')+'">').join('');
+  }catch(e){}
+}
+function cexDados(){
+  const g=id=>((document.getElementById(id)||{}).value||'').trim();
+  return { medico:g('cex-medico'), hospital:g('cex-hospital'), data:g('cex-data'),
+           atend:g('cex-atend'), paciente:g('cex-paciente') };
+}
+// a folha que viaja com o material
+async function cexDocumento(D, itens, registrante){
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const br=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+  // lote e validade: o que o estoque conhece hoje, o mais perto de vencer primeiro
+  let lotes={};
+  try{
+    const ids=itens.map(x=>x.id).filter(Boolean);
+    if(ids.length){
+      const ls=(await sbFetch('lotes?select=material_id,lote,validade,qtd,status&status=eq.ativo&material_id=in.('+ids.join(',')+')&order=validade.asc'))||[];
+      for(const l of ls){ (lotes[l.material_id]=lotes[l.material_id]||[]).push(l); }
+    }
+  }catch(e){}
+  const linhas=itens.map(function(x){
+    const ls=lotes[x.id]||[];
+    const lote=ls.length?esc(ls[0].lote||'—'):'';
+    const val =ls.length&&ls[0].validade?br(ls[0].validade):'';
+    return '<tr><td>'+esc(x.nome)+'</td><td style="text-align:center">'+x.qtd+'</td>'
+      +'<td>'+(lote||'<span class="br"></span>')+'</td><td>'+(val||'<span class="br"></span>')+'</td></tr>';
+  }).join('');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa de material — cirurgia externa</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;margin:24px}h1{font-size:18px;margin:0 0 2px}'
+    +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start}'
+    +'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:6px;border:1px solid #cfd8e3}'
+    +'td{padding:9px 6px;border:1px solid #cfd8e3;vertical-align:top}.br{display:inline-block;min-width:90px;border-bottom:1px solid #999}'
+    +'.dados td{padding:6px}.dados th{width:120px;background:#f7f9fc}'
+    +'.ass{display:flex;gap:40px;margin-top:34px}.ass div{flex:1;border-top:1px solid #999;padding-top:5px;text-align:center;font-size:11px}'
+    +'small{color:#666}@media print{@page{margin:14mm}}</style></head><body>'
+    +'<div class="cab"><div><h1>Remessa de material — cirurgia externa</h1>'
+    +'<div><b>Hospital dos Olhos Guanabara</b> · Centro Cirúrgico</div></div>'
+    +'<div style="text-align:right"><small>Emitida em '+new Date().toLocaleString('pt-BR')+'</small></div></div>'
+    +'<table class="dados"><tr><th>Paciente</th><td>'+(esc(D.paciente)||'<span class="br" style="min-width:300px"></span>')+'</td></tr>'
+    +'<tr><th>Médico</th><td>'+(esc(D.medico)||'—')+'</td></tr>'
+    +'<tr><th>Onde</th><td>'+(esc(D.hospital)||'—')+'</td></tr>'
+    +'<tr><th>Data da cirurgia</th><td>'+br(D.data)+(D.atend?(' &nbsp;·&nbsp; atendimento '+esc(D.atend)):'')+'</td></tr></table>'
+    +'<table><thead><tr><th>Material</th><th style="width:70px;text-align:center">Qtd</th><th style="width:150px">Lote</th><th style="width:120px">Validade</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table>'
+    +'<p><small>Material de propriedade do Hospital dos Olhos Guanabara, entregue para uso exclusivo na cirurgia acima. '
+    +'O que não for utilizado deve retornar ao HOG com esta folha.</small></p>'
+    +'<div class="ass"><div>Entregue por — '+esc(registrante||'')+'</div><div>Recebido por (nome e assinatura)</div></div>'
+    +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
+}
+
+// v4.158 — o relatório que ela pediu: custo do material por cirurgia FORA do HOG.
+// Uma cirurgia = uma saída (a observação guarda médico · hospital · data), e o
+// custo vem do último valor pago de cada item, igual ao resto do sistema.
+async function cexRelatorio(){
+  const hoje=new Date().toISOString().slice(0,10);
+  const de90=new Date(Date.now()-180*86400000).toISOString().slice(0,10);
+  const r=await hogPergunta({ titulo:'🏥 Cirurgia externa — custo do material',
+    texto:'O que saiu do estoque do HOG para cirurgias feitas fora.',
+    campos:[{id:'de',rot:'De',tipo:'data',valor:de90},{id:'ate',rot:'Até',tipo:'data',valor:hoje}], ok:'Gerar relatório' });
+  if(!r) return;
+  try{
+    const movs=(await sbFetch('movimentacoes?select=id,material_id,qtd,observacao,created_at,aprovado,registrado_por'
+      +'&tipo=eq.SAIDA_GERAL&destino_saida_geral=eq.'+encodeURIComponent('CIRURGIA EXTERNA')+'&order=id.asc&limit=3000'))||[];
+    const noPeriodo=movs.filter(m=>{ const d=String(m.created_at||'').slice(0,10); return d>=r.de && d<=r.ate; });
+    if(!noPeriodo.length){ toast('Nenhuma saída para cirurgia externa nesse período.',''); return; }
+    const ids=[...new Set(noPeriodo.map(m=>m.material_id))];
+    const mats=(await sbFetch('materiais?select=id,nome,ultimo_valor_pago&id=in.('+ids.join(',')+')&limit=2000'))||[];
+    const M={}; mats.forEach(m=>{ M[m.id]=m; });
+    const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const brl=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const brd=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+    // cada cirurgia é um grupo: a observação diz médico · hospital · data
+    const grupos={};
+    for(const m of noPeriodo){
+      const k=(m.observacao||'(sem identificação)');
+      const g=grupos[k]=grupos[k]||{ obs:k, itens:[], total:0, quando:String(m.created_at||'').slice(0,10), quem:m.registrado_por, pendente:false };
+      const mat=M[m.material_id]||{}; const q=Math.abs(Number(m.qtd)||0);
+      const v=Number(mat.ultimo_valor_pago)||0;
+      g.itens.push({ nome:mat.nome||('#'+m.material_id), qtd:q, unit:v, total:q*v, semPreco:!(v>0), aprovado:m.aprovado });
+      g.total+=q*v; if(!m.aprovado) g.pendente=true;
+    }
+    const lista=Object.values(grupos).sort((a,b)=>String(b.quando).localeCompare(String(a.quando)));
+    const totGeral=lista.reduce((t,g)=>t+g.total,0);
+    const semPreco=lista.flatMap(g=>g.itens.filter(i=>i.semPreco)).length;
+    const blocos=lista.map(g=>'<div class="cx"><div class="tit">'+esc(g.obs.replace(/^Cirurgia externa — /,''))+'</div>'
+      +'<div class="sub">lançada em '+brd(g.quando)+(g.quem?(' por '+esc(g.quem)):'')+(g.pendente?' · <b style="color:#B9770E">aguardando aprovação</b>':'')+'</div>'
+      +'<table><thead><tr><th>Material</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor un.</th><th style="text-align:right">Total</th></tr></thead><tbody>'
+      +g.itens.map(i=>'<tr><td>'+esc(i.nome)+'</td><td style="text-align:center">'+i.qtd+'</td>'
+        +'<td style="text-align:right">'+(i.semPreco?'<small>sem preço</small>':brl(i.unit))+'</td>'
+        +'<td style="text-align:right">'+(i.semPreco?'—':brl(i.total))+'</td></tr>').join('')
+      +'</tbody><tfoot><tr class="tot"><td colspan="3">Custo desta cirurgia</td><td style="text-align:right">'+brl(g.total)+'</td></tr></tfoot></table></div>').join('');
+    hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Custo de cirurgia externa</title>'
+      +'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}h1{font-size:17px;margin:0}'
+      +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:12px}'
+      +'.cx{margin-top:16px;page-break-inside:avoid}.tit{font-size:13.5px;font-weight:bold;color:#1B4F72}.sub{font-size:11px;color:#666}'
+      +'table{width:100%;border-collapse:collapse;margin-top:5px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid #bbb}'
+      +'td{padding:5px 6px;border-bottom:1px solid #e3e3e3}.tot{font-weight:bold;background:#fafafa}small{color:#666}'
+      +'@media print{@page{margin:14mm}}</style></head><body>'
+      +'<div class="cab"><h1>Custo de material — cirurgias fora do HOG</h1>'
+      +'<div><b>Hospital dos Olhos Guanabara</b> · '+brd(r.de)+' a '+brd(r.ate)+'</div>'
+      +'<div><small>Emitido em '+new Date().toLocaleString('pt-BR')+' · valores pelo último preço pago de cada item</small></div></div>'
+      +'<p><b>'+lista.length+'</b> cirurgia(s) · total <b>'+brl(totGeral)+'</b>'
+      +(semPreco?(' · <span style="color:#B9770E">'+semPreco+' item(ns) sem preço no cadastro — entram como zero</span>'):'')+'</p>'
+      + (blocos||'<p>—</p>')
+      +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
+  }catch(e){ toast('Não consegui montar o relatório: '+(e.message||e),'erro'); }
 }
 
 async function enviarDiversas() {
@@ -5015,7 +5177,17 @@ async function enviarDiversas() {
     }
   } catch (e) { console.warn('conferência de quantidade (saída diversa):', e); }
 
-  if (!confirm(`Enviar ${itens.length} item(ns) para aprovação?\nDestino: ${destino} — Data: ${data.split('-').reverse().join('/')}`)) return;
+  // v4.158 — cirurgia externa: sem médico e hospital o papel não serve para nada
+  const ehCex = destino==='CIRURGIA EXTERNA';
+  const D = ehCex ? cexDados() : null;
+  if (ehCex) {
+    if (!D.medico)   { toast('Diga qual médico vai operar.', 'erro'); return; }
+    if (!D.hospital) { toast('Diga onde vai ser a cirurgia.', 'erro'); return; }
+    if (!D.data)     { toast('Informe a data da cirurgia.', 'erro'); return; }
+  }
+  if (!confirm(ehCex
+      ? `Enviar ${itens.length} item(ns) para aprovação?\n\n🏥 Cirurgia externa — ${D.medico} · ${D.hospital} · ${D.data.split('-').reverse().join('/')}\n\nO material sai do estoque do HOG e o custo entra no relatório de cirurgia externa.`
+      : `Enviar ${itens.length} item(ns) para aprovação?\nDestino: ${destino} — Data: ${data.split('-').reverse().join('/')}`)) return;
 
   try {
     const localId = await getEstoqueGeralId();
@@ -5031,13 +5203,20 @@ async function enviarDiversas() {
         destino_saida_geral: destino,
         aprovado: false,
         registrado_por: registrante,
-        observacao: 'Saída diversa — ' + destino + ' — ' + data,
+        observacao: ehCex
+          ? ('Cirurgia externa — ' + D.medico + ' · ' + D.hospital + ' · ' + D.data
+             + (D.atend ? (' · atendimento ' + D.atend) : ''))
+          : ('Saída diversa — ' + destino + ' — ' + data),
       });
     }
     if (naoEnc.length) {
       alert('⚠️ ' + naoEnc.length + ' item(ns) não enviados (fora do catálogo):\n' + naoEnc.join('\n'));
     }
     toast(`${itens.length - naoEnc.length} itens enviados para aprovação! ✓`, 'sucesso');
+    if (ehCex) {   // v4.158 — a folha que viaja com o material
+      const paraDoc = itens.map(it => { const m = resolverMaterial(it.nome); return m ? { id:m.id, nome:m.nome, qtd:it.qtd } : null; }).filter(Boolean);
+      if (confirm('Imprimir a folha de remessa para levar com o material?')) await cexDocumento(D, paraDoc, registrante);
+    }
     limparFormDiv();
   } catch(e) {
     toast('Erro ao enviar: ' + e.message, 'erro');
