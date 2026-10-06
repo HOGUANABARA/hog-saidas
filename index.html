@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.158 · material para cirurgia externa: saída, papel e custo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.159 · remessa no modelo do hospital: lote traz a nota de compra</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -835,17 +835,24 @@ details[open] summary { margin-bottom: 6px; }
           <div class="campo"><label>🩺 Médico da cirurgia</label>
             <input type="text" id="cex-medico" list="cex-medicos" placeholder="quem vai operar"></div>
           <div class="campo"><label>🏥 Onde vai ser</label>
-            <input type="text" id="cex-hospital" placeholder="hospital / day hospital"></div>
+            <input type="text" id="cex-hospital" list="cex-hospitais" placeholder="hospital / day hospital" onchange="cexDestPreencher()"></div>
           <div class="campo"><label>📅 Data da cirurgia</label>
             <input type="date" id="cex-data"></div>
         </div>
         <div class="grid-3" style="margin-top:8px">
-          <div class="campo"><label>🧾 Nº do atendimento no Externo <span style="font-weight:400;color:var(--cinza-4)">(opcional)</span></label>
-            <input type="text" id="cex-atend" placeholder="para amarrar com o faturamento"></div>
+          <div class="campo"><label>🔪 Procedimento</label>
+            <input type="text" id="cex-proc" placeholder="ex.: Dacrio, Facectomia"></div>
           <div class="campo" style="grid-column:span 2"><label>👤 Paciente <span style="font-weight:400;color:var(--cinza-4)">(só para o documento impresso — não fica gravado no estoque)</span></label>
             <input type="text" id="cex-paciente" placeholder="nome do paciente"></div>
         </div>
+        <div class="grid-3" style="margin-top:8px">
+          <div class="campo"><label>🧾 Nº do atendimento no Externo <span style="font-weight:400;color:var(--cinza-4)">(opcional)</span></label>
+            <input type="text" id="cex-atend" placeholder="para amarrar com o faturamento"></div>
+          <div class="campo" style="grid-column:span 2"><label>📬 Destinatário — razão social e endereço <span style="font-weight:400;color:var(--cinza-4)">(vai no documento)</span></label>
+            <textarea id="cex-dest" rows="3" style="width:100%;border:1.5px solid var(--cinza-2);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--fonte)" placeholder="RAZÃO SOCIAL&#10;RUA, Nº&#10;CIDADE (UF) - CEP"></textarea></div>
+        </div>
         <datalist id="cex-medicos"></datalist>
+        <datalist id="cex-hospitais"></datalist>
         <div style="font-size:12px;color:#7D6608;background:var(--amarelo-claro,#FEF9E7);border-radius:8px;padding:9px 12px;margin-top:10px;line-height:1.5">
           Ao enviar, o sistema oferece a <b>folha de remessa</b> para imprimir: materiais com <b>lote e validade</b>,
           quem entregou e espaço para quem recebe assinar. O custo aparece no relatório <b>Cirurgia externa</b>.
@@ -5003,7 +5010,7 @@ function renderizarDiversas() {
 function limparFormDiv() {
   itensDiversas = [];
   document.getElementById('sel-destino-div').value = '';
-  ['cex-medico','cex-hospital','cex-atend','cex-paciente'].forEach(function(id){ const e=document.getElementById(id); if(e) e.value=''; });   // v4.158
+  ['cex-medico','cex-hospital','cex-atend','cex-paciente','cex-proc','cex-dest'].forEach(function(id){ const e=document.getElementById(id); if(e) e.value=''; });   // v4.158/v4.159
   if (typeof cexMostrar==='function') cexMostrar();
   document.getElementById('inp-data-div').value = new Date().toISOString().split('T')[0];
   renderizarDiversas();
@@ -5028,7 +5035,7 @@ function cexMostrar(){
   box.style.display = ehCex ? '' : 'none';
   if(ehCex){
     const d=document.getElementById('cex-data'); if(d && !d.value) d.value=(document.getElementById('inp-data-div')||{}).value||new Date().toISOString().slice(0,10);
-    cexMedicos();
+    cexMedicos(); cexHospitais();
   }
 }
 async function cexMedicos(){
@@ -5041,7 +5048,116 @@ async function cexMedicos(){
 function cexDados(){
   const g=id=>((document.getElementById(id)||{}).value||'').trim();
   return { medico:g('cex-medico'), hospital:g('cex-hospital'), data:g('cex-data'),
-           atend:g('cex-atend'), paciente:g('cex-paciente') };
+           atend:g('cex-atend'), paciente:g('cex-paciente'),
+           proc:g('cex-proc'), dest:g('cex-dest') };   // v4.159
+}
+// ═══ v4.159 — O MODELO QUE O HOSPITAL EXIGE ═══════════════════════════════
+// Ela, 06/10, com o papel que o Campinas Day Hospital aceitou: a remessa é uma
+// CARTA da F2MR declarando que não pratica circulação de mercadoria (não é
+// contribuinte de ICMS, logo não emite nota de remessa), e cada material vai
+// escrito assim:
+//   "01 unid - Mitomicina / lote: 601855 - Val: 20/02/27, no valor unitário de
+//    R$ 104,50, referente N/NF de compra 1509753, cuja cópia segue anexa"
+// Ou seja: o lote tem de puxar o NÚMERO DA NOTA em que aquele lote entrou — é a
+// nota cuja cópia viaja junto. No banco isso é lotes.nf_item_id → nf_itens →
+// notas_fiscais. Armadilha real: a contagem de inventário cria um lote NOVO com
+// o mesmo número e sem nf_item_id (o 601855 tem dois: o da nota, já baixado, e o
+// da contagem, ativo). Por isso a busca da nota é por material+lote+validade,
+// em qualquer um dos registros daquele lote.
+const CEX_EMPRESA = {
+  razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
+  endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP',
+  rodape:'F2MR Clínica Oftalmológica Ltda - CNPJ 15.047.746/0001-28<br>Rua Camargo Paes, 572 - Jd Guanabara - Campinas (SP) - CEP 13073-350'
+};
+const CEX_DESTINOS = {
+  'CAMPINAS DAY HOSPITAL':'DAY HOSPITAL SS SOCIEDADE SIMPLES LTDA\nRUA BENJAMIN CONSTANT, 2011\nCAMPINAS (SP) - CEP 13025-005'
+};
+function cexDestPreencher(){
+  const h=((document.getElementById('cex-hospital')||{}).value||'').trim().toUpperCase();
+  const d=document.getElementById('cex-dest'); if(!d) return;
+  if(CEX_DESTINOS[h] && !d.value.trim()) d.value=CEX_DESTINOS[h];
+  try{ if(d.value.trim()) localStorage.setItem('hog_cex_dest_'+h, d.value); }catch(e){}
+  if(!d.value.trim()){ try{ const g=localStorage.getItem('hog_cex_dest_'+h); if(g) d.value=g; }catch(e){} }
+}
+function cexHospitais(){
+  const dl=document.getElementById('cex-hospitais'); if(!dl) return;
+  const nomes=new Set(Object.keys(CEX_DESTINOS));
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.indexOf('hog_cex_dest_')===0) nomes.add(k.slice(13)); } }catch(e){}
+  dl.innerHTML=[...nomes].map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">').join('');
+}
+// lote → nota de compra: o número que vai escrito no documento
+async function cexLotesENotas(ids){
+  const out={ porMaterial:{}, nfDoLote:{} };
+  if(!ids.length) return out;
+  try{
+    const ls=(await sbFetch('lotes?select=id,material_id,lote,validade,qtd,status,nf_item_id&material_id=in.('+ids.join(',')+')&order=validade.asc'))||[];
+    const nfItens=[...new Set(ls.map(l=>l.nf_item_id).filter(Boolean))];
+    let mapaItem={}, mapaNota={};
+    if(nfItens.length){
+      const its=(await sbFetch('nf_itens?select=id,nota_fiscal_id&id=in.('+nfItens.join(',')+')'))||[];
+      its.forEach(x=>{ mapaItem[x.id]=x.nota_fiscal_id; });
+      const notas=[...new Set(its.map(x=>x.nota_fiscal_id).filter(Boolean))];
+      if(notas.length){
+        const ns=(await sbFetch('notas_fiscais?select=id,numero_nf&id=in.('+notas.join(',')+')'))||[];
+        ns.forEach(n=>{ mapaNota[n.id]=n.numero_nf; });
+      }
+    }
+    const chave=l=>l.material_id+'|'+String(l.lote||'').trim().toUpperCase()+'|'+(l.validade||'');
+    for(const l of ls){
+      const k=chave(l);
+      const nf=l.nf_item_id ? mapaNota[mapaItem[l.nf_item_id]] : null;
+      if(nf && !out.nfDoLote[k]) out.nfDoLote[k]=nf;        // a nota em que ESTE lote entrou
+      if(l.status==='ativo' && (Number(l.qtd)||0)>0) (out.porMaterial[l.material_id]=out.porMaterial[l.material_id]||[]).push(l);
+    }
+  }catch(e){}
+  return out;
+}
+// v4.159 — a folha agora é a CARTA que o hospital exige (ver CEX_EMPRESA).
+// `itens` = [{id, nome, qtd, lote, validade, unit, nf}] já conferidos na tela.
+function cexCartaHtml(D, itens){
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const br=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'—';
+  const br2=d=>{ const p=String(d||'').slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0].slice(2)):'—'; };
+  const brl=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const hj=new Date();
+  const linhas=itens.map(function(x){
+    const q=String(Math.abs(Number(x.qtd)||0)); const qq=q.length<2?('0'+q):q;
+    return '<p class="item">'+qq+' unid - <b>'+esc(x.nome)+'</b>'
+      + (x.lote?(' / lote: '+esc(x.lote)):'')
+      + (x.validade?(' - Val: '+br2(x.validade)):'')
+      + (Number(x.unit)>0?(', no valor unitário de '+brl(x.unit)):'')
+      + (x.nf?(', referente N/NF de compra '+esc(x.nf)+', cuja cópia segue anexa')
+            :', <span class="falta">N/NF de compra: ____________</span>')
+      + '</p>';
+  }).join('');
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Remessa de material — '+esc(D.paciente||'cirurgia externa')+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12.5px;color:#111;margin:28px 34px;line-height:1.55}'
+    +'p{margin:0 0 10px}.item{margin:0 0 8px}.falta{color:#B9770E}'
+    +'.cols{display:flex;gap:30px;margin-top:22px}.cols>div{flex:1}'
+    +'.rec{border:1px solid #999;padding:10px 12px}.lin{border-bottom:1px solid #666;height:18px;margin-top:16px}'
+    +'.ass{margin-top:30px}.ass .l{border-top:1px solid #666;width:320px;padding-top:4px}'
+    +'.pe{margin-top:34px;border-top:1px solid #ccc;padding-top:6px;font-size:10.5px;color:#555;text-align:center}'
+    +'@media print{@page{margin:16mm}}</style></head><body>'
+    +'<p>'+esc(CEX_EMPRESA.cidade)+' ('+esc(CEX_EMPRESA.uf)+'), '+hj.getDate()+' de '+MES[hj.getMonth()]+' de '+hj.getFullYear()+'</p>'
+    +'<p>Pela presente a empresa <b>'+esc(CEX_EMPRESA.razao)+'</b>, pessoa jurídica regularmente inscrita no CNPJ sob o número '
+      +esc(CEX_EMPRESA.cnpj)+', situada na '+esc(CEX_EMPRESA.endereco)+', cidade de '+esc(CEX_EMPRESA.cidade)
+      +', Estado de São Paulo, declara para os devidos fins que não pratica operação relativa a circulação de mercadorias, '
+      +'não sendo inscrita dessa forma no cadastro de contribuintes de ICMS, estando, portanto desobrigada ao cumprimento '
+      +'das obrigações acessórias e emissão de nota fiscal para circulação de mercadorias estabelecidas para contribuintes em geral.</p>'
+    +'<p>Sendo assim estamos remetendo os materiais abaixo relacionados para cirurgia:</p>'
+    + linhas
+    +'<p style="margin-top:14px">Destinados ao procedimento de <b>'+(esc(D.proc)||'____________')+'</b> agendado para '+br(D.data)+':<br>'
+      +'Paciente: <b>'+(esc(D.paciente)||'____________________________')+'</b><br>'
+      +'Cirurgião: <b>'+(esc(D.medico)||'____________')+'</b></p>'
+    +'<div class="cols"><div><b>Destinatário:</b><br>'+esc(D.hospital||'')+'<br>'
+      +(esc(D.dest||'').replace(/\n/g,'<br>'))+'</div>'
+    +'<div class="rec"><b>RECIBO</b><p style="margin-top:8px">Recebi o material acima listado.</p>'
+      +'<div class="lin"></div><p style="margin:4px 0 0">Nome:</p><div class="lin"></div><p style="margin:4px 0 0">RG</p></div></div>'
+    +'<p style="margin-top:22px">Sem mais para o momento.</p>'
+    +'<div class="ass"><div class="l">'+esc(CEX_EMPRESA.razao)+'<br>CNPJ '+esc(CEX_EMPRESA.cnpj)+'</div></div>'
+    +'<div class="pe">'+CEX_EMPRESA.rodape+'</div>'
+    +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>';
 }
 // a folha que viaja com o material
 async function cexDocumento(D, itens, registrante){
@@ -5089,6 +5205,62 @@ async function cexDocumento(D, itens, registrante){
 // v4.158 — o relatório que ela pediu: custo do material por cirurgia FORA do HOG.
 // Uma cirurgia = uma saída (a observação guarda médico · hospital · data), e o
 // custo vem do último valor pago de cada item, igual ao resto do sistema.
+// v4.159 — a tela de conferência: por item, QUAL lote vai (com o saldo de cada um)
+// e qual nota de compra o sistema achou para aquele lote. O que não tiver nota sai
+// com o espaço em branco no papel, para preencher à mão — melhor do que inventar.
+let cexItensDoc=[], cexDadosDoc=null, cexNfMapa={};
+async function cexConferir(D, itens, registrante){
+  const L=await cexLotesENotas(itens.map(x=>x.id));
+  cexNfMapa=L.nfDoLote; cexDadosDoc=D;
+  cexItensDoc=itens.map(function(x){
+    const ls=L.porMaterial[x.id]||[];
+    const esc=ls[0]||null;
+    return Object.assign({}, x, { lotes:ls, lote:esc?esc.lote:'', validade:esc?esc.validade:'', nf:esc?(L.nfDoLote[x.id+'|'+String(esc.lote||'').trim().toUpperCase()+'|'+(esc.validade||'')]||''):'' });
+  });
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const br=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'';
+  let ov=document.getElementById('cex-ov');
+  if(!ov){ ov=document.createElement('div'); ov.id='cex-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9100;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.addEventListener('click',e=>{ if(e.target===ov) cexFechar(); });
+    document.body.appendChild(ov); }
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">'
+    +'<div style="display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--cinza-2)">'
+    +'<b style="font-size:15px;color:var(--cinza-5)">🏥 Remessa — confira lote e nota de compra</b>'
+    +'<button onclick="cexFechar()" style="margin-left:auto;border:none;background:transparent;font-size:20px;cursor:pointer;color:var(--cinza-4)">&#10005;</button></div>'
+    +'<div style="padding:16px 22px">'
+    +'<div style="font-size:12px;color:#7D6608;background:#FEF9E7;border-radius:8px;padding:9px 12px;margin-bottom:12px;line-height:1.5">'
+    +'O hospital exige o número da nota de compra de cada lote, com a <b>cópia da nota anexa</b>. '
+    +'O que o sistema achou já vem preenchido; o que faltar você completa aqui ou escreve à mão no papel.</div>'
+    +'<table class="hg-tab"><thead><tr><th>Material</th><th class="hg-num">Qtd</th><th>Lote que vai</th><th>Validade</th><th>N/NF de compra</th></tr></thead><tbody>'
+    + cexItensDoc.map(function(x,i){
+        const op=(x.lotes||[]).map(l=>'<option value="'+esc(l.lote)+'|'+(l.validade||'')+'"'+((l.lote===x.lote&&l.validade===x.validade)?' selected':'')+'>'
+            +esc(l.lote||'sem lote')+(l.validade?(' · val. '+br(l.validade)):'')+' · tem '+(Number(l.qtd)||0)+'</option>').join('');
+        return '<tr><td class="hg-prod">'+esc(x.nome)+'</td><td class="hg-num">'+x.qtd+'</td>'
+          +'<td>'+(op?('<select onchange="cexTrocaLote('+i+',this.value)" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px;max-width:230px">'+op+'</select>')
+                    :('<input value="'+esc(x.lote)+'" oninput="cexItensDoc['+i+'].lote=this.value" placeholder="digite o lote" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px;width:130px">'))+'</td>'
+          +'<td><input type="date" value="'+(x.validade||'')+'" oninput="cexItensDoc['+i+'].validade=this.value" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px"></td>'
+          +'<td><input id="cex-nf-'+i+'" value="'+esc(x.nf)+'" oninput="cexItensDoc['+i+'].nf=this.value" placeholder="nº da nota" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px;width:130px">'
+            +(x.nf?'':'<div style="font-size:10.5px;color:#B9770E;margin-top:3px">não achei a nota deste lote</div>')+'</td></tr>';
+      }).join('')
+    +'</tbody></table></div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--cinza-2);background:var(--cinza-1)">'
+    +'<button onclick="cexFechar()" style="border:1.5px solid var(--cinza-2);background:#fff;color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Agora não</button>'
+    +'<button onclick="cexImprimir()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)">🖨 Imprimir a remessa</button></div></div>';
+}
+function cexFechar(){ const ov=document.getElementById('cex-ov'); if(ov) ov.remove(); }
+function cexTrocaLote(i, valor){
+  const p=String(valor||'').split('|'); const x=cexItensDoc[i]; if(!x) return;
+  x.lote=p[0]||''; x.validade=p[1]||'';
+  x.nf=cexNfMapa[x.id+'|'+x.lote.trim().toUpperCase()+'|'+(x.validade||'')]||'';
+  const campo=document.getElementById('cex-nf-'+i); if(campo) campo.value=x.nf;
+}
+function cexImprimir(){
+  if(!cexDadosDoc) return;
+  hogImprimir(cexCartaHtml(cexDadosDoc, cexItensDoc));
+  cexFechar();
+}
+
 async function cexRelatorio(){
   const hoje=new Date().toISOString().slice(0,10);
   const de90=new Date(Date.now()-180*86400000).toISOString().slice(0,10);
@@ -5213,9 +5385,9 @@ async function enviarDiversas() {
       alert('⚠️ ' + naoEnc.length + ' item(ns) não enviados (fora do catálogo):\n' + naoEnc.join('\n'));
     }
     toast(`${itens.length - naoEnc.length} itens enviados para aprovação! ✓`, 'sucesso');
-    if (ehCex) {   // v4.158 — a folha que viaja com o material
-      const paraDoc = itens.map(it => { const m = resolverMaterial(it.nome); return m ? { id:m.id, nome:m.nome, qtd:it.qtd } : null; }).filter(Boolean);
-      if (confirm('Imprimir a folha de remessa para levar com o material?')) await cexDocumento(D, paraDoc, registrante);
+    if (ehCex) {   // v4.158/v4.159 — conferir lote e nota, depois imprimir a carta
+      const paraDoc = itens.map(it => { const m = resolverMaterial(it.nome); return m ? { id:m.id, nome:m.nome, qtd:it.qtd, unit:Number(m.ultimo_valor_pago)||0 } : null; }).filter(Boolean);
+      await cexConferir(D, paraDoc, registrante);
     }
     limparFormDiv();
   } catch(e) {
