@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.159 · remessa no modelo do hospital: lote traz a nota de compra</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.160 · manutenção: prestador na demanda sem lançar custo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -24999,6 +24999,7 @@ async function manDadosCarregar(){
 }
 // v4.126 — prestadores envolvidos na demanda: acionados para orçar, quem visitou e quem tem custo
 function manEnvolvidos(sid){ const ids=new Set();
+  { const s=manSols.find(x=>x.id===sid); if(s&&s.prestador_id) ids.add(s.prestador_id); }   // v4.160 — prestador posto na demanda
   manAcion.filter(a=>a.solicitacao_id===sid).forEach(a=>ids.add(a.prestador_id));
   manVisItens.filter(i=>i.solicitacao_id===sid).forEach(i=>{ const v=manVisitas.find(x=>x.id===i.visita_id); if(v&&v.prestador_id) ids.add(v.prestador_id); });
   manCustosDe(sid).forEach(c=>{ if(c.prestador_id) ids.add(c.prestador_id); });
@@ -25318,7 +25319,10 @@ function manFichaRender(){
   let c2='<div class="man-col"><h4>Situação</h4><div class="man-bloco agora">'
     +(pode?'<div class="man-linha" style="margin-top:0"><label class="man-rot" style="flex:1">👤 Quem faz a tratativa <input id="mt-resp" list="man-dl-nomes" value="'+manEsc(s.responsavel||'')+'" placeholder="nome"></label>'
       +'<button class="man-b o p" style="align-self:flex-end" onclick="manSalvarResp()">💾 Salvar</button></div>'
-      :'<div class="man-par"><span>👤 Tratativa</span><b>'+manEsc(s.responsavel||'—')+'</b></div>')
+      +'<div class="man-linha" style="margin-top:0"><label class="man-rot" style="flex:1">👷 Prestador que vai atender <input id="mt-prest" list="man-dl-prest" value="'+manEsc(s.prestador_id?manPrestNome(s.prestador_id):'')+'" placeholder="apelido — não lança custo nenhum" title="só vincula quem vai fazer; orçamento e custo continuam na aba Custos, quando houver"></label>'
+      +'<button class="man-b o p" style="align-self:flex-end" onclick="manSalvarPrestDem()">💾 Salvar</button></div>'
+      :'<div class="man-par"><span>👤 Tratativa</span><b>'+manEsc(s.responsavel||'—')+'</b></div>'
+       +(s.prestador_id?'<div class="man-par"><span>👷 Prestador</span><b>'+manEsc(manPrestNome(s.prestador_id))+'</b></div>':''))
     +(s.agendada_para&&!fim?'<div class="man-par" style="margin-bottom:6px"><span>📅 Combinado para</span><b>'+manDt(s.agendada_para)+'</b></div>':'');
   if(s.situacao==='RESOLVIDA') c2+='<div class="man-ok">✅ Resolvida'+(s.sem_cobranca?' — sem cobrança':'')+'<span class="man-sub">'+manDth(s.resolvida_em)+' · '+manEsc(s.resolvida_por||'')+'</span></div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
   else if(s.situacao==='CANCELADA') c2+='<div class="man-motivo">Cancelada</div>'+(pode?B('n p','Reabrir','manReabrir('+s.id+')'):'');
@@ -25407,6 +25411,17 @@ async function manSalvarContrato(){ const s=manSols.find(x=>x.id===manAberta.id)
 function manVisFicou(sid){ const w=document.getElementById('mv-dw'+sid); if(w) w.style.display=(manGv('mv-r'+sid)==='1')?'none':''; }
 function manVisTipo(){ const t=manGv('mv-tipo'), e=document.getElementById('mv-prest'), r=document.getElementById('mv-prest-rot'); if(!e) return;
   e.setAttribute('list', t==='INTERNO'?'man-dl-nomes':'man-dl-prest'); e.placeholder=t==='INTERNO'?'nome de quem fez':'apelido'; if(r) r.textContent=t==='INTERNO'?'Quem da equipe':'Prestador'; }
+// v4.160 — ela: "preciso conseguir colocar na demanda o prestador sem que registre imediatamente o orçamento"
+async function manSalvarPrestDem(){ const s=manSols.find(x=>x.id===manAberta.id); const nome=manGv('mt-prest').trim();
+  if(!nome){ if(!s.prestador_id) return toast('Nada mudou');
+    if(!await hogConfirma({titulo:'Tirar o prestador da demanda?', texto:'Fica registrado no histórico. Nenhum custo é mexido.', ok:'Tirar'})) return;
+    try{ await manNota(s.id,'prestador tirado da demanda',{prestador_id:null}); toast('Prestador tirado'); }catch(e){ toast('Erro: '+e.message,'erro'); }
+    return manFichaReabrir(); }
+  const p=await manPrestPorNome(nome); if(!p) return;
+  if(s.prestador_id===p.id) return toast('Nada mudou');
+  try{ await manNota(s.id,'prestador que vai atender: '+p.apelido,Object.assign({prestador_id:p.id},manAndamento(s.id))); toast('Prestador: '+p.apelido); }
+  catch(e){ toast('Erro: '+e.message,'erro'); }
+  await manFichaReabrir(); }
 async function manSalvarResp(){ const s=manSols.find(x=>x.id===manAberta.id); const r=manGv('mt-resp').trim();
   if((s.responsavel||'')===r) return toast('Nada mudou');
   try{ await manNota(s.id,'tratativa: '+(r||'— sem responsável'),Object.assign({responsavel:r||null},manAndamento(s.id))); toast('Tratativa: '+(r||'—')); }catch(e){ toast('Erro: '+e.message,'erro'); }
