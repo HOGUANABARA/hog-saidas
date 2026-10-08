@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.160 · manutenção: prestador na demanda sem lançar custo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.161 · manutenção: visita e custo lançados dentro da ficha</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -24892,7 +24892,7 @@ const MAN_MAX=50*1024*1024;
 let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
-let manHistOrdem='ASC', manVisSel=[], manVisCab={}, manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
+let manHistOrdem='ASC', manFichaAcao=null, manFichaFotos=[], manFichaTmpArq=null, manVisSel=[], manVisCab={}, manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
 function manEsc(t){ return dptoEsc(t); }
 function manNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
@@ -25276,7 +25276,7 @@ async function manFicha(id){
   try{
     if(!manDeps.length) await manBase();
     if(!manSols.some(x=>x.id===id) || !manCustos) await manDadosCarregar();
-    manAberta={id, edit:false, anexos:[], hist:[]};
+    manAberta={id, edit:false, anexos:[], hist:[]}; manFichaAcao=null; manFichaFotos=[]; manFichaTmpArq=null;   // v4.161
     await manFichaDados(); manDatalists(); manFichaRender();
   }catch(e){ mdl.innerHTML='<div class="man-mh"><b>Erro</b><button class="fecha" onclick="manFechar()">&#10005;</button></div><div style="padding:20px">'+manEsc(e.message)+'</div>'; }
 }
@@ -25343,7 +25343,8 @@ function manFichaRender(){
   c2+='<h4>🔧 Visitas</h4><div class="man-bloco">'+(vs.length?vs.map(({i,v})=>{ const outras=manVisItens.filter(x=>x.visita_id===v.id&&x.solicitacao_id!==s.id).map(x=>'#'+x.solicitacao_id);
       return '<div class="man-orc"><b style="flex:1">'+manDt(v.data)+' · '+manEsc(manVisQuem(v))+'<span class="man-sub">'+manEsc(i.feito||'—')+(outras.length?' · na mesma visita: '+outras.join(', '):'')+'</span></b>'
         +(i.resolveu?'<span class="man-tag man-t-ok">resolveu</span>':'<span class="man-tag man-t-sep">falta terminar</span>')+'</div>'; }).join(''):'<span class="man-sub">Nenhuma visita registrada.</span>')
-    +(pode&&!fim?'<div class="man-linha">'+B('o p','+ Registrar visita','manPreDem='+s.id+';manFechar();trocarAba(\'man_vis\')')+'</div>':'')+'</div>'+manRetirBloco(s,pode)+'</div>';
+    +(pode&&!fim&&manFichaAcao!=='VISITA'?'<div class="man-linha">'+B('o p','+ Registrar visita','manFichaAcao=\'VISITA\';manFichaRender()','sem sair da ficha')+'</div>':'')+'</div>'
+    +(pode&&!fim&&manFichaAcao==='VISITA'?manFichaVisitaBloco(s):'')+manRetirBloco(s,pode)+'</div>';
   // coluna 3 — custos + histórico
   const cs=manCustosDe(s.id);
   let c3='<div class="man-col">'+manAcionBloco(s,pode,fim)+'<h4>💰 Custos</h4><div class="man-bloco">'+(cs.length?cs.map(c=>{ const ds=manDemsDoCusto(c.id);
@@ -25351,8 +25352,8 @@ function manFichaRender(){
         +'<span class="man-sub">'+manRecebIcone(c)+manEsc(manReceb(c))+(ds.length>1?' · vale para '+ds.map(x=>'#'+x).join(' + '):'')+'</span></b>'+manBrl(c.valor)
         +(c.arquivo?' <a href="'+manEsc(manPublica(c.arquivo))+'" target="_blank" title="ver o orçamento">📄</a>':'')+' '+manTagCus(c)
         +(pode&&!c.lote_id?' <button class="man-b n p" onclick="manCusTirar('+c.id+')" title="tira o custo da(s) demanda(s); fica registrado no histórico">🗑 Tirar</button>':'')+'</div>'; }).join(''):'<span class="man-sub">Sem custo lançado.</span>')
-    +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>'
-    +(pode?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manPreDem='+s.id+';manFechar();trocarAba(\'man_cus\')')+'</div>':'')+'</div>';
+    +(pode&&manFichaAcao!=='CUSTO'?'<div class="man-linha">'+B('o p','+ Lançar custo / orçamento','manFichaAcao=\'CUSTO\';manFichaRender()','sem sair da ficha')+'</div>':'')+'</div>'
+    +(pode&&manFichaAcao==='CUSTO'?manFichaCustoBloco(s):'')+'</div>';
   // faixa de baixo — anotação do andamento + histórico com espaço (v4.125)
   let c4='<div class="man-full"><h4>📝 Andamento do caso <span class="hg-dica" title="Cada anotação entra no histórico com a data do que aconteceu, quem registrou e o texto. A data combinada é opcional e aparece na ficha e na lista de demandas.">?</span></h4>';
   if(pode) c4+='<div class="man-bloco agora"><div class="man-grade" style="grid-template-columns:1fr;margin-bottom:6px">'
@@ -25367,6 +25368,7 @@ function manFichaRender(){
       +'<td class="q">'+manEsc(x.quem||'')+'</td><td>'+manEsc(x.motivo||'')+'</td></tr>').join('')
       :'<tr><td class="man-sub" style="padding:10px">Nada no histórico ainda.</td></tr>')
     +'</tbody></table></div><div class="man-sub" style="margin-top:4px">'+A.hist.length+' registro(s) · aberta em '+manDt(s.created_at)+(s.resolvida_em?' · resolvida em '+manDt(s.resolvida_em):'')+'</div></div>';
+  if(manFichaAcao) setTimeout(function(){ if(manFichaAcao==='VISITA') manFichaVisFicou(); const e=document.getElementById('man-acao'); if(e) e.scrollIntoView({block:'nearest',behavior:'smooth'}); },30);   // v4.161 — o formulário aberto vem para a vista
   document.getElementById('man-mdl').innerHTML='<div class="man-mh"><b>#'+s.id+' · '+manEsc(s.o_que)+'</b><span>'+manEsc(s.local)+' · '+manEsc(manDepNome(s.departamento_id))+'</span>'
     +manTagSit(s)+manTagAtraso(s)+(s.predial?' <span class="man-tag man-t-n" title="problema geral da estrutura">🏢 predial</span>':'')
     +'<button class="fecha" title="fechar" onclick="manFechar();manRecarregarTela()">&#10005;</button></div><div class="man-mb">'+c1+c2+c3+c4+'</div>';
@@ -25412,6 +25414,86 @@ function manVisFicou(sid){ const w=document.getElementById('mv-dw'+sid); if(w) w
 function manVisTipo(){ const t=manGv('mv-tipo'), e=document.getElementById('mv-prest'), r=document.getElementById('mv-prest-rot'); if(!e) return;
   e.setAttribute('list', t==='INTERNO'?'man-dl-nomes':'man-dl-prest'); e.placeholder=t==='INTERNO'?'nome de quem fez':'apelido'; if(r) r.textContent=t==='INTERNO'?'Quem da equipe':'Prestador'; }
 // v4.160 — ela: "preciso conseguir colocar na demanda o prestador sem que registre imediatamente o orçamento"
+// ═══ v4.161 — registrar visita e lançar custo DENTRO da ficha ═══════════════
+// Ela (08/10): a primeira tela (lista) ficou boa; a segunda (ficha) precisa parar de mandar o
+// usuário para outra aba só para registrar o que acabou de acontecer na demanda.
+function manFichaVisitaBloco(s){
+  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
+  const p=manPrestDe(s.prestador_id)||{};
+  return '<div class="man-bloco agora" id="man-acao"><div class="man-rot" style="margin-bottom:6px">🔧 Registrar visita nesta demanda</div>'
+   +'<div class="man-grade"><label class="man-rot">Quem fez <select id="fv-tipo" onchange="manFichaVisTipo()"><option value="PRESTADOR">👷 prestador</option><option value="INTERNO">🏢 equipe interna</option></select></label>'
+   +'<label class="man-rot"><span id="fv-rot">Prestador</span><input id="fv-quem" list="man-dl-prest" value="'+manEsc(p.apelido||'')+'" placeholder="apelido"></label>'
+   +'<label class="man-rot">Data <input id="fv-data" type="date" value="'+manIsoDia()+'"></label>'
+   +'<label class="man-rot">Ficou <select id="fv-res" onchange="manFichaVisFicou()"><option value="0">falta terminar</option><option value="1">resolvida</option></select></label>'
+   +'<label class="man-rot" style="grid-column:1/-1">O que fez <input id="fv-feito" placeholder="ex.: trocou o trinco"></label>'
+   +'<label class="man-rot" id="fv-dw" style="grid-column:1/-1">Volta combinada — opcional <input id="fv-volta" type="date" title="pode deixar em branco"></label></div>'
+   +'<div class="man-linha" style="margin-top:0">'+manBotaoUp('📷 Fotos do depois','manFichaVisArquivos(this)')+(manFichaFotos.length?'<span class="man-sub">'+manFichaFotos.length+' arquivo(s)</span>':'')+'</div>'
+   +'<div class="man-linha" style="margin-top:0">'+B('g p','💾 Registrar visita','manFichaVisitaSalvar()')+B('n p','Cancelar','manFichaAcao=null;manFichaFotos=[];manFichaRender()')+'</div>'
+   +'<div class="man-sub">Visita que atendeu mais de uma demanda: use a aba 🔧 Visitas.</div></div>';
+}
+function manFichaVisTipo(){ const tp=manGv('fv-tipo'), e=document.getElementById('fv-quem'), r=document.getElementById('fv-rot'); if(!e) return;
+  e.setAttribute('list', tp==='INTERNO'?'man-dl-nomes':'man-dl-prest'); e.placeholder=tp==='INTERNO'?'nome de quem fez':'apelido'; if(r) r.textContent=tp==='INTERNO'?'Quem da equipe':'Prestador'; }
+function manFichaVisFicou(){ const w=document.getElementById('fv-dw'); if(w) w.style.display=(manGv('fv-res')==='1')?'none':''; }
+async function manFichaVisArquivos(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs,'DEPOIS'); if(!p.length) return;
+  manFichaFotos.push(...p); manFichaRender(); toast('📷 '+p.length+' foto(s) na visita'); }
+async function manFichaVisitaSalvar(){
+  const s=manSols.find(x=>x.id===manAberta.id); const tipo=manGv('fv-tipo')||'PRESTADOR', nome=manGv('fv-quem').trim();
+  if(!nome) return toast(tipo==='INTERNO'?'Diga quem da equipe fez':'Diga qual prestador veio','erro');
+  const feito=manGv('fv-feito').trim(), res=manGv('fv-res')==='1', volta=manGv('fv-volta'), data=manGv('fv-data')||manIsoDia();
+  let p=null; if(tipo==='PRESTADOR'){ p=await manPrestPorNome(nome); if(!p) return; }
+  const quem=p?p.apelido:nome+' (equipe interna)';
+  if(!await hogConfirma({titulo:'Registrar a visita de '+quem+' ('+manDt(data)+')?', texto:'#'+s.id+' '+s.o_que+' — '+(res?'RESOLVIDA':'falta terminar')+(feito?'\n'+feito:''), ok:'💾 Registrar'})) return;
+  const fotos=manFichaFotos.slice();
+  try{
+    const r=await sbFetch('manut_visitas','POST',{prestador_id:p?p.id:null,interno_nome:p?null:nome,data,registrada_por:manQuem()});
+    const v=r&&r[0]; if(!v) throw new Error('o banco não devolveu a visita');
+    await sbFetch('manut_visita_itens','POST',[{visita_id:v.id,solicitacao_id:s.id,feito:feito||null,resolveu:res}]);
+    if(fotos.length) await manSubirVarios(fotos, s.id);
+    const campos=res?{situacao:'RESOLVIDA',resolvida_em:new Date().toISOString(),resolvida_por:manQuem()}:{situacao:'ANDAMENTO'};
+    if(!res && volta) campos.agendada_para=volta+'T12:00:00';
+    if(p && !s.prestador_id) campos.prestador_id=p.id;
+    await manNota(s.id,'visita de '+quem+' em '+manDt(data)+': '+(feito||'—')+(res?' (resolveu)':' (falta terminar)')+(!res&&volta?' · volta combinada para '+manDt(volta):'')+(fotos.length?' · '+fotos.length+' foto(s)':''),campos,campos.situacao);
+    manFichaAcao=null; manFichaFotos=[]; toast('Visita registrada');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+  await manFichaReabrir(); }
+function manFichaCustoBloco(s){
+  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
+  const p=manPrestDe(s.prestador_id)||{};
+  return '<div class="man-bloco agora" id="man-acao"><div class="man-rot" style="margin-bottom:6px">💰 Lançar custo nesta demanda</div>'
+   +'<div class="man-grade"><label class="man-rot">Tipo <select id="fc-tipo" onchange="manFichaCusPagoA()">'+Object.keys(MAN_TIPOS).map(k=>'<option value="'+k+'">'+MAN_TIPOS[k]+'</option>').join('')+'</select></label>'
+   +'<label class="man-rot">O que é <input id="fc-desc" placeholder="ex.: troca do trinco"></label>'
+   +'<label class="man-rot">Pago a <select id="fc-pago" onchange="manFichaCusPagoA()"><option value="">— escolha —</option><option value="PRESTADOR"'+(p.apelido?' selected':'')+'>👷 prestador</option><option value="FORNECEDOR">🏪 fornecedor (loja)</option></select></label>'
+   +'<label class="man-rot"><span id="fc-rec-rot">Prestador / loja</span><input id="fc-rec" list="man-dl-prest" value="'+manEsc(p.apelido||'')+'" placeholder="apelido ou loja"></label>'
+   +'<label class="man-rot">Valor <input id="fc-val" type="number" min="0" step="0.01" placeholder="R$"></label>'
+   +'<label class="man-rot">Empresa / CNPJ (se tiver) <input id="fc-emp" placeholder="em branco = só o nome"></label></div>'
+   +'<div class="man-linha" style="margin-top:0">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manFichaCusArquivo(this)','application/pdf,image/*')+'<span class="man-sub">'+(manFichaTmpArq?'📄 '+manEsc(manFichaTmpArq.nome):'sem arquivo')+'</span></div>'
+   +'<div class="man-linha" style="margin-top:0">'+B('g p','➕ Lançar custo','manFichaCustoSalvar()')+B('n p','Cancelar','manFichaAcao=null;manFichaTmpArq=null;manFichaRender()')+'</div>'
+   +'<div class="man-sub">Custo que vale para mais de uma demanda: use a aba 💰 Custos. A aprovação continua lá.</div></div>';
+}
+function manFichaCusPagoA(){ const pg=manGv('fc-pago'), rot=document.getElementById('fc-rec-rot'), rec=document.getElementById('fc-rec'); if(!rot||!rec) return;
+  rot.textContent=pg==='FORNECEDOR'?'Fornecedor (loja)':(pg==='PRESTADOR'?'Prestador':'Prestador / loja');
+  rec.setAttribute('list', pg==='FORNECEDOR'?'man-dl-lojas':'man-dl-prest'); rec.placeholder=pg==='FORNECEDOR'?'nome da loja':'apelido'; }
+async function manFichaCusArquivo(input){ const fs=[...input.files]; input.value=''; const p=await manPreparar(fs.slice(0,1),'ORCAMENTO'); if(!p.length) return;
+  manFichaTmpArq=p[0]; manFichaRender(); }
+async function manFichaCustoSalvar(){
+  const s=manSols.find(x=>x.id===manAberta.id);
+  const tipo=manGv('fc-tipo'), pago=manGv('fc-pago'), rec=manGv('fc-rec').trim(), v=Number(manGv('fc-val')), desc=manGv('fc-desc').trim();
+  if(!pago) return toast(tipo==='MATERIAL'?'Material: foi pago ao fornecedor (loja) ou ao prestador?':'Diga se é pago ao prestador ou ao fornecedor','erro');
+  if(!rec) return toast(pago==='FORNECEDOR'?'Diga a loja':'Diga o prestador','erro');
+  if(!(v>0)) return toast('Informe o valor','erro');
+  let p=null; if(pago==='PRESTADOR'){ p=await manPrestPorNome(rec); if(!p) return; }
+  if(!await hogConfirma({titulo:'Lançar o custo?', texto:MAN_TIPOS[tipo]+' · '+(desc||'—')+'\n'+(pago==='FORNECEDOR'?'🏪 '+rec:'👷 '+p.apelido)+' — '+manBrl(v)+'\nDemanda #'+s.id, ok:'➕ Lançar'})) return;
+  const arq=manFichaTmpArq;
+  try{
+    const r=await sbFetch('manut_custos','POST',{tipo,descricao:desc||null,pago_a:pago,prestador_id:p?p.id:null,loja:pago==='FORNECEDOR'?rec:null,empresa:manGv('fc-emp').trim()||null,valor:v,lancado_por:manQuem()});
+    const c=r&&r[0]; if(!c) throw new Error('o banco não devolveu o custo');
+    await sbFetch('manut_custo_demandas','POST',[{custo_id:c.id,solicitacao_id:s.id}]);
+    if(arq){ const cam=await manStoragePut(arq,'custos/'+c.id+'/orcamento-'+Date.now()+'.'+(arq.ext||'pdf')); await sbFetch('manut_custos?id=eq.'+c.id,'PATCH',{arquivo:cam}); }
+    const campos=manAndamento(s.id); if(p && !s.prestador_id) campos.prestador_id=p.id;
+    await manNota(s.id,'custo lançado: '+MAN_TIPOS[tipo]+' '+manBrl(v)+' · '+(pago==='FORNECEDOR'?rec:p.apelido)+(desc?' — '+desc:''),campos);
+    manFichaAcao=null; manFichaTmpArq=null; toast('Custo lançado — falta a aprovação, na aba Custos');
+  }catch(e){ toast('Erro: '+e.message,'erro'); }
+  await manFichaReabrir(); }
 async function manSalvarPrestDem(){ const s=manSols.find(x=>x.id===manAberta.id); const nome=manGv('mt-prest').trim();
   if(!nome){ if(!s.prestador_id) return toast('Nada mudou');
     if(!await hogConfirma({titulo:'Tirar o prestador da demanda?', texto:'Fica registrado no histórico. Nenhum custo é mexido.', ok:'Tirar'})) return;
