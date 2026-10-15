@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.164 · ocorrências: editar depois de aberta, custo do envio e troca com outro parceiro</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.165 · ocorrências em quatro grupos: não resolvidas, parciais, resolvidas e canceladas</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15645,13 +15645,68 @@ async function ocMoverSeparadas(o, delta, motivo){
   return mid;
 }
 
+// ═══ v4.165 · OS QUATRO GRUPOS ══════════════════════════════════════════
+// Ela, 15/10/2026: "o que sinto falta é de uma divisão do que está 100% resolvido,
+// o que está parcialmente resolvido, o que não está resolvido e o que está cancelado".
+// A régua do PARCIAL é o que o sistema SABE que já andou sem ter terminado:
+//   · crédito ligado com parte abatida — o caso da #17 (R$ 192,64 de R$ 395,00; o
+//     resto só vem na próxima nota do fornecedor);
+//   · troca já registrada: o material novo entrou no estoque e a ocorrência continua
+//     aberta porque falta fechar o acerto.
+// Aberta sem nada disso = NÃO RESOLVIDA. O grupo aparece no cartão e nas pílulas,
+// e clicar numa pílula mostra só aquele grupo.
+const OC_GRUPOS=[
+  { k:'ABERTA',    rot:'🔴 Não resolvidas',          cor:'var(--vermelho)', bg:'#FDEDEC' },
+  { k:'PARCIAL',   rot:'🟡 Parcialmente resolvidas', cor:'#B7950B',         bg:'#FEF9E7' },
+  { k:'RESOLVIDA', rot:'✅ Resolvidas',              cor:'var(--verde)',    bg:'var(--verde-claro)' },
+  { k:'CANCELADA', rot:'🚫 Canceladas',              cor:'var(--cinza-5)',  bg:'var(--cinza-2)' },
+];
+let ocFiltroG='';
+function ocGrupoDe(o){
+  if(o.status==='cancelada') return 'CANCELADA';
+  if(o.status!=='aberta')    return 'RESOLVIDA';
+  const c=ocCreditoDa(o.id);
+  if(c && c.status==='ABERTO' && Number(c.valor_utilizado)>0) return 'PARCIAL';
+  if(o.troca_mov_id) return 'PARCIAL';
+  return 'ABERTA';
+}
+function ocGrupoRot(k){ const g=OC_GRUPOS.find(x=>x.k===k); return g?g.rot:k; }
+function ocFaltaTxt(o){
+  const c=ocCreditoDa(o.id), ps=[];
+  if(c && c.status==='ABERTO' && Number(c.valor_utilizado)>0)
+    ps.push('crédito: '+ocMoney(c.valor_utilizado)+' de '+ocMoney(c.valor)+' abatidos — falta '+ocMoney(c.valor-(c.valor_utilizado||0)));
+  if(o.troca_mov_id) ps.push('o material da troca já entrou no estoque');
+  if(Number(o.qtd_separada)>0) ps.push(Number(o.qtd_separada).toLocaleString('pt-BR')+' un ainda fora do estoque');
+  return ps.join(' · ');
+}
+function ocFiltrarG(k){ ocFiltroG=(ocFiltroG===k?'':k); ocRender(); }
+function ocPilulas(cont){
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    + OC_GRUPOS.map(g=>{
+        const on=(ocFiltroG===g.k);
+        return '<button onclick="ocFiltrarG(\''+g.k+'\')" title="mostrar só este grupo" style="border:1.5px solid '+(on?g.cor:'var(--cinza-2)')+';background:'+(on?g.bg:'var(--branco)')+';color:'+g.cor+';border-radius:20px;padding:6px 14px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:var(--fonte)">'
+          + g.rot + ' <b style="font-size:14px">' + (cont[g.k]||0) + '</b></button>';
+      }).join('')
+    + (ocFiltroG?'<button onclick="ocFiltrarG(\'\')" style="border:none;background:transparent;color:var(--azul);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">ver todos</button>':'')
+    + '</div>';
+}
+
 function ocRender(){
-  const abertas=ocLista.filter(o=>o.status==='aberta');
-  const fechadas=ocLista.filter(o=>o.status!=='aberta');
   const hoje=new Date().toISOString().slice(0,10);
+  const cont={};
+  ocLista.forEach(o=>{ const g=ocGrupoDe(o); cont[g]=(cont[g]||0)+1; });
+  const abertas=ocLista.filter(o=>{
+    const g=ocGrupoDe(o);
+    if(ocFiltroG) return g===ocFiltroG;
+    return g==='ABERTA'||g==='PARCIAL';
+  });
+  const fechadas=ocLista.filter(o=>o.status!=='aberta');
+  const titulo = ocFiltroG ? ocGrupoRot(ocFiltroG) : '⚠️ O que ainda pede ação';
   document.getElementById('oc-pendencias').innerHTML =
-    `<div class="oc-ct" style="border:none;margin-bottom:8px"><span>⚠️ Pendências abertas (${abertas.length})</span></div>`+
+    `<div class="oc-ct" style="border:none;margin-bottom:8px"><span>${titulo} (${abertas.length})</span></div>`+
+    ocPilulas(cont)+
     (abertas.length?abertas.map(o=>{
+      const grupo=ocGrupoDe(o), falta=(grupo==='PARCIAL')?ocFaltaTxt(o):'';
       const atrasada=o.data_prometida&&o.data_prometida<hoje;
       return `<div class="oc-pend ${atrasada?'atrasada':''}">
         <div style="flex:1;min-width:240px">
@@ -15659,17 +15714,19 @@ function ocRender(){
           <div class="oc-pd">🏪 ${ocForn(o.fornecedor_id)}${o.material_id?(' · 📦 '+ocMat(o.material_id)):''}${o.numero_nf?(' · NF '+o.numero_nf):''}${o.valor?(' · <b>'+ocMoney(o.valor)+'</b>'):''}${Number(o.qtd_separada)>0?(' · <span class="oc-chip occ-ama" title="Unidades separadas para devolução ou troca: fora do estoque utilizável">↩ '+Number(o.qtd_separada).toLocaleString('pt-BR')+' un fora do estoque</span>'):''}
 ${Number(o.custo_envio)>0?(' · <span class="oc-chip" style="background:#EBF5FB;color:#1B4F72" title="O que o HOG gastou para mandar o material — frete, transportadora, portador">🚚 envio '+ocMoney(o.custo_envio)+'</span>'):''}${o.troca_material_id?(' · <span class="oc-chip" style="background:var(--verde-claro);color:var(--verde)" title="Veio outro material no lugar e já entrou no estoque">🔁 veio '+(ocMat(o.troca_material_id)||'material')+'</span>'):''}
           <br>➜ ${o.acao_aplicada||'—'}
-          <br><span style="font-size:11px">aberta há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
+          ${grupo==='PARCIAL'?`<br><span class="oc-chip occ-ama" title="já andou, mas não terminou">🟡 parcialmente resolvida</span> <span style="font-size:11.5px;color:#7D6608;font-weight:700">${falta}</span>`:''}
+          <br><span style="font-size:11px">${o.status==='aberta'?'aberta':ocGrupoRot(grupo).replace(/^.. /,'')} há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada&&o.status==='aberta'?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
         </div>
         <div style="display:flex;gap:6px;align-self:center">
-          ${(Number(o.valor)>0 && !ocCreditoDa(o.id))?`<button class="oc-btn" style="background:#FEF9E7;color:#7D6608;padding:7px 11px;font-size:12px" onclick="ocGerarCredito(${o.id})" title="Cria um crédito com este fornecedor no valor da ocorrência, para abater na próxima nota">💳 Gerar crédito</button>`:''}
+          ${o.status!=='aberta'?`<span class="oc-chip" style="background:${(OC_GRUPOS.find(g=>g.k===grupo)||{}).bg};color:${(OC_GRUPOS.find(g=>g.k===grupo)||{}).cor};align-self:center">${ocGrupoRot(grupo)}</span>`:''}
+          ${(o.status==='aberta' && Number(o.valor)>0 && !ocCreditoDa(o.id))?`<button class="oc-btn" style="background:#FEF9E7;color:#7D6608;padding:7px 11px;font-size:12px" onclick="ocGerarCredito(${o.id})" title="Cria um crédito com este fornecedor no valor da ocorrência, para abater na próxima nota">💳 Gerar crédito</button>`:''}
           ${ocCreditoDa(o.id)?`<span class="oc-chip" style="background:var(--verde-claro);color:var(--verde);align-self:center" title="Já existe crédito ligado a esta ocorrência">💳 crédito ${ocMoney(ocCreditoDa(o.id).valor)}</span>`:''}
-          <button class="oc-btn" style="background:var(--azul-claro);color:var(--azul);padding:7px 11px;font-size:12px" onclick="ocEditar(${o.id})" title="Corrigir os dados, lançar o custo do envio ou mudar a quantidade separada">✎ Editar</button>
+          ${o.status==='aberta'?`<button class="oc-btn" style="background:var(--azul-claro);color:var(--azul);padding:7px 11px;font-size:12px" onclick="ocEditar(${o.id})" title="Corrigir os dados, lançar o custo do envio ou mudar a quantidade separada">✎ Editar</button>
           <button class="oc-btn" style="background:var(--verde-claro);color:var(--verde);padding:7px 11px;font-size:12px" onclick="ocResolver(${o.id})">✔ Resolver</button>
-          <button class="oc-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:12px" onclick="ocCancelar(${o.id})">✕</button>
+          <button class="oc-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:12px" onclick="ocCancelar(${o.id})">✕</button>`:''}
         </div>
       </div>`;
-    }).join(''):'<div class="oc-card"><div class="oc-empty">Nenhuma pendência aberta. ✓</div></div>');
+    }).join(''):'<div class="oc-card"><div class="oc-empty">'+(ocFiltroG?('Nada em '+ocGrupoRot(ocFiltroG)+'.'):'Nenhuma pendência aberta. ✓')+'</div></div>');
   // créditos
   const elC=document.getElementById('oc-creditos');
   if(ocCreditos===null){ elC.innerHTML='<div class="oc-empty">Rode o <b>ocorrencias_creditos.sql</b> no Supabase para ativar os créditos.</div>'; }
@@ -15685,12 +15742,17 @@ ${Number(o.custo_envio)>0?(' · <span class="oc-chip" style="background:#EBF5FB;
         </tbody></table><div style="font-size:11px;color:var(--cinza-4);margin-top:8px">O crédito também é abatido automaticamente pelo campo 💳 da tela Receber NF do fornecedor.</div>`
       : '<div class="oc-empty">Nenhum crédito em aberto. ✓</div>';
   }
-  document.getElementById('oc-resolvidas').innerHTML = fechadas.length
-    ? `<table><thead><tr><th>#</th><th>Situação</th><th>Fornecedor</th><th>Resolução</th><th>Quando</th></tr></thead><tbody>
-      ${fechadas.slice(0,30).map(o=>`<tr style="opacity:.75"><td>${o.id}</td><td>${ocRot(o.situacao)}</td><td>${ocForn(o.fornecedor_id)}</td>
+  const tabelaFechadas=(lista)=>`<table><thead><tr><th>#</th><th>Situação</th><th>Fornecedor</th><th>Resolução</th><th>Quando</th></tr></thead><tbody>
+      ${lista.slice(0,30).map(o=>`<tr style="opacity:.8"><td>${o.id}</td><td>${ocRot(o.situacao)}</td><td>${ocForn(o.fornecedor_id)}</td>
       <td style="font-size:11px">${o.resolucao||o.acao_aplicada||'—'}</td><td style="font-size:11px">${ocData(o.resolvido_em||o.created_at)}</td></tr>`).join('')}
-      </tbody></table>`
-    : '<div class="oc-empty">Nada resolvido ainda.</div>';
+      </tbody></table>`;
+  const resolvidas=fechadas.filter(o=>ocGrupoDe(o)==='RESOLVIDA');
+  const canceladas=fechadas.filter(o=>ocGrupoDe(o)==='CANCELADA');
+  document.getElementById('oc-resolvidas').innerHTML =
+      '<div class="oc-ct" style="border:none;margin:0 0 6px"><span style="color:var(--verde)">✅ Resolvidas 100% ('+resolvidas.length+')</span></div>'
+    + (resolvidas.length?tabelaFechadas(resolvidas):'<div class="oc-empty">Nada resolvido ainda.</div>')
+    + '<div class="oc-ct" style="border:none;margin:16px 0 6px"><span>🚫 Canceladas ('+canceladas.length+')</span></div>'
+    + (canceladas.length?tabelaFechadas(canceladas):'<div class="oc-empty">Nenhuma cancelada.</div>');
 }
 // ═══ v4.43 — OCORRÊNCIAS E CRÉDITOS, SEM prompt() CRU ════════════════════
 // Três buracos que a gestão apontou:
