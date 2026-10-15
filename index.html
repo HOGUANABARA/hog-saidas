@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.163 · esteira de compra do administrativo: lista, pedido por fornecedor e compra já feita</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.164 · ocorrências: editar depois de aberta, custo do envio e troca com outro parceiro</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -15556,6 +15556,7 @@ async function ocCarregar(){
     }
     const sf=document.getElementById('oc-fornecedor');
     if(sf) sf.innerHTML='<option value="">—</option>'+coFornecedores.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+    await ocColsExtras();   // v4.164 — custo do envio e troca só aparecem com o SQL 113
     const sp=document.getElementById('oc-por');
     if(sp && !sp.children.length) sp.innerHTML='<option value="">—</option>'+EQUIPE.map(n=>`<option>${n}</option>`).join('');
     ocLista=(await sbFetch('ocorrencias?select=*&order=id.desc&limit=200'))||[];
@@ -15656,12 +15657,14 @@ function ocRender(){
         <div style="flex:1;min-width:240px">
           <div class="oc-pt">#${o.id} · ${ocRot(o.situacao)}</div>
           <div class="oc-pd">🏪 ${ocForn(o.fornecedor_id)}${o.material_id?(' · 📦 '+ocMat(o.material_id)):''}${o.numero_nf?(' · NF '+o.numero_nf):''}${o.valor?(' · <b>'+ocMoney(o.valor)+'</b>'):''}${Number(o.qtd_separada)>0?(' · <span class="oc-chip occ-ama" title="Unidades separadas para devolução ou troca: fora do estoque utilizável">↩ '+Number(o.qtd_separada).toLocaleString('pt-BR')+' un fora do estoque</span>'):''}
+${Number(o.custo_envio)>0?(' · <span class="oc-chip" style="background:#EBF5FB;color:#1B4F72" title="O que o HOG gastou para mandar o material — frete, transportadora, portador">🚚 envio '+ocMoney(o.custo_envio)+'</span>'):''}${o.troca_material_id?(' · <span class="oc-chip" style="background:var(--verde-claro);color:var(--verde)" title="Veio outro material no lugar e já entrou no estoque">🔁 veio '+(ocMat(o.troca_material_id)||'material')+'</span>'):''}
           <br>➜ ${o.acao_aplicada||'—'}
           <br><span style="font-size:11px">aberta há ${ocDias(o.created_at)}d${o.data_prometida?(' · combinado p/ '+ocData(o.data_prometida)+(atrasada?' <span class="oc-chip occ-verm">⏰ ATRASADA</span>':'')):''}${o.criado_por?(' · por '+o.criado_por):''}</span></div>
         </div>
         <div style="display:flex;gap:6px;align-self:center">
           ${(Number(o.valor)>0 && !ocCreditoDa(o.id))?`<button class="oc-btn" style="background:#FEF9E7;color:#7D6608;padding:7px 11px;font-size:12px" onclick="ocGerarCredito(${o.id})" title="Cria um crédito com este fornecedor no valor da ocorrência, para abater na próxima nota">💳 Gerar crédito</button>`:''}
           ${ocCreditoDa(o.id)?`<span class="oc-chip" style="background:var(--verde-claro);color:var(--verde);align-self:center" title="Já existe crédito ligado a esta ocorrência">💳 crédito ${ocMoney(ocCreditoDa(o.id).valor)}</span>`:''}
+          <button class="oc-btn" style="background:var(--azul-claro);color:var(--azul);padding:7px 11px;font-size:12px" onclick="ocEditar(${o.id})" title="Corrigir os dados, lançar o custo do envio ou mudar a quantidade separada">✎ Editar</button>
           <button class="oc-btn" style="background:var(--verde-claro);color:var(--verde);padding:7px 11px;font-size:12px" onclick="ocResolver(${o.id})">✔ Resolver</button>
           <button class="oc-btn" style="background:#FDEDEC;color:var(--vermelho);padding:7px 11px;font-size:12px" onclick="ocCancelar(${o.id})">✕</button>
         </div>
@@ -15756,10 +15759,11 @@ function ocResolver(id){
   if(Number(o.qtd_separada)>0){
     bloco += `<div style="margin-top:14px;${HGS_AVISO}">↩ Há <b>${Number(o.qtd_separada).toLocaleString('pt-BR')} un</b> de ${ocMat(o.material_id)||'material'} separadas, fora do estoque. O que aconteceu com elas?`
       + `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px;font-weight:400">`
-      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="SAIU" checked><span><b>Foram para o fornecedor</b> (devolvidas ou trocadas) — continuam fora do estoque. O que vier em troca entra pela nota.</span></label>`
-      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="VOLTA"><span><b>Ficaram na casa e vão ser usadas</b> — voltam para o estoque agora.</span></label>`
-      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="DESCARTE"><span><b>Ficaram na casa e não têm uso</b> — continuam fora do estoque (descarte).</span></label>`
-      + `</div></div>`;
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="SAIU" checked onchange="ocSepTroca(this.value)"><span><b>Foram para o fornecedor</b> (devolvidas ou trocadas) — continuam fora do estoque. O que vier em troca entra pela nota.</span></label>`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="VOLTA" onchange="ocSepTroca(this.value)"><span><b>Ficaram na casa e vão ser usadas</b> — voltam para o estoque agora.</span></label>`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="DESCARTE" onchange="ocSepTroca(this.value)"><span><b>Ficaram na casa e não têm uso</b> — continuam fora do estoque (descarte).</span></label>`
+      + `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="oc-sep-fim" value="TROCA" onchange="ocSepTroca(this.value)"><span><b>Trocadas com outro parceiro ou fornecedor</b> — veio OUTRO material no lugar, e ele entra no estoque agora.</span></label>`
+      + `</div>` + ocTrocaBloco(o) + `</div>`;
   }
   ocAbrirModal('✔ Resolver ocorrência #'+id,
      `<div style="font-size:13px;color:var(--cinza-4)">${ocRot(o.situacao)} · 🏪 ${ocForn(o.fornecedor_id)}${o.numero_nf?(' · NF '+o.numero_nf):''}</div>`
@@ -15769,6 +15773,169 @@ function ocResolver(id){
      `<button onclick="ocFecharModal()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>`
     +`<button id="oc-res-btn" onclick="ocResolverGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--verde)">Resolver</button>`);
   setTimeout(()=>{const e=document.getElementById('oc-res-txt'); if(e) e.focus();},60);
+}
+
+// ═══ v4.164 · EDITAR A OCORRÊNCIA E A TROCA COM OUTRO PARCEIRO ═══════════
+// Ela, 15/10/2026: "quero botão de edição e possibilidade colocar custo com envio
+// nas ocorrências após abertas" e "quero a opção de material trocado com outro
+// parceiro ou fornecedor para termos a opção de dar entrada nos itens no estoque
+// com esse rastreio".
+// O caso: 3 caixas de fio que o fornecedor NÃO troca. O Carlos levou para Jundiaí
+// e a troca sai com um TERCEIRO — o que volta é outro material. Faltavam as duas
+// pontas: o frete que o HOG pagou e a entrada do que chegou no lugar.
+// Depende do SQL 113; sem ele os campos somem e o resto da tela funciona igual.
+let ocColsOk=null, ocEditando=null;
+async function ocColsExtras(){
+  if(ocColsOk!==null) return ocColsOk;
+  try{ await sbFetch('ocorrencias?select=custo_envio,troca_fornecedor_id&limit=1'); ocColsOk=true; }
+  catch(e){ ocColsOk=false; }
+  return ocColsOk;
+}
+function ocOpts(lista, sel){
+  return lista.map(x=>'<option value="'+x.v+'"'+(String(x.v)===String(sel==null?'':sel)?' selected':'')+'>'+hgEsc(x.r)+'</option>').join('');
+}
+
+// ⚠️ A coluna `resolucao` NUNCA existiu em `ocorrencias` — o app grava nela desde
+// a v4.43 e o 42703 caía num catch mudo. Foi por isso que a MSJAU (NF 8340) não
+// baixou: o crédito de R$ 135 foi todo abatido, a baixa automática tentou fechar
+// a ocorrência #18 e falhou calada. O SQL 113 cria a coluna; aqui fica a rede:
+// sem ela, o texto vai para a observação e a ocorrência fecha do mesmo jeito.
+async function ocFecharComTexto(id, txt){
+  const quando=new Date().toISOString();
+  try{
+    await sbFetch('ocorrencias?id=eq.'+id+'&status=eq.aberta','PATCH',{ status:'resolvida', resolucao:txt, resolvido_em:quando });
+  }catch(e){
+    if(!/resolucao/.test(String(e.message||''))) throw e;
+    await sbFetch('ocorrencias?id=eq.'+id+'&status=eq.aberta','PATCH',{ status:'resolvida', observacao:txt, resolvido_em:quando });
+  }
+}
+
+// ── ✎ EDITAR ──────────────────────────────────────────────────────────────
+function ocEditar(id){
+  const o=ocLista.find(x=>x.id===id); if(!o){ toast('Ocorrência não encontrada.','erro'); return; }
+  ocEditando=id;
+  const sits=OC_SITUACOES.map(s=>({v:s.k,r:s.rot}));
+  const forns=[{v:'',r:'—'}].concat((coFornecedores||[]).map(f=>({v:f.id,r:f.nome})));
+  const nSep=Number(o.qtd_separada)||0;
+  const envio = ocColsOk===false ? ''
+    : '<div style="margin-top:14px;'+HGS_OK+'">🚚 <b>Custo do envio</b> — o que o HOG gastou para mandar o material (frete, transportadora, portador). Não é o valor do item.'
+      +'<div style="display:grid;grid-template-columns:150px 1fr;gap:10px;margin-top:9px;font-weight:400">'
+      +'<div><label style="'+HGS_LBL+'">Quanto (R$)</label><input id="oc-ed-envio" type="number" step="0.01" min="0" value="'+(o.custo_envio!=null?Number(o.custo_envio):'')+'" style="'+HGS_INP+'"></div>'
+      +'<div><label style="'+HGS_LBL+'">Como foi</label><input id="oc-ed-envio-obs" value="'+hgEsc(o.custo_envio_obs||'')+'" placeholder="ex.: transportadora, portador, nº do conhecimento" style="'+HGS_INP+'"></div>'
+      +'</div></div>';
+  ocAbrirModal('✎ Editar ocorrência #'+id,
+     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    +'<div><label style="'+HGS_LBL+'">Situação</label><select id="oc-ed-sit" style="'+HGS_INP+'">'+ocOpts(sits,o.situacao)+'</select></div>'
+    +'<div><label style="'+HGS_LBL+'">Fornecedor</label><select id="oc-ed-forn" style="'+HGS_INP+'">'+ocOpts(forns,o.fornecedor_id)+'</select></div>'
+    +'<div><label style="'+HGS_LBL+'">Material</label><input id="oc-ed-mat" list="pn-mat-datalist" value="'+hgEsc(ocMat(o.material_id)||'')+'" placeholder="deixe em branco se não é de um item" style="'+HGS_INP+'"></div>'
+    +'<div><label style="'+HGS_LBL+'">Nota fiscal</label><input id="oc-ed-nf" value="'+hgEsc(o.numero_nf||'')+'" style="'+HGS_INP+'"></div>'
+    +'<div><label style="'+HGS_LBL+'">Valor envolvido (R$)</label><input id="oc-ed-valor" type="number" step="0.01" min="0" value="'+(o.valor!=null?Number(o.valor):'')+'" style="'+HGS_INP+'"></div>'
+    +'<div><label style="'+HGS_LBL+'">Combinado para</label><input id="oc-ed-data" type="date" value="'+String(o.data_prometida||'').slice(0,10)+'" style="'+HGS_INP+'"></div>'
+    +'</div>'
+    +'<div style="margin-top:12px"><label style="'+HGS_LBL+'">Providência — o que está sendo feito</label>'
+    +'<textarea id="oc-ed-acao" rows="2" style="'+HGS_INP+';resize:vertical">'+hgEsc(o.acao_aplicada||'')+'</textarea></div>'
+    +'<div style="margin-top:14px;'+HGS_AVISO+'">↩ <b>Unidades separadas</b> — o que está fora do estoque por causa desta ocorrência.'
+    +'<div style="margin-top:9px;font-weight:400;display:flex;gap:10px;align-items:flex-end">'
+    +'<div style="width:150px"><label style="'+HGS_LBL+'">Quantidade</label><input id="oc-ed-sep" type="number" step="0.01" min="0" value="'+(nSep||'')+'" style="'+HGS_INP+'"></div>'
+    +'<div style="font-size:12.5px;color:#7D6608;padding-bottom:9px">hoje: <b>'+nSep.toLocaleString('pt-BR')+'</b> un'+(o.material_id?(' de '+hgEsc(ocMat(o.material_id)||'')):'')
+    +'<br>mudar aqui <b>move o estoque</b>: aumentar tira mais, diminuir devolve.</div></div></div>'
+    + envio,
+     '<button onclick="ocFecharModal()" style="border:1.5px solid var(--cinza-2);background:var(--branco);color:var(--cinza-5);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte)">Cancelar</button>'
+    +'<button id="oc-ed-btn" onclick="ocEditarGravar()" style="border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul)">Salvar</button>');
+}
+
+async function ocEditarGravar(){
+  const id=ocEditando; if(!id) return;
+  const o=ocLista.find(x=>x.id===id); if(!o) return;
+  const g=i=>((document.getElementById(i)||{}).value||'');
+  const sit=g('oc-ed-sit'); if(!sit){ toast('Escolha a situação.','erro'); return; }
+  const matNome=g('oc-ed-mat').trim();
+  const matId=matNome?((catalogoMateriais.find(m=>m.nome.toUpperCase()===matNome.toUpperCase())||{}).id||null):null;
+  if(matNome && !matId){ toast('Material não encontrado — escolha da lista (ou deixe em branco).','erro'); return; }
+  const nSep=Number(o.qtd_separada)||0;
+  const novoSep=Math.max(0, parseFloat(String(g('oc-ed-sep')).replace(',','.'))||0);
+  if(novoSep>0 && !matId){ toast('Para separar unidades do estoque, escolha o material.','erro'); return; }
+  if(novoSep!==nSep && matId!==o.material_id && nSep>0){ toast('Troque o material OU a quantidade separada — as duas juntas deixariam o estoque errado.','erro'); return; }
+  const corpo={ situacao:sit,
+    fornecedor_id: g('oc-ed-forn')?Number(g('oc-ed-forn')):null,
+    material_id: matId,
+    numero_nf: g('oc-ed-nf').trim()||null,
+    valor: g('oc-ed-valor')!==''?Number(g('oc-ed-valor')):null,
+    data_prometida: g('oc-ed-data')||null,
+    acao_aplicada: g('oc-ed-acao').trim()||null };
+  if(ocColsOk!==false){
+    corpo.custo_envio = g('oc-ed-envio')!==''?Number(g('oc-ed-envio')):null;
+    corpo.custo_envio_obs = g('oc-ed-envio-obs').trim()||null;
+  }
+  if(novoSep!==nSep){
+    const dif=novoSep-nSep;
+    const ok=await hogConfirma({ titulo:(dif>0?'Separar mais ':'Devolver ')+Math.abs(dif).toLocaleString('pt-BR')+' un?',
+      texto:(dif>0
+        ? Math.abs(dif)+' un de '+(matNome||'material')+' vão SAIR do estoque agora, como item em devolução/troca.'
+        : Math.abs(dif)+' un de '+(matNome||'material')+' VOLTAM para o estoque agora.')
+        +'\n\nA ocorrência fica com '+novoSep.toLocaleString('pt-BR')+' un separadas.', ok:'Pode mexer' });
+    if(!ok) return;
+  }
+  const btn=document.getElementById('oc-ed-btn'); if(btn){ btn.disabled=true; btn.textContent='salvando…'; }
+  try{
+    await sbFetch('ocorrencias?id=eq.'+id,'PATCH',corpo);
+    if(novoSep!==nSep){
+      // ocMoverSeparadas: delta negativo SEPARA (tira do estoque), positivo DEVOLVE
+      await ocMoverSeparadas(Object.assign({},o,{material_id:matId}), -(novoSep-nSep),
+        novoSep>nSep?'separadas para devolução/troca (ajuste na edição)':'voltaram ao estoque (ajuste na edição)');
+    }
+    ocFecharModal();
+    toast('Ocorrência #'+id+' atualizada ✓','sucesso');
+    ocCarregar();
+  }catch(e){
+    const falta=/custo_envio|troca_/.test(String(e.message||''));
+    toast('Erro ao salvar: '+(e.message||e)+(falta?' — rode o SQL 113':''),'erro');
+    if(btn){ btn.disabled=false; btn.textContent='Salvar'; }
+  }
+}
+
+// ── 🔁 TROCA COM OUTRO PARCEIRO ───────────────────────────────────────────
+// a entrada no estoque é uma movimentação comum: funciona mesmo sem o SQL 113.
+// Só o rastro gravado na ocorrência (troca_*) depende das colunas novas.
+function ocTrocaBloco(o){
+  const forns=[{v:'',r:'— escolher —'}].concat((coFornecedores||[]).map(f=>({v:f.id,r:f.nome})));
+  const n=Number(o.qtd_separada)||0;
+  return '<div id="oc-troca-box" style="display:none;margin-top:12px;'+HGS_OK+'">🔁 <b>O que veio no lugar</b>'
+    +'<div style="margin-top:4px;font-weight:400;color:var(--cinza-5);font-size:12.5px">Entra no estoque agora, com o custo do que saiu — numa troca não há compra nova, então o preço do cadastro não muda.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;font-weight:400">'
+    +'<div><label style="'+HGS_LBL+'">Trocado com</label><select id="oc-tr-forn" style="'+HGS_INP+'">'+ocOpts(forns,null)+'</select></div>'
+    +'<div><label style="'+HGS_LBL+'">Material que chegou</label><input id="oc-tr-mat" list="pn-mat-datalist" placeholder="busque no cadastro" style="'+HGS_INP+'"></div>'
+    +'<div><label style="'+HGS_LBL+'">Quantidade</label><input id="oc-tr-qtd" type="number" step="0.01" min="0" placeholder="'+(n||'')+'" style="'+HGS_INP+'"></div>'
+    +'<div><label style="'+HGS_LBL+'">Valor total (R$)</label><input id="oc-tr-valor" type="number" step="0.01" min="0" value="'+(o.valor!=null?Number(o.valor):'')+'" style="'+HGS_INP+'"></div>'
+    +'</div></div>';
+}
+function ocSepTroca(v){
+  const b=document.getElementById('oc-troca-box'); if(b) b.style.display = (v==='TROCA'?'':'none');
+}
+async function ocTrocaGravar(o, quem){
+  const g=i=>((document.getElementById(i)||{}).value||'');
+  const fid=g('oc-tr-forn')?Number(g('oc-tr-forn')):null;
+  const nome=g('oc-tr-mat').trim();
+  const mid=nome?((catalogoMateriais.find(m=>m.nome.toUpperCase()===nome.toUpperCase())||{}).id||null):null;
+  const qtd=parseFloat(String(g('oc-tr-qtd')).replace(',','.'))||0;
+  const val=parseFloat(String(g('oc-tr-valor')).replace(',','.'))||0;
+  if(!fid) throw new Error('escolha com quem foi a troca');
+  if(!mid) throw new Error('escolha o material que chegou (pelo nome do cadastro)');
+  if(!(qtd>0)) throw new Error('informe quanto chegou');
+  const geralId=await getEstoqueGeralId();
+  const unit = val>0 ? Math.round((val/qtd)*10000)/10000 : 0;
+  const obs='Troca da ocorrência #'+o.id+' — recebido de '+ocForn(fid)
+    +' no lugar de '+(ocMat(o.material_id)||'material')+(o.numero_nf?(' (NF '+o.numero_nf+')'):'')+'. Não é compra: não gera nota a pagar';
+  const mv=await sbFetch('movimentacoes','POST',{ tipo:'ENTRADA_COMPRA', material_id:mid, local_id:geralId,
+    qtd:qtd, valor_unitario:unit, fornecedor_id:fid, aprovado:true, aprovado_por:quem,
+    aprovado_em:new Date().toISOString(), registrado_por:quem, observacao:obs });
+  const movId=mv&&mv[0]&&mv[0].id;
+  if(!movId) throw new Error('a entrada no estoque não foi gravada');
+  if(ocColsOk!==false){
+    try{ await sbFetch('ocorrencias?id=eq.'+o.id,'PATCH',{ troca_fornecedor_id:fid, troca_material_id:mid,
+      troca_qtd:qtd, troca_valor:val||null, troca_mov_id:movId }); }catch(e){}
+  }
+  return ' · '+qtd.toLocaleString('pt-BR')+' un de '+(ocMat(mid)||nome)+' entraram no estoque em troca ('+ocForn(fid)+')';
 }
 
 async function ocResolverGravar(){
@@ -15791,10 +15958,13 @@ async function ocResolverGravar(){
     if(oSep && Number(oSep.qtd_separada)>0){
       const n=Number(oSep.qtd_separada);
       if(fimSep==='VOLTA'){ await ocMoverSeparadas(oSep, n, 'voltaram ao estoque ao resolver'); txtSep=` · ${n} un voltaram ao estoque`; }
+      else if(fimSep==='TROCA'){
+        const quem=(typeof SESSAO!=='undefined'&&SESSAO)?SESSAO.nome:(oSep.criado_por||'Evelise');
+        txtSep = ` · ${n} un foram trocadas` + (await ocTrocaGravar(oSep, quem));
+      }
       else txtSep = fimSep==='DESCARTE' ? ` · ${n} un ficaram fora do estoque (sem uso)` : ` · ${n} un foram para o fornecedor`;
     }
-    await sbFetch(`ocorrencias?id=eq.${id}`,'PATCH',{ status:'resolvida', resolucao:txt+txtSep,
-      resolvido_em:new Date().toISOString() });
+    await ocFecharComTexto(id, txt+txtSep);   // v4.164 — a coluna `resolucao` pode não existir
     ocFecharModal();
     toast('Ocorrência #'+id+' resolvida ✓'+(cred&&escolha==='BAIXAR'?' · crédito baixado':'')
       +(cred&&escolha==='CANCELAR'?' · crédito cancelado':''),'sucesso');
@@ -15893,13 +16063,12 @@ async function ocAbaterCreditos(fornId, valor, contexto){
       try{
         const oc=await sbFetch(`ocorrencias?select=id,status&id=eq.${c.ocorrencia_id}`);
         if(oc && oc[0] && oc[0].status==='aberta'){
-          await sbFetch(`ocorrencias?id=eq.${c.ocorrencia_id}&status=eq.aberta`,'PATCH',{
-            status:'resolvida',
-            resolucao:'Crédito de '+ocMoney(c.valor)+' abatido integralmente'+(contexto?(' na '+contexto):'')+' — baixa automática.',
-            resolvido_em:new Date().toISOString() });
+          await ocFecharComTexto(c.ocorrencia_id,
+            'Crédito de '+ocMoney(c.valor)+' abatido integralmente'+(contexto?(' na '+contexto):'')+' — baixa automática.');
           toast('✔ Ocorrência #'+c.ocorrencia_id+' resolvida sozinha — o crédito dela foi todo abatido.','sucesso');
         }
-      }catch(e){ console.warn('baixa automática da ocorrência #'+c.ocorrencia_id+':', e); }
+      }catch(e){ console.warn('baixa automática da ocorrência #'+c.ocorrencia_id+':', e);
+        toast('⚠ O crédito foi abatido, mas a ocorrência #'+c.ocorrencia_id+' NÃO baixou: '+(e.message||e),'erro'); }
     }
   }
   return valor-resta; // quanto foi de fato abatido
