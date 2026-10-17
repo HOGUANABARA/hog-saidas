@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.166 · gravação que falha agora avisa (saída, livro de remessas, aprovação, NF, empréstimo, inventário)</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.167 · devolução: a peça só é descontada depois que o caso foi resolvido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11419,21 +11419,29 @@ async function rcDevResolverExec(id){
   const ov=document.getElementById('rc-dev-res-modal');
   try{
     // v4.38 — baixa a quantidade da peça devolvida (vale para qualquer desfecho)
+    // v4.167 — a baixa acontece só no FIM, depois que o desfecho gravou: se a resolução
+    // parar no meio, resolver de novo não desconta a peça duas vezes. O campo é lido
+    // agora, porque o modal fecha antes da baixa.
     const pecaId=Number((document.getElementById('rc-dev-peca-id')||{}).value||0);
-    if(pecaId){
-      const baixa=Math.abs(parseFloat((document.getElementById('rc-dev-peca-qtd')||{}).value)||0);
-      const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd,valor_unitario,nf_valor&id=eq.'+pecaId))||[])[0];
-      if(p && baixa>0){
-        const nova=Math.max(0,(Number(p.qtd)||0)-baixa);
-        // o valor da peça na nota acompanha a quantidade que ficou — senão a NF
-        // continua somando o que foi devolvido
-        const patch={ qtd:nova };
-        if(p.nf_valor!=null && Number(p.valor_unitario)>0) patch.nf_valor = nova*Number(p.valor_unitario);
-        await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',patch);
-        toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+baixa+')'
-          +(patch.nf_valor!=null?(' · valor na nota: '+rcMoney(patch.nf_valor)):'')+' ✓','sucesso');
+    const pecaBaixa=Math.abs(parseFloat((document.getElementById('rc-dev-peca-qtd')||{}).value)||0);
+    const baixarPeca=async function(){
+      if(!pecaId) return;
+      try{
+        const p=((await sbFetch('solicitacao_instrumental?select=id,peca_nome,qtd,valor_unitario,nf_valor&id=eq.'+pecaId))||[])[0];
+        if(p && pecaBaixa>0){
+          const nova=Math.max(0,(Number(p.qtd)||0)-pecaBaixa);
+          // o valor da peça na nota acompanha a quantidade que ficou — senão a NF
+          // continua somando o que foi devolvido
+          const patch={ qtd:nova };
+          if(p.nf_valor!=null && Number(p.valor_unitario)>0) patch.nf_valor = nova*Number(p.valor_unitario);
+          await sbFetch('solicitacao_instrumental?id=eq.'+pecaId,'PATCH',patch);
+          toast('🔩 "'+p.peca_nome+'": '+(Number(p.qtd)||0)+' → '+nova+' un (devolvida '+pecaBaixa+')'
+            +(patch.nf_valor!=null?(' · valor na nota: '+rcMoney(patch.nf_valor)):'')+' ✓','sucesso');
+        }
+      }catch(e){
+        alert('⚠️ O caso foi resolvido, mas a quantidade da peça devolvida NÃO foi descontada ('+(e.message||e)+').\n\nAcerte a quantidade da peça à mão na aba Instrumentais.');
       }
-    }
+    };
     if(res==='SUBSTITUICAO_NF'){
       const num=((document.getElementById('rc-dev-nf-num')||{}).value||'').trim();
       if(!num){ toast('Informe o número da nota nova.','erro'); return; }
@@ -11496,6 +11504,7 @@ async function rcDevResolverExec(id){
         historico:rcDevHist(d,'RESOLVIDA — NF '+antiga.numero_nf+' cancelada e substituída pela NF '+num+' ('+rcMoney(val)+')'),
         atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
       if(ov) ov.remove();
+      await baixarPeca();
       toast('📄 NF '+num+' criada ('+nItens+' item(ns) herdados) e a NF '+antiga.numero_nf+' foi cancelada ✓','sucesso');
       rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar(); if(typeof siCarregar==='function') siCarregar();
       return;
@@ -11504,6 +11513,7 @@ async function rcDevResolverExec(id){
     await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:res, valor_resolvido:val,
       historico:rcDevHist(d,'RESOLVIDA — '+res+(val?(' de '+rcMoney(val)):'')), atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
     if(ov) ov.remove();
+    await baixarPeca();
     if(res==='TROCA') toast('Resolvida como TROCA — quando o item novo chegar, dê a entrada normal (NF ou aba Instrumentais).','');
     if(res==='CREDITO') toast('Resolvida como CRÉDITO — registre o crédito do fornecedor na aba Ocorrências para usar na próxima NF.','');
     toast('Caso #'+id+' resolvido ✓','sucesso');
