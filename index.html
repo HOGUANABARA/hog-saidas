@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.165 · ocorrências em quatro grupos: não resolvidas, parciais, resolvidas e canceladas</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.166 · gravação que falha agora avisa (saída, livro de remessas, aprovação, NF, empréstimo, inventário)</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -2567,7 +2567,9 @@ async function carregarBensRemessa(){
 // Só soma em `d_sujo` — a peça não vinha de "em casa", está entrando no livro
 // agora, vinda do estoque de novas.
 // Falha aqui NUNCA derruba a saída: a baixa é o que não pode se perder.
-async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
+// v4.166 — mas também não fica calada (auditoria 17/10, E1): a peça que não entrou
+// no livro vai para `falhas` (quem chamou avisa no fim) ou, sem `falhas`, num alerta aqui.
+async function bridgeNovaParaSujo(mat, qtd, periodoId, quem, falhas){
   // v4.79 — KIT LACRADO (regra dela, 16/09): o Pak CONSTELLATION vem fechado e, ao ser
   // aberto na cirurgia, vira VÁRIAS peças reprocessáveis (cassete, sonda, endoiluminador,
   // trocater, kit verde, equipo, extensão de ar). Cada uma entra suja no seu próprio bem.
@@ -2581,11 +2583,14 @@ async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
     ? 'Kit "'+mat.nome+'" aberto na cirurgia — peça entrou no ciclo de reprocessamento'
     : 'Peça nova usada na cirurgia ("'+mat.nome+'") — entrou no ciclo de reprocessamento';
   let n = 0;
+  const falhou = [];   // v4.166 — { bem_id, qtd, meio } das peças que não entraram
   for(const c of comps){
+    let sujoId = null;
     try{
-      await sbFetch('remessa_sujos','POST',{
+      const sj = await sbFetch('remessa_sujos','POST',{
         bem_id: c.bem_id, qtd: c.qtd, origem: 'SAIDA_NOVA',
         periodo_cirurgico_id: periodoId || null, registrado_por: quem });
+      sujoId = (Array.isArray(sj) && sj[0]) ? sj[0].id : (sj && sj.id) || null;
       try{
         await sbFetch('remessa_mov','POST',{ bem_id: c.bem_id, tipo: 'USO_NOVA', d_sujo: c.qtd,
           registrado_por: quem, observacao: obs });
@@ -2598,10 +2603,31 @@ async function bridgeNovaParaSujo(mat, qtd, periodoId, quem){
       n++;
     }catch(e){
       console.warn('ponte nova→sujo (bem '+c.bem_id+'):', e);
+      // v4.166 — a fila de sujos gravou e o saldo do livro não: tira a linha da fila
+      // para o livro não ficar meio lançado. Se nem isso der, avisa que ficou pela metade.
+      let meio = false;
+      if(sujoId){
+        try{ await sbFetch('remessa_sujos?id=eq.'+sujoId,'DELETE'); }catch(e2){ meio = true; }
+      }
+      falhou.push({ bem_id: c.bem_id, qtd: c.qtd, meio: meio });
     }
   }
   if(n && kit && typeof toast==='function'){
     toast('🧩 Kit aberto: '+n+' peça(s) entraram na fila de sujos do livro de remessas.','');
+  }
+  if(falhou.length){
+    // nome do bem para o aviso — se nem a leitura funcionar, fica o número
+    let nomes = {};
+    try{
+      const bs = (await sbFetch('remessa_bens?select=id,nome&id=in.('+falhou.map(f=>f.bem_id).join(',')+')')) || [];
+      for(const b of bs) nomes[b.id] = b.nome;
+    }catch(e){}
+    const linhas = falhou.map(f => '• ' + f.qtd + 'x ' + (nomes[f.bem_id] || ('peça #'+f.bem_id))
+      + (f.meio ? ' (ficou na fila de sujos sem o saldo do livro — confira no livro)' : ''));
+    const msg = '"' + mat.nome + '": ' + falhou.length + ' peça(s) NÃO entraram no livro de remessas:\n'
+      + linhas.join('\n') + '\n\nA baixa do estoque foi gravada. Lance essas peças como sujas no livro de remessas.';
+    if(Array.isArray(falhas)) falhas.push(msg);
+    else alert('⚠️ ' + msg);
   }
   return n > 0;
 }
@@ -3597,19 +3623,41 @@ async function enviarSupabase(reg) {
       // Ele não foi consumido: ficou sujo. A baixa sai do livro de remessas.
       const bemId = matRemessa[mat.id];
       if (bemId) {
+        // v4.166 (auditoria 17/10, E2) — os dois passos do livro andam separados.
+        // Antes: se a fila de sujos gravava e o saldo do livro não, o catch lançava
+        // TAMBÉM a saída comum — peça suja no livro E baixa no estoque, sem aviso.
+        // Agora: falhou o saldo do livro → a linha da fila é apagada e só então cai no
+        // caminho antigo; se não der para apagar, NÃO baixa o estoque e avisa.
+        let sujoId = null, livroOk = false;
         try{
-          await sbFetch('remessa_sujos', 'POST', {
+          const sj = await sbFetch('remessa_sujos', 'POST', {
             bem_id: bemId, qtd: qtd, origem: 'SAIDA_CIRURGIA',
             periodo_cirurgico_id: periodoId, registrado_por: quem,
           });
+          sujoId = (Array.isArray(sj) && sj[0]) ? sj[0].id : (sj && sj.id) || null;
           await sbFetch('remessa_mov', 'POST', {
             bem_id: bemId, tipo: 'USO', d_casa: -qtd, d_sujo: qtd,
             registrado_por: quem, observacao: 'Usado na cirurgia — foi para a fila de remessa',
           });
+          livroOk = true;
           if (!reg.foramParaRemessa) reg.foramParaRemessa = [];
           reg.foramParaRemessa.push(`${qtd}x ${mat.nome}`);
         }catch(e){
+          console.warn('saída de item do livro (bem '+bemId+'):', e);
+        }
+        if (!livroOk && sujoId) {
+          // o 1º passo gravou: desfaz antes de qualquer outra coisa
+          try{ await sbFetch('remessa_sujos?id=eq.'+sujoId, 'DELETE'); sujoId = null; }catch(e2){}
+          if (sujoId) {
+            if (!reg.falhasLivro) reg.falhasLivro = [];
+            reg.falhasLivro.push(`${qtd}x ${mat.nome}: entrou na fila de sujos, mas o saldo do livro não mexeu e o estoque NÃO foi baixado — confira no livro de remessas.`);
+            continue;
+          }
+        }
+        if (!livroOk) {
           // livro indisponível: não perde o registro, cai no caminho antigo
+          if (!reg.falhasLivro) reg.falhasLivro = [];
+          reg.falhasLivro.push(`${qtd}x ${mat.nome}: o livro de remessas não aceitou — foi lançado como saída comum (baixa o estoque, vai para a Aprovação).`);
           await sbFetch('movimentacoes', 'POST', {
             tipo: item.origem === 'extra' ? 'SAIDA_EXTRA' : 'SAIDA_CIRURGIA',
             material_id: mat.id, local_id: localId,
@@ -3629,7 +3677,8 @@ async function enviarSupabase(reg) {
       });
       // v4.14c — peça nova usada não some: entra suja na fila do bem.
       // Só depois da baixa, e sem poder derrubá-la.
-      if (await bridgeNovaParaSujo(mat, qtd, periodoId, quem)) {
+      if (!reg.falhasLivro) reg.falhasLivro = [];
+      if (await bridgeNovaParaSujo(mat, qtd, periodoId, quem, reg.falhasLivro)) {
         if (!reg.novasParaSujo) reg.novasParaSujo = [];
         reg.novasParaSujo.push(`${qtd}x ${mat.nome}`);
       }
@@ -3646,6 +3695,10 @@ async function enviarSupabase(reg) {
   }
   if (reg.novasParaSujo && reg.novasParaSujo.length) {
     toast('♻️ ' + reg.novasParaSujo.length + ' peça(s) nova(s) baixaram o estoque e entraram na fila de sujos.', '');
+  }
+  // v4.166 — o que não entrou no livro de remessas aparece para quem lançou
+  if (reg.falhasLivro && reg.falhasLivro.length) {
+    alert('⚠️ ATENÇÃO — livro de remessas:\n\n' + reg.falhasLivro.join('\n\n'));
   }
 }
 
@@ -4078,10 +4131,15 @@ function editarQtdPendente(i, k, val) {
 async function aprovar(i) {
   const p = pendentes[i];
   if (!exigirAssinatura('Aprovar saída de material')) return;
+  // v4.166 (auditoria 17/10, E6) — confere quantas linhas o banco mudou de fato, como o
+  // rejeitar() faz: um PATCH que casa 0 linhas (permissão, item já mexido) volta 200 com [].
+  let nMov = 0, nOk = 0;
+  const naoMudou = [];
   if (sbUrl && sbKey && p.itens?.length) {
     try {
       for (const it of p.itens) {
         if (it.reproc){ if(it.editado) await aprAjustarSujo(it); continue; }   // v4.146 — vive no livro, não em movimentações
+        nMov++;
         const patch = {
           aprovado: true, aprovado_por: (SESSAO ? SESSAO.nome : 'Gestora'),
           aprovado_por_id: (SESSAO ? SESSAO.id : null), aprovado_em: new Date().toISOString(),
@@ -4091,9 +4149,18 @@ async function aprovar(i) {
           patch.qtd = -Math.abs(it.qtd);
           patch.observacao = 'Qtd ajustada na aprovação';
         }
-        await sbFetch(`movimentacoes?id=eq.${it.id}`, 'PATCH', patch);
+        const r = await sbFetch(`movimentacoes?id=eq.${it.id}`, 'PATCH', patch);
+        if (Array.isArray(r) && r.length) nOk++;
+        else naoMudou.push(it.nome || ('movimentação #' + it.id));
       }
     } catch(e) { toast('Erro ao aprovar: ' + e.message, 'erro'); return; }
+    if (naoMudou.length) {
+      alert('⚠️ A aprovação NÃO foi completa: ' + nOk + ' de ' + nMov + ' item(ns) aprovado(s).\n\n'
+        + 'Estes não mudaram no banco (o estoque deles não foi atualizado):\n• ' + naoMudou.join('\n• ')
+        + '\n\nPode ser falta de permissão ou o item já ter sido mexido por outra pessoa. A lista de pendentes foi recarregada.');
+      carregarPendentes(); carregarAprovadas(); carregarSaldos();
+      return;
+    }
   }
   pendentes.splice(i, 1);
   atualizarBadge(); renderizarPendentes();
@@ -11385,18 +11452,38 @@ async function rcDevResolverExec(id){
         status_pagamento:'LIBERADA',
         vencimentos_obs:(venc?(venc+' | '):'')+'Substitui a NF '+antiga.numero_nf+' (cancelada pelo fornecedor)' });
       const novaId=nova&&nova[0]&&nova[0].id;
+      if(!novaId){ alert('⚠️ A NF '+num+' não foi gravada (o banco não devolveu o registro).\n\nNada foi cancelado: a NF '+antiga.numero_nf+' continua valendo e a devolução continua aberta.'); return; }
       // 2) itens: os mesmos, menos o devolvido — sem tocar em estoque
+      // v4.166 (auditoria 17/10, E3) — item que não copiou PARA tudo: a NF antiga só é
+      // cancelada depois que a nova tem todos os itens.
       let nItens=0;
-      try{
-        const its=(await sbFetch('nf_itens?select=*&nota_fiscal_id=eq.'+antiga.id))||[];
-        for(const it of its){
-          if(d.material_id && Number(it.material_id)===Number(d.material_id)) continue;
-          await sbFetch('nf_itens','POST',{ nota_fiscal_id:novaId, material_id:it.material_id,
+      const naoCopiou=[];
+      let its=[];
+      try{ its=(await sbFetch('nf_itens?select=*&nota_fiscal_id=eq.'+antiga.id))||[]; }
+      catch(e){
+        if(ov) ov.remove();
+        alert('⚠️ A substituição PAROU no meio.\n\nA NF '+num+' foi criada, mas não consegui ler os itens da NF '+antiga.numero_nf+' para copiar ('+(e.message||e)+').\n\nA NF '+antiga.numero_nf+' NÃO foi cancelada e a devolução continua aberta. Confira a NF '+num+' antes de resolver de novo (resolver de novo cria outra nota).');
+        rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar();
+        return;
+      }
+      for(const it of its){
+        if(d.material_id && Number(it.material_id)===Number(d.material_id)) continue;
+        try{
+          const r=await sbFetch('nf_itens','POST',{ nota_fiscal_id:novaId, material_id:it.material_id,
             descricao_nf:it.descricao_nf, qtd:it.qtd, unidade:it.unidade,
             valor_unitario:it.valor_unitario, valor_item:it.valor_item });
-          nItens++;
-        }
-      }catch(e){}
+          if(Array.isArray(r) && r.length) nItens++;
+          else naoCopiou.push(it.descricao_nf||('material #'+it.material_id));
+        }catch(e){ naoCopiou.push((it.descricao_nf||('material #'+it.material_id))+' ('+(e.message||e)+')'); }
+      }
+      if(naoCopiou.length){
+        if(ov) ov.remove();
+        alert('⚠️ A substituição PAROU no meio.\n\nA NF '+num+' foi criada com '+nItens+' item(ns), mas '+naoCopiou.length+' não foram copiados:\n• '
+          +naoCopiou.join('\n• ')
+          +'\n\nA NF '+antiga.numero_nf+' NÃO foi cancelada e a devolução continua aberta. Confira a NF '+num+' antes de resolver de novo (resolver de novo cria outra nota).');
+        rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar();
+        return;
+      }
       // 3) peças de instrumental apontam para a nota nova
       try{ await sbFetch('solicitacao_instrumental?nf_numero=eq.'+encodeURIComponent(antiga.numero_nf),'PATCH',{ nf_numero:num }); }catch(e){}
       // 4) a antiga sai do pagamento e dos custos
@@ -15303,7 +15390,19 @@ async function pnEmpRegistrar(){
           + (lote?` · lote ${lote}`:'') + (val?` · val. ${val}`:'')
           + (dataC?` · combinado p/ ${dataC}`:'') });
     }catch(errMov){
-      try{ await sbFetch('emprestimos?id=eq.'+e[0].id,'DELETE'); }catch(e2){}
+      // v4.166 (auditoria 17/10, E4) — só diz "desfeito" depois de conferir que o
+      // empréstimo sumiu do banco (DELETE que casa 0 linhas não dá erro).
+      let desfeito = false;
+      try{
+        await sbFetch('emprestimos?id=eq.'+e[0].id,'DELETE');
+        const ainda = (await sbFetch('emprestimos?select=id&id=eq.'+e[0].id)) || [];
+        desfeito = !ainda.length;
+      }catch(e2){}
+      if(!desfeito){
+        alert('⚠️ O estoque não aceitou a movimentação ('+(errMov.message||errMov)+').\n\n'
+          +'E o empréstimo #'+e[0].id+' NÃO pôde ser desfeito: ele ficou registrado sem mexer no estoque. Apague-o à mão (ou avise a gestora).');
+        throw new Error('empréstimo #'+e[0].id+' ficou registrado sem estoque — apague à mão');
+      }
       throw new Error('o estoque não aceitou a movimentação, então o empréstimo foi desfeito — '+(errMov.message||errMov));
     }
     // v4.145 — o lote acompanha o material: entra com ele, sai com ele
@@ -16380,14 +16479,26 @@ async function ivAddSalvar(){
   if(!confirm('Gravar?\n\n'+resumo.join('\n')+'\n\nA contagem entra no inventário aberto. O saldo do estoque só muda na confirmação do inventário.')) return;
   if(!exigirAssinatura('Acrescentar item à contagem de '+nomeLocal)) return;
 
+  // v4.166 (auditoria 17/10, E5) — recontagem do mesmo item no mesmo local: substitui
+  // em vez de duplicar. Se a contagem anterior não sair, a nova NÃO é gravada (antes o
+  // erro era engolido e o item ficava contado duas vezes). Confere depois do DELETE,
+  // porque um DELETE barrado pela permissão volta sem erro.
+  try{
+    const filtroRec = `inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}&material_id=eq.${m.id}`;
+    await sbFetch(filtroRec,'DELETE');
+    const sobrou = (await sbFetch(filtroRec.replace('inventario_itens?','inventario_itens?select=id&'))) || [];
+    if(sobrou.length) throw new Error('a contagem anterior continua no banco');
+  }catch(e){
+    alert('⚠️ Nada foi gravado.\n\nNão consegui apagar a contagem anterior de "'+novo.nome+'" em '+nomeLocal+' ('+(e.message||e)+'). '
+      +'Gravar agora deixaria o item contado duas vezes. Tente de novo; se continuar, avise a gestora.');
+    return;
+  }
   try{
     if(Object.keys(mudou).length){
       await sbFetch(`materiais?id=eq.${m.id}`,'PATCH', mudou);
       const cm = catalogoMateriais.find(x=>x.id===m.id);
       if(cm && mudou.nome) cm.nome = mudou.nome;
     }
-    // recontagem do mesmo item no mesmo local: substitui em vez de duplicar
-    try{ await sbFetch(`inventario_itens?inventario_id=eq.${ivAtual.id}&local_id=eq.${localId}&material_id=eq.${m.id}`,'DELETE'); }catch(e){}
     await sbFetch('inventario_itens','POST',{
       inventario_id: ivAtual.id, material_id: m.id, local_id: localId,
       qtd_contada: qtd, contado_por: quem, contado_em: new Date().toISOString(),
