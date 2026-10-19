@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.167 · devolução: a peça só é descontada depois que o caso foi resolvido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.168 · manutenção: conta corrente do prestador</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -26880,7 +26880,7 @@ function manPrestTabela(){
     h+='<tr'+(p.ativo===false?' style="opacity:.55"':'')+'><td><b>'+manEsc(p.apelido)+'</b>'+(p.ativo===false?' <span class="man-tag man-t-n">inativo</span>':'')+'</td>'
       +'<td class="man-ocs">'+manEsc(p.servico||'—')+'</td><td class="man-ocm">'+manEsc(p.contato||'—')+'</td><td>'+manEsc(p.telefone||'—')+'</td>'
       +'<td>'+(p.empresa?manEsc(p.empresa)+(p.documento?'<span class="man-sub">'+manEsc(p.documento)+'</span>':''):'<span class="man-sub">—</span>')+'</td><td class="man-ocm">'+(usos[p.id]||0)+'</td>'
-      +'<td class="man-acoes"><button class="man-b p" onclick="manPrestRel('+p.id+')">📊 Relatório</button> <button class="man-b n p" onclick="manPrestEditar('+p.id+')">Editar</button> <button class="man-b n p" onclick="manPrestAtivo('+p.id+','+(p.ativo===false)+')">'+(p.ativo===false?'Reativar':'Desativar')+'</button></td></tr>';
+      +'<td class="man-acoes"><button class="man-b p" title="tudo o que ele fez, o que falta valor, o que está aprovado e o que já foi pago" onclick="manPrestRel('+p.id+')">💳 Conta corrente</button> <button class="man-b n p" onclick="manPrestEditar('+p.id+')">Editar</button> <button class="man-b n p" onclick="manPrestAtivo('+p.id+','+(p.ativo===false)+')">'+(p.ativo===false?'Reativar':'Desativar')+'</button></td></tr>';
   });
   el.innerHTML=h+'</tbody></table>';
 }
@@ -26897,6 +26897,39 @@ function manRelDados(pid){
     emLote:cus.filter(c=>c.lote_id&&(manLotes.find(l=>l.id===c.lote_id)||{}).etapa!=='PAGO'),
     pagos:cus.filter(c=>c.lote_id&&(manLotes.find(l=>l.id===c.lote_id)||{}).etapa==='PAGO'), soma};
 }
+// ═══ 💳 CONTA CORRENTE DO PRESTADOR (v4.168) ═══════════════════════════════
+// Ela (19/10): "podemos criar uma conta corrente para organizar tudo o que ele fez,
+// colocar os valores após e lançar os pagamentos para controle".
+// Sem SQL novo: sai dos custos, dos lotes e das demandas que já existem.
+function manCCDados(pid){
+  const D=manRelDados(pid);
+  const temCusto=sid=>manCustos.some(c=>c.prestador_id===pid&&c.situacao!=='REPROVADO'&&manDemsDoCusto(c.id).includes(sid));
+  const semValor=D.dems.filter(s=>s.situacao==='RESOLVIDA'&&!s.sem_cobranca&&!temCusto(s.id));   // serviço feito e o valor não veio (resolvida sem cobrança fica de fora)
+  const lotes=manLotes.filter(l=>l.pago_a==='PRESTADOR'&&l.prestador_id===pid&&l.etapa!=='CANCELADO')
+    .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  return {D, semValor, lotes, aPagar:D.soma(D.aprov)+D.soma(D.emLote), pago:D.soma(D.pagos), aguard:D.soma(D.aguard)};
+}
+function manCCBloco(p){
+  const C=manCCDados(p.id);
+  let h='<div class="man-bloco agora" style="margin-top:10px"><div class="man-linha" style="margin-top:0;align-items:baseline">'
+   +'<b style="font-size:13px;color:var(--azul)">💳 Saldo a pagar</b>'
+   +'<b style="font-size:20px;color:'+(C.aPagar>0?'var(--vermelho)':'var(--ok)')+'">'+manBrl(C.aPagar)+'</b>'
+   +'<span class="man-sub" style="margin-left:auto">aprovado sem lote '+manBrl(C.D.soma(C.D.aprov))+' · em lote '+manBrl(C.D.soma(C.D.emLote))+' · já pago '+manBrl(C.pago)+'</span></div>'
+   +(C.aguard>0?'<div class="man-sub">⏳ '+C.D.aguard.length+' custo(s) aguardando aprovação — '+manBrl(C.aguard)+' (ainda não entra no saldo)</div>':'');
+  if(C.semValor.length) h+='<div class="man-rot" style="margin:8px 0 4px">⚠ Serviço feito e o valor não veio ('+C.semValor.length+')</div>'
+   +'<table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th>Pronta</th><th></th></tr></thead><tbody>'
+   +C.semValor.map(s=>'<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+'</span></td><td>'+(manDtFim(s)||'—')+'</td>'
+     +'<td><button class="man-b o p" onclick="manFicha('+s.id+')" title="abrir a demanda para lançar o valor">+ lançar valor</button></td></tr>').join('')
+   +'</tbody></table>';
+  h+='<div class="man-rot" style="margin:8px 0 4px">🧾 Pagamentos</div>';
+  if(!C.lotes.length) h+='<span class="man-sub">Nenhum lote de pagamento para ele ainda.</span>';
+  else h+='<table class="hg-tab man-tab"><thead><tr><th>Lote</th><th>Gerado</th><th>Nota</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>'
+   +C.lotes.map(l=>'<tr><td>#'+l.id+'</td><td>'+manDt(l.created_at)+'</td><td>'+manEsc(l.fatura_nf||'—')+'</td>'
+     +'<td style="text-align:right">'+manBrl(l.total)+'</td><td>'+(l.etapa==='PAGO'?'<span class="man-tag man-t-ok">pago em '+manDt(l.pago_em)+'</span>'
+       :(l.etapa==='PROGRAMADO'?'<span class="man-tag man-t-par">programado para '+manDt(l.pagto_programado_para)+'</span>':'<span class="man-tag man-t-par">'+manEsc(l.etapa.toLowerCase())+'</span>'))+'</td></tr>').join('')
+   +'</tbody></table>';
+  return h+'</div>';
+}
 async function manPrestRel(pid){
   manRelPrest=pid; const box=document.getElementById('man-prest-box');
   if(!box){ trocarAba('man_prest'); await new Promise(r=>setTimeout(r,900)); }
@@ -26907,7 +26940,7 @@ function manPrestRelRender(){
   const D=manRelDados(p.id), B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
   const per=[[30,'30 dias'],[90,'90 dias'],[180,'6 meses'],[365,'1 ano'],[0,'tudo']];
   let h='<div class="man-linha" style="margin-top:0">'+B('n p','‹ Voltar para a lista','manRelPrest=null;manPrestRender()')
-    +'<b style="font-size:15px;color:var(--azul)">📊 '+manEsc(p.apelido)+'</b><span class="man-sub">'+manEsc([p.servico,p.empresa,p.telefone].filter(Boolean).join(' · '))+'</span>'
+    +'<b style="font-size:15px;color:var(--azul)">💳 Conta corrente — '+manEsc(p.apelido)+'</b><span class="man-sub">'+manEsc([p.servico,p.empresa,p.telefone].filter(Boolean).join(' · '))+'</span>'
     +'<span style="margin-left:auto"></span>'+per.map(([d,r])=>'<button class="man-b '+(manRelDias===d?'':'n ')+'p" onclick="manRelDias='+d+';manPrestRender()">'+r+'</button>').join('')
     +B('o p','🖨 Imprimir','manPrestRelImprimir()')+'</div>'
    +'<div class="man-kpis"><div class="man-k fixo"><span class="r">Demandas</span><b>'+D.dems.length+'</b></div>'
@@ -26916,6 +26949,7 @@ function manPrestRelRender(){
    +'<div class="man-k fixo'+(D.aprov.length?' al':'')+'"><span class="r">Aprovado sem lote</span><b>'+D.aprov.length+'</b><span class="man-sub">'+manBrl(D.soma(D.aprov))+'</span></div>'
    +'<div class="man-k fixo"><span class="r">Em lote</span><b>'+D.emLote.length+'</b><span class="man-sub">'+manBrl(D.soma(D.emLote))+'</span></div>'
    +'<div class="man-k fixo"><span class="r">Pago</span><b>'+D.pagos.length+'</b><span class="man-sub">'+manBrl(D.soma(D.pagos))+'</span></div></div>'
+   +manCCBloco(p)
    +'<div class="card-titulo">Demandas</div><table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê · onde</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th>Papel</th><th style="text-align:right">Custos dele <span class="hg-dica" title="valor dos custos DESTA demanda. Custo que cobre mais de uma demanda aparece marcado com 🔗 e só entra uma vez no total, na tabela de custos abaixo.">?</span></th><th></th></tr></thead><tbody>';
   if(!D.dems.length) h+='<tr><td colspan="8" class="sol-vazio">Nada no período.</td></tr>';
   D.dems.forEach(s=>{ const S=manCustosSep(s.id, c=>c.prestador_id===p.id);   // v4.150
@@ -26948,7 +26982,7 @@ function manPrestRelImprimir(){
     +'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid #bbb}'
     +'td{padding:5px 6px;border-bottom:1px solid #e3e3e3;vertical-align:top}small{color:#666}.tot{font-weight:bold}'
     +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:10px}@media print{@page{margin:14mm}}</style></head><body>'
-    +'<div class="cab"><h1>Relatório do prestador — '+manEsc(p.apelido)+'</h1>'
+    +'<div class="cab"><h1>Conta corrente — '+manEsc(p.apelido)+'</h1>'
     +'<div>'+manEsc([p.servico,p.empresa,p.documento,p.telefone].filter(Boolean).join(' · '))+'</div>'
     +'<div><small>Hospital dos Olhos Guanabara · '+per+' · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
     +'<p><b>'+D.dems.length+'</b> demanda(s) · <b>'+D.vis.length+'</b> visita(s) · aguardando aprovação <b>'+manBrl(D.soma(D.aguard))+'</b>'
