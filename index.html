@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.171 · livro de remessas: protocolo com declaração e assinatura, como o do conserto</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.172 · o salvar do orçamento não apaga mais o grupo que a janela não carregou</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6865,6 +6865,9 @@ let coFornGrupo = {};        // { "Orçamento 1": [fornecedor_id, ...] até 3 }
 let coBuscaTimer = null;
 let coBuscaRes = [];
 let coGrupoAtual = 'Orçamento 1';
+// v4.172 — grupos que ESTA janela carregou do banco. É o alcance da faxina do
+// salvar: o que a janela não conhece, ela não apaga.
+let coGruposCarregados = [];
 
 // ═══ v4.24c — RASCUNHO ANTI-F5: o orçamento em montagem é guardado no
 // navegador a cada mudança; se a página recarregar antes do 💾 Salvar,
@@ -6904,9 +6907,26 @@ function coDraftChave(){ return 'hog_co_draft' + (coOrcFoco ? ':'+coOrcFoco : ''
 
 // filtro das linhas que ESTA janela pode regravar. `pedido_id=is.null` é a trava
 // nova: linha que já virou pedido é histórico e nenhum salvamento a apaga.
+// v4.172 — ela, 20/10: "corrija o problema de vc usar os orçamentos via chrome".
+// O salvar desta tela regravava o que estava NELA e apagava TODA linha aberta da
+// cotação — inclusive orçamento de grupo que a janela nunca carregou (montado por
+// SQL, por outra aba ou por outra pessoa). Com o autosave de 1,5 s bastava digitar
+// uma quantidade: em 20/10 isso levou junto, seis vezes, os grupos OPHTHALMOS,
+// CRISTÁLIA e OPHTALMED e os preços da Ophthalmos já lançados. Agora a faxina
+// alcança SÓ os grupos que ESTA janela conhece.
+function coGruposDaTela(){
+  const s = new Set(coGruposCarregados || []);
+  (coItens||[]).forEach(it => s.add(it.grupo || 'Orçamento 1'));
+  if(coGrupoAtual) s.add(coGrupoAtual);
+  return [...s].filter(Boolean);
+}
 function coFiltroRegravar(){
   const base = 'cotacao_id=eq.'+coCotacaoId+'&fechado=is.false&pedido_id=is.null';
-  return coOrcFoco ? (base + '&grupo=eq.' + encodeURIComponent(coOrcFoco)) : base;
+  if(coOrcFoco) return base + '&grupo=eq.' + encodeURIComponent(coOrcFoco);
+  const gs = coGruposDaTela();
+  // sem grupo nenhum (cotação recém-criada) não há linha velha para apagar
+  if(!gs.length) return base;
+  return base + '&grupo=in.(' + gs.map(g => '"' + encodeURIComponent(g) + '"').join(',') + ')';
 }
 
 // o cabeçalho guarda os fornecedores de TODOS os grupos; a janela presa a um
@@ -7050,6 +7070,8 @@ async function coAbrir(id){
   await coCarregarJaComprados(id);
   const its = await sbFetch(`cotacao_itens?select=*,cotacao_opcoes!cotacao_opcoes_cotacao_item_id_fkey(*)&cotacao_id=eq.${id}&fechado=is.false&order=id.asc`);
   coCotacaoId = id;
+  // v4.172 — o que ESTA janela carregou é o alcance da faxina do salvar
+  coGruposCarregados = [...new Set((its||[]).map(it => it.grupo || 'Orçamento 1'))];
   coAutoTxt = ''; coUltimoSalvo = null;   // v4.77 — baseline é definida logo abaixo, depois de montar coItens
   coItens = (its||[]).map(it=>({
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
@@ -7107,7 +7129,7 @@ async function coJuntarAbertas(abertas){
 }
 function coNova(){
   if(coItens.length && !confirm('Isto limpa a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
-  coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1';
+  coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1'; coGruposCarregados=[];   // v4.172
   coAtualizaLabelGrupo(); coRender();
 }
 let coSnapshotUndo = null;
