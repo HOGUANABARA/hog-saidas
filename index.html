@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.173 · o salvar do orçamento não apaga linha nem fornecedor que a janela não carregou</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.174 · o orçamento abre do banco; o rascunho do navegador deixou de mandar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7032,7 +7032,17 @@ async function coCarregar(){
       const abertas = (await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta'+((await origemPronta())?'&origem=eq.INSUMO':'')+'&order=id.desc&limit=10')) || [];
       // v4.88 — a junção renomeia grupos; numa janela presa a um orçamento isso puxaria o tapete
       if(abertas.length>1 && !coOrcFoco) await coJuntarAbertas(abertas);
-      if(draft && (draft.cot || !abertas.length)){
+      // v4.174 — ela, 20/10: "o orçamento nunca apareceu". ERA ISTO: havendo
+      // rascunho no navegador com cotação (`draft.cot`), a tela carregava o
+      // RASCUNHO e nem lia o banco — então nada lançado por fora (SQL, outra aba,
+      // outra pessoa) aparecia, nem depois do F5; e o salvamento seguinte
+      // devolvia o rascunho velho por cima do banco. O rascunho nasceu na v4.24c
+      // para o F5 no meio da montagem, quando não havia gravação automática;
+      // desde a v4.77 tudo grava sozinho em 1,5 s, então ele virou só uma cópia
+      // velha com direito de veto. Agora o BANCO manda: existindo cotação aberta,
+      // ela é carregada e o rascunho entra como complemento (laço abaixo, que já
+      // acrescenta o item que o banco não tem e limpa o rascunho).
+      if(draft && !abertas.length){
         coCotacaoId=draft.cot||null; coItens=draft.itens||[]; coFornGrupo=draft.forn||{}; coGrupoAtual=draft.grupo||'Orçamento 1';
         coRender(); coAtualizaLabelGrupo();
         toast('📝 Recuperei o orçamento que você estava montando (não estava salvo). Confira e clique em 💾 Salvar cotação.','sucesso');
@@ -7091,8 +7101,17 @@ async function coAbrir(id){
   // duas vezes no mesmo orçamento, vale a linha mais nova (id maior). Antes isso
   // não acontecia porque o salvar apagava primeiro — e era justamente aí que se
   // perdia tudo quando a gravação falhava.
+  // v4.174 — a linha que fica é a que tem TRABALHO FEITO (preço, escolha ou
+  // "não tem"); só no empate vale a mais nova. Antes vencia sempre a mais nova:
+  // em 20/10, com as linhas repetidas, a tela mostrava a cópia vazia e os preços
+  // já lançados ficavam escondidos na linha anterior ("o orçamento nunca apareceu").
+  const _peso = it => (it.opcoes||[]).filter(o => o.preco_total!=null || o.escolhida || o.nao_tem).length;
   const _ult = {};
-  coItens.forEach(function(it,ix){ _ult[(it.grupo||'Orçamento 1')+'|'+it.material_id] = ix; });
+  coItens.forEach(function(it,ix){
+    const k = (it.grupo||'Orçamento 1')+'|'+it.material_id;
+    if(_ult[k] === undefined){ _ult[k] = ix; return; }
+    if(_peso(it) >= _peso(coItens[_ult[k]])) _ult[k] = ix;
+  });
   coItens = coItens.filter(function(it,ix){ return _ult[(it.grupo||'Orçamento 1')+'|'+it.material_id] === ix; });
   // v4.88 — janela presa a um orçamento: só as linhas dele entram na memória,
   // e é por isso que o salvar desta janela não alcança os outros orçamentos.
