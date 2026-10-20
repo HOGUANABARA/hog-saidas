@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.174 · o orçamento abre do banco; o rascunho do navegador deixou de mandar</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.175 · item que já virou pedido não volta para o orçamento ao salvar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8339,6 +8339,16 @@ async function coSalvar(silencioso){
     // (o que virou pedido é histórico) e, na janela presa, o grupo dela.
     const velhas = (await sbFetch('cotacao_itens?select=id&' + coFiltroRegravar() + '&limit=2000')) || [];
     const novos = [];
+    // v4.175 — material que JÁ VIROU PEDIDO vivo nesta cotação não é regravado.
+    // Em 20/10 a janela estava aberta desde antes de o pedido do Mercado Livre
+    // ser fechado: ao salvar, ela reinseriu o 24X38 e a seringa como linhas
+    // ABERTAS — material já comprado e pago voltando para a fila de compra.
+    const jaPedido = coItens.filter(it => coJaComprado[it.material_id]);
+    if(jaPedido.length){
+      coItens = coItens.filter(it => !coJaComprado[it.material_id]);
+      toast(jaPedido.length+' item(ns) já viraram pedido e saíram desta tela: '
+            + jaPedido.map(it=>it.material_nome+' → #'+coJaComprado[it.material_id].pedido).join(' · '), 'erro');
+    }
     for(const it of coItens){
       const ins=await sbFetch('cotacao_itens','POST',{
         cotacao_id:coCotacaoId, material_id:it.material_id, material_nome:it.material_nome,
