@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.176 · item de pedido EM ANDAMENTO não volta para o orçamento ao salvar</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.177 · devolução com desfecho "NF cancelada, sem substituição"</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -11415,6 +11415,8 @@ const RC_DEV_RES = [
   { k:'TROCA',          rot:'🔁 Troca (item novo chegou)',    ajuda:'quando o item novo chegar, dê a entrada normal' },
   { k:'ABATIMENTO',     rot:'➖ Abatimento na nota',          ajuda:'o valor é descontado na própria nota' },
   { k:'SUBSTITUICAO_NF',rot:'📄 NF cancelada e substituída',  ajuda:'o fornecedor cancelou a nota e emitiu outra, só com o que será pago' },
+  // v4.177 — devolução integral: a nota é cancelada e não entra nota nenhuma no lugar
+  { k:'NF_CANCELADA',   rot:'🚫 NF cancelada, sem substituição', ajuda:'o fornecedor cancelou a nota e não haverá cobrança — nada a pagar' },
 ];
 async function rcDevResolver(id){
   const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
@@ -11438,6 +11440,10 @@ async function rcDevResolver(id){
         +'<span><b style="font-size:13px">'+o.rot+'</b><br><span style="font-size:11.5px;color:var(--cinza-4)">'+o.ajuda+'</span></span></label>';
     }).join('')
     +'<div id="rc-dev-res-peca" style="margin-top:10px"></div>'
+    +'<div id="rc-dev-res-cancel" style="display:none;margin-top:10px;background:#FDEDEC;border:1px solid #E6B0AA;border-radius:8px;padding:12px;font-size:12px;color:#7B241C;line-height:1.6">'
+    +'A nota <b>'+(nfAntiga.numero_nf||'—')+'</b> ('+rcMoney(nfAntiga.valor_total)+') sai do pagamento e dos custos, e <b>nenhuma nota nova entra no lugar</b>.'
+    +'<br>Fica registrado que '+rcMoney(valorCaso)+' deixaram de ser pagos.'
+    +'<br><b>O estoque não se mexe aqui</b> — quem baixa o que voltou é o botão 📦 Enviada, na retirada.</div>'
     +'<div id="rc-dev-res-valor" style="display:none;margin-top:10px">'
     +'<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--cinza-4)">Valor do acerto (R$)</label>'
     +'<input id="rc-dev-val" type="number" step="0.01" value="'+(valorCaso||'')+'" style="'+inp+'"></div>'
@@ -11481,8 +11487,12 @@ function rcDevEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(
 function rcDevResTrocou(){
   const sel=(document.querySelector('input[name=rc-dev-res]:checked')||{}).value;
   const bxVal=document.getElementById('rc-dev-res-valor'), bxNf=document.getElementById('rc-dev-res-nf');
-  if(bxVal) bxVal.style.display = (sel && sel!=='SUBSTITUICAO_NF') ? '' : 'none';
+  const bxCan=document.getElementById('rc-dev-res-cancel');   // v4.177
+  // v4.177 — na NF cancelada não há acerto de valor a combinar: o que deixa de ser
+  // pago é o próprio caso (qtd × valor), gravado sozinho.
+  if(bxVal) bxVal.style.display = (sel && sel!=='SUBSTITUICAO_NF' && sel!=='NF_CANCELADA') ? '' : 'none';
   if(bxNf)  bxNf.style.display  = (sel==='SUBSTITUICAO_NF') ? '' : 'none';
+  if(bxCan) bxCan.style.display = (sel==='NF_CANCELADA') ? '' : 'none';
 }
 async function rcDevResolverExec(id){
   const d=rcDevs.find(function(x){return x.id===id;}); if(!d) return;
@@ -11514,6 +11524,35 @@ async function rcDevResolverExec(id){
         alert('⚠️ O caso foi resolvido, mas a quantidade da peça devolvida NÃO foi descontada ('+(e.message||e)+').\n\nAcerte a quantidade da peça à mão na aba Instrumentais.');
       }
     };
+    // v4.177 — ela, 20/10 (azul brilhante da Ophthalmos): "a Ophthalmos vai cancelar
+    // essa NF, não haverá cobrança nenhuma". Devolução INTEGRAL de nota com um item só
+    // não tinha desfecho que a descrevesse: os três primeiros pressupõem dinheiro a
+    // devolver ou abater, a troca é outro caso, e "NF cancelada e substituída" exige o
+    // número de uma nota nova — criaria uma nota vazia de R$ 0,00. Aqui a nota só sai
+    // do pagamento e dos custos. O estoque NÃO se mexe neste passo: quem baixa o que
+    // voltou é o 📦 Enviada, na retirada.
+    if(res==='NF_CANCELADA'){
+      const antiga=((await sbFetch('notas_fiscais?select=*&id=eq.'+d.nota_fiscal_id))||[])[0];
+      if(!antiga){ toast('Não achei a nota original.','erro'); return; }
+      const valorCaso=(Number(d.qtd)||0)*(Number(d.valor_unitario)||0)||null;
+      const pat=await sbFetch('notas_fiscais?id=eq.'+antiga.id,'PATCH',{ status:'DEVOLVIDO',
+        motivo_tratativa:'NF cancelada pelo fornecedor — sem cobrança'+(d.motivo?(' — '+d.motivo):''),
+        vencimentos_obs:'⛔ CANCELADA pelo fornecedor — sem cobrança | '+(antiga.vencimentos_obs||'') });
+      if(!(Array.isArray(pat) && pat.length)){
+        alert('⚠️ A NF '+(antiga.numero_nf||'—')+' NÃO foi marcada como cancelada.\n\nO caso continua aberto — tente de novo.');
+        return;
+      }
+      await sbFetch('devolucoes?id=eq.'+id,'PATCH',{ status:'RESOLVIDA', resolucao:'NF_CANCELADA',
+        valor_resolvido:valorCaso,
+        historico:rcDevHist(d,'RESOLVIDA — NF '+(antiga.numero_nf||'—')+' cancelada pelo fornecedor, sem cobrança'
+                              +(valorCaso?(' ('+rcMoney(valorCaso)+' que deixam de ser pagos)'):'')),
+        atualizado_por:rcDevQuem(), atualizado_em:new Date().toISOString() });
+      if(ov) ov.remove();
+      await baixarPeca();
+      toast('📄 NF '+(antiga.numero_nf||'—')+' cancelada — fora do pagamento e dos custos ✓','sucesso');
+      rcDevCarregar(); if(typeof rcCarregar==='function') rcCarregar();
+      return;
+    }
     if(res==='SUBSTITUICAO_NF'){
       const num=((document.getElementById('rc-dev-nf-num')||{}).value||'').trim();
       if(!num){ toast('Informe o número da nota nova.','erro'); return; }
