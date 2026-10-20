@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.170 · conserto: protocolo sem localização; a caixa e o dono ficam na relação interna</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.171 · livro de remessas: protocolo com declaração e assinatura, como o do conserto</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -18742,6 +18742,7 @@ function rmRenderMontagem(){
         <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
         <span style="font-size:11px;color:var(--cinza-4)">guias, borrachas, lentes — o que não passa pela saída cirúrgica</span>
         <button class="rm-b claro" style="margin-left:auto" onclick="rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button>
+        <button class="rm-b claro" onclick="rmProtocolo(${r.id})" title="Papel para o fornecedor assinar na entrega: remetente, declaração e assinatura">🖨 Protocolo</button>
         <button class="rm-b verde" onclick="rmEnviar(${r.id})">🚚 Enviar remessa</button>
         <button class="rm-b perigo" onclick="rmDesfazerMontagem(${r.id})">🗑 Desfazer</button>
       </div>
@@ -18781,6 +18782,7 @@ function rmRenderFora(){
         <button class="rm-b claro" style="margin-left:auto" title="a remessa volta para a montagem: aí você troca item, quantidade e bloco, e envia de novo" onclick="rmReabrir(${r.id})">↩ Reabrir para ajustes</button>
         <button class="rm-b claro" onclick="rmCorrBloco(${r.id})">✏️ Nº do bloco</button>
         <button class="rm-b claro" onclick="rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button>
+        <button class="rm-b claro" onclick="rmProtocolo(${r.id})" title="Papel para o fornecedor assinar na entrega: remetente, declaração e assinatura">🖨 Protocolo</button>
         <button class="rm-b verde" onclick="rmRegistrarRetorno(${r.id})">📥 Dar baixa na entrega</button>
       </div>
     </div>`;
@@ -19193,7 +19195,8 @@ function rmRenderHistorico(){
       <td style="white-space:nowrap">${nf?('NF <b>'+rmEsc(nf.numero_nf||'(sem número)')+'</b>'+(nf.data_emissao?`<div style="font-size:11px;color:var(--cinza-4)">emitida ${rmData(nf.data_emissao)}</div>`:'')):'<span style="color:var(--cinza-4)">—</span>'}</td>
       <td style="text-align:right;font-weight:700;white-space:nowrap">${valorNf}</td>
       <td>${rmHistPagRot(nf)}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="imprimir o romaneio desta remessa" onclick="event.stopPropagation();rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button></td>
+      <td style="text-align:right;white-space:nowrap"><button class="rm-b claro" style="padding:4px 9px;font-size:11px" title="imprimir o romaneio desta remessa" onclick="event.stopPropagation();rmRemessaPDF(${r.id})">🖨 Imprimir romaneio</button>
+        <button class="rm-b claro" style="padding:4px 9px;font-size:11px;margin-left:5px" title="protocolo com a declaração e a assinatura do fornecedor" onclick="event.stopPropagation();rmProtocolo(${r.id})">🖨 Protocolo</button></td>
     </tr>`;
     if(!aberta) return cab;
     const sub = itens.map(i=>{
@@ -20223,6 +20226,78 @@ function rmRemessaPDF(remessaId){
     +'<tbody>'+linhas+'</tbody><tfoot><tr><td></td><td style="text-align:right">Total de peças</td><td class="q">'+tot+'</td><td></td></tr></tfoot></table>'
     +'<div class="ass"><div>Entregue por (HOG)</div><div>Recebido por (transporte / fornecedor)</div></div>'
     +'<div class="rodape">HOG Saídas · romaneio da remessa '+rmEsc(r.numero_bloco||('#'+r.id))+' · impresso em '+rmData(hoje)+'</div>'
+    +'</body></html>');
+}
+
+// ═══ v4.171 · PROTOCOLO DA REMESSA (o papel que o fornecedor assina) ═════
+// Ela, 20/10/2026: "preciso gerar um protocolo da Sterileno" — a Talita tinha
+// mandado o material no papel do fornecedor, sem passar pelo sistema. O romaneio
+// já existia, mas é lista de conferência: não traz os dados da empresa nem a
+// declaração de que o material sai só para o serviço e volta. É o mesmo papel da
+// manutenção (v4.169/170), agora para esterilização e lavanderia.
+const RM_DECL = {
+  ESTERILIZACAO:'esterilização (óxido de etileno)',
+  LAVANDERIA:'lavagem e processamento do enxoval',
+  MANUTENCAO:'avaliação e conserto',
+};
+function rmProtocolo(remessaId){
+  const r = rmRemessas.find(x=>x.id===remessaId) || rmHist.find(x=>x.id===remessaId);
+  if(!r){ toast('Remessa não encontrada.','erro'); return; }
+  const itens = (r.remessa_itens||[]);
+  if(!itens.length){ toast('Remessa sem itens.','erro'); return; }
+  const qtdDe = i => { const el=document.getElementById('rm-mi-'+i.id); const v=el?parseFloat(el.value):NaN; return isNaN(v)?rmNum(i.qtd_enviada):v; };
+  const fo = r.fornecedor_id ? ((coFornecedores||[]).find(x=>x.id===r.fornecedor_id)||{}) : {};
+  const fornNome = fo.nome || '—';
+  const emp = (typeof CEX_EMPRESA !== 'undefined') ? CEX_EMPRESA
+            : { razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
+                endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP' };
+  const servico = RM_DECL[r.tipo] || 'processamento';
+  const hoje = new Date().toISOString().slice(0,10);
+  const linhas = itens.map((i,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i"><b>'+rmEsc(rmBem(i.bem_id))+'</b></td>'
+    +'<td class="q">'+qtdDe(i)+'</td><td class="c">☐</td></tr>').join('');
+  const tot = itens.reduce((s,i)=>s+qtdDe(i),0);
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+    +'<title>Protocolo — remessa '+rmEsc(r.numero_bloco||('#'+r.id))+'</title>'
+    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}'
+    +'h1{font-size:17px;margin:0 0 2px;color:#1B4F72}.sub{color:#555;font-size:11.5px}'
+    +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
+    +'.num{text-align:right;font-size:10.5px;color:#555;text-transform:uppercase;letter-spacing:.5px}'
+    +'.num b{display:block;font-size:22px;color:#1B4F72;letter-spacing:0;text-transform:none}'
+    +'.blocos{display:flex;gap:12px;margin-bottom:14px}.bloco{flex:1;border:1px solid #ccc;border-radius:6px;padding:8px 12px}'
+    +'.bloco h2{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;margin:0 0 4px}.bloco div{font-size:12px;line-height:1.55}'
+    +'.decl{border-left:3px solid #1B4F72;background:#F4F8FB;padding:10px 13px;font-size:12px;line-height:1.6;margin-bottom:14px}'
+    +'table{width:100%;border-collapse:collapse}th{background:#EEF3F8;font-size:10px;text-transform:uppercase;letter-spacing:.4px;'
+    +'text-align:left;padding:6px 8px;border-bottom:1.5px solid #bbb}td{padding:7px 8px;border-bottom:1px solid #e3e3e3}'
+    +'td.n{width:26px;color:#888}td.q{width:60px;text-align:center;font-weight:bold;color:#1B4F72}td.c{width:60px;text-align:center;font-size:15px}'
+    +'tfoot td{font-weight:bold;background:#fafafa;border-top:1.5px solid #bbb}'
+    +'.ass{display:flex;gap:30px;margin-top:38px}.ass div{flex:1;border-top:1px solid #333;padding-top:5px;font-size:11px;text-align:center;color:#444}'
+    +'.obs{margin-top:12px;font-size:11.5px;color:#444}.pe{margin-top:26px;font-size:10px;color:#777;text-align:center;border-top:1px solid #ddd;padding-top:8px}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<div class="topo"><div><h1>Protocolo de remessa</h1><div class="sub">'+rmEsc((rmTipo(r.tipo).rot)||r.tipo)+' · saída e retorno</div></div>'
+      +'<div class="num">bloco<b>'+rmEsc(r.numero_bloco||('#'+r.id))+'</b>'+rmData(r.data_envio||hoje)+'</div></div>'
+    +'<div class="blocos">'
+      +'<div class="bloco"><h2>Remetente</h2><div><b>'+rmEsc(emp.razao)+'</b><br>CNPJ '+rmEsc(emp.cnpj)
+        +'<br>'+rmEsc(emp.endereco)+'<br>'+rmEsc(emp.cidade)+' ('+rmEsc(emp.uf)+')'
+        +'<br>Hospital dos Olhos Guanabara · Centro Cirúrgico</div></div>'
+      +'<div class="bloco"><h2>Destinatário</h2><div><b>'+rmEsc(fornNome)+'</b>'
+        +(fo.contato?('<br>A/C '+rmEsc(fo.contato)):'')
+        +(fo.telefone?('<br>'+rmEsc(fo.telefone)):'')
+        +(fo.email?('<br>'+rmEsc(fo.email)):'')
+        +(fo.observacao?('<br>'+rmEsc(fo.observacao)):'')
+        +'<br><br>Recebido em ____/____/______</div></div>'
+    +'</div>'
+    +'<div class="decl">Declaramos que os itens relacionados abaixo, de propriedade do remetente, são entregues a '
+      +'<b>'+rmEsc(fornNome)+'</b> exclusivamente para <b>'+rmEsc(servico)+'</b>. Não há circulação de mercadoria: '
+      +'o material deve retornar ao remetente após o serviço, acompanhado da nota fiscal correspondente. '
+      +'Item que não puder ser processado deve voltar igualmente, para baixa no controle do hospital.</div>'
+    +'<table><thead><tr><th>#</th><th>Item</th><th class="q">Qtd</th><th class="c">Conferido</th></tr></thead>'
+      +'<tbody>'+linhas+'</tbody>'
+      +'<tfoot><tr><td></td><td>Total de peças entregues</td><td class="q">'+tot+'</td><td></td></tr></tfoot></table>'
+    +(r.observacao?('<div class="obs"><b>Observação:</b> '+rmEsc(r.observacao)+'</div>'):'')
+    +'<div class="ass"><div>Entregue por'+(r.enviado_por?('<br><b>'+rmEsc(r.enviado_por)+'</b>'):'')+'<br>Hospital dos Olhos Guanabara</div>'
+      +'<div>Recebido por<br>Nome e documento<br>'+rmEsc(fornNome)+'</div></div>'
+    +'<div class="pe">'+rmEsc(emp.razao)+' · CNPJ '+rmEsc(emp.cnpj)+' · '+rmEsc(emp.endereco)+' · '+rmEsc(emp.cidade)+' ('+rmEsc(emp.uf)+')</div>'
+    +'<button onclick="window.print()" style="margin-top:16px;padding:9px 18px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
     +'</body></html>');
 }
 
