@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.175 · item que já virou pedido não volta para o orçamento ao salvar</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.176 · item de pedido EM ANDAMENTO não volta para o orçamento ao salvar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8343,7 +8343,13 @@ async function coSalvar(silencioso){
     // Em 20/10 a janela estava aberta desde antes de o pedido do Mercado Livre
     // ser fechado: ao salvar, ela reinseriu o 24X38 e a seringa como linhas
     // ABERTAS — material já comprado e pago voltando para a fila de compra.
-    const jaPedido = coItens.filter(it => coJaComprado[it.material_id]);
+    // v4.176 — só vale o pedido EM ANDAMENTO. A #32 está aberta desde 15/09 e já
+    // gerou pedidos CONCLUIDOS (o #67 da Belive, de 22/09, levou luva 7.0, 7.5 e
+    // ringer): com a régua larga da v4.175 esses itens sumiriam da tela no
+    // primeiro salvamento, justamente os que precisam ser comprados de novo.
+    const CO_PED_VIVO = ['EM_MONTAGEM','AGUARDANDO_APROVACAO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'];
+    const jaPedido = coItens.filter(it => { const j = coJaComprado[it.material_id];
+                                            return j && CO_PED_VIVO.includes(j.status); });
     if(jaPedido.length){
       coItens = coItens.filter(it => !coJaComprado[it.material_id]);
       toast(jaPedido.length+' item(ns) já viraram pedido e saíram desta tela: '
