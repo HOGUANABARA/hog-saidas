@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.169 · remessa de conserto: incluir peças, unificar, fechar e protocolo com assinatura</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.170 · conserto: protocolo sem localização; a caixa e o dono ficam na relação interna</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -17740,7 +17740,8 @@ function ciRenderConsertos(){
       <div style="padding:10px 14px;border-top:1px solid var(--cinza-2);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${montagem?`<button class="rm-b" onclick="ciIncluirPecas(${r.id})" title="Acrescentar peça a esta remessa sem abrir outra">➕ Incluir peças</button>`:''}
         ${montagem&&irmas?`<button class="rm-b roxo" onclick="ciUnificar(${r.id})" title="Juntar aqui as outras remessas em montagem do mesmo fornecedor">🔗 Unificar (${irmas})</button>`:''}
-        <button class="rm-b claro" onclick="ciProtocolo(${r.id})" title="Papel para a empresa assinar na entrega: itens, queixa e assinatura">🖨 Protocolo</button>
+        <button class="rm-b claro" onclick="ciProtocolo(${r.id})" title="Vai com as peças: itens, queixa e assinatura da oficina — sem a localização, que é interna">🖨 Protocolo</button>
+        <button class="rm-b claro" onclick="ciProtocolo(${r.id}, true)" title="Fica no CC: a mesma relação COM a caixa e o dono de cada peça, para a conferência do retorno">🖨 Relação interna</button>
         ${montagem?`<button class="rm-b verde" onclick="ciFecharRemessa(${r.id})" title="Fecha a montagem: a remessa passa a ENVIADA e o protocolo é impresso">📦 Fechar e enviar</button>`
                   :`<span style="font-size:12px;color:var(--verde);font-weight:700">📦 enviada ${r.data_envio?('em '+ciData(r.data_envio)):''}${r.enviado_por?(' por '+ciEsc(r.enviado_por)):''}</span>`}
         <span style="flex:1"></span>
@@ -18332,8 +18333,11 @@ async function ciFecharRemessa(rid){
   }catch(e){ toast('Erro ao fechar: '+(e.message||e),'erro'); }
 }
 
-// o papel que a oficina assina na entrega
-function ciProtocolo(rid){
+// Dois papéis da mesma remessa (ela, 20/10): o PROTOCOLO vai com as peças e
+// **não leva a localização** — de onde a peça saiu é assunto do hospital, não da
+// oficina; a RELAÇÃO INTERNA é a mesma lista COM caixa e dono, para conferir o
+// retorno peça por peça.
+function ciProtocolo(rid, interna){
   const r = ciRemessas.find(x => x.id === rid); if(!r) return;
   const itens = ciItens.filter(i => i.remessa_id === rid);
   if(!itens.length){ toast('Remessa sem peças.','erro'); return; }
@@ -18346,7 +18350,7 @@ function ciProtocolo(rid){
     const p = ciPeca(i.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
     return '<tr><td class="n">'+(ix+1)+'</td>'
       +'<td class="i"><b>'+ciEsc(p ? p.nome : ('#'+i.peca_id))+'</b>'
-        +(c?('<div class="cx">'+ciEsc(c.nome)+' · '+ciEsc(ciDono(c))+'</div>'):'')+'</td>'
+        +((interna && c)?('<div class="cx">'+ciEsc(c.nome)+' · '+ciEsc(ciDono(c))+'</div>'):'')+'</td>'
       +'<td class="q">'+ciNum(i.qtd)+'</td>'
       +'<td class="d">'+(i.defeito?ciEsc(i.defeito):'<span class="vz">&nbsp;</span>')+'</td>'
       +'<td class="c">☐</td></tr>';
@@ -18354,7 +18358,7 @@ function ciProtocolo(rid){
   const total = itens.reduce((s,i) => s + ciNum(i.qtd), 0);
   const dataTxt = ciData(r.data_envio || ciHoje());
   hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
-    +'<title>Protocolo de remessa '+ciEsc(r.numero_bloco||('#'+r.id))+'</title>'
+    +'<title>'+(interna?'Relação interna':'Protocolo')+' — remessa '+ciEsc(r.numero_bloco||('#'+r.id))+'</title>'
     +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}'
     +'h1{font-size:17px;margin:0 0 2px;color:#1B4F72}.sub{color:#555;font-size:11.5px}'
     +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
@@ -18371,8 +18375,8 @@ function ciProtocolo(rid){
     +'.ass{display:flex;gap:30px;margin-top:38px}.ass div{flex:1;border-top:1px solid #333;padding-top:5px;font-size:11px;text-align:center;color:#444}'
     +'.obs{margin-top:12px;font-size:11.5px;color:#444}.pe{margin-top:26px;font-size:10px;color:#777;text-align:center;border-top:1px solid #ddd;padding-top:8px}'
     +'@media print{button{display:none}}</style></head><body>'
-    +'<div class="topo"><div><h1>Protocolo de remessa para conserto</h1>'
-      +'<div class="sub">Instrumental cirúrgico · saída e retorno</div></div>'
+    +'<div class="topo"><div><h1>'+(interna?'Relação interna da remessa':'Protocolo de remessa para conserto')+'</h1>'
+      +'<div class="sub">Instrumental cirúrgico · saída e retorno'+(interna?' · uso interno do Centro Cirúrgico':'')+'</div></div>'
       +'<div class="num">bloco<b>'+ciEsc(r.numero_bloco||('#'+r.id))+'</b>'+dataTxt+'</div></div>'
     +'<div class="blocos">'
       +'<div class="bloco"><h2>Remetente</h2><div><b>'+ciEsc(emp.razao)+'</b><br>CNPJ '+ciEsc(emp.cnpj)
@@ -18383,18 +18387,21 @@ function ciProtocolo(rid){
         +(fo.telefone?('<br>'+ciEsc(fo.telefone)):'')
         +(fo.email?('<br>'+ciEsc(fo.email)):'')
         +(fo.observacao?('<br>'+ciEsc(fo.observacao)):'')
-        +'<br><br>Recebido em ____/____/______</div></div>'
+        +(interna?'':'<br><br>Recebido em ____/____/______')+'</div></div>'
     +'</div>'
-    +'<div class="decl">Declaramos que as peças relacionadas abaixo, de propriedade do remetente, são entregues '
+    +(interna?'':'<div class="decl">Declaramos que as peças relacionadas abaixo, de propriedade do remetente, são entregues '
       +'a <b>'+ciEsc(fornNome)+'</b> exclusivamente para <b>avaliação e conserto</b>, com a queixa descrita em cada linha. '
       +'Não há circulação de mercadoria: o material deve retornar ao remetente após o serviço, acompanhado da nota fiscal '
-      +'correspondente. Qualquer peça sem conserto deve voltar igualmente, para baixa no controle do hospital.</div>'
-    +'<table><thead><tr><th>#</th><th>Peça / caixa</th><th>Qtd</th><th>Queixa relatada</th><th>Conf.</th></tr></thead>'
+      +'correspondente. Qualquer peça sem conserto deve voltar igualmente, para baixa no controle do hospital.</div>')
+    +'<table><thead><tr><th>#</th><th>'+(interna?'Peça · caixa e dono':'Peça')+'</th><th>Qtd</th><th>Queixa relatada</th><th>'+(interna?'Voltou':'Conf.')+'</th></tr></thead>'
       +'<tbody>'+linhas+'</tbody>'
       +'<tfoot><tr><td></td><td>Total de peças entregues</td><td class="q">'+total+'</td><td colspan="2"></td></tr></tfoot></table>'
     +(r.observacao?('<div class="obs"><b>Observação:</b> '+ciEsc(r.observacao)+'</div>'):'')
-    +'<div class="ass"><div>Entregue por'+(r.enviado_por?('<br><b>'+ciEsc(r.enviado_por)+'</b>'):'')+'<br>Hospital dos Olhos Guanabara</div>'
-      +'<div>Recebido por<br>Nome e documento<br>'+ciEsc(fornNome)+'</div></div>'
+    +(interna
+      ? '<div class="ass"><div>Separado por'+(r.enviado_por?('<br><b>'+ciEsc(r.enviado_por)+'</b>'):'')+'<br>Centro Cirúrgico</div>'
+        +'<div>Conferido no retorno<br>Nome e data</div></div>'
+      : '<div class="ass"><div>Entregue por'+(r.enviado_por?('<br><b>'+ciEsc(r.enviado_por)+'</b>'):'')+'<br>Hospital dos Olhos Guanabara</div>'
+        +'<div>Recebido por<br>Nome e documento<br>'+ciEsc(fornNome)+'</div></div>')
     +'<div class="pe">'+ciEsc(emp.razao)+' · CNPJ '+ciEsc(emp.cnpj)+' · '+ciEsc(emp.endereco)+' · '+ciEsc(emp.cidade)+' ('+ciEsc(emp.uf)+')</div>'
     +'<button onclick="window.print()" style="margin-top:16px;padding:9px 18px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
     +'</body></html>');
