@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.172 · o salvar do orçamento não apaga mais o grupo que a janela não carregou</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.173 · o salvar do orçamento não apaga linha nem fornecedor que a janela não carregou</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6868,6 +6868,9 @@ let coGrupoAtual = 'Orçamento 1';
 // v4.172 — grupos que ESTA janela carregou do banco. É o alcance da faxina do
 // salvar: o que a janela não conhece, ela não apaga.
 let coGruposCarregados = [];
+// v4.173 — ids de linha que ESTA janela carregou ou gravou. Só eles podem ser
+// apagados pelo salvar; linha que apareceu depois (SQL, outra aba) sobrevive.
+let coIdsConhecidos = new Set();
 
 // ═══ v4.24c — RASCUNHO ANTI-F5: o orçamento em montagem é guardado no
 // navegador a cada mudança; se a página recarregar antes do 💾 Salvar,
@@ -6929,18 +6932,21 @@ function coFiltroRegravar(){
   return base + '&grupo=in.(' + gs.map(g => '"' + encodeURIComponent(g) + '"').join(',') + ')';
 }
 
-// o cabeçalho guarda os fornecedores de TODOS os grupos; a janela presa a um
-// orçamento só conhece o dela, então mescla com o que está no banco
+// o cabeçalho guarda os fornecedores de TODOS os grupos; a janela só conhece os
+// grupos que carregou, então mescla SEMPRE com o que está no banco.
+// v4.173 — antes a janela não-presa gravava o objeto inteiro e apagava do
+// cabeçalho o fornecedor de orçamento montado por fora: em 20/10 as linhas dos
+// grupos OPHTHALMOS, CRISTÁLIA e OPHTALMED sobreviveram (v4.172) e o
+// fornecedor deles sumiu do cabeçalho no mesmo salvamento.
 async function coSalvarCabecalho(){
   let fg = coFornGrupo;
-  if(coOrcFoco){
-    try{
-      const cab = await sbFetch('cotacoes?select=fornecedores_grupo&id=eq.'+coCotacaoId+'&limit=1');
-      const atual = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
-      fg = Object.assign({}, atual);
-      fg[coOrcFoco] = coFornGrupo[coOrcFoco] || [];
-    }catch(e){ fg = coFornGrupo; }
-  }
+  try{
+    const cab = await sbFetch('cotacoes?select=fornecedores_grupo&id=eq.'+coCotacaoId+'&limit=1');
+    const atual = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
+    fg = Object.assign({}, atual);
+    if(coOrcFoco) fg[coOrcFoco] = coFornGrupo[coOrcFoco] || [];
+    else for(const g of coGruposDaTela()) fg[g] = coFornGrupo[g] || [];
+  }catch(e){ fg = coFornGrupo; }
   await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ fornecedores_grupo: fg });
 }
 
@@ -7072,6 +7078,7 @@ async function coAbrir(id){
   coCotacaoId = id;
   // v4.172 — o que ESTA janela carregou é o alcance da faxina do salvar
   coGruposCarregados = [...new Set((its||[]).map(it => it.grupo || 'Orçamento 1'))];
+  coIdsConhecidos = new Set((its||[]).map(it => it.id).filter(Boolean));   // v4.173
   coAutoTxt = ''; coUltimoSalvo = null;   // v4.77 — baseline é definida logo abaixo, depois de montar coItens
   coItens = (its||[]).map(it=>({
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
@@ -7129,7 +7136,8 @@ async function coJuntarAbertas(abertas){
 }
 function coNova(){
   if(coItens.length && !confirm('Isto limpa a tela para uma NOVA cotação (o que já foi salvo continua no banco). Continuar?')) return;
-  coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1'; coGruposCarregados=[];   // v4.172
+  coCotacaoId=null; coItens=[]; coFornGrupo={}; coGrupoAtual='Orçamento 1';
+  coGruposCarregados=[]; coIdsConhecidos=new Set();   // v4.172 / v4.173
   coAtualizaLabelGrupo(); coRender();
 }
 let coSnapshotUndo = null;
@@ -8334,7 +8342,14 @@ async function coSalvar(silencioso){
       if(ops.length) await sbFetch('cotacao_opcoes','POST',ops);
     }
     // tudo gravado: agora as linhas antigas podem sair
-    const idsVelhos = velhas.map(x=>x.id).filter(id=>novos.indexOf(id)<0);
+    // v4.173 — só sai linha que ESTA janela conhece (carregou no coAbrir ou
+    // gravou num salvamento anterior). Linha que apareceu depois — lançada por
+    // SQL, por outra aba, por outra pessoa — não é "versão anterior" desta tela
+    // e não pode ser apagada por ela. Em 20/10 um salvamento de janela velha
+    // levou os itens novos do Orçamento 1 e os 17 preços já lançados.
+    novos.forEach(id => coIdsConhecidos.add(id));
+    const idsVelhos = velhas.map(x=>x.id)
+      .filter(id => novos.indexOf(id)<0 && coIdsConhecidos.has(id));
     if(idsVelhos.length){
       const lista = idsVelhos.join(',');
       try{ await sbFetch(`cotacao_opcoes?cotacao_item_id=in.(${lista})`,'DELETE'); }
