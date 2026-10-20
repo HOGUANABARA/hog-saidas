@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.168 · manutenção: conta corrente do prestador</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.169 · remessa de conserto: incluir peças, unificar, fechar e protocolo com assinatura</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -17716,6 +17716,8 @@ function ciRenderConsertos(){
     const orcado = itens.reduce((s,i) => s + ciNum(i.valor_orcado) * ciNum(i.qtd), 0);
     const temOrc = itens.some(i => i.valor_orcado != null);
     const enviado = itens.some(i => i.ordem_id);
+    const montagem = (r.status === 'MONTAGEM');
+    const irmas = montagem ? ciIrmas(r).padrao.length : 0;
     const linhas = itens.map(i => {
       const p = ciPeca(i.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
       const fechado = !!i.desfecho;
@@ -17736,6 +17738,12 @@ function ciRenderConsertos(){
         <span class="rm-count">${itens.length} peça(s)</span></div>
       ${linhas || '<div class="rm-empty">Sem peças nesta remessa.</div>'}
       <div style="padding:10px 14px;border-top:1px solid var(--cinza-2);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${montagem?`<button class="rm-b" onclick="ciIncluirPecas(${r.id})" title="Acrescentar peça a esta remessa sem abrir outra">➕ Incluir peças</button>`:''}
+        ${montagem&&irmas?`<button class="rm-b roxo" onclick="ciUnificar(${r.id})" title="Juntar aqui as outras remessas em montagem do mesmo fornecedor">🔗 Unificar (${irmas})</button>`:''}
+        <button class="rm-b claro" onclick="ciProtocolo(${r.id})" title="Papel para a empresa assinar na entrega: itens, queixa e assinatura">🖨 Protocolo</button>
+        ${montagem?`<button class="rm-b verde" onclick="ciFecharRemessa(${r.id})" title="Fecha a montagem: a remessa passa a ENVIADA e o protocolo é impresso">📦 Fechar e enviar</button>`
+                  :`<span style="font-size:12px;color:var(--verde);font-weight:700">📦 enviada ${r.data_envio?('em '+ciData(r.data_envio)):''}${r.enviado_por?(' por '+ciEsc(r.enviado_por)):''}</span>`}
+        <span style="flex:1"></span>
         ${temOrc?`<b style="font-size:13px">Orçamento: ${ciMoney(orcado)}</b>`:'<span style="font-size:12px;color:var(--cinza-4)">Orçamento ainda não lançado</span>'}
         <button class="rm-b claro" onclick="ciOrcamento(${r.id})">${temOrc?'✎ Corrigir orçamento':'💰 Lançar orçamento'}</button>
         ${temOrc && !enviado?`<button class="rm-b laranja" onclick="ciEnviarAprovacao(${r.id})">🔏 Enviar para aprovação</button>`:''}
@@ -18196,6 +18204,200 @@ async function rmMontarManutencao(){
     toast(escolhidas.length + ' peça(s) na remessa de conserto ✓','sucesso');
     if(typeof trocarAba === 'function') trocarAba('instrumentais'); else ciCarregar();
   }catch(e){ toast('Erro ao criar a remessa: '+e.message,'erro'); }
+}
+
+// ═══ v4.169 · A REMESSA DE CONSERTO FECHA E VIRA PROTOCOLO ═══════════════
+// Ela, 20/10/2026, com o print de três remessas iguais (bloco 02 · MAG):
+// "unificar as 3 remessas, colocar botão incluir itens na remessa, fechar a
+// remessa, gerar o protocolo com os dados da empresa, declaração dos itens com
+// a queixa e espaço para assinatura".
+// Por que havia três: a remessa só recebia peça na hora de criar — quem lembrava
+// de mais uma peça depois abria outra remessa. Agora dá para incluir, juntar o
+// que se espalhou, fechar a montagem e imprimir o papel que a oficina assina.
+async function ciColetarPecas(primeiraPergunta){
+  const escolhidas=[];
+  while(true){
+    const rot = escolhidas.length
+      ? 'Acrescentar outra peça? (' + escolhidas.length + ' nesta rodada)'
+      : primeiraPergunta;
+    const p = await ciEscolherPeca(rot);
+    if(!p) break;
+    const c = ciCaixa(p.caixa_id);
+    const r = await hogPergunta({
+      titulo: p.nome,
+      texto: (c ? c.nome + ' · ' + ciDono(c) + '. ' : '')
+           + (c && c.proprietario === 'MEDICO'
+              ? '⚠️ Esta peça é do médico. O conserto pode; comprar e descartar, não — combine antes.'
+              : ''),
+      campos: [
+        { id:'qtd', rot:'Quantas peças', tipo:'numero', valor:1, obrigatorio:true },
+        { id:'def', rot:'Qual o defeito (vai no protocolo)', tipo:'texto-longo', placeholder:'ex.: dente torto, sem corte, falta parafuso' },
+      ], ok:'Acrescentar' });
+    if(!r) continue;
+    const qtd = ciNum(r.qtd);
+    if(qtd <= 0){ toast('Quantidade inválida.','erro'); continue; }
+    escolhidas.push({ peca_id:p.id, qtd, defeito:(r.def||'').trim()||null });
+    const mais = await hogConfirma({ titulo:'Mais alguma peça?',
+      texto: escolhidas.length + ' peça(s) nesta rodada. Quer acrescentar outra?', ok:'Acrescentar outra' });
+    if(!mais) break;
+  }
+  return escolhidas;
+}
+
+async function ciIncluirPecas(rid){
+  const r = ciRemessas.find(x => x.id === rid); if(!r) return;
+  if(r.status !== 'MONTAGEM'){ toast('Esta remessa já foi enviada — abra outra.','erro'); return; }
+  const escolhidas = await ciColetarPecas('Que peça entra na remessa do bloco ' + (r.numero_bloco||('#'+r.id)) + '?');
+  if(!escolhidas.length){ toast('Nenhuma peça escolhida.',''); return; }
+  try{
+    for(const e of escolhidas){
+      await sbFetch('manutencao_itens','POST',{ remessa_id:rid, peca_id:e.peca_id, qtd:e.qtd,
+        defeito:e.defeito, enviado_por: ciQuem() });
+      const p2 = ciPeca(e.peca_id);
+      if(p2 && p2.qtd != null)
+        await sbFetch(`instrumental_pecas?id=eq.${e.peca_id}`,'PATCH',{ qtd: Math.max(0, ciNum(p2.qtd) - e.qtd) });
+    }
+    toast(escolhidas.length + ' peça(s) acrescentada(s) à remessa ✓','sucesso');
+    ciCarregar();
+  }catch(e){ toast('Erro ao incluir: '+(e.message||e),'erro'); }
+}
+
+function ciBloco(x){ return String((x&&x.numero_bloco)||'').trim().toUpperCase(); }
+// juntar TUDO do fornecedor juntaria remessa de outro bloco (a #2, de julho,
+// estava aberta com 12 peças) — por isso o padrão é o MESMO bloco, e juntar
+// blocos diferentes é escolha explícita.
+function ciIrmas(r){
+  const todas = ciRemessas.filter(x => x.id !== r.id && x.status === 'MONTAGEM' && x.fornecedor_id === r.fornecedor_id);
+  const mesmo = todas.filter(x => ciBloco(x) === ciBloco(r));
+  return { todas, mesmo, padrao: (mesmo.length ? mesmo : todas) };
+}
+async function ciUnificar(rid){
+  const r = ciRemessas.find(x => x.id === rid); if(!r) return;
+  const { todas, mesmo } = ciIrmas(r);
+  if(!todas.length){ toast('Não há outra remessa em montagem deste fornecedor.','erro'); return; }
+  let irmas = mesmo.length ? mesmo : todas;
+  if(mesmo.length && mesmo.length !== todas.length){
+    const esc = await hogMenu({ titulo:'Juntar o quê?',
+      texto:'Há remessas de OUTROS blocos em montagem com ' + ciForn(r.fornecedor_id) + '.',
+      opcoes:[
+        { ico:'🔗', rot:'Só as do bloco ' + (r.numero_bloco||''), desc: mesmo.length + ' remessa(s)', valor:'MESMO' },
+        { ico:'📦', rot:'Todas as em montagem deste fornecedor', desc: todas.length + ' remessa(s), blocos diferentes', valor:'TODAS' },
+      ] });
+    if(!esc) return;
+    irmas = (esc === 'MESMO') ? mesmo : todas;
+  }
+  const lista = irmas.map(x => '• bloco ' + (x.numero_bloco||('#'+x.id)) + ' — '
+      + ciItens.filter(i => i.remessa_id === x.id).length + ' peça(s), aberta em ' + ciData(x.created_at)).join('\n');
+  const ok = await hogConfirma({ titulo:'Juntar ' + irmas.length + ' remessa(s) nesta?',
+    texto:'As peças destas remessas passam para a do bloco ' + (r.numero_bloco||('#'+r.id)) + ':\n\n' + lista
+      + '\n\nNada sai nem volta do estoque — as peças já estão fora. As remessas que ficarem vazias somem da tela.',
+    ok:'Juntar tudo aqui' });
+  if(!ok) return;
+  try{
+    let n=0;
+    for(const x of irmas){
+      await sbFetch('manutencao_itens?remessa_id=eq.'+x.id,'PATCH',{ remessa_id:rid });
+      await sbFetch('remessas?id=eq.'+x.id,'PATCH',{ status:'UNIFICADA',
+        observacao:'Unificada na remessa #'+rid+' (bloco '+(r.numero_bloco||rid)+') em '+ciData(ciHoje())+' por '+ciQuem() });
+      n++;
+    }
+    toast(n + ' remessa(s) juntada(s) ✓','sucesso');
+    ciCarregar();
+  }catch(e){ toast('Erro ao unificar: '+(e.message||e),'erro'); }
+}
+
+async function ciFecharRemessa(rid){
+  const r = ciRemessas.find(x => x.id === rid); if(!r) return;
+  const itens = ciItens.filter(i => i.remessa_id === rid);
+  if(!itens.length){ toast('Remessa sem peças — não há o que enviar.','erro'); return; }
+  const semDefeito = itens.filter(i => !i.defeito).length;
+  const dados = await hogPergunta({ titulo:'Fechar e enviar a remessa',
+    texto: itens.length + ' peça(s) para ' + ciForn(r.fornecedor_id) + '.'
+      + (semDefeito ? ('\n⚠️ ' + semDefeito + ' peça(s) sem a queixa escrita — no protocolo elas saem em branco.') : ''),
+    campos:[
+      { id:'data', rot:'Data da entrega', tipo:'data', valor:ciHoje(), obrigatorio:true },
+      { id:'quem', rot:'Entregue por', valor:ciQuem() },
+      { id:'obs',  rot:'Observação do protocolo', tipo:'texto-longo', placeholder:'ex.: retirado pelo portador da MAG' },
+    ], ok:'Fechar e imprimir o protocolo' });
+  if(!dados) return;
+  try{
+    await sbFetch('remessas?id=eq.'+rid,'PATCH',{ status:'ENVIADA', data_envio:dados.data,
+      enviado_por:(dados.quem||'').trim()||ciQuem(),
+      observacao:(dados.obs||'').trim()|| r.observacao || null });
+    r.status='ENVIADA'; r.data_envio=dados.data; r.enviado_por=(dados.quem||'').trim()||ciQuem();
+    if((dados.obs||'').trim()) r.observacao=(dados.obs||'').trim();
+    toast('Remessa fechada ✓ — imprima o protocolo e peça a assinatura','sucesso');
+    ciProtocolo(rid);
+    ciCarregar();
+  }catch(e){ toast('Erro ao fechar: '+(e.message||e),'erro'); }
+}
+
+// o papel que a oficina assina na entrega
+function ciProtocolo(rid){
+  const r = ciRemessas.find(x => x.id === rid); if(!r) return;
+  const itens = ciItens.filter(i => i.remessa_id === rid);
+  if(!itens.length){ toast('Remessa sem peças.','erro'); return; }
+  const fornNome = ciForn(r.fornecedor_id);
+  const fo = (coFornecedores||[]).find(x => x.id === r.fornecedor_id) || {};
+  const emp = (typeof CEX_EMPRESA !== 'undefined') ? CEX_EMPRESA
+            : { razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
+                endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP' };
+  const linhas = itens.map((i, ix) => {
+    const p = ciPeca(i.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
+    return '<tr><td class="n">'+(ix+1)+'</td>'
+      +'<td class="i"><b>'+ciEsc(p ? p.nome : ('#'+i.peca_id))+'</b>'
+        +(c?('<div class="cx">'+ciEsc(c.nome)+' · '+ciEsc(ciDono(c))+'</div>'):'')+'</td>'
+      +'<td class="q">'+ciNum(i.qtd)+'</td>'
+      +'<td class="d">'+(i.defeito?ciEsc(i.defeito):'<span class="vz">&nbsp;</span>')+'</td>'
+      +'<td class="c">☐</td></tr>';
+  }).join('');
+  const total = itens.reduce((s,i) => s + ciNum(i.qtd), 0);
+  const dataTxt = ciData(r.data_envio || ciHoje());
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+    +'<title>Protocolo de remessa '+ciEsc(r.numero_bloco||('#'+r.id))+'</title>'
+    +'<style>@page{size:A4 portrait;margin:14mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}'
+    +'h1{font-size:17px;margin:0 0 2px;color:#1B4F72}.sub{color:#555;font-size:11.5px}'
+    +'.topo{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1B4F72;padding-bottom:10px;margin-bottom:14px}'
+    +'.num{text-align:right;font-size:10.5px;color:#555;text-transform:uppercase;letter-spacing:.5px}'
+    +'.num b{display:block;font-size:22px;color:#1B4F72;letter-spacing:0;text-transform:none}'
+    +'.blocos{display:flex;gap:12px;margin-bottom:14px}.bloco{flex:1;border:1px solid #ccc;border-radius:6px;padding:8px 12px}'
+    +'.bloco h2{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;margin:0 0 4px}.bloco div{font-size:12px;line-height:1.55}'
+    +'.decl{border-left:3px solid #1B4F72;background:#F4F8FB;padding:10px 13px;font-size:12px;line-height:1.6;margin-bottom:14px}'
+    +'table{width:100%;border-collapse:collapse}th{background:#EEF3F8;font-size:10px;text-transform:uppercase;letter-spacing:.4px;'
+    +'text-align:left;padding:6px 8px;border-bottom:1.5px solid #bbb}td{padding:7px 8px;border-bottom:1px solid #e3e3e3;vertical-align:top}'
+    +'td.n{width:26px;color:#888}td.q{width:46px;text-align:center;font-weight:bold;color:#1B4F72}td.c{width:34px;text-align:center;font-size:15px}'
+    +'td.d{width:38%}.cx{font-size:10.5px;color:#777}.vz{display:inline-block;border-bottom:1px dotted #999;width:92%}'
+    +'tfoot td{font-weight:bold;background:#fafafa;border-top:1.5px solid #bbb}'
+    +'.ass{display:flex;gap:30px;margin-top:38px}.ass div{flex:1;border-top:1px solid #333;padding-top:5px;font-size:11px;text-align:center;color:#444}'
+    +'.obs{margin-top:12px;font-size:11.5px;color:#444}.pe{margin-top:26px;font-size:10px;color:#777;text-align:center;border-top:1px solid #ddd;padding-top:8px}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<div class="topo"><div><h1>Protocolo de remessa para conserto</h1>'
+      +'<div class="sub">Instrumental cirúrgico · saída e retorno</div></div>'
+      +'<div class="num">bloco<b>'+ciEsc(r.numero_bloco||('#'+r.id))+'</b>'+dataTxt+'</div></div>'
+    +'<div class="blocos">'
+      +'<div class="bloco"><h2>Remetente</h2><div><b>'+ciEsc(emp.razao)+'</b><br>CNPJ '+ciEsc(emp.cnpj)
+        +'<br>'+ciEsc(emp.endereco)+'<br>'+ciEsc(emp.cidade)+' ('+ciEsc(emp.uf)+')'
+        +'<br>Hospital dos Olhos Guanabara · Centro Cirúrgico</div></div>'
+      +'<div class="bloco"><h2>Destinatário</h2><div><b>'+ciEsc(fornNome)+'</b>'
+        +(fo.contato?('<br>A/C '+ciEsc(fo.contato)):'')
+        +(fo.telefone?('<br>'+ciEsc(fo.telefone)):'')
+        +(fo.email?('<br>'+ciEsc(fo.email)):'')
+        +(fo.observacao?('<br>'+ciEsc(fo.observacao)):'')
+        +'<br><br>Recebido em ____/____/______</div></div>'
+    +'</div>'
+    +'<div class="decl">Declaramos que as peças relacionadas abaixo, de propriedade do remetente, são entregues '
+      +'a <b>'+ciEsc(fornNome)+'</b> exclusivamente para <b>avaliação e conserto</b>, com a queixa descrita em cada linha. '
+      +'Não há circulação de mercadoria: o material deve retornar ao remetente após o serviço, acompanhado da nota fiscal '
+      +'correspondente. Qualquer peça sem conserto deve voltar igualmente, para baixa no controle do hospital.</div>'
+    +'<table><thead><tr><th>#</th><th>Peça / caixa</th><th>Qtd</th><th>Queixa relatada</th><th>Conf.</th></tr></thead>'
+      +'<tbody>'+linhas+'</tbody>'
+      +'<tfoot><tr><td></td><td>Total de peças entregues</td><td class="q">'+total+'</td><td colspan="2"></td></tr></tfoot></table>'
+    +(r.observacao?('<div class="obs"><b>Observação:</b> '+ciEsc(r.observacao)+'</div>'):'')
+    +'<div class="ass"><div>Entregue por'+(r.enviado_por?('<br><b>'+ciEsc(r.enviado_por)+'</b>'):'')+'<br>Hospital dos Olhos Guanabara</div>'
+      +'<div>Recebido por<br>Nome e documento<br>'+ciEsc(fornNome)+'</div></div>'
+    +'<div class="pe">'+ciEsc(emp.razao)+' · CNPJ '+ciEsc(emp.cnpj)+' · '+ciEsc(emp.endereco)+' · '+ciEsc(emp.cidade)+' ('+ciEsc(emp.uf)+')</div>'
+    +'<button onclick="window.print()" style="margin-top:16px;padding:9px 18px;font-size:13px;cursor:pointer">🖨 Imprimir / Salvar em PDF</button>'
+    +'</body></html>');
 }
 
 async function ciEscolherPeca(titulo, somenteContadas){
