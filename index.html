@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.179 · manutenção: os 18 aparelhos do PMOC em ordem</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.180 · conta corrente: extrato com mão de obra, material e saldo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -21572,6 +21572,10 @@ async function alIgnorar(id){
   .man-mb{padding:14px 18px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-content:start}
   .man-full{min-width:0;grid-column:1/-1}
   .man-t-at{background:#FDECEA;color:#B03A2E;border:1px solid #F5B7B1}
+  .man-ext td{vertical-align:top}
+  .man-ext-ag td{opacity:.72}
+  .man-ext-pago td{background:#F2FBF5}
+  .man-ext-tot td{background:#EEF3F8;border-top:2px solid var(--azul)}
   .man-dob{border:1.5px solid var(--cinza-2);border-radius:9px;margin-bottom:7px;font-size:13px;background:#fff}
   .man-dob>summary{cursor:pointer;padding:7px 10px;display:flex;align-items:center;gap:7px;list-style:none;font-size:12.5px}
   .man-dob>summary::-webkit-details-marker{display:none}
@@ -27461,14 +27465,50 @@ function manCCBloco(p){
    +C.semValor.map(s=>'<tr><td>'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local)+'</span></td><td>'+(manDtFim(s)||'—')+'</td>'
      +'<td><button class="man-b o p" onclick="manFicha('+s.id+')" title="abrir a demanda para lançar o valor">+ lançar valor</button></td></tr>').join('')
    +'</tbody></table>';
-  h+='<div class="man-rot" style="margin:8px 0 4px">🧾 Pagamentos</div>';
-  if(!C.lotes.length) h+='<span class="man-sub">Nenhum lote de pagamento para ele ainda.</span>';
-  else h+='<table class="hg-tab man-tab"><thead><tr><th>Lote</th><th>Gerado</th><th>Nota</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>'
-   +C.lotes.map(l=>'<tr><td>#'+l.id+'</td><td>'+manDt(l.created_at)+'</td><td>'+manEsc(l.fatura_nf||'—')+'</td>'
-     +'<td style="text-align:right">'+manBrl(l.total)+'</td><td>'+(l.etapa==='PAGO'?'<span class="man-tag man-t-ok">pago em '+manDt(l.pago_em)+'</span>'
-       :(l.etapa==='PROGRAMADO'?'<span class="man-tag man-t-par">programado para '+manDt(l.pagto_programado_para)+'</span>':'<span class="man-tag man-t-par">'+manEsc(l.etapa.toLowerCase())+'</span>'))+'</td></tr>').join('')
-   +'</tbody></table>';
+  h+=manCCExtrato(p);
   return h+'</div>';
+}
+// v4.180 — ela: "preciso de uma coluna para MO e uma coluna Material e uma coluna saldo" +
+// "se ele cobrou um valor para várias demandas, unifique para que todos os serviços inclusos
+// fiquem na mesma linha". É o extrato que vai para o financeiro.
+function manCCLinhas(pid){
+  const C=manCCDados(pid), L=[];
+  C.D.cus.filter(c=>c.situacao!=='REPROVADO').forEach(c=>{
+    const dems=manDemsDoCusto(c.id).map(id=>{ const s=manSols.find(x=>x.id===id); return {id, oq:s?s.o_que:'?'}; });
+    L.push({tipo:'CUSTO', quando:c.created_at, mo:(c.tipo==='MAO_DE_OBRA'?Number(c.valor||0):0), mat:(c.tipo!=='MAO_DE_OBRA'?Number(c.valor||0):0),
+      aguarda:c.situacao==='AGUARDANDO', custo:c, dems});
+  });
+  C.lotes.filter(l=>l.etapa==='PAGO').forEach(l=>L.push({tipo:'PAGO', quando:l.pago_em||l.created_at, valor:Number(l.total||0), lote:l}));
+  L.sort((a,b)=>String(a.quando||'').localeCompare(String(b.quando||'')));
+  let saldo=0; L.forEach(x=>{ if(x.tipo==='PAGO'){ saldo-=x.valor; x.saldo=saldo; }
+    else if(!x.aguarda){ saldo+=x.mo+x.mat; x.saldo=saldo; } });
+  return {linhas:L, saldo, totMo:L.filter(x=>x.tipo==='CUSTO'&&!x.aguarda).reduce((s,x)=>s+x.mo,0),
+    totMat:L.filter(x=>x.tipo==='CUSTO'&&!x.aguarda).reduce((s,x)=>s+x.mat,0),
+    totPago:L.filter(x=>x.tipo==='PAGO').reduce((s,x)=>s+x.valor,0)};
+}
+function manCCServico(x){   // todos os serviços daquela cobrança numa linha só
+  return x.dems.map(d=>'<b>#'+d.id+'</b> '+manEsc(d.oq)).join(' · ')
+    +(x.custo.descricao?'<span class="man-sub">'+manEsc(x.custo.descricao)+'</span>':'');
+}
+function manCCExtrato(p){
+  const E=manCCLinhas(p.id);
+  let h='<div class="man-rot" style="margin:10px 0 4px">🧾 Extrato — mão de obra, material e saldo</div>';
+  if(!E.linhas.length) return h+'<span class="man-sub">Nada lançado para ele ainda.</span>';
+  h+='<table class="hg-tab man-tab man-ext"><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th><th style="text-align:right">Material</th><th style="text-align:right">Saldo</th></tr></thead><tbody>';
+  E.linhas.forEach(x=>{
+    if(x.tipo==='PAGO'){
+      h+='<tr class="man-ext-pago"><td>'+manDt(x.quando)+'</td><td><b>🧾 Pagamento</b> — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+manEsc(x.lote.fatura_nf):'')+'</td>'
+       +'<td colspan="2" style="text-align:right;color:var(--ok)">− '+manBrl(x.valor)+'</td><td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td></tr>'; return; }
+    h+='<tr'+(x.aguarda?' class="man-ext-ag"':'')+'><td>'+manDt(x.quando)+'</td><td>'+manCCServico(x)
+     +(x.aguarda?' <span class="man-tag man-t-par">aguardando aprovação</span>':'')+'</td>'
+     +'<td style="text-align:right">'+(x.mo?manBrl(x.mo):'<span class="man-sub">—</span>')+'</td>'
+     +'<td style="text-align:right">'+(x.mat?manBrl(x.mat):'<span class="man-sub">—</span>')+'</td>'
+     +'<td style="text-align:right">'+(x.aguarda?'<span class="man-sub">fora do saldo</span>':'<b>'+manBrl(x.saldo)+'</b>')+'</td></tr>';
+  });
+  h+='<tr class="man-ext-tot"><td></td><td><b>Total</b>'+(E.totPago?'<span class="man-sub">já pago '+manBrl(E.totPago)+'</span>':'')+'</td>'
+   +'<td style="text-align:right"><b>'+manBrl(E.totMo)+'</b></td><td style="text-align:right"><b>'+manBrl(E.totMat)+'</b></td>'
+   +'<td style="text-align:right"><b>'+manBrl(E.saldo)+'</b></td></tr>';
+  return h+'</tbody></table>';
 }
 async function manPrestRel(pid){
   manRelPrest=pid; const box=document.getElementById('man-prest-box');
@@ -27507,6 +27547,20 @@ function manPrestRelRender(){
     +'<td>'+manDemsDoCusto(c.id).map(x=>'#'+x).join(' + ')+'</td><td style="text-align:right">'+manBrl(c.valor)+'</td><td>'+manTagCus(c)+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>';
 }
+function manCCExtratoPapel(p){   // v4.180 — o extrato impresso, igual ao da tela
+  const E=manCCLinhas(p.id); if(!E.linhas.length) return '';
+  const lin=E.linhas.map(x=>{
+    if(x.tipo==='PAGO') return '<tr><td>'+manDt(x.quando)+'</td><td>Pagamento — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+x.lote.fatura_nf:'')+'</td>'
+      +'<td colspan="2" style="text-align:right">- '+manBrl(x.valor)+'</td><td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td></tr>';
+    return '<tr><td>'+manDt(x.quando)+'</td><td>'+x.dems.map(d=>'#'+d.id+' '+d.oq).join(' · ')+(x.custo.descricao?'<br><small>'+x.custo.descricao+'</small>':'')
+      +(x.aguarda?'<br><small>aguardando aprovação</small>':'')+'</td>'
+      +'<td style="text-align:right">'+(x.mo?manBrl(x.mo):'-')+'</td><td style="text-align:right">'+(x.mat?manBrl(x.mat):'-')+'</td>'
+      +'<td style="text-align:right">'+(x.aguarda?'fora do saldo':'<b>'+manBrl(x.saldo)+'</b>')+'</td></tr>'; }).join('');
+  return '<h2 style="font-size:14px;margin:10px 0 2px">Extrato</h2><table><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th>'
+   +'<th style="text-align:right">Material</th><th style="text-align:right">Saldo</th></tr></thead><tbody>'+lin
+   +'<tr class="tot"><td></td><td>Total'+(E.totPago?' (já pago '+manBrl(E.totPago)+')':'')+'</td><td style="text-align:right">'+manBrl(E.totMo)+'</td>'
+   +'<td style="text-align:right">'+manBrl(E.totMat)+'</td><td style="text-align:right">'+manBrl(E.saldo)+'</td></tr></tbody></table>';
+}
 function manPrestRelImprimir(){
   const p=manPrestDe(manRelPrest); if(!p) return; const D=manRelDados(p.id);
   const per=manRelDias?('últimos '+manRelDias+' dias'):'todo o período';
@@ -27523,6 +27577,7 @@ function manPrestRelImprimir(){
     +'td{padding:5px 6px;border-bottom:1px solid #e3e3e3;vertical-align:top}small{color:#666}.tot{font-weight:bold}'
     +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:10px}@media print{@page{margin:14mm}}</style></head><body>'
     +'<div class="cab"><h1>Conta corrente — '+manEsc(p.apelido)+'</h1>'
+    +manCCExtratoPapel(p)
     +'<div>'+manEsc([p.servico,p.empresa,p.documento,p.telefone].filter(Boolean).join(' · '))+'</div>'
     +'<div><small>Hospital dos Olhos Guanabara · '+per+' · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
     +'<p><b>'+D.dems.length+'</b> demanda(s) · <b>'+D.vis.length+'</b> visita(s) · aguardando aprovação <b>'+manBrl(D.soma(D.aguard))+'</b>'
