@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.180 · conta corrente: extrato com mão de obra, material e saldo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.181 · lote impresso para o financeiro; relatório separa demandas e extrato</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -27085,9 +27085,45 @@ function manFinRender(){
       +'<td style="text-align:right">'+manBrl(l.total)+(l.arquivo?' <a href="'+manEsc(manPublica(l.arquivo))+'" target="_blank" title="fatura">📄</a>':'')+'</td>'
       +'<td class="man-ocm">'+manEsc(l.fatura_nf||'—')+'<span class="man-sub">'+(l.fatura_vencimento?'vence '+manDt(l.fatura_vencimento):'')+'</span></td>'
       +'<td><span class="man-tag '+t[1]+'">'+t[0]+'</span>'+(at?' <span class="man-tag man-atraso">⏰ '+at+' d</span>':'')+(l.pagto_programado_para?'<span class="man-sub">🗓️ '+manDt(l.pagto_programado_para)+'</span>':'')+(l.pago_em?'<span class="man-sub">pago '+manDt(l.pago_em)+'</span>':'')+'</td>'
-      +'<td class="man-acoes">'+prox+'</td></tr>'; });
+      +'<td class="man-acoes"><button class="man-b n p" onclick="manLoteImprimir('+l.id+')" title="folha deste lote para mandar ao financeiro">🖨 Imprimir</button> '+prox+'</td></tr>'; });
   box.innerHTML=h+'</tbody></table>'; manLoteSoma();
 }
+// v4.181 — ela: "onde imprimo o lote separado para enviar ao financeiro?"
+function manLoteImprimir(id){
+  const l=manLotes.find(x=>x.id===id); if(!l) return;
+  const cs=manCustos.filter(c=>c.lote_id===id);
+  const p=l.pago_a==='PRESTADOR'?manPrestDe(l.prestador_id):null;
+  const linhas=cs.map(c=>{ const dems=manDemsDoCusto(c.id).map(x=>{ const s=manSols.find(y=>y.id===x); return '#'+x+' '+(s?s.o_que:''); });
+    const mo=c.tipo==='MAO_DE_OBRA'?Number(c.valor||0):0, mat=mo?0:Number(c.valor||0);
+    return '<tr><td>'+manDt(c.created_at)+'</td><td>'+dems.join(' · ')+(c.descricao?'<br><small>'+manEsc(c.descricao)+'</small>':'')+'</td>'
+      +'<td style="text-align:right">'+(mo?manBrl(mo):'-')+'</td><td style="text-align:right">'+(mat?manBrl(mat):'-')+'</td></tr>'; }).join('');
+  const totMo=cs.filter(c=>c.tipo==='MAO_DE_OBRA').reduce((s,c)=>s+Number(c.valor||0),0);
+  const totMat=cs.filter(c=>c.tipo!=='MAO_DE_OBRA').reduce((s,c)=>s+Number(c.valor||0),0);
+  const et=(MAN_LOTE[l.etapa]||[l.etapa])[0];
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Lote de pagamento #'+l.id+'</title>'
+   +'<style>body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;margin:24px}h1{font-size:18px;margin:0;color:#1B4F72}'
+   +'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#eef3f8;text-align:left;font-size:10px;text-transform:uppercase;padding:6px;border-bottom:1px solid #bbb}'
+   +'td{padding:6px;border-bottom:1px solid #e3e3e3;vertical-align:top}small{color:#666}.tot td{font-weight:bold;background:#eef3f8}'
+   +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:10px}.box{border:1px solid #ccc;border-radius:6px;padding:8px;margin-top:10px}'
+   +'.ass{margin-top:42px;display:flex;gap:30px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px;text-align:center}'
+   +'@media print{@page{margin:14mm}}</style></head><body>'
+   +'<div class="cab"><h1>Lote de pagamento #'+l.id+'</h1>'
+   +'<div>'+CEX_EMPRESA.rodape.replace(/<br>/g,' · ')+'</div>'
+   +'<div><small>Manutenção · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+' · situação: '+manEsc(et)+'</small></div></div>'
+   +'<div class="box"><b>Pagar a:</b> '+manEsc(manLoteNomeReceb(l))+(l.fatura_empresa?'<br>'+manEsc(l.fatura_empresa):'')
+   +(p&&p.telefone?'<br>Telefone: '+manEsc(p.telefone):'')
+   +'<br><b>Nota / fatura:</b> '+manEsc(l.fatura_nf||'a emitir')+(l.fatura_vencimento?' · <b>vence em</b> '+manDt(l.fatura_vencimento):'')
+   +(l.pagto_programado_para?'<br><b>Pagamento programado para:</b> '+manDt(l.pagto_programado_para):'')
+   +(l.pago_em?'<br><b>Pago em:</b> '+manDt(l.pago_em):'')+'</div>'
+   +'<table><thead><tr><th>Quando</th><th>Serviço (demandas incluídas)</th><th style="text-align:right">Mão de obra</th><th style="text-align:right">Material</th></tr></thead><tbody>'
+   +(linhas||'<tr><td colspan="4">Lote sem custos.</td></tr>')
+   +'<tr class="tot"><td colspan="2">Total do lote — '+manBrl(l.total)+'</td><td style="text-align:right">'+manBrl(totMo)+'</td><td style="text-align:right">'+manBrl(totMat)+'</td></tr>'
+   +'</tbody></table>'
+   +'<p><small>A mão de obra vai na nota fiscal de serviço do prestador. O material é reembolso do que ele comprou para o serviço, com o comprovante guardado na demanda.</small></p>'
+   +'<div class="ass"><div>Conferido por</div><div>Autorizado por</div><div>Financeiro — lançado no Omie</div></div>'
+   +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
+}
+
 // ═══ v4.150 — A FOLHA DO FINANCEIRO ══════════════════════════════════════
 // Ela, 28/09: "preciso de um relatório que o financeiro compreenda o que precisa
 // programar pagamento e o que já foi pago (informado pelo financeiro)".
@@ -27486,9 +27522,15 @@ function manCCLinhas(pid){
     totMat:L.filter(x=>x.tipo==='CUSTO'&&!x.aguarda).reduce((s,x)=>s+x.mat,0),
     totPago:L.filter(x=>x.tipo==='PAGO').reduce((s,x)=>s+x.valor,0)};
 }
+function manCCOnde(c){   // v4.181 — onde esse custo está hoje
+  if(!c.lote_id) return c.situacao==='AGUARDANDO'?'aguardando aprovação':'aprovado, sem lote';
+  const l=manLotes.find(x=>x.id===c.lote_id)||{};
+  return l.etapa==='PAGO' ? 'pago · lote #'+c.lote_id : 'em lote #'+c.lote_id+(l.etapa?' ('+String(l.etapa).toLowerCase()+')':'');
+}
 function manCCServico(x){   // todos os serviços daquela cobrança numa linha só
   return x.dems.map(d=>'<b>#'+d.id+'</b> '+manEsc(d.oq)).join(' · ')
-    +(x.custo.descricao?'<span class="man-sub">'+manEsc(x.custo.descricao)+'</span>':'');
+    +(x.custo.descricao?'<span class="man-sub">'+manEsc(x.custo.descricao)+'</span>':'')
+    +'<span class="man-sub">'+manCCOnde(x.custo)+'</span>';
 }
 function manCCExtrato(p){
   const E=manCCLinhas(p.id);
@@ -27541,11 +27583,7 @@ function manPrestRelRender(){
       +'<td>'+manTagSit(s)+(s.predial?' <span class="man-tag man-t-n">🏢</span>':'')+(s.situacao==='RESOLVIDA'&&!manTemCusto(s.id)?'<span class="man-sub">sem custo lançado</span>':'')+'</td><td>'+manEsc(papel||'—')+'</td>'
       +'<td style="text-align:right">'+(S.vSo?manBrl(S.vSo):'—')+(S.comp.length?'<span class="man-sub">'+manCompartTxt(s.id,S.comp)+'</span>':'')+'</td>'
       +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>'; });
-  h+='</tbody></table><div class="card-titulo" style="margin-top:14px">Custos</div><table class="hg-tab man-tab"><thead><tr><th>Quando</th><th>O que é</th><th>Demandas</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>';
-  if(!D.cus.length) h+='<tr><td colspan="5" class="sol-vazio">Nenhum custo no período.</td></tr>';
-  D.cus.forEach(c=>{ h+='<tr><td>'+manDt(c.created_at)+'</td><td><b>'+manEsc(MAN_TIPOS[c.tipo]||c.tipo)+'</b><span class="man-sub">'+manEsc(c.descricao||'')+'</span></td>'
-    +'<td>'+manDemsDoCusto(c.id).map(x=>'#'+x).join(' + ')+'</td><td style="text-align:right">'+manBrl(c.valor)+'</td><td>'+manTagCus(c)+'</td></tr>'; });
-  box.innerHTML=h+'</tbody></table>';
+  box.innerHTML=h+'</tbody></table>';   // v4.181 — a tabela de Custos saiu: quem conta o dinheiro é o extrato, lá em cima
 }
 function manCCExtratoPapel(p){   // v4.180 — o extrato impresso, igual ao da tela
   const E=manCCLinhas(p.id); if(!E.linhas.length) return '';
@@ -27553,7 +27591,7 @@ function manCCExtratoPapel(p){   // v4.180 — o extrato impresso, igual ao da t
     if(x.tipo==='PAGO') return '<tr><td>'+manDt(x.quando)+'</td><td>Pagamento — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+x.lote.fatura_nf:'')+'</td>'
       +'<td colspan="2" style="text-align:right">- '+manBrl(x.valor)+'</td><td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td></tr>';
     return '<tr><td>'+manDt(x.quando)+'</td><td>'+x.dems.map(d=>'#'+d.id+' '+d.oq).join(' · ')+(x.custo.descricao?'<br><small>'+x.custo.descricao+'</small>':'')
-      +(x.aguarda?'<br><small>aguardando aprovação</small>':'')+'</td>'
+      +'<br><small>'+manCCOnde(x.custo)+'</small></td>'
       +'<td style="text-align:right">'+(x.mo?manBrl(x.mo):'-')+'</td><td style="text-align:right">'+(x.mat?manBrl(x.mat):'-')+'</td>'
       +'<td style="text-align:right">'+(x.aguarda?'fora do saldo':'<b>'+manBrl(x.saldo)+'</b>')+'</td></tr>'; }).join('');
   return '<h2 style="font-size:14px;margin:10px 0 2px">Extrato</h2><table><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th>'
@@ -27577,16 +27615,16 @@ function manPrestRelImprimir(){
     +'td{padding:5px 6px;border-bottom:1px solid #e3e3e3;vertical-align:top}small{color:#666}.tot{font-weight:bold}'
     +'.cab{border-bottom:2px solid #1B4F72;padding-bottom:8px;margin-bottom:10px}@media print{@page{margin:14mm}}</style></head><body>'
     +'<div class="cab"><h1>Conta corrente — '+manEsc(p.apelido)+'</h1>'
-    +manCCExtratoPapel(p)
     +'<div>'+manEsc([p.servico,p.empresa,p.documento,p.telefone].filter(Boolean).join(' · '))+'</div>'
     +'<div><small>Hospital dos Olhos Guanabara · '+per+' · emitido em '+manDth(new Date())+' por '+manEsc(manQuem())+'</small></div></div>'
     +'<p><b>'+D.dems.length+'</b> demanda(s) · <b>'+D.vis.length+'</b> visita(s) · aguardando aprovação <b>'+manBrl(D.soma(D.aguard))+'</b>'
     +' · aprovado sem lote <b>'+manBrl(D.soma(D.aprov))+'</b> · em lote <b>'+manBrl(D.soma(D.emLote))+'</b> · pago <b>'+manBrl(D.soma(D.pagos))+'</b></p>'
-    +'<h3 style="font-size:13px;margin:12px 0 0">Demandas</h3>'
+    +'<h2 style="font-size:14px;margin:14px 0 0;border-bottom:1px solid #bbb">1 · Demandas atendidas</h2>'
     +'<p style="margin:4px 0 0"><small>🔗 = custo que cobre mais de uma demanda: entra uma vez só, na tabela de custos.</small></p>'
     +'<table><thead><tr><th>#</th><th>O quê</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th style="text-align:right">Custos dele</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="6">—</td></tr>')+'</tbody></table>'
-    +'<h3 style="font-size:13px;margin:14px 0 0">Custos</h3><table><thead><tr><th>Quando</th><th>O que é</th><th>Demandas</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>'+(cus||'<tr><td colspan="5">—</td></tr>')
-    +'</tbody><tfoot><tr class="tot"><td colspan="3">Total no período</td><td style="text-align:right">'+manBrl(D.soma(D.cus.filter(c=>c.situacao!=='REPROVADO')))+'</td><td></td></tr></tfoot></table>'
+    +'<h2 style="font-size:14px;margin:16px 0 0;border-bottom:1px solid #bbb">2 · Extrato financeiro</h2>'
+    +manCCExtratoPapel(p)
+    +'<p><small>Mão de obra entra na nota fiscal de serviço do prestador; material é reembolso do que ele comprou, com o comprovante guardado na demanda.</small></p>'
     +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
 }
 
