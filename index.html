@@ -18539,8 +18539,8 @@ function ciProtocolo(rid, interna){
   const fornNome = ciForn(r.fornecedor_id);
   const fo = (coFornecedores||[]).find(x => x.id === r.fornecedor_id) || {};
   const emp = (typeof CEX_EMPRESA !== 'undefined') ? CEX_EMPRESA
-            : { razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
-                endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP' };
+            : { razao:'F2MR CLÍNICA OFTALMOLÓGICA LTDA', cnpj:'15.047.746/0001-28',
+                endereco:'Rua Camargo Paes, 572, Jd Guanabara', cidade:'Campinas', uf:'SP' };
   const linhas = itens.map((i, ix) => {
     const p = ciPeca(i.peca_id), c = p ? ciCaixa(p.caixa_id) : null;
     return '<tr><td class="n">'+(ix+1)+'</td>'
@@ -20444,8 +20444,8 @@ function rmProtocolo(remessaId){
   const fo = r.fornecedor_id ? ((coFornecedores||[]).find(x=>x.id===r.fornecedor_id)||{}) : {};
   const fornNome = fo.nome || '—';
   const emp = (typeof CEX_EMPRESA !== 'undefined') ? CEX_EMPRESA
-            : { razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
-                endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP' };
+            : { razao:'F2MR CLÍNICA OFTALMOLÓGICA LTDA', cnpj:'15.047.746/0001-28',
+                endereco:'Rua Camargo Paes, 572, Jd Guanabara', cidade:'Campinas', uf:'SP' };
   const servico = RM_DECL[r.tipo] || 'processamento';
   const hoje = new Date().toISOString().slice(0,10);
   const linhas = itens.map((i,ix)=>'<tr><td class="n">'+(ix+1)+'</td><td class="i"><b>'+rmEsc(rmBem(i.bem_id))+'</b></td>'
