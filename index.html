@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.183 · a carta de remessa sai com o nome da NOTA, não com o apelido interno</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.184 · carta de remessa também na aprovação, com o preço da nota do lote</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4004,6 +4004,7 @@ function renderizarPendentes() {
       </div>
       <div class="acoes">
         <button class="btn btn-secundario btn-sm" onclick="aprIncluirItem(${i})" title="A equipe esqueceu de lançar algo? Inclua aqui antes de aprovar">➕ Incluir item</button>
+        ${(ehDiversa && p.destino === 'CIRURGIA EXTERNA') ? `<button class="btn btn-secundario btn-sm" onclick="aprCartaRemessa(${i})" title="A carta que vai com o material para o hospital, com lote, validade e nota de compra">🖨 Carta de remessa</button>` : ''}
         ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprPacientes(${i})" title="Corrigir quantos pacientes foram atendidos neste período">👥 Pacientes</button>`}
         ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprMedico(${i})" title="Trocar o médico, a cirurgia ou a modalidade deste período">🩺 Médico</button>`}
         ${ehDiversa ? '' : `<button class="btn btn-secundario btn-sm" onclick="aprDividir(${i})" title="Foram dois médicos neste período? Separe as quantidades em dois registros">✂️ Dividir</button>`}
@@ -5156,7 +5157,7 @@ function cexHospitais(){
 }
 // lote → nota de compra: o número que vai escrito no documento
 async function cexLotesENotas(ids){
-  const out={ porMaterial:{}, nfDoLote:{}, descNf:{} };
+  const out={ porMaterial:{}, nfDoLote:{}, descNf:{}, valorDoLote:{} };
   if(!ids.length) return out;
   try{
     // v4.182 — ela: "precisa sair o nome da NF e não o apelido da coluna material".
@@ -5168,10 +5169,10 @@ async function cexLotesENotas(ids){
     }catch(e){}
     const ls=(await sbFetch('lotes?select=id,material_id,lote,validade,qtd,status,nf_item_id&material_id=in.('+ids.join(',')+')&order=validade.asc'))||[];
     const nfItens=[...new Set(ls.map(l=>l.nf_item_id).filter(Boolean))];
-    let mapaItem={}, mapaNota={};
+    let mapaItem={}, mapaNota={}, mapaValor={};
     if(nfItens.length){
-      const its=(await sbFetch('nf_itens?select=id,nota_fiscal_id&id=in.('+nfItens.join(',')+')'))||[];
-      its.forEach(x=>{ mapaItem[x.id]=x.nota_fiscal_id; });
+      const its=(await sbFetch('nf_itens?select=id,nota_fiscal_id,valor_unitario&id=in.('+nfItens.join(',')+')'))||[];
+      its.forEach(x=>{ mapaItem[x.id]=x.nota_fiscal_id; mapaValor[x.id]=Number(x.valor_unitario)||0; });
       const notas=[...new Set(its.map(x=>x.nota_fiscal_id).filter(Boolean))];
       if(notas.length){
         const ns=(await sbFetch('notas_fiscais?select=id,numero_nf&id=in.('+notas.join(',')+')'))||[];
@@ -5183,6 +5184,9 @@ async function cexLotesENotas(ids){
       const k=chave(l);
       const nf=l.nf_item_id ? mapaNota[mapaItem[l.nf_item_id]] : null;
       if(nf && !out.nfDoLote[k]) out.nfDoLote[k]=nf;        // a nota em que ESTE lote entrou
+      // v4.184 — o preço tem de ser o DAQUELA nota, não o último pago do cadastro:
+      // a sonda tinha R$ 370,00 no cadastro e R$ 351,72 na NF 171643 que a carta cita.
+      if(l.nf_item_id && mapaValor[l.nf_item_id] && !out.valorDoLote[k]) out.valorDoLote[k]=mapaValor[l.nf_item_id];
       if(l.status==='ativo' && (Number(l.qtd)||0)>0) (out.porMaterial[l.material_id]=out.porMaterial[l.material_id]||[]).push(l);
     }
   }catch(e){}
@@ -5293,6 +5297,7 @@ async function cexConferir(D, itens, registrante){
     const ls=L.porMaterial[x.id]||[];
     const esc=ls[0]||null;
     return Object.assign({}, x, { lotes:ls, lote:esc?esc.lote:'', validade:esc?esc.validade:'', nf:esc?(L.nfDoLote[x.id+'|'+String(esc.lote||'').trim().toUpperCase()+'|'+(esc.validade||'')]||''):'',
+      unit: (esc && L.valorDoLote[x.id+'|'+String(esc.lote||'').trim().toUpperCase()+'|'+(esc.validade||'')]) || x.unit || 0,
       descricao_nf: L.descNf[x.id]||'' });
   });
   const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -5340,6 +5345,58 @@ function cexImprimir(){
   if(!cexDadosDoc) return;
   hogImprimir(cexCartaHtml(cexDadosDoc, cexItensDoc));
   cexFechar();
+}
+
+/* v4.184 — ela, 22/10: "coloca o botão de impressão na aprovação também".
+   A carta era oferecida só no instante de enviar a saída; quem aprova depois
+   (ou quem precisa reimprimir porque o papel sumiu) não tinha caminho.
+   O que o estoque guardou é a observação: "Cirurgia externa — médico · hospital
+   · data". Paciente, procedimento e destinatário NÃO ficam gravados — regra da
+   Entrega 02, saída diversa não grava paciente — então são perguntados aqui,
+   já com o destinatário que o hospital tem em memória. */
+async function aprCartaRemessa(i){
+  const p = pendentes[i]; if(!p) return;
+  const obs   = String(p.obs||'');
+  const resto = obs.replace(/^Cirurgia externa\s*[—-]\s*/i,'').split(' · ');
+  const medico   = (resto[0]||'').trim();
+  const hospital = (resto[1]||'').trim();
+  const data     = ((obs.match(/\d{4}-\d{2}-\d{2}/)||[''])[0]);
+  const atend    = (obs.match(/atendimento\s+([^\s·]+)/i)||[])[1] || '';
+  let dest = '';
+  if(hospital){
+    const h = hospital.toUpperCase();
+    dest = (typeof CEX_DESTINOS!=='undefined' && CEX_DESTINOS[h]) || '';
+    if(!dest){ try{ dest = localStorage.getItem('hog_cex_dest_'+h) || ''; }catch(e){} }
+  }
+  const r = await hogPergunta({
+    titulo: '🖨 Carta de remessa — ' + (hospital || 'cirurgia externa'),
+    texto: 'Médico, hospital e data vêm do lançamento. O resto não fica gravado no estoque: é só para o papel.',
+    campos: [
+      {id:'proc', rot:'Procedimento', valor:'', placeholder:'ex.: Dacriorrinocistotomia — OE'},
+      {id:'pac',  rot:'Paciente',     valor:'', placeholder:'nome completo'},
+      {id:'dest', rot:'Destinatário — razão social e endereço', tipo:'texto-longo', valor:dest,
+       placeholder:'RAZÃO SOCIAL\nRUA, Nº\nCIDADE (UF) - CEP'}
+    ], ok:'Conferir e imprimir'
+  });
+  if(!r) return;
+  if(r.dest && r.dest.trim() && hospital){
+    try{ localStorage.setItem('hog_cex_dest_'+hospital.toUpperCase(), r.dest.trim()); }catch(e){}
+  }
+  // cexConferir espera o id do MATERIAL; aqui p.itens[].id é o da movimentação.
+  // O valor unitário sai do cadastro, a mesma fonte do fluxo de envio (v4.159).
+  const ids = [...new Set((p.itens||[]).map(x=>x.material_id).filter(Boolean))];
+  let valor = {};
+  if(ids.length){
+    try{
+      const ms=(await sbFetch('materiais?select=id,ultimo_valor_pago&id=in.('+ids.join(',')+')'))||[];
+      ms.forEach(m=>{ valor[m.id]=Number(m.ultimo_valor_pago)||0; });
+    }catch(e){}
+  }
+  const itens = (p.itens||[]).map(x => ({ id: x.material_id, nome: x.nome,
+                                          qtd: Math.abs(Number(x.qtd)||0), unit: valor[x.material_id]||0 }));
+  if(!itens.length){ toast('Este lançamento não tem itens.', 'erro'); return; }
+  await cexConferir({ medico, hospital, data, atend, proc:(r.proc||'').trim(), paciente:(r.pac||'').trim(),
+                      dest:(r.dest||'').trim() }, itens, p.registrado_por || '');
 }
 
 async function cexRelatorio(){
