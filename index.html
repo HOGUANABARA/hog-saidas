@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.184 · carta de remessa também na aprovação, com o preço da nota do lote</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.185 · a carta de remessa sai em papel timbrado, com o logo do HOG</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5219,7 +5219,13 @@ function cexCartaHtml(D, itens){
     +'.rec{border:1px solid #999;padding:10px 12px}.lin{border-bottom:1px solid #666;height:18px;margin-top:16px}'
     +'.ass{margin-top:30px}.ass .l{border-top:1px solid #666;width:320px;padding-top:4px}'
     +'.pe{margin-top:34px;border-top:1px solid #ccc;padding-top:6px;font-size:10.5px;color:#555;text-align:center}'
+    +'.tim{text-align:right;margin:0 0 26px}.tim img{height:46px;width:auto}'
     +'@media print{@page{margin:16mm}}</style></head><body>'
+    // v4.185 — ela: "a carta modelo não está em papel timbrado com o logo?".
+    // O logo já existe no app (comprovante de gasto cirúrgico); leio dali em vez
+    // de embutir 148 KB de base64 outra vez no arquivo.
+    + (function(){ const i=document.querySelector('#comprovante .comp-header img');
+         return (i && i.src) ? '<div class="tim"><img src="'+i.src+'" alt="Hospital dos Olhos Guanabara"></div>' : ''; })()
     +'<p>'+esc(CEX_EMPRESA.cidade)+' ('+esc(CEX_EMPRESA.uf)+'), '+hj.getDate()+' de '+MES[hj.getMonth()]+' de '+hj.getFullYear()+'</p>'
     +'<p>Pela presente a empresa <b>'+esc(CEX_EMPRESA.razao)+'</b>, pessoa jurídica regularmente inscrita no CNPJ sob o número '
       +esc(CEX_EMPRESA.cnpj)+', situada na '+esc(CEX_EMPRESA.endereco)+', cidade de '+esc(CEX_EMPRESA.cidade)
