@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.189 · manutenção: a tela dos custos começa pela lista, e o lançamento virou botão</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.190 · devolver para ajustes devolve o lote, não só o saldo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4500,6 +4500,35 @@ function aprObsSemCarimbo(t){
     .replace(/\s*\|?\s*Qtd ajustada após aprovação em[\s\S]*$/i,'')
     .trim();
 }
+/* ═══ v4.190 — DEVOLVER TAMBÉM DEVOLVE O LOTE ════════════════════════════
+   Achado conferindo a aprovação do ILTON (23/10): o saldo ficou certo e os
+   LOTES ficaram curtos. O gatilho `fn_atualiza_saldo` só age quando `aprovado`
+   VIRA true — aí soma o saldo e chama o `fn_consome_lotes_fefo`. Quando
+   `aprovado` volta a false ele não faz NADA: por isso o apvDevolverExecutar
+   mede e devolve o `estoque.saldo` na mão. Mas ninguém devolvia o lote, então
+   cada ciclo devolver→aprovar comia uma unidade do lote, calada — e é o lote
+   que a carta de remessa imprime e que o FEFO consome na próxima saída.
+   Limite conhecido: o banco não registra DE QUAL lote o FEFO tirou. Devolvemos
+   para o lote que o FEFO pegaria primeiro (o ativo que vence antes) e, se não
+   houver nenhum ativo, reabrimos o último que zerou. Com lote sobreposto no
+   mesmo material isso pode cair no vizinho — por isso a tela DIZ para onde
+   voltou, em vez de mexer em silêncio. */
+async function apvDevolverLote(it, q){
+  if(!it || !it.material_id || !(q>0)) return '';
+  try{
+    const m = await sbFetch('materiais?select=controla_lote&id=eq.'+it.material_id);
+    if(!m || !m.length || !m[0].controla_lote) return '';
+    const ls = (await sbFetch('lotes?select=id,lote,validade,qtd,status&material_id=eq.'+it.material_id
+                              +'&order=validade.asc.nullslast,id.asc')) || [];
+    if(!ls.length) return '';
+    let alvo = ls.find(l => l.status === 'ativo');
+    if(!alvo){ const zerados = ls.filter(l => Number(l.qtd||0) <= 0);
+               alvo = zerados.length ? zerados[zerados.length-1] : null; }
+    if(!alvo) return '';
+    await sbFetch('lotes?id=eq.'+alvo.id,'PATCH',{ qtd: Number(alvo.qtd||0) + q, status:'ativo' });
+    return (alvo.lote || 'sem número');
+  }catch(e){ return ''; }
+}
 // ═══ v4.33 — DEVOLVER SAÍDA APROVADA PARA AJUSTES ═══════════════════════
 // Pedido da Evelise (20/08): "se pego um erro, quantidade de pacientes, ou
 // tenho que dividir a saída por cirurgias, não consigo voltar para a aba
@@ -4549,6 +4578,7 @@ async function apvDevolverExecutar(i){
     // adivinhar se ele desfaz sozinho, medimos no primeiro item e aplicamos a
     // mesma conclusão nos demais — nunca devolvendo duas vezes.
     let trigDesfaz = null;
+    const lotesVoltaram = [];   // v4.190 — o que o FEFO tinha comido e voltou
     for(const it of p.itens){
       const q = Math.abs(Number(it.qtd)||0);
       let antes = null;
@@ -4568,9 +4598,13 @@ async function apvDevolverExecutar(i){
         const e = await sbFetch('estoque?select=id,saldo&material_id=eq.'+it.material_id+'&local_id=eq.'+it.local_id+'&limit=1');
         if(e && e.length) await sbFetch('estoque?id=eq.'+e[0].id,'PATCH',{ saldo: Number(e[0].saldo) + q });
       }
+      // v4.190 — o saldo volta acima; o LOTE que o FEFO consumiu volta aqui
+      const volt = await apvDevolverLote(it, q);
+      if(volt) lotesVoltaram.push((it.nome||'item')+' → lote '+volt);
     }
     if(ov) ov.remove();
     toast('↩ Saída devolvida — está na aba 🔒 Aprovação de Saídas para você ajustar.','sucesso');
+    if(lotesVoltaram.length) alert('O lote também voltou para o estoque (v4.190):\n\n'+lotesVoltaram.join('\n')+'\n\nConfira se é o lote certo: o banco não guarda de qual lote a saída tirou, então a unidade volta para o que vence primeiro.');
     aprovadas.splice(i,1);
     renderizarAprovadas();
     if(typeof carregarPendentes==='function') await carregarPendentes();
