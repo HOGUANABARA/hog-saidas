@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.181 · lote impresso para o financeiro; relatório separa demandas e extrato</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.182 · conta corrente agrupada por lote, com filtro e impressão do grupo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -26047,6 +26047,7 @@ const MAN_MAX=50*1024*1024;
 let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manEquip=[], manDemEquip=[], manEquipEd=null, manEquipBusca='', manEquipTipo='';   // v4.178 — aparelhos
+let manCCGrupo='TODOS';   // v4.182 — qual pacote de pagamento está à vista na conta corrente
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
 let manHistOrdem='ASC', manFichaAcao=null, manFichaFotos=[], manFichaTmpArq=null, manVisSel=[], manVisCab={}, manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
@@ -27532,30 +27533,65 @@ function manCCServico(x){   // todos os serviços daquela cobrança numa linha s
     +(x.custo.descricao?'<span class="man-sub">'+manEsc(x.custo.descricao)+'</span>':'')
     +'<span class="man-sub">'+manCCOnde(x.custo)+'</span>';
 }
-function manCCExtrato(p){
-  const E=manCCLinhas(p.id);
-  let h='<div class="man-rot" style="margin:10px 0 4px">🧾 Extrato — mão de obra, material e saldo</div>';
-  if(!E.linhas.length) return h+'<span class="man-sub">Nada lançado para ele ainda.</span>';
-  h+='<table class="hg-tab man-tab man-ext"><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th><th style="text-align:right">Material</th><th style="text-align:right">Saldo</th></tr></thead><tbody>';
-  E.linhas.forEach(x=>{
-    if(x.tipo==='PAGO'){
-      h+='<tr class="man-ext-pago"><td>'+manDt(x.quando)+'</td><td><b>🧾 Pagamento</b> — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+manEsc(x.lote.fatura_nf):'')+'</td>'
-       +'<td colspan="2" style="text-align:right;color:var(--ok)">− '+manBrl(x.valor)+'</td><td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td></tr>'; return; }
-    h+='<tr'+(x.aguarda?' class="man-ext-ag"':'')+'><td>'+manDt(x.quando)+'</td><td>'+manCCServico(x)
-     +(x.aguarda?' <span class="man-tag man-t-par">aguardando aprovação</span>':'')+'</td>'
+// v4.182 — ela: "agrupamento por pacote de pagamento, por lote, e os valores de cada um"
+// + "preciso do filtro para selecionar o lote e imprimir somente o grupo escolhido".
+function manCCGrupos(pid){
+  const E=manCCLinhas(pid), gs=[];
+  const add=(ch,rot,sub,linhas,etapa)=>{ if(!linhas.length) return;
+    gs.push({chave:ch, rotulo:rot, sub, etapa, linhas,
+      mo:linhas.reduce((s,x)=>s+(x.mo||0),0), mat:linhas.reduce((s,x)=>s+(x.mat||0),0),
+      total:linhas.reduce((s,x)=>s+(x.tipo==='PAGO'?0:(x.mo||0)+(x.mat||0)),0)}); };
+  add('AGUARDANDO','⏳ Aguardando aprovação','não entra no saldo enquanto ninguém autoriza',
+      E.linhas.filter(x=>x.tipo==='CUSTO'&&x.aguarda));
+  add('SEMLOTE','📋 Aprovado, ainda sem lote','pronto para virar pacote de pagamento',
+      E.linhas.filter(x=>x.tipo==='CUSTO'&&!x.aguarda&&!x.custo.lote_id));
+  const lotes=[...new Set(E.linhas.filter(x=>x.tipo==='CUSTO'&&x.custo.lote_id).map(x=>x.custo.lote_id))]
+    .sort((a,b)=>a-b);
+  lotes.forEach(id=>{ const l=manLotes.find(y=>y.id===id)||{};
+    const et=(MAN_LOTE[l.etapa]||[l.etapa||'—'])[0];
+    const linhas=E.linhas.filter(x=>(x.tipo==='CUSTO'&&x.custo.lote_id===id)||(x.tipo==='PAGO'&&x.lote&&x.lote.id===id));
+    add('L'+id,'🧾 Lote #'+id, et+(l.fatura_nf?' · nota '+l.fatura_nf:'')+(l.pagto_programado_para?' · programado para '+manDt(l.pagto_programado_para):'')+(l.pago_em?' · pago em '+manDt(l.pago_em):''), linhas, l.etapa); });
+  return {grupos:gs, saldo:E.saldo};
+}
+function manCCTabela(g, comSaldo){
+  let h='<table class="hg-tab man-tab man-ext"><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th><th style="text-align:right">Material</th>'
+   +(comSaldo?'<th style="text-align:right">Saldo</th>':'')+'</tr></thead><tbody>';
+  g.linhas.forEach(x=>{
+    if(x.tipo==='PAGO'){ h+='<tr class="man-ext-pago"><td>'+manDt(x.quando)+'</td><td><b>🧾 Pagamento</b> — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+manEsc(x.lote.fatura_nf):'')+'</td>'
+       +'<td colspan="2" style="text-align:right;color:var(--ok)">− '+manBrl(x.valor)+'</td>'+(comSaldo?'<td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td>':'')+'</tr>'; return; }
+    h+='<tr'+(x.aguarda?' class="man-ext-ag"':'')+'><td>'+manDt(x.quando)+'</td><td>'+manCCServico(x)+'</td>'
      +'<td style="text-align:right">'+(x.mo?manBrl(x.mo):'<span class="man-sub">—</span>')+'</td>'
      +'<td style="text-align:right">'+(x.mat?manBrl(x.mat):'<span class="man-sub">—</span>')+'</td>'
-     +'<td style="text-align:right">'+(x.aguarda?'<span class="man-sub">fora do saldo</span>':'<b>'+manBrl(x.saldo)+'</b>')+'</td></tr>';
+     +(comSaldo?'<td style="text-align:right">'+(x.aguarda?'<span class="man-sub">fora do saldo</span>':'<b>'+manBrl(x.saldo)+'</b>')+'</td>':'')+'</tr>';
   });
-  h+='<tr class="man-ext-tot"><td></td><td><b>Total</b>'+(E.totPago?'<span class="man-sub">já pago '+manBrl(E.totPago)+'</span>':'')+'</td>'
-   +'<td style="text-align:right"><b>'+manBrl(E.totMo)+'</b></td><td style="text-align:right"><b>'+manBrl(E.totMat)+'</b></td>'
-   +'<td style="text-align:right"><b>'+manBrl(E.saldo)+'</b></td></tr>';
+  h+='<tr class="man-ext-tot"><td></td><td><b>Total '+manEsc(g.rotulo.replace(/^[^ ]+ /,''))+'</b></td>'
+   +'<td style="text-align:right"><b>'+manBrl(g.mo)+'</b></td><td style="text-align:right"><b>'+manBrl(g.mat)+'</b></td>'
+   +(comSaldo?'<td style="text-align:right"><b>'+manBrl(g.total)+'</b></td>':'')+'</tr>';
   return h+'</tbody></table>';
 }
+function manCCExtrato(p){
+  const G=manCCGrupos(p.id);
+  let h='<div class="man-linha" style="margin:10px 0 4px"><span class="man-rot" style="flex:1">🧾 Extrato por pacote de pagamento</span>'
+   +'<button class="man-b n p" onclick="manPrestRelImprimir()" title="imprime o que está à vista: todos os pacotes ou só o escolhido">🖨 Imprimir este extrato</button></div>';
+  if(!G.grupos.length) return h+'<span class="man-sub">Nada lançado para ele ainda.</span>';
+  h+='<div class="man-linha" style="margin:0 0 6px;flex-wrap:wrap">'
+   +'<button class="man-b '+(manCCGrupo==='TODOS'?'o':'n')+' p" onclick="manCCGrupo=\'TODOS\';manPrestRender()">Todos</button>'
+   +G.grupos.map(g=>'<button class="man-b '+(manCCGrupo===g.chave?'o':'n')+' p" onclick="manCCGrupo=\''+g.chave+'\';manPrestRender()">'+manEsc(g.rotulo)+' · '+manBrl(g.total)+'</button>').join('')
+   +'</div>';
+  const vis=manCCGrupo==='TODOS'?G.grupos:G.grupos.filter(g=>g.chave===manCCGrupo);
+  if(!vis.length){ manCCGrupo='TODOS'; return manCCExtrato(p); }
+  vis.forEach(g=>{ h+='<div class="man-linha" style="margin:10px 0 0"><b style="font-size:13px;color:var(--azul)">'+manEsc(g.rotulo)+'</b>'
+    +'<span class="man-sub" style="flex:1">'+manEsc(g.sub||'')+'</span>'
+    +(g.chave.startsWith('L')?'<button class="man-b n p" onclick="manLoteImprimir('+g.chave.slice(1)+')" title="a folha deste lote para o financeiro">🖨 Folha do lote</button>':'')+'</div>'
+    +manCCTabela(g, manCCGrupo==='TODOS'||g.chave.startsWith('L')); });
+  if(manCCGrupo==='TODOS') h+='<div class="man-linha" style="margin-top:6px"><b style="margin-left:auto">Saldo a pagar: '+manBrl(G.saldo)+'</b></div>';
+  return h;
+}
 async function manPrestRel(pid){
-  manRelPrest=pid; const box=document.getElementById('man-prest-box');
+  manRelPrest=pid; manCCGrupo='TODOS'; const box=document.getElementById('man-prest-box');
   if(!box){ trocarAba('man_prest'); await new Promise(r=>setTimeout(r,900)); }
   manPrestEd=null; manPrestRender();
+  try{ await manDadosCarregar(); await manSolsCarregar(); manPrestRender(); }catch(e){}   // v4.182 — nunca mostrar saldo de dado velho
 }
 function manPrestRelRender(){
   const box=document.getElementById('man-prest-box'); const p=manPrestDe(manRelPrest); if(!box||!p) return;
@@ -27585,19 +27621,25 @@ function manPrestRelRender(){
       +'<td><button class="man-b p" onclick="manFicha('+s.id+')">Abrir</button></td></tr>'; });
   box.innerHTML=h+'</tbody></table>';   // v4.181 — a tabela de Custos saiu: quem conta o dinheiro é o extrato, lá em cima
 }
-function manCCExtratoPapel(p){   // v4.180 — o extrato impresso, igual ao da tela
-  const E=manCCLinhas(p.id); if(!E.linhas.length) return '';
-  const lin=E.linhas.map(x=>{
+function manCCExtratoPapel(p){   // v4.180 — o extrato impresso; v4.182 — segue o pacote escolhido
+  const G=manCCGrupos(p.id); if(!G.grupos.length) return '';
+  const vis=manCCGrupo==='TODOS'?G.grupos:G.grupos.filter(g=>g.chave===manCCGrupo);
+  return vis.map(g=>manCCGrupoPapel(g)).join('')
+   +(manCCGrupo==='TODOS'?'<p style="text-align:right"><b>Saldo a pagar: '+manBrl(G.saldo)+'</b></p>':'');
+}
+function manCCGrupoPapel(g){
+  const lin=g.linhas.map(x=>{
     if(x.tipo==='PAGO') return '<tr><td>'+manDt(x.quando)+'</td><td>Pagamento — lote #'+x.lote.id+(x.lote.fatura_nf?' · nota '+x.lote.fatura_nf:'')+'</td>'
       +'<td colspan="2" style="text-align:right">- '+manBrl(x.valor)+'</td><td style="text-align:right"><b>'+manBrl(x.saldo)+'</b></td></tr>';
     return '<tr><td>'+manDt(x.quando)+'</td><td>'+x.dems.map(d=>'#'+d.id+' '+d.oq).join(' · ')+(x.custo.descricao?'<br><small>'+x.custo.descricao+'</small>':'')
       +'<br><small>'+manCCOnde(x.custo)+'</small></td>'
       +'<td style="text-align:right">'+(x.mo?manBrl(x.mo):'-')+'</td><td style="text-align:right">'+(x.mat?manBrl(x.mat):'-')+'</td>'
       +'<td style="text-align:right">'+(x.aguarda?'fora do saldo':'<b>'+manBrl(x.saldo)+'</b>')+'</td></tr>'; }).join('');
-  return '<h2 style="font-size:14px;margin:10px 0 2px">Extrato</h2><table><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th>'
+  return '<h3 style="font-size:13px;margin:12px 0 2px">'+g.rotulo+(g.sub?' — <small>'+g.sub+'</small>':'')+'</h3>'
+   +'<table><thead><tr><th>Data</th><th>Serviço</th><th style="text-align:right">Mão de obra</th>'
    +'<th style="text-align:right">Material</th><th style="text-align:right">Saldo</th></tr></thead><tbody>'+lin
-   +'<tr class="tot"><td></td><td>Total'+(E.totPago?' (já pago '+manBrl(E.totPago)+')':'')+'</td><td style="text-align:right">'+manBrl(E.totMo)+'</td>'
-   +'<td style="text-align:right">'+manBrl(E.totMat)+'</td><td style="text-align:right">'+manBrl(E.saldo)+'</td></tr></tbody></table>';
+   +'<tr class="tot"><td></td><td>Total — '+g.rotulo.replace(/^[^ ]+ /,'')+'</td><td style="text-align:right">'+manBrl(g.mo)+'</td>'
+   +'<td style="text-align:right">'+manBrl(g.mat)+'</td><td style="text-align:right">'+manBrl(g.total)+'</td></tr></tbody></table>';
 }
 function manPrestRelImprimir(){
   const p=manPrestDe(manRelPrest); if(!p) return; const D=manRelDados(p.id);
@@ -27622,7 +27664,7 @@ function manPrestRelImprimir(){
     +'<h2 style="font-size:14px;margin:14px 0 0;border-bottom:1px solid #bbb">1 · Demandas atendidas</h2>'
     +'<p style="margin:4px 0 0"><small>🔗 = custo que cobre mais de uma demanda: entra uma vez só, na tabela de custos.</small></p>'
     +'<table><thead><tr><th>#</th><th>O quê</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th style="text-align:right">Custos dele</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="6">—</td></tr>')+'</tbody></table>'
-    +'<h2 style="font-size:14px;margin:16px 0 0;border-bottom:1px solid #bbb">2 · Extrato financeiro</h2>'
+    +'<h2 style="font-size:14px;margin:16px 0 0;border-bottom:1px solid #bbb">2 · Extrato financeiro'+(manCCGrupo==='TODOS'?'':' — só o pacote escolhido')+'</h2>'
     +manCCExtratoPapel(p)
     +'<p><small>Mão de obra entra na nota fiscal de serviço do prestador; material é reembolso do que ele comprou, com o comprovante guardado na demanda.</small></p>'
     +'<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
