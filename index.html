@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.185 · a carta de remessa sai em papel timbrado, com o logo do HOG</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.186 · razão social e endereço iguais em todos os papéis</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5134,9 +5134,15 @@ function cexDados(){
 // o mesmo número e sem nf_item_id (o 601855 tem dois: o da nota, já baixado, e o
 // da contagem, ativo). Por isso a busca da nota é por material+lote+validade,
 // em qualquer um dos registros daquele lote.
+/* v4.186 — o corpo e o rodapé da carta diziam coisas diferentes da MESMA empresa:
+   "F2MR Serviços Médicos, Camargo Paes 442" em cima e "F2MR Clínica Oftalmológica,
+   Camargo Paes 572" embaixo, com o mesmo CNPJ. Ela, 22/10, decidiu qual vale:
+   **F2MR Clínica Oftalmológica, Rua Camargo Paes 572**.
+   Esta constante manda em quatro papéis: a carta de remessa, o protocolo do livro,
+   o protocolo da manutenção e o extrato do lote. */
 const CEX_EMPRESA = {
-  razao:'F2MR SERVIÇOS MÉDICOS LTDA', cnpj:'15.047.746/0001-28',
-  endereco:'Rua Camargo Paes, 442, Jd Guanabara', cidade:'Campinas', uf:'SP',
+  razao:'F2MR CLÍNICA OFTALMOLÓGICA LTDA', cnpj:'15.047.746/0001-28',
+  endereco:'Rua Camargo Paes, 572, Jd Guanabara', cidade:'Campinas', uf:'SP',
   rodape:'F2MR Clínica Oftalmológica Ltda - CNPJ 15.047.746/0001-28<br>Rua Camargo Paes, 572 - Jd Guanabara - Campinas (SP) - CEP 13073-350'
 };
 const CEX_DESTINOS = {
