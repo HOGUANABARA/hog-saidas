@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.186 · razão social e endereço iguais em todos os papéis</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.187 · carta de remessa também na saída já aprovada, com o paciente</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -844,7 +844,7 @@ details[open] summary { margin-bottom: 6px; }
         <div class="grid-3" style="margin-top:8px">
           <div class="campo"><label>🔪 Procedimento</label>
             <input type="text" id="cex-proc" placeholder="ex.: Dacrio, Facectomia"></div>
-          <div class="campo" style="grid-column:span 2"><label>👤 Paciente <span style="font-weight:400;color:var(--cinza-4)">(só para o documento impresso — não fica gravado no estoque)</span></label>
+          <div class="campo" style="grid-column:span 2"><label>👤 Paciente <span style="font-weight:400;color:var(--cinza-4)">(vai gravado na observação do lançamento, para a carta sair pronta na reimpressão)</span></label>
             <input type="text" id="cex-paciente" placeholder="nome do paciente"></div>
         </div>
         <div class="grid-3" style="margin-top:8px">
@@ -4438,6 +4438,7 @@ function renderizarAprovadas() {
       </div>
       <div class="acoes" style="flex-direction:column">
         <button class="btn btn-primario btn-sm" onclick="imprimirGrupo(${i})">🖨️ Imprimir</button>
+        ${(ehDiversa && p.destino === 'CIRURGIA EXTERNA') ? `<button class="btn btn-secundario btn-sm" onclick="aprCartaRemessa(${i}, true)" title="Reimprimir a carta que foi com o material para o hospital">🏥 Carta de remessa</button>` : ''}
         <button class="btn btn-verde btn-sm" onclick="salvarAjustesAprovada(${i})" ${temEdicao ? '' : ''}>💾 Salvar ajustes</button>
         <button class="btn btn-secundario btn-sm" onclick="apvDevolver(${i})" title="Voltar esta saída para a aba Aprovação de Saídas e corrigir com calma">↩ Devolver para ajustes</button>
       </div>
@@ -5366,14 +5367,22 @@ function cexImprimir(){
    · data". Paciente, procedimento e destinatário NÃO ficam gravados — regra da
    Entrega 02, saída diversa não grava paciente — então são perguntados aqui,
    já com o destinatário que o hospital tem em memória. */
-async function aprCartaRemessa(i){
-  const p = pendentes[i]; if(!p) return;
+async function aprCartaRemessa(i, jaAprovada){
+  // v4.187 — serve às duas listas: a fila de aprovação e as já aprovadas
+  // (ali é reimpressão, quando o papel sumiu ou o hospital pediu outra via)
+  const p = (jaAprovada ? aprovadas : pendentes)[i]; if(!p) return;
   const obs   = String(p.obs||'');
   const resto = obs.replace(/^Cirurgia externa\s*[—-]\s*/i,'').split(' · ');
   const medico   = (resto[0]||'').trim();
   const hospital = (resto[1]||'').trim();
   const data     = ((obs.match(/\d{4}-\d{2}-\d{2}/)||[''])[0]);
   const atend    = (obs.match(/atendimento\s+([^\s·]+)/i)||[])[1] || '';
+  // v4.187 — paciente e procedimento agora vêm gravados; nos lançamentos
+  // antigos não vêm, e aí os campos abrem em branco como antes
+  const pacGrav  = (obs.match(/·\s*paciente:\s*([^·]+)/i)||[])[1];
+  const procGrav = resto.slice(2).map(s=>s.trim())
+                    .filter(s => s && !/^\d{4}-\d{2}-\d{2}$/.test(s)
+                              && !/^atendimento\s/i.test(s) && !/^paciente:/i.test(s))[0];
   let dest = '';
   if(hospital){
     const h = hospital.toUpperCase();
@@ -5382,10 +5391,10 @@ async function aprCartaRemessa(i){
   }
   const r = await hogPergunta({
     titulo: '🖨 Carta de remessa — ' + (hospital || 'cirurgia externa'),
-    texto: 'Médico, hospital e data vêm do lançamento. O resto não fica gravado no estoque: é só para o papel.',
+    texto: 'Médico, hospital e data vêm do lançamento. Procedimento e paciente vêm do lançamento quando foram gravados nele; nos lançamentos antigos, preencha aqui.',
     campos: [
-      {id:'proc', rot:'Procedimento', valor:'', placeholder:'ex.: Dacriorrinocistotomia — OE'},
-      {id:'pac',  rot:'Paciente',     valor:'', placeholder:'nome completo'},
+      {id:'proc', rot:'Procedimento', valor:(procGrav||'').trim(), placeholder:'ex.: Dacriorrinocistotomia — OE'},
+      {id:'pac',  rot:'Paciente',     valor:(pacGrav||'').trim(),  placeholder:'nome completo'},
       {id:'dest', rot:'Destinatário — razão social e endereço', tipo:'texto-longo', valor:dest,
        placeholder:'RAZÃO SOCIAL\nRUA, Nº\nCIDADE (UF) - CEP'}
     ], ok:'Conferir e imprimir'
@@ -5525,9 +5534,15 @@ async function enviarDiversas() {
         destino_saida_geral: destino,
         aprovado: false,
         registrado_por: registrante,
+        // v4.187 — ela, 23/10: "após eu aprovar vai sumir novamente o nome do
+        // paciente?". Ia: paciente e procedimento só existiam no papel impresso,
+        // então toda reimpressão pedia tudo de novo. Agora vão na observação, que
+        // é o que o lançamento guarda. (Decisão dela em 22/10, "3 - sim".)
         observacao: ehCex
           ? ('Cirurgia externa — ' + D.medico + ' · ' + D.hospital + ' · ' + D.data
-             + (D.atend ? (' · atendimento ' + D.atend) : ''))
+             + (D.atend ? (' · atendimento ' + D.atend) : '')
+             + (D.proc ? (' · ' + D.proc) : '')
+             + (D.paciente ? (' · paciente: ' + D.paciente) : ''))
           : ('Saída diversa — ' + destino + ' — ' + data),
       });
     }
