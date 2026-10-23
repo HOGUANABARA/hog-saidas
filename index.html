@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.188 · devolver para ajustes não apaga mais a identificação da saída</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.189 · manutenção: a tela dos custos começa pela lista, e o lançamento virou botão</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -26176,6 +26176,7 @@ let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manC
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manEquip=[], manDemEquip=[], manEquipEd=null, manEquipBusca='', manEquipTipo='';   // v4.178 — aparelhos
 let manCCGrupo='TODOS';   // v4.182 — qual pacote de pagamento está à vista na conta corrente
+let manCusForm=false, manCusDems=[];   // v4.189 — o formulário de custo só aparece quando se pede
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
 let manHistOrdem='ASC', manFichaAcao=null, manFichaFotos=[], manFichaTmpArq=null, manVisSel=[], manVisCab={}, manRasc={midias:[]}, manAberta=null, manTmpCus=null, manTmpFat=null, manPreDem=null, manVisFotos={}, manLoteReceb='';
 
@@ -27052,7 +27053,9 @@ function manCusRender(){
   const box=document.getElementById('man-cus-box'); if(!box) return;
   if(manDepRelOn) return manDepRelRender();
   const dems=manSols.filter(s=>s.situacao!=='CANCELADA').sort((a,b)=>(b.id===manPreDem)-(a.id===manPreDem)||((a.situacao==='RESOLVIDA')-(b.situacao==='RESOLVIDA'))||b.id-a.id).slice(0,120);
-  let h='<div class="man-bloco agora"><div class="man-grade">'
+  if(manPreDem && !manCusDems.includes(manPreDem)){ manCusDems=[manPreDem]; manCusForm=true; }
+  let h=manCusCabeca();
+  if(manCusForm) h+='<div class="man-bloco agora"><div class="man-rot" style="margin-bottom:6px">➕ Lançar custo que vale para mais de uma demanda</div><div class="man-grade">'
    +'<label class="man-rot">Tipo <select id="mc-tipo" onchange="manCusPagoA()">'+Object.keys(MAN_TIPOS).map(k=>'<option value="'+k+'">'+MAN_TIPOS[k]+'</option>').join('')+'</select></label>'
    +'<label class="man-rot">O que é <input id="mc-desc" placeholder="ex.: visita — janela + tomada"></label>'
    +'<label class="man-rot">Pago a <select id="mc-pago" onchange="manCusPagoA()"><option value="">— escolha —</option><option value="PRESTADOR">👷 prestador</option><option value="FORNECEDOR">🏪 fornecedor (loja)</option></select></label>'
@@ -27060,13 +27063,14 @@ function manCusRender(){
    +'<label class="man-rot">Valor <input id="mc-val" type="number" min="0" step="0.01" placeholder="R$"></label>'
    +'<label class="man-rot">Empresa / CNPJ (se tiver) <input id="mc-emp" placeholder="em branco = só o nome"></label></div>'
    +'<div class="man-linha" style="margin-top:0">'+manBotaoUp('📄 Anexar orçamento (PDF/foto)','manCusArquivo(this)','application/pdf,image/*')+'<span id="mc-arq" class="man-sub">'+(manTmpCus?'📄 '+manEsc(manTmpCus.nome):'sem arquivo')+'</span></div>'
-   +'<div class="man-rot" style="margin:6px 0 4px">Vale para quais demandas <span class="hg-dica" title="Marque mais de uma quando o prestador cobra uma visita só por várias coisas.">?</span></div>'
-   +'<div style="max-height:170px;overflow:auto;border:1px solid var(--cinza-2);border-radius:8px;padding:2px 8px">'
-   +dems.map(s=>'<label class="man-chk" style="padding:3px 0"><input type="checkbox" class="mc-dem" value="'+s.id+'"'+(s.id===manPreDem?' checked':'')+'> <span>#'+s.id+' '+manEsc(s.o_que)+' <span class="man-sub" style="display:inline">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</span></span></label>').join('')+'</div>'
-   +'<div class="man-linha"><button class="man-b g" onclick="manCusSalvar()">➕ Lançar custo</button></div></div>';
+   +'<label class="man-rot" style="margin-top:6px">Vale para quais demandas <span class="hg-dica" title="Digite o número ou o nome da demanda e dê Enter. Repita para incluir outra: é assim que uma cobrança só cobre vários serviços.">?</span>'
+   +'<input id="mc-dem-busca" list="man-dl-dems" placeholder="digite o número ou o nome e dê Enter" onchange="manCusDemAdd(this.value)"></label>'
+   +'<datalist id="man-dl-dems">'+dems.map(s=>'<option value="#'+s.id+' '+manEsc(s.o_que)+'">'+manEsc(s.local)+' · '+(MAN_SIT[s.situacao]||[''])[0]+'</option>').join('')+'</datalist>'
+   +'<div id="mc-dem-chips">'+manCusDemChips()+'</div>'
+   +'<div class="man-linha"><button class="man-b g" onclick="manCusSalvar()">➕ Lançar custo</button>'
+   +'<button class="man-b n p" onclick="manCusForm=false;manCusDems=[];manCusRender()">Cancelar</button></div></div>';
   const n=k=>manCustos.filter(MAN_FCUS[k]).length;
-  h+='<div class="man-linha" style="margin-top:12px"><button class="man-b o p" onclick="manDepRelOn=true;manCusRender()" title="quanto a manutenção custou em cada departamento ou em cada espaço da empresa">📊 Custo por departamento / espaço</button></div>'
-   +'<div class="man-kpis">'+[['PENDENTES','Pendentes'],['AGUARDANDO','Aguardando aprovação'],['SEMLOTE','Aprovados sem lote'],['EMLOTE','Em lote'],['REPROVADO','Reprovados'],['TODOS','Todos']]
+  h+='<div class="man-kpis">'+[['PENDENTES','Pendentes'],['AGUARDANDO','Aguardando aprovação'],['SEMLOTE','Aprovados sem lote'],['EMLOTE','Em lote'],['REPROVADO','Reprovados'],['TODOS','Todos']]
     .map(([k,r])=>'<div class="man-k'+(manFiltroCus===k?' on':'')+'" onclick="manFiltroCus=\''+k+'\';manCusRender()"><span class="r">'+r+'</span><b>'+n(k)+'</b></div>').join('')+'</div>'
    +'<table class="hg-tab man-tab"><thead><tr><th>Tipo · o que é</th><th>Demandas</th><th>Pago a</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>';
   const lista=manCustos.filter(MAN_FCUS[manFiltroCus]||MAN_FCUS.PENDENTES);
@@ -27080,6 +27084,38 @@ function manCusRender(){
   box.innerHTML=h+'</tbody></table>';
   manCusPagoA(); manPreDem=null;
 }
+// v4.189 — ela: "essa tela ficou sem sentido" (o formulário de lançar custo era a primeira coisa).
+// A tela passa a começar pelo que está esperando decisão; lançar custo virou botão.
+function manCusCabeca(){
+  const ag=manCustos.filter(c=>c.situacao==='AGUARDANDO'), sl=manCustos.filter(c=>c.situacao==='APROVADO'&&!c.lote_id);
+  const sv=manSols.filter(s=>s.situacao==='RESOLVIDA'&&!s.sem_cobranca&&!manCustosDe(s.id).some(c=>c.situacao!=='REPROVADO'));
+  const soma=a=>a.reduce((s,c)=>s+Number(c.valor||0),0);
+  let h='<div class="man-bloco"><div class="man-linha" style="margin-top:0;align-items:baseline">'
+   +'<b style="font-size:13px;color:var(--azul)">💰 O que o prestador cobrou</b>'
+   +'<span class="man-sub" style="flex:1">cada valor entra aqui, você aprova, e só então ele pode virar pacote de pagamento</span>'
+   +'<button class="man-b o p" onclick="manCusForm=true;manCusRender()">➕ Lançar custo</button>'
+   +'<button class="man-b n p" onclick="manDepRelOn=true;manCusRender()" title="quanto a manutenção custou em cada departamento ou em cada espaço da empresa">📊 Custo por departamento / espaço</button></div>'
+   +'<div class="man-sub">'
+   +(ag.length?'⏳ <b>'+ag.length+'</b> esperando sua aprovação — '+manBrl(soma(ag)):'⏳ nada esperando aprovação')
+   +' · '+(sl.length?'✅ <b>'+sl.length+'</b> aprovado(s) sem lote — '+manBrl(soma(sl))+' (vai no "O que vai ao financeiro")':'✅ nada aprovado fora de lote')
+   +(sv.length?' · ⚠ <b>'+sv.length+'</b> serviço(s) feito(s) e o valor não veio':'')
+   +'</div>'
+   +'<div class="man-sub" style="margin-top:4px">O caminho normal é lançar o valor <b>dentro da ficha da demanda</b>. Este botão é para quando uma cobrança cobre várias demandas.</div></div>';
+  return h;
+}
+function manCusDemChips(){
+  if(!manCusDems.length) return '<span class="man-sub">nenhuma demanda escolhida ainda</span>';
+  return manCusDems.map(id=>{ const s=manSols.find(x=>x.id===id);
+    return '<span class="man-tag man-t-par" style="margin:2px 4px 2px 0">#'+id+' '+manEsc(s?s.o_que:'')+' <a href="#" onclick="manCusDemTirar('+id+');return false" title="tirar">✕</a></span>'; }).join('');
+}
+function manCusDemAdd(txt){
+  const m=String(txt||'').match(/#?(\d+)/); const el=document.getElementById('mc-dem-busca'); if(el) el.value='';
+  if(!m) return; const id=Number(m[1]); const s=manSols.find(x=>x.id===id);
+  if(!s) return toast('Não achei a demanda #'+id,'erro');
+  if(!manCusDems.includes(id)) manCusDems.push(id);
+  const c=document.getElementById('mc-dem-chips'); if(c) c.innerHTML=manCusDemChips();
+}
+function manCusDemTirar(id){ manCusDems=manCusDems.filter(x=>x!==id); const c=document.getElementById('mc-dem-chips'); if(c) c.innerHTML=manCusDemChips(); }
 function manCusPagoA(){ const p=manGv('mc-pago'), t=manGv('mc-tipo'), rot=document.getElementById('mc-rec-rot'), rec=document.getElementById('mc-rec'); if(!rot||!rec) return;
   rot.textContent=p==='FORNECEDOR'?'Fornecedor (loja)':(p==='PRESTADOR'?'Prestador':'Prestador / loja');
   rec.setAttribute('list',p==='FORNECEDOR'?'man-dl-lojas':'man-dl-prest'); rec.placeholder=p==='FORNECEDOR'?'nome da loja':'apelido';
@@ -27088,10 +27124,10 @@ async function manCusArquivo(input){ const fs=[...input.files]; input.value=''; 
   manTmpCus=p[0]; const e=document.getElementById('mc-arq'); if(e) e.textContent='📄 '+p[0].nome; }
 async function manCusSalvar(){
   const tipo=manGv('mc-tipo'), pago=manGv('mc-pago'), rec=manGv('mc-rec').trim(), v=Number(manGv('mc-val')), desc=manGv('mc-desc').trim();
-  const dems=[...document.querySelectorAll('.mc-dem:checked')].map(x=>Number(x.value));
+  const dems=[...manCusDems];   // v4.189 — escolhidas por busca, não mais caixinha a caixinha
   if(!pago) return toast(tipo==='MATERIAL'?'Material: foi pago ao fornecedor (loja) ou ao prestador?':'Diga se é pago ao prestador ou ao fornecedor','erro');
   if(!rec) return toast(pago==='FORNECEDOR'?'Diga a loja':'Diga o prestador','erro');
-  if(!(v>0)) return toast('Informe o valor','erro'); if(!dems.length) return toast('Marque a(s) demanda(s)','erro');
+  if(!(v>0)) return toast('Informe o valor','erro'); if(!dems.length) return toast('Diga para qual demanda é esse custo','erro');
   let p=null; if(pago==='PRESTADOR'){ p=await manPrestPorNome(rec); if(!p) return; }
   if(!await hogConfirma({titulo:'Lançar o custo?', texto:(MAN_TIPOS[tipo])+' · '+(desc||'—')+'\n'+(pago==='FORNECEDOR'?'🏪 '+rec:'👷 '+p.apelido)+' — '+manBrl(v)+'\nDemandas: '+dems.map(x=>'#'+x).join(' + '), ok:'➕ Lançar'})) return;
   await manExec(async()=>{
@@ -27100,6 +27136,7 @@ async function manCusSalvar(){
     await sbFetch('manut_custo_demandas','POST',dems.map(id=>({custo_id:c.id,solicitacao_id:id})));
     if(manTmpCus){ const ext=manTmpCus.ext||'pdf'; const cam=await manStoragePut(manTmpCus,'custos/'+c.id+'/orcamento-'+Date.now()+'.'+ext); await sbFetch('manut_custos?id=eq.'+c.id,'PATCH',{arquivo:cam}); manTmpCus=null; }
     for(const id of dems) await manNota(id,'custo lançado: '+MAN_TIPOS[tipo]+' '+manBrl(v)+' · '+(pago==='FORNECEDOR'?rec:p.apelido)+(dems.length>1?' (vale para '+dems.map(x=>'#'+x).join(' + ')+')':''),manAndamento(id));
+    manCusForm=false; manCusDems=[];   // v4.189 — grava e fecha
   },'Custo lançado — falta a aprovação');
 }
 async function manCusAprovar(id){ const c=manCustos.find(x=>x.id===id); if(!c) return;
