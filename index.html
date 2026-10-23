@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.187 · carta de remessa também na saída já aprovada, com o paciente</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.188 · devolver para ajustes não apaga mais a identificação da saída</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -3732,7 +3732,7 @@ async function carregarPendentes() {
         key = `GERAL_${m.destino_saida_geral}_${m.observacao || ''}`;
         if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao, itens: [], ids: [] };
       } else { continue; }
-      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
+      grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), observacao: m.observacao, material_id: m.material_id, local_id: m.local_id, editado: false });
       if (m.registrado_por) grupos[key].registrado_por = m.registrado_por;
       grupos[key].ids.push(m.id);
     }
@@ -4257,7 +4257,7 @@ function apvAgrupar(){
       if (!grupos[key]) grupos[key] = { periodo: null, destino: m.destino_saida_geral, obs: m.observacao,
                                         itens: [], registrado_por: m.registrado_por, aprovado_em: m.aprovado_em };
     } else { continue; }
-    grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd),
+    grupos[key].itens.push({ id: m.id, nome: m.materiais?.nome, qtd: Math.abs(m.qtd), observacao: m.observacao,
       qtdOriginal: Math.abs(m.qtd), material_id: m.material_id, local_id: m.local_id, editado: false });
   }
   aprovadas = Object.values(grupos);
@@ -4468,6 +4468,38 @@ function editarQtdAprovada(i, k, val) {
   aprovadas[i].itens[k].editado = true;
 }
 
+/* ═══ v4.188 — A OBSERVAÇÃO NÃO SE PERDE MAIS ════════════════════════════
+   Ela, 23/10: "quando voltei a carta para ajustes ela perdeu os dados inclusive
+   do local de destino" + "no nome do cirurgião apareceu voltou para ajustes".
+   A raiz: `apvAgrupar` montava o item do cartão SEM a observação, então o
+   `it.observacao` do apvDevolverExecutar era sempre undefined e o PATCH gravava
+   só o carimbo — apagando "Cirurgia externa — médico · hospital · data". Sem o
+   hospital, o destinatário vinha vazio; e o carimbo, sendo o começo do texto,
+   virava o nome do cirurgião. O mesmo valia para o "💾 Salvar ajustes", que
+   substituía a observação sem nem olhar o que havia.
+   Na saída de cirurgia do CC isso machucava menos (médico e data vêm do
+   período); na cirurgia externa a observação é o ÚNICO lugar onde esses dados
+   existem — e é por ela que o cexRelatorio() agrupa o custo.
+   Agora: o item carrega a observação, e quem grava carimbo acrescenta ao que já
+   está lá; se por algum caminho o item vier sem ela, lê do banco antes. */
+async function aprObsPreservar(it){
+  let atual = it && it.observacao;
+  if(atual == null && it && it.id){
+    try{ const r = await sbFetch('movimentacoes?select=observacao&id=eq.'+it.id);
+         if(r && r.length) atual = r[0].observacao; }catch(e){}
+  }
+  atual = String(atual==null?'':atual).trim();
+  return atual ? (atual + ' | ') : '';
+}
+/* O carimbo é histórico, não identificação: quem LÊ a observação para saber
+   médico, hospital, data, procedimento e paciente tem de ignorá-lo. Vale para a
+   carta e para o relatório de custo (senão a mesma cirurgia vira dois grupos). */
+function aprObsSemCarimbo(t){
+  return String(t==null?'':t)
+    .replace(/\s*\|?\s*Devolvida para ajustes por[\s\S]*$/i,'')
+    .replace(/\s*\|?\s*Qtd ajustada após aprovação em[\s\S]*$/i,'')
+    .trim();
+}
 // ═══ v4.33 — DEVOLVER SAÍDA APROVADA PARA AJUSTES ═══════════════════════
 // Pedido da Evelise (20/08): "se pego um erro, quantidade de pacientes, ou
 // tenho que dividir a saída por cirurgias, não consigo voltar para a aba
@@ -4526,7 +4558,7 @@ async function apvDevolverExecutar(i){
       }
       await sbFetch('movimentacoes?id=eq.'+it.id,'PATCH',{
         aprovado:false, aprovado_por:null, aprovado_em:null,
-        observacao: (it.observacao? (it.observacao+' | ') : '') + carimbo });
+        observacao: (await aprObsPreservar(it)) + carimbo });
       if(trigDesfaz===null && antes){
         const e2 = await sbFetch('estoque?select=saldo&id=eq.'+antes.id);
         const depois = (e2&&e2.length)?Number(e2[0].saldo):antes.saldo;
@@ -4918,7 +4950,7 @@ async function salvarAjustesAprovada(i) {
       // 1. Atualiza a movimentação
       await sbFetch(`movimentacoes?id=eq.${it.id}`, 'PATCH', {
         qtd: -Math.abs(it.qtd),
-        observacao: 'Qtd ajustada após aprovação em ' + new Date().toLocaleString('pt-BR'),
+        observacao: (await aprObsPreservar(it)) + 'Qtd ajustada após aprovação em ' + new Date().toLocaleString('pt-BR'),
       });
       // 2. Corrige o saldo do estoque
       const est = await sbFetch(`estoque?select=id,saldo&material_id=eq.${it.material_id}&local_id=eq.${it.local_id}&limit=1`);
@@ -5371,7 +5403,7 @@ async function aprCartaRemessa(i, jaAprovada){
   // v4.187 — serve às duas listas: a fila de aprovação e as já aprovadas
   // (ali é reimpressão, quando o papel sumiu ou o hospital pediu outra via)
   const p = (jaAprovada ? aprovadas : pendentes)[i]; if(!p) return;
-  const obs   = String(p.obs||'');
+  const obs   = aprObsSemCarimbo(p.obs);   // v4.188 — o carimbo de devolução não é identificação
   const resto = obs.replace(/^Cirurgia externa\s*[—-]\s*/i,'').split(' · ');
   const medico   = (resto[0]||'').trim();
   const hospital = (resto[1]||'').trim();
@@ -5379,7 +5411,7 @@ async function aprCartaRemessa(i, jaAprovada){
   const atend    = (obs.match(/atendimento\s+([^\s·]+)/i)||[])[1] || '';
   // v4.187 — paciente e procedimento agora vêm gravados; nos lançamentos
   // antigos não vêm, e aí os campos abrem em branco como antes
-  const pacGrav  = (obs.match(/·\s*paciente:\s*([^·]+)/i)||[])[1];
+  const pacGrav  = (obs.match(/·\s*paciente:\s*([^·|]+)/i)||[])[1];
   const procGrav = resto.slice(2).map(s=>s.trim())
                     .filter(s => s && !/^\d{4}-\d{2}-\d{2}$/.test(s)
                               && !/^atendimento\s/i.test(s) && !/^paciente:/i.test(s))[0];
@@ -5441,7 +5473,7 @@ async function cexRelatorio(){
     // cada cirurgia é um grupo: a observação diz médico · hospital · data
     const grupos={};
     for(const m of noPeriodo){
-      const k=(m.observacao||'(sem identificação)');
+      const k=(aprObsSemCarimbo(m.observacao)||'(sem identificação)');   // v4.188 — sem isso a mesma cirurgia virava dois grupos
       const g=grupos[k]=grupos[k]||{ obs:k, itens:[], total:0, quando:String(m.created_at||'').slice(0,10), quem:m.registrado_por, pendente:false };
       const mat=M[m.material_id]||{}; const q=Math.abs(Number(m.qtd)||0);
       const v=Number(mat.ultimo_valor_pago)||0;
