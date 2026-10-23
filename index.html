@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.182 · conta corrente agrupada por lote, com filtro e impressão do grupo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.183 · a carta de remessa sai com o nome da NOTA, não com o apelido interno</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5156,9 +5156,16 @@ function cexHospitais(){
 }
 // lote → nota de compra: o número que vai escrito no documento
 async function cexLotesENotas(ids){
-  const out={ porMaterial:{}, nfDoLote:{} };
+  const out={ porMaterial:{}, nfDoLote:{}, descNf:{} };
   if(!ids.length) return out;
   try{
+    // v4.182 — ela: "precisa sair o nome da NF e não o apelido da coluna material".
+    // O papel vai para fora do HOG: "SONDA DACRIO" é como a gente chama aqui;
+    // o hospital e o fisco entendem "DISPOSITIVO LACRIMAL, SONDA DE CRAWFORD".
+    try{
+      const mm=(await sbFetch('materiais?select=id,descricao_nf&id=in.('+ids.join(',')+')'))||[];
+      mm.forEach(m=>{ if(m.descricao_nf && String(m.descricao_nf).trim()) out.descNf[m.id]=String(m.descricao_nf).trim(); });
+    }catch(e){}
     const ls=(await sbFetch('lotes?select=id,material_id,lote,validade,qtd,status,nf_item_id&material_id=in.('+ids.join(',')+')&order=validade.asc'))||[];
     const nfItens=[...new Set(ls.map(l=>l.nf_item_id).filter(Boolean))];
     let mapaItem={}, mapaNota={};
@@ -5192,7 +5199,8 @@ function cexCartaHtml(D, itens){
   const hj=new Date();
   const linhas=itens.map(function(x){
     const q=String(Math.abs(Number(x.qtd)||0)); const qq=q.length<2?('0'+q):q;
-    return '<p class="item">'+qq+' unid - <b>'+esc(x.nome)+'</b>'
+    // o nome que vai no papel é o da NOTA (descricao_nf), não o apelido interno
+    return '<p class="item">'+qq+' unid - <b>'+esc(x.descricao_nf || x.nome)+'</b>'
       + (x.lote?(' / lote: '+esc(x.lote)):'')
       + (x.validade?(' - Val: '+br2(x.validade)):'')
       + (Number(x.unit)>0?(', no valor unitário de '+brl(x.unit)):'')
@@ -5284,7 +5292,8 @@ async function cexConferir(D, itens, registrante){
   cexItensDoc=itens.map(function(x){
     const ls=L.porMaterial[x.id]||[];
     const esc=ls[0]||null;
-    return Object.assign({}, x, { lotes:ls, lote:esc?esc.lote:'', validade:esc?esc.validade:'', nf:esc?(L.nfDoLote[x.id+'|'+String(esc.lote||'').trim().toUpperCase()+'|'+(esc.validade||'')]||''):'' });
+    return Object.assign({}, x, { lotes:ls, lote:esc?esc.lote:'', validade:esc?esc.validade:'', nf:esc?(L.nfDoLote[x.id+'|'+String(esc.lote||'').trim().toUpperCase()+'|'+(esc.validade||'')]||''):'',
+      descricao_nf: L.descNf[x.id]||'' });
   });
   const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const br=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'';
@@ -5305,7 +5314,10 @@ async function cexConferir(D, itens, registrante){
     + cexItensDoc.map(function(x,i){
         const op=(x.lotes||[]).map(l=>'<option value="'+esc(l.lote)+'|'+(l.validade||'')+'"'+((l.lote===x.lote&&l.validade===x.validade)?' selected':'')+'>'
             +esc(l.lote||'sem lote')+(l.validade?(' · val. '+br(l.validade)):'')+' · tem '+(Number(l.qtd)||0)+'</option>').join('');
-        return '<tr><td class="hg-prod">'+esc(x.nome)+'</td><td class="hg-num">'+x.qtd+'</td>'
+        return '<tr><td class="hg-prod">'+esc(x.descricao_nf || x.nome)
+          +(x.descricao_nf?('<div style="font-size:10.5px;color:var(--cinza-4);font-weight:400;margin-top:2px">aqui chamamos de '+esc(x.nome)+'</div>')
+                          :'<div style="font-size:10.5px;color:#B9770E;font-weight:400;margin-top:2px">sem descrição de NF no cadastro — vai com o nome interno</div>')
+          +'</td><td class="hg-num">'+x.qtd+'</td>'
           +'<td>'+(op?('<select onchange="cexTrocaLote('+i+',this.value)" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px;max-width:230px">'+op+'</select>')
                     :('<input value="'+esc(x.lote)+'" oninput="cexItensDoc['+i+'].lote=this.value" placeholder="digite o lote" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px;width:130px">'))+'</td>'
           +'<td><input type="date" value="'+(x.validade||'')+'" oninput="cexItensDoc['+i+'].validade=this.value" style="font-family:var(--fonte);font-size:12px;padding:5px 7px;border:1.5px solid var(--cinza-2);border-radius:6px"></td>'
