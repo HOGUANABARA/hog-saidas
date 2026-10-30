@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.190 · devolver para ajustes devolve o lote, não só o saldo</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.191 · fellow do Dr Lucas: a marca do período vale mais que o dia da semana</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -4292,6 +4292,16 @@ function hogTipoCir(per, fallback){
     if(per.fellow)          return 'FACO NACIONAL FELLOW';
     return imp ? 'FACO IMPORT' : 'FACO NACIONAL';
   }
+  // ═══ v4.191 — A MARCA "COM FELLOW" VALE MAIS QUE O DIA DA SEMANA ═══════
+  // Ela, 30/10/2026: "o fellow do Dr Lucas agora será uma data adicional, e nem
+  // sempre um dia da semana fixo". O período de 28/10 (QUARTA) estava marcado
+  // com fellow, convênio, 3 pacientes — e saía como FACO IMPORT, porque o plano
+  // B só conhecia segunda (fellow) e sexta (Martinelli). Pior que o rótulo: a
+  // aprovação comparava a saída com 11 períodos de FACO IMPORT e acendia 21
+  // bandeiras falsas. Quando o período DIZ que teve fellow, é isso que vale;
+  // o dono do paciente (Martinelli, parceiro) continua passando na frente, logo
+  // acima. Sem marca, segue o plano B do calendário, para o histórico antigo.
+  if(ehFaco && per.fellow) return 'FACO NACIONAL FELLOW';
   return (typeof pnTipoCanon==='function') ? pnTipoCanon(bruto, med, per.data) : bruto;
 }
 
