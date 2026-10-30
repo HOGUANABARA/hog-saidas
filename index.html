@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.191 · fellow do Dr Lucas: a marca do período vale mais que o dia da semana</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.192 · compra com piso por período: item que sai sem ser lançado não some mais</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -5913,6 +5913,12 @@ async function acCarregar(){
       const oc = await sbFetch('materiais?select=id&ocultar_compra=eq.true&limit=500');
       ccOculto = {}; for(const x of (oc||[])) ccOculto[x.id] = true;
     }catch(e){ ccOculto = {}; }
+    // v4.192 — piso de consumo por período (SQL 114). Sem a coluna, fica vazio e a régua é a de antes.
+    try{
+      const cp = await sbFetch('materiais?select=id,consumo_por_periodo&consumo_por_periodo=not.is.null&limit=500');
+      ccConsPeriodo = {}; for(const x of (cp||[])) ccConsPeriodo[x.id] = Number(x.consumo_por_periodo)||0;
+    }catch(e){ ccConsPeriodo = {}; }
+    await ccPeriodosCarregar();
     // v4.76 — "⏸ esperar acabar outro item" (materiais.comprar_apos_material_id, SQL 83)
     try{
       const es = await sbFetch('materiais?select=id,comprar_apos_material_id&comprar_apos_material_id=not.is.null&limit=500');
@@ -5962,6 +5968,20 @@ async function ccCarregarAndamento(){
 }
 
 // marcas/fornecedores das compras passadas (planilha + histórico)
+// v4.192 — o chip aparece só quando o piso venceu o consumo medido: quem olha a
+// tela precisa saber que o número veio da regra da gestão, não da medição.
+function ccPisoChip(r){
+  const piso = ccPisoMes(r);
+  if(!(piso > 0)) return '';
+  const medido = Number(r.consumo_medio_mensal)||0;
+  const porPer = Number(ccConsPeriodo[r.material_id])||0;
+  const manda = piso > medido;
+  return '<span class="cc-chip" style="background:'+(manda?'#EBF5FB':'var(--cinza-1)')+';color:'+(manda?'#1B4F72':'var(--cinza-4)')
+    +';font-weight:'+(manda?'800':'600')+'" title="Piso definido pela gestão: '+porPer+' por período cirúrgico. '
+    +'Com '+Math.round(ccPeriodosMes)+' períodos por mês dá '+Math.round(piso)+'/mês, contra '+Math.round(medido)+'/mês medidos pelos lançamentos.'
+    +(manda?' É o piso que está contando.':' O consumo medido é maior, então é ele que conta.')+'">📏 piso '+porPer+'/período</span>';
+}
+
 function ccFontesHtml(r){
   const nome = (r.material||'').toUpperCase().replace(/\s+/g,' ').trim();
   const f = ccFontes[nome];
@@ -5994,12 +6014,38 @@ const CC_PRIO = {
 // compra). A previsão de pacientes virou multiplicador: agenda 150 com média 123 ⇒ ×1,22.
 const CC_FORA_CC = ['LIMPEZA','COPA','ADM_EXPEDIENTE','ADM_IMPRESSOS'];   // v4.123 — COPA passou a existir no cadastro (SQL 98)
 function ccFator(){ return (ccPrevisao && ccPrevisaoBase) ? ccPrevisao/ccPrevisaoBase : 1; }
+
+// ═══ v4.192 — PISO DE CONSUMO POR PERÍODO ════════════════════════════════
+// Ela, 30/10/2026, sobre a ESCOVA CLOROHEX: "está difícil o controle. Para
+// evitar falta, vamos considerar na média 4 por período para que possamos
+// fazer as compras."
+// A régua da v4.59 mede o consumo pelo que foi LANÇADO. Item que sai sem ser
+// lançado parece consumir pouco, nunca acende o alerta e some da prateleira —
+// a escova registrava 44,6/mês e a contagem de 30/10 achou 25 a menos do que o
+// sistema dizia. O piso é o número que ela define por período; a necessidade do
+// mês passa a ser o MAIOR entre o consumo medido e piso × períodos do mês.
+// O piso nunca reduz a compra: só levanta o chão quando o lançamento falha.
+let ccConsPeriodo = {}, ccPeriodosMes = 0;
+async function ccPeriodosCarregar(){
+  try{
+    const de = new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+    const ps = (await sbFetch('periodos_cirurgicos?select=id&data=gte.'+de+'&limit=1000')) || [];
+    ccPeriodosMes = ps.length ? (ps.length/3) : 0;   // 90 dias = 3 meses
+  }catch(e){ ccPeriodosMes = 0; }
+}
+function ccPisoMes(r){
+  const porPer = Number(ccConsPeriodo[r.material_id])||0;
+  if(!porPer || !ccPeriodosMes) return 0;
+  return porPer * ccPeriodosMes;
+}
 function ccRecorrente(r){
   if(CC_FORA_CC.includes(r.classe_compra)) return false;
+  if(ccPisoMes(r) > 0) return true;   // v4.192 — piso definido pela gestão vale como consumo
   return (Number(r.meses_com_consumo)||0) >= 2 && (Number(r.consumo_medio_mensal)||0) > 0;
 }
 function ccNecMes(r){ // necessidade p/ 1 mês de procedimentos, escalada pela agenda
-  return (Number(r.consumo_medio_mensal)||0) * ccFator();
+  // v4.192 — o piso por período entra aqui: vale o maior dos dois
+  return Math.max(Number(r.consumo_medio_mensal)||0, ccPisoMes(r)) * ccFator();
 }
 function ccPrioridade(r){
   // v4.75 — durável (balão, laringoscópio, guedel…) não é estoque de consumo: não entra na régua
@@ -6425,7 +6471,7 @@ function ccTabela(classe, rows, mostrarTodos){
                   : `<span class="cc-chip cc-verd">${acData(r.proxima_validade)} ✓</span>`))
           : `<span class="cc-chip cc-cz">— sem lote</span>`;
         const status = gt.compra ? `<span class="cc-chip ${gt.chip}">${gt.motivo}</span>` : `<span class="cc-chip cc-verd">✓ ok</span>`;
-        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}${ccPisoChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
           <td class="num"><input class="ac-min" value="${r.estoque_minimo??''}" onchange="acSalvarMinimo(${r.material_id}, this)"></td>
           <td>${val}</td><td>${status}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`;
@@ -6441,7 +6487,7 @@ function ccTabela(classe, rows, mostrarTodos){
         const falta = gt.compra ? `<b style="color:var(--vermelho)">${acN0(gt.sugestao)}</b>` : '—';
         const sit = gt.compra ? `<span class="cc-chip cc-verm">⛔ não cobre o mês</span>`
                               : `<span class="cc-chip cc-verd">✓ cobre</span>`;
-        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+        return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}${ccPisoChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
           <td class="num">${cpp}</td><td class="num">${nec}</td><td class="num">${acN0(r.saldo)}</td>
           <td class="num">${falta}</td><td>${sit}</td><td>${ccFontesHtml(r)}</td></tr>`;
       }).join('') + '</tbody></table>';
@@ -6449,7 +6495,7 @@ function ccTabela(classe, rows, mostrarTodos){
 
   if(classe==='ESPORADICO'){
     return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Meses c/ consumo (5m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
-      visiveis.map(r=>`<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+      visiveis.map(r=>`<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}${ccPisoChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
         <td class="num">${acN0(r.saldo)}</td><td class="num">${r.meses_com_consumo??0}</td><td>${ccFontesHtml(r)}</td><td>${ccUc(r)}</td></tr>`).join('') + '</tbody></table>';
   }
 
@@ -6457,7 +6503,7 @@ function ccTabela(classe, rows, mostrarTodos){
   return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura (dias)</th><th class="num">Sugerido (2m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
     visiveis.map(r=>{
       const gt=g(r);
-      return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
+      return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}${ccPisoChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
         <td class="num" style="${Number(r.saldo)<=0?'color:var(--vermelho);font-weight:800':''}">${acN0(r.saldo)}</td>
         <td class="num">${acN0(r.consumo_medio_mensal)}</td>
         <td class="num">${ccCob(r)}</td>
