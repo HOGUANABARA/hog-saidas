@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.194 · inventário: planilha com uma linha por marca sobe sem erro</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.195 · custos gerais: consultórios separados de CC · CME · RPA e da cirurgia externa</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14458,9 +14458,11 @@ const PN_DESTINO_GRUPO = {
   'RECEPÇÃO':'setores', 'ADMINISTRATIVO':'setores',
   'PERDA':'perda', 'VENCIMENTO':'perda', 'DESCARTE':'perda',
   'EMPRESTIMO':'emprestimo',
+  'CIRURGIA EXTERNA':'externa',   // v4.195 — material levado para cirurgia fora do HOG
 };
 const PN_GRUPO_ROT = {
   cirurgia:'🏥 cirurgias', consultorio:'🩺 consultórios', interno:'🏨 uso interno (CC · CME · RPA)',
+  externa:'🚑 cirurgia externa',
   limpeza:'🧼 limpeza', copa:'☕ copa',
   setores:'🏢 outros setores', perda:'🗑 perdas e vencimentos', emprestimo:'🤝 empréstimo',
   diversas:'📦 diversas (sem destino)',
@@ -14474,7 +14476,7 @@ function pnComposicaoMes(mes){
   const movs = pnMovs.filter(m=>m.mes===mes);
   const c = { planilha:0, planilhaPer:0, cirurgia:0, consultorio:0, interno:0, setores:0,
               limpeza:0, copa:0,   // v4.95
-              perda:0, emprestimo:0, diversas:0, reproc:0, pac:0, itens:movs.length };
+              perda:0, emprestimo:0, diversas:0, externa:0, reproc:0, pac:0, itens:movs.length };
   for(const m of movs){
     if(m.reprocessado) c.reproc += m.custo;
     c[pnGrupoCusto(m)] += m.custo;   // v4.80 — cada destino no seu lugar
@@ -14483,7 +14485,7 @@ function pnComposicaoMes(mes){
   for(const p of (typeof pnPeriodos!=='undefined'?pnPeriodos:[])){
     if(((p.data||'')+'').slice(0,7)===mes) c.pac += Number(p.qtd_pacientes)||0;
   }
-  c.app = c.cirurgia + c.consultorio + c.interno + c.setores + c.limpeza + c.copa + c.perda + c.emprestimo + c.diversas;
+  c.app = c.cirurgia + c.consultorio + c.interno + c.externa + c.setores + c.limpeza + c.copa + c.perda + c.emprestimo + c.diversas;
   return c;
 }
 function pnCompLinhas(x){
@@ -14492,7 +14494,7 @@ function pnCompLinhas(x){
   else if(c.planilha>0) l.push('📄 só planilha');
   else if(c.app>0) l.push('📲 só app');
   const p2=[];
-  for(const g of ['cirurgia','consultorio','interno','setores','perda','emprestimo','diversas'])
+  for(const g of ['cirurgia','consultorio','interno','externa','setores','perda','emprestimo','diversas'])
     if(c[g]>0) p2.push(PN_GRUPO_ROT[g]+' '+pnMoney0(c[g]));   // v4.80
   if(p2.length) l.push(p2.join(' · '));
   if(c.reproc>0) l.push('♻️ reprocessados '+pnMoney0(c.reproc));
@@ -14504,7 +14506,7 @@ function pnCompTitulo(x){
   return ('Mês '+pnMesLabel(x.mes)+'/26 — total '+pnMoney0(x.v)
     +'\nPlanilha (jun/jul até 20/07): '+pnMoney0(c.planilha)+' em '+c.planilhaPer+' período(s)'
     +'\nApp (dados vivos): '+pnMoney0(c.app)+' em '+c.itens+' lançamento(s)'
-    +['cirurgia','consultorio','interno','setores','perda','emprestimo','diversas']
+    +['cirurgia','consultorio','interno','externa','setores','perda','emprestimo','diversas']
         .filter(g=>c[g]>0).map(g=>'\n  · '+PN_GRUPO_ROT[g].replace(/^\S+\s/,'')+' '+pnMoney0(c[g])).join('')
     +'\n  · destes, reprocessados: '+pnMoney0(c.reproc)
     +'\nPacientes no mês: '+c.pac+(c.pac?('  → '+pnMoney0(x.v/c.pac)+' por paciente'):'')
@@ -14817,7 +14819,13 @@ async function pnCG_Render(){
   const movs=pnMovs.filter(m=>m.mes===mes&&okMed(m)&&okMat(m)&&okPer(m));
   const cirur=movs.filter(m=>pnGrupoCusto(m)==='cirurgia');
   const perdas=movs.filter(m=>pnGrupoCusto(m)==='perda');            // v4.80
-  const consult=movs.filter(m=>{ const g=pnGrupoCusto(m); return g!=='cirurgia' && g!=='perda'; });
+  // v4.195 — ela (31/10): "CME e RPA não devem ser misturados com consultório". O bloco dos
+  // consultórios juntava tudo o que não era cirurgia nem perda (USO CC/CME/RPA, cirurgia
+  // externa, copa…). Agora cada grupo de destino tem o seu bloco.
+  const consult=movs.filter(m=>pnGrupoCusto(m)==='consultorio');
+  const interno=movs.filter(m=>pnGrupoCusto(m)==='interno');
+  const externa=movs.filter(m=>pnGrupoCusto(m)==='externa');
+  const outrosDest=movs.filter(m=>['setores','limpeza','copa','emprestimo','diversas'].includes(pnGrupoCusto(m)));
   const depMovs=(pnMovsDep||[]).filter(m=>m.mes===mes&&okMat(m));   // v4.104
   const soma=a=>a.reduce((s,m)=>s+m.custo,0);
   // v4.26c — jun/jul vêm da PLANILHA (pnHistPer): entram no bloco cirúrgico
@@ -14956,7 +14964,10 @@ async function pnCG_Render(){
   mergeHist(agrupa(cirur,m=>m.tipoCir),'tipo').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por tipo',k,Math.round(v.q),v.c.toFixed(2)]));
   mergeHist(agrupa(cirur,m=>m.medico),'medico').forEach(([k,v])=>pnCGultimoCsv.push(['Saídas cirúrgicas — por médico',k,Math.round(v.q),v.c.toFixed(2)]));
   Object.entries(porTipoPac).forEach(([t,v])=>pnCGultimoCsv.push(['R$/paciente — '+t,(v.p+' pacientes'),'',(v.p?(v.c/v.p):0).toFixed(2)]));
-  agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Saídas diversas — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Consultórios — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(interno,m=>(m.destino||'—')+' — '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).forEach(([k,v])=>pnCGultimoCsv.push(['Uso interno (CC · CME · RPA) — itens',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.195
+  agrupa(externa,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Cirurgia externa — itens',k,Math.round(v.q),v.c.toFixed(2)]));
+  agrupa(outrosDest,m=>(m.destino||'sem destino')+' — '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).forEach(([k,v])=>pnCGultimoCsv.push(['Outros destinos — itens',k,Math.round(v.q),v.c.toFixed(2)]));
   agrupa(perdas,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)).forEach(([k,v])=>pnCGultimoCsv.push(['Perdas e vencimentos — itens',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.80
   agrupa(depMovs,m=>m.dep).forEach(([k,v])=>pnCGultimoCsv.push(['Custo por departamento',k,Math.round(v.q),v.c.toFixed(2)]));   // v4.104
   agrupa(depMovs,m=>m.dep+' — '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).forEach(([k,v])=>pnCGultimoCsv.push(['Custo por departamento — itens',k,Math.round(v.q),v.c.toFixed(2)]));
@@ -15013,6 +15024,16 @@ async function pnCG_Render(){
       // v4.33 — soma os itens da PLANILHA também: em junho (100% planilha) esta
       // lista aparecia vazia, como se nada tivesse sido consumido.
       +tabela(mergeHistItens(agrupa(cirur,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id))).slice(0,20),'Item'))
+    // v4.195 — uso interno, cirurgia externa e outros destinos saíram do bloco dos consultórios
+    +D('🏨 Uso interno — CC · CME · RPA (saídas diversas)', soma(interno),
+      (interno.length
+        ? '<div style="font-size:11px;color:var(--cinza-4);margin-top:4px">Por destino:</div>'+tabela(agrupa(interno,m=>m.destino||'—'),'Destino')
+          +'<div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Itens:</div>'+tabela(agrupa(interno,m=>(m.destino||'—')+' · '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))),'Destino · item')
+        : '<div style="font-size:12px;color:var(--cinza-4);padding:8px 0">Nenhuma saída para uso interno neste mês.</div>'))
+    +(externa.length?D('🚑 Cirurgia externa (material levado para fora)', soma(externa),
+        tabela(agrupa(externa,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item')):'')
+    +(outrosDest.length?D('🏢 Outros destinos — recepção, administrativo, copa, limpeza, empréstimo', soma(outrosDest),
+        tabela(agrupa(outrosDest,m=>(m.destino||'sem destino')+' · '+((pnUvp[m.material_id]||{}).nome||('#'+m.material_id))),'Destino · item')):'')
     +D('🚪 Materiais para os consultórios (saídas diversas)', soma(consult),
       (consult.length
         ? tabela(agrupa(consult,m=>(pnUvp[m.material_id]||{}).nome||('#'+m.material_id)),'Item')
