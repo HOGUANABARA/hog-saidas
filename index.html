@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.192 · compra com piso por período: item que sai sem ser lançado não some mais</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.193 · excluir orçamento vazio agora grava no banco — ele não volta mais</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7499,12 +7499,47 @@ function coDevolverParaCompras(i){
   if(typeof ccRender==='function' && typeof ccDados!=='undefined' && ccDados.length) ccRender();
   toast(it.material_nome+' devolvido para a lista de compras ↩','sucesso');
 }
-// excluir grupo vazio (some da tela e dos fornecedores salvos)
-function coExcluirGrupo(g){
+// excluir grupo vazio (some da tela, do cabeçalho no banco e da data de criação)
+// v4.193 — até aqui esta função só apagava o grupo da MEMÓRIA: nenhuma chamada ao
+// banco. Quem grava o cabeçalho é coSalvarCabecalho, que desde a v4.173 lê o
+// `fornecedores_grupo` do banco e só ACRESCENTA — de propósito, para janela velha
+// não apagar grupo montado por fora. Sem caminho de remoção, o grupo excluído
+// voltava na abertura seguinte. "Já exclui esses orçamentos vazios várias vezes"
+// (ela, 31/10): Orçamento 1, 4 e 7 voltaram por 11 dias seguidos na cotação #32.
+async function coExcluirGrupo(g){
   const temItens = coItens.some(it=>(it.grupo||'Orçamento 1')===g);
   if(temItens){ toast('O grupo ainda tem itens — mova ou tire os itens antes.','erro'); return; }
   if(!confirm('Excluir o grupo "'+g+'"?')) return;
+  // a memória desta janela só conhece o que ela carregou — janela presa a um
+  // orçamento, aba aberta há horas, item lançado por fora. Quem diz se o grupo
+  // está mesmo vazio é o banco, e é lá que a exclusão precisa ficar gravada.
+  if(coCotacaoId){
+    try{
+      const vivos = await sbFetch('cotacao_itens?select=id&cotacao_id=eq.'+coCotacaoId
+                  + '&grupo=eq.'+encodeURIComponent(g)
+                  + '&fechado=is.false&pedido_id=is.null&limit=1');
+      if(vivos && vivos.length){
+        toast('O grupo "'+g+'" tem item aberto que esta janela não carregou — recarregue a cotação antes de excluir.','erro');
+        return;
+      }
+      const cab = await sbFetch('cotacoes?select=fornecedores_grupo,grupos_criado_em&id=eq.'+coCotacaoId+'&limit=1');
+      const fg = Object.assign({}, (cab && cab[0] && cab[0].fornecedores_grupo) || {});
+      delete fg[g];
+      const patch = { fornecedores_grupo: fg };
+      if(cab && cab[0] && 'grupos_criado_em' in cab[0]){
+        const gc = Object.assign({}, cab[0].grupos_criado_em || {});
+        delete gc[g]; patch.grupos_criado_em = gc;
+      }
+      await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',patch);
+    }catch(e){
+      // melhor dizer que não deu do que sumir da tela e voltar amanhã
+      toast('Não consegui excluir "'+g+'" no banco: '+e.message+' — ele voltaria na próxima abertura.','erro');
+      return;
+    }
+  }
   delete coFornGrupo[g];
+  if(typeof coGrupoCriado==='object' && coGrupoCriado) delete coGrupoCriado[g];
+  if(Array.isArray(coGruposCarregados)) coGruposCarregados = coGruposCarregados.filter(x=>x!==g);
   if(coGrupoAtual===g){ const restantes=coGruposDistintos().filter(x=>x!==g); coGrupoAtual = restantes[0]||'Orçamento 1'; }
   coRender();
   toast('Grupo "'+g+'" excluído.','sucesso');
