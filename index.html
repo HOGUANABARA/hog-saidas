@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.193 · excluir orçamento vazio agora grava no banco — ele não volta mais</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.194 · inventário: planilha com uma linha por marca sobe sem erro</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -17033,6 +17033,19 @@ async function ivSubirLocal(localId, file){
         if(mNovo!==null && mNovo!=='' && mNovo!==(cadastroMarca[mid]||'')) correcoes.push({ material_id:mid, nome:nomeMat, campo:'marca', de:cadastroMarca[mid]||'—', para:mNovo });
       }
     }
+    // v4.194 — o banco aceita UMA linha por material em cada local (unique
+    // inventario_id+material_id+local_id): as linhas por marca do mesmo ID viram
+    // uma só, somando a quantidade e juntando as marcas em `lotes`. Antes a subida
+    // morria no 23505 (inventário #10, Arsenal: seda, campo mesa, gaze…).
+    { const junto={};
+      for(const g of regs){
+        const k=g.material_id;
+        if(!junto[k]){ junto[k]=g; continue; }
+        junto[k].qtd_contada=(Number(junto[k].qtd_contada)||0)+(Number(g.qtd_contada)||0);
+        const ls=[...(junto[k].lotes||[]), ...(g.lotes||[])];
+        junto[k].lotes=ls.length?ls:null;
+      }
+      regs.length=0; regs.push(...Object.values(junto)); }
     if(!regs.length){ toast('Nenhuma contagem preenchida nessa planilha.','erro'); return; }
     const avisoNao = naoReconhecidas.length
       ? `\n\n⚠️ ${naoReconhecidas.length} linha(s) NÃO foram reconhecidas e ficarão de fora:\n` +
