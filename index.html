@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.195 · custos gerais: consultórios separados de CC · CME · RPA e da cirurgia externa</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.196 · custo por período: resumo de cirurgias por tipo</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -14553,6 +14553,22 @@ function pnCustos(){
   if(pnPerFTipo && !perTipos.includes(pnPerFTipo)) pnPerFTipo='';
   const perRows = perTodos.filter(p=>(!pnPerFMed||p.medico===pnPerFMed)&&(!pnPerFTipo||p.tipo===pnPerFTipo));
   window._pnPerRows = perRows;   // usado pelo Excel e pela impressão
+  // v4.196 — ela (31/10): "preciso que neste dash apareça o resumo da quantidade de cirurgias por tipo".
+  // Cirurgias = pacientes operados; obedece aos mesmos filtros (mês, médico, tipo) da tabela.
+  // Mesma conta do resumo impresso (pnPerResumo); aqui ordenado pela quantidade de cirurgias.
+  const perResumo = (function(){
+    if(!perRows.length) return '';
+    const R=pnPerResumo(perRows);
+    const ls=R.porTipo.map(([t,v])=>[t,{per:v.n,pac:v.p,c:v.c}]).sort((a,b)=>b[1].pac-a[1].pac||a[0].localeCompare(b[0],'pt-BR'));
+    const tot={per:perRows.length,pac:R.pac,c:R.tot};
+    const td='style="padding:5px 10px;border-bottom:1px solid var(--cinza-2)"', tn='style="padding:5px 10px;border-bottom:1px solid var(--cinza-2);text-align:right"';
+    return `<div style="margin:4px 0 14px"><div style="font-size:11px;font-weight:800;color:var(--cinza-4);text-transform:uppercase;margin-bottom:4px">Resumo — cirurgias por tipo</div>
+      <table style="width:100%;max-width:760px;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:var(--cinza-1)">
+        <th style="text-align:left;padding:5px 10px">Tipo</th><th style="text-align:right;padding:5px 10px">Cirurgias (pac.)</th><th style="text-align:right;padding:5px 10px">Períodos</th><th style="text-align:right;padding:5px 10px">Custo</th><th style="text-align:right;padding:5px 10px">R$/paciente</th></tr></thead><tbody>
+      ${ls.map(([t,v])=>`<tr><td ${td}>${t}</td><td ${tn}><b>${v.pac}</b></td><td ${tn}>${v.per}</td><td ${tn}>${pnMoney0(v.c)}</td><td ${tn}>${v.pac?pnMoney0(v.c/v.pac):'—'}</td></tr>`).join('')}
+      <tr style="font-weight:800;background:#EEF3F8"><td style="padding:6px 10px">TOTAL</td><td style="padding:6px 10px;text-align:right">${tot.pac}</td><td style="padding:6px 10px;text-align:right">${tot.per}</td><td style="padding:6px 10px;text-align:right">${pnMoney0(tot.c)}</td><td style="padding:6px 10px;text-align:right">${tot.pac?pnMoney0(tot.c/tot.pac):'—'}</td></tr>
+      </tbody></table></div>`;
+  })();
   // tabelas R$/pac por tipo/médico × mês (planilha + vivo)
   function aggCpp(campo){
     const agg = {};
@@ -14650,6 +14666,7 @@ function pnCustos(){
           <button class="pn-btn" style="background:var(--verde-claro);color:var(--verde);padding:5px 10px;font-size:11px" onclick="pnPerExcel()">📊 Excel</button>
           <button class="pn-btn" style="background:var(--azul-claro);color:var(--azul);padding:5px 10px;font-size:11px" onclick="pnPerImprimir()">🖨 Imprimir</button>
         </span></summary>
+      ${perResumo}
       <div style="overflow-x:auto"><table class="pn-tb"><thead><tr><th></th><th>Data</th><th>Médico</th><th>Tipo</th><th class="num">Pac.</th><th class="num">Custo</th><th class="num">R$/paciente</th><th class="num">vs média do tipo</th><th>Fonte</th></tr></thead><tbody>
       ${perRows.length?perRows.map(r=>{
         const cpp = r.pac>0?r.custo/r.pac:null;
