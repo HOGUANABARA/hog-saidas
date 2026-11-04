@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.198 · orçamento: salvar não apaga mais item já comprado antes nesta cotação</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.199 · orçamento vazio excluído não volta mais no salvamento seguinte</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7089,6 +7089,15 @@ let coGrupoAtual = 'Orçamento 1';
 // v4.172 — grupos que ESTA janela carregou do banco. É o alcance da faxina do
 // salvar: o que a janela não conhece, ela não apaga.
 let coGruposCarregados = [];
+// v4.199 — GRUPO EXCLUÍDO NESTA JANELA NÃO VOLTA PELO SALVAR.
+// `coGruposDaTela()` inclui SEMPRE o `coGrupoAtual`, e `coSalvarCabecalho` grava no
+// banco um `fornecedores_grupo` para cada grupo da tela. Ao excluir o grupo que
+// estava selecionado, `coGrupoAtual` caía no padrão 'Orçamento 1' (ou no primeiro
+// que sobrou) e a gravação automática, 1,5 s depois, devolvia o grupo ao cabeçalho
+// — a cotação #32 estava com "Orçamento 1": [] e nenhum item. Ela, 04/11: "um erro
+// recorrente é o orçamento vazio ficar voltando após eu removê-lo". A v4.193 fez a
+// exclusão chegar ao banco, mas não impediu o salvamento seguinte de reescrever.
+let coGruposExcluidos = new Set();
 // v4.173 — ids de linha que ESTA janela carregou ou gravou. Só eles podem ser
 // apagados pelo salvar; linha que apareceu depois (SQL, outra aba) sobrevive.
 let coIdsConhecidos = new Set();
@@ -7142,7 +7151,11 @@ function coGruposDaTela(){
   const s = new Set(coGruposCarregados || []);
   (coItens||[]).forEach(it => s.add(it.grupo || 'Orçamento 1'));
   if(coGrupoAtual) s.add(coGrupoAtual);
-  return [...s].filter(Boolean);
+  // v4.199 — grupo excluído nesta janela sai daqui: é esta lista que o
+  // coSalvarCabecalho usa para gravar o cabeçalho e o coFiltroRegravar para
+  // escolher as linhas a regravar. Grupo vazio excluído não tem linha nenhuma,
+  // então tirá-lo dos dois não deixa trabalho para trás.
+  return [...s].filter(g => g && !coGruposExcluidos.has(g));
 }
 function coFiltroRegravar(){
   const base = 'cotacao_id=eq.'+coCotacaoId+'&fechado=is.false&pedido_id=is.null';
@@ -7221,6 +7234,7 @@ function coNovoGrupo(){
   const nome = prompt('Nome do novo grupo de orçamento:', 'Orçamento '+(coGruposDistintos().length+1));
   if(!nome||!nome.trim()) return;
   coGrupoAtual = nome.trim(); if(!coFornGrupo[coGrupoAtual]) coFornGrupo[coGrupoAtual]=[];
+  coGruposExcluidos.delete(coGrupoAtual);   // v4.199 — criar de novo com o mesmo nome desfaz a exclusão
   coGrupoCriado[coGrupoAtual] = new Date().toISOString(); coSalvarGruposCriado();   // v4.140
   coGrupoAberto = coGrupoAtual; try{ localStorage.setItem('hog_orc_aberto', coGrupoAberto); }catch(e){}   // v4.116 — o novo já abre
   coAtualizaLabelGrupo(); coRender();
@@ -7232,6 +7246,7 @@ function coRenomearGrupo(g){
   const n = novo.trim();
   coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')===g) it.grupo=n; });
   if(coFornGrupo[g]){ coFornGrupo[n]=coFornGrupo[g]; delete coFornGrupo[g]; }
+  coGruposExcluidos.delete(n);   // v4.199 — renomear para um nome excluído antes o traz de volta
   if(coGrupoCriado[g]){ coGrupoCriado[n]=coGrupoCriado[g]; delete coGrupoCriado[g]; coSalvarGruposCriado(); }   // v4.140
   if(coGrupoAtual===g) coGrupoAtual=n;
   coRender();
@@ -7301,6 +7316,7 @@ function coOpVazia(slot){
 }
 async function coAbrir(id){
   const cab = await sbFetch(`cotacoes?select=*&id=eq.${id}&limit=1`);
+  coGruposExcluidos = new Set();   // v4.199 — abrir a cotação recomeça do que o BANCO diz
   coFornGrupo = (cab && cab[0] && cab[0].fornecedores_grupo) || {};
   coCotInfo = (cab && cab[0]) ? { criado_em:cab[0].created_at, criado_por:cab[0].criado_por } : {};   // v4.70
   if(cab && cab[0] && 'grupos_criado_em' in cab[0]){ coGruposCol = true; coGrupoCriado = cab[0].grupos_criado_em || {}; }   // v4.140
@@ -7484,6 +7500,7 @@ function coMoverItem(i, destino){
     if(nome===null || !nome.trim()){ coRender(); return; }
     destino=nome.trim();
     if(!coFornGrupo[destino]) coFornGrupo[destino]=[];
+    coGruposExcluidos.delete(destino);   // v4.199
   }
   coItens[i].grupo = destino;
   coRender();
@@ -7538,6 +7555,7 @@ async function coExcluirGrupo(g){
     }
   }
   delete coFornGrupo[g];
+  coGruposExcluidos.add(g);   // v4.199 — nenhum salvamento desta janela o reescreve
   if(typeof coGrupoCriado==='object' && coGrupoCriado) delete coGrupoCriado[g];
   if(Array.isArray(coGruposCarregados)) coGruposCarregados = coGruposCarregados.filter(x=>x!==g);
   if(coGrupoAtual===g){ const restantes=coGruposDistintos().filter(x=>x!==g); coGrupoAtual = restantes[0]||'Orçamento 1'; }
