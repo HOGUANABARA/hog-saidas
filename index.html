@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.197 · custo por período: período marcado com fellow entra como FELLOW</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.198 · orçamento: salvar não apaga mais item já comprado antes nesta cotação</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -8604,10 +8604,22 @@ async function coSalvar(silencioso){
     // ringer): com a régua larga da v4.175 esses itens sumiriam da tela no
     // primeiro salvamento, justamente os que precisam ser comprados de novo.
     const CO_PED_VIVO = ['EM_MONTAGEM','AGUARDANDO_APROVACAO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'];
-    const jaPedido = coItens.filter(it => { const j = coJaComprado[it.material_id];
-                                            return j && CO_PED_VIVO.includes(j.status); });
+    // v4.198 — A RÉGUA DA REMOÇÃO É A MESMA DO AVISO. A v4.176 corrigiu o `jaPedido`
+    // para olhar só o pedido VIVO, mas a linha de baixo ficou com a régua larga da
+    // v4.175 (qualquer pedido não cancelado) — e `coJaComprado` guarda TODO pedido
+    // da cotação que não foi cancelado, CONCLUIDO inclusive. Resultado: bastava um
+    // item virar pedido para o salvamento seguinte tirar da tela, e depois APAGAR,
+    // todo item que já tivesse sido comprado alguma vez nesta cotação.
+    // Em 04/11 isso apagou 13 itens abertos da #32 em dois salvamentos (15:34 e
+    // 15:56). A prova é perfeita, 19 de 19: os 6 que sobreviveram têm ZERO pedidos
+    // na #32; os 13 apagados têm pelo menos um, e todos CONCLUIDOS, nenhum vivo.
+    // Justamente os que precisam ser comprados de novo — que é o que o comentário
+    // da v4.176 já dizia que não podia acontecer.
+    const coEmPedidoVivo = it => { const j = coJaComprado[it.material_id];
+                                   return !!(j && CO_PED_VIVO.includes(j.status)); };
+    const jaPedido = coItens.filter(coEmPedidoVivo);
     if(jaPedido.length){
-      coItens = coItens.filter(it => !coJaComprado[it.material_id]);
+      coItens = coItens.filter(it => !coEmPedidoVivo(it));
       toast(jaPedido.length+' item(ns) já viraram pedido e saíram desta tela: '
             + jaPedido.map(it=>it.material_nome+' → #'+coJaComprado[it.material_id].pedido).join(' · '), 'erro');
     }
