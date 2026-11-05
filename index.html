@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.199 · orçamento vazio excluído não volta mais no salvamento seguinte</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.200 · teste de Schirmer com entrada desconta 2 tiras</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -799,6 +799,10 @@ details[open] summary { margin-bottom: 6px; }
   <!-- ABA SAÍDAS DIVERSAS -->
   <div id="aba-diversas" style="display:none">
   <div id="iv-aviso-saidas2" style="display:none;background:#FEF9E7;border:1.5px solid #F9E79F;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7a6408"></div>
+  <!-- v4.200 — teste de Schirmer: 2 tiras por teste QUE TEVE ENTRADA.
+       A entrada vem do espelho do HOG Gestão, não de um clique aqui; por isso
+       esta é uma lista do que falta descontar, e não um gatilho automático. -->
+  <div id="sch-bloco" style="display:none"></div>
     <div class="card">
       <div class="card-titulo">1. Dados da Saída
         <button class="btn btn-secundario btn-sm" style="margin-left:auto" title="o que saiu daqui para cirurgias fora do HOG, com o custo de cada uma" onclick="cexRelatorio()">🏥 Relatório de cirurgia externa</button></div>
@@ -5689,6 +5693,131 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+// ══════ v4.200 · TESTE DE SCHIRMER — 2 tiras por teste QUE TEVE ENTRADA ══════
+// Ela, 04/11: "cada teste de shirmer agendado descontar 2 tiras". No dia
+// seguinte, vendo os dados: "lança somente se tiver data de entrada".
+//
+// Por que é uma LISTA e não um gatilho automático:
+//   · dos 23 agendamentos de `teste_schirmer` (todos da Dra. Ana Carolina),
+//     4 estão SEM registro de entrada — agendados que não aconteceram;
+//   · NENHUM dos 23 tem finalização, então pendurar a baixa no "finalizar"
+//     nunca dispararia;
+//   · a entrada é escrita pelo ESPELHO do HOG Gestão (o sync de 18:30), não
+//     por um clique nesta casa — não existe evento daqui para ouvir.
+// Sobra o caminho honesto: mostrar o que falta descontar e gravar com
+// confirmação, que é a regra da casa para movimentação. São uns dois testes
+// por mês, então a lista quase sempre está vazia.
+//
+// O que amarra a baixa ao teste é o id do agendamento na observação — é ele
+// que impede descontar duas vezes o mesmo teste. Nenhum dado de paciente
+// atravessa para o banco do estoque (LGPD): a view `vw_schirmer_para_baixa`
+// (SQL 125, que roda no banco do HOG TOTAL) devolve só id, data, hora e
+// entrada. Por isso a confirmação identifica o teste pela data e hora, e não
+// pelo nome — quem é o paciente está na agenda, do outro lado.
+const SCH_MATERIAL   = 612;     // TIRA TESTE DE SCHIRMER
+const SCH_POR_TESTE  = 2;       // uma tira por olho
+const SCH_GESTAO     = 'https://prztrrtwrunljapnyaci.supabase.co/rest/v1';
+const SCH_GESTAO_KEY = 'sb_publishable_kRhrCWNeQIxOSUee_GYX4A_Q1uwrn67';
+const SCH_MARCA      = 'Teste de Schirmer · ag ';
+let schPendentes = [];
+let schLocal     = null;        // de onde a tira sai: o local onde ela entrou
+
+function schDataBr(d){
+  if(!d) return '—';
+  const p = String(d).slice(0,10).split('-');
+  return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : String(d);
+}
+function schHora(h){ return h ? ' às '+String(h).slice(0,5) : ''; }
+
+async function schCarregar(){
+  const box = document.getElementById('sch-bloco');
+  if(!box) return;
+  schPendentes = [];
+  box.style.display = 'none';
+  try{
+    // 1) de onde a tira sai — e desde quando existe tira para sair.
+    //    Antes da primeira entrada da compra não há saldo, e descontar teste
+    //    antigo só deixaria o estoque negativo: aquelas tiras vieram de outra
+    //    caixa, que este sistema nunca viu.
+    const ent = (await sbFetch('movimentacoes?select=local_id,created_at&material_id=eq.'+SCH_MATERIAL
+      + '&tipo=eq.ENTRADA_COMPRA&order=created_at.asc&limit=1')) || [];
+    if(!ent.length) return;
+    schLocal = ent[0].local_id;
+    const corte = String(ent[0].created_at).slice(0,10);
+
+    // 2) os testes com entrada registrada, do corte para cá
+    const r = await fetch(SCH_GESTAO + '/vw_schirmer_para_baixa?select=id,data,hora,entrada_em'
+      + '&data=gte.' + corte + '&order=data.desc&limit=200',
+      { headers:{ apikey:SCH_GESTAO_KEY, Authorization:'Bearer '+SCH_GESTAO_KEY } });
+    if(!r.ok) throw new Error(r.status===404
+      ? 'a janela ainda não existe no banco do HOG TOTAL — falta rodar o SQL 125'
+      : (await r.text()));
+    const testes = await r.json();
+    if(!testes.length) return;
+
+    // 3) tira da lista os que já foram descontados
+    const movs = (await sbFetch('movimentacoes?select=observacao&material_id=eq.'+SCH_MATERIAL
+      + '&tipo=eq.SAIDA_GERAL&limit=2000')) || [];
+    const jaFoi = new Set();
+    movs.forEach(m => {
+      const t = String(m.observacao||''), i = t.indexOf(SCH_MARCA);
+      if(i >= 0) jaFoi.add(t.slice(i + SCH_MARCA.length).split(/[\s·|]/)[0]);
+    });
+    schPendentes = testes.filter(t => !jaFoi.has(String(t.id)));
+  }catch(e){
+    box.style.display = '';
+    box.innerHTML = '<div style="background:#FDEDEC;border:1.5px solid #F5B7B1;border-radius:8px;'
+      + 'padding:10px 14px;margin-bottom:12px;font-size:12px;color:#922B21">'
+      + '🧪 Não consegui ler os testes de Schirmer na agenda: '
+      + String(e.message||e).replace(/</g,'&lt;') + '</div>';
+    return;
+  }
+  schRender();
+}
+
+function schRender(){
+  const box = document.getElementById('sch-bloco');
+  if(!box) return;
+  if(!schPendentes.length){ box.style.display='none'; box.innerHTML=''; return; }
+  const n = schPendentes.length, tiras = n * SCH_POR_TESTE;
+  const linhas = schPendentes.map(t =>
+    '<li style="margin:2px 0">' + schDataBr(t.data) + schHora(t.hora) + '</li>').join('');
+  box.style.display = '';
+  box.innerHTML =
+    '<div style="background:#EBF5FB;border:1.5px solid #AED6F1;border-radius:8px;padding:11px 14px;'
+    + 'margin-bottom:12px;font-size:12px;color:#1B4F72;display:flex;gap:14px;align-items:center;flex-wrap:wrap">'
+    + '<div style="flex:1;min-width:260px">'
+    + '<b>🧪 Teste de Schirmer — ' + n + (n===1?' teste sem baixa':' testes sem baixa') + '</b>'
+    + ' <span class="dica" title="A lista vem da agenda: só entram os testes que TIVERAM entrada registrada. '
+    + 'Cada teste gasta ' + SCH_POR_TESTE + ' tiras, uma por olho. Quem faltou não aparece aqui.">?</span>'
+    + '<ul style="margin:5px 0 0 16px;padding:0">' + linhas + '</ul></div>'
+    + '<button class="btn btn-primario btn-sm" onclick="schLancar()">Descontar ' + tiras + ' tiras</button>'
+    + '</div>';
+}
+
+async function schLancar(){
+  if(!schPendentes.length) return;
+  const n = schPendentes.length, tiras = n * SCH_POR_TESTE;
+  const lista = schPendentes.slice(0,8).map(t => '• ' + schDataBr(t.data) + schHora(t.hora)).join('\n')
+    + (n > 8 ? '\n• … e mais ' + (n-8) : '');
+  if(!confirm('Descontar ' + tiras + ' tiras de Schirmer do estoque?\n\n'
+    + SCH_POR_TESTE + ' tiras por teste, nestes ' + n + ':\n' + lista
+    + '\n\nDestino: Consultórios · Coordenação Clínica.')) return;
+  const quem = (document.getElementById('sel-registrante-div')||{}).value
+    || localStorage.getItem('hog_registrante') || 'Equipe CC';
+  const agora = new Date().toISOString();
+  try{
+    await sbFetch('movimentacoes','POST', schPendentes.map(t => ({
+      tipo:'SAIDA_GERAL', material_id:SCH_MATERIAL, local_id:schLocal,
+      qtd:-SCH_POR_TESTE, destino_saida_geral:'CONSULTÓRIOS', departamento_id:2,
+      aprovado:true, aprovado_por:quem, aprovado_em:agora, registrado_por:quem,
+      observacao: SCH_MARCA + t.id + ' · ' + schDataBr(t.data)
+    })));
+    toast(tiras + ' tiras descontadas ✓ — ' + n + (n===1?' teste':' testes') + ' de Schirmer.','sucesso');
+    schCarregar();
+  }catch(e){ toast('Não consegui descontar: '+(e.message||e),'erro'); }
+}
+
 function trocarAba(aba) {
   // v4.8 — quem manda é o PERFIL do usuário logado (ver PERFIS, no topo).
   if (!SESSAO) { abrirLogin(); return; }
@@ -5743,6 +5872,7 @@ function trocarAba(aba) {
   if (aba==='receber')   { rcCarregar(); }
   if (aba==='inventario'){ invCarregar(); ivCarregar(); if(typeof dpCarregar==='function') dpCarregar(); if(typeof colaCarregar==='function') colaCarregar(); }   // v4.29 — contagem do livro mudou para Remessas
   if (aba==='registro' || aba==='diversas'){ ivChecarAberto(); }
+  if (aba==='diversas'){ schCarregar(); }   // v4.200 — testes de Schirmer sem baixa
   if (aba==='painel'){ pnCarregar(); }
   if (aba==='saida_hc') { shcCarregar(); }   // v4.142
   if (aba==='man_pag') { manPagAbrir(); }   // v4.151 — custos e lotes na mesma tela
