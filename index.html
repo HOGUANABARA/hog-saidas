@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.200 · teste de Schirmer com entrada desconta 2 tiras</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.201 · corrigir item e quantidade também na remessa que voltou</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -19389,6 +19389,7 @@ function rmRenderAguardandoNf(){
         <td style="text-align:center;font-weight:700">${dev}</td>
         <td style="text-align:center"><input class="rm-n" type="number" step="any" id="rm-fat-${i.id}" value="${aCobrar}" title="quantidade que ESTA nota está cobrando (o que nota anterior já cobrou fica ao lado do item)"></td>
         <td style="text-align:center"><input class="rm-n" type="number" step="0.01" id="rm-val-${i.id}" placeholder="R$/un"></td>
+        <td style="white-space:nowrap;text-align:right"><button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="era outro item" onclick="rmCorrItem(${r.id},${i.id})">✏️ item</button> <button class="rm-b claro" style="padding:3px 8px;font-size:11px" title="foi outra quantidade — corrige o enviado e o que voltou, e acerta o livro" onclick="rmCorrQtd(${r.id},${i.id})">✏️ qtd</button></td>
       </tr>`;
     }).join('');
     return `<div class="rm-card">
@@ -19396,9 +19397,10 @@ function rmRenderAguardandoNf(){
         <span class="rm-count">voltou ${rmData(r.data_retorno)}</span></div>
       <div style="padding:10px 16px;background:#FEF9E7;font-size:12px;color:#7D6608;line-height:1.5">
         A nota é conferida item a item contra o que voltou. Se a nota cobrar algo que não voltou,
-        os itens que chegaram entram normalmente e <b>a nota fica travada para pagamento</b> até o administrativo resolver.</div>
+        os itens que chegaram entram normalmente e <b>a nota fica travada para pagamento</b> até o administrativo resolver.
+        <br>Se foi outra quantidade ou outro item, corrija pelo <b>✏️ da linha</b> ANTES de lançar a nota — a correção acerta o livro e deixa o motivo registrado.</div>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobra</th><th style="text-align:center">R$/un</th></tr></thead>
+        <thead><tr><th>Item</th><th style="text-align:center">Enviado</th><th style="text-align:center">Voltou</th><th style="text-align:center">Nota cobra</th><th style="text-align:center">R$/un</th><th></th></tr></thead>
         <tbody>${linhas}</tbody></table></div>
       <div style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
         <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:10px;font-weight:700;color:var(--cinza-4);text-transform:uppercase">Nº da NF</label>
