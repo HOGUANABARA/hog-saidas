@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.204 · ao fechar a demanda, a tela pergunta o que foi feito do aparelho</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.205 · o material administrativo agora tem orçamento antes do pedido</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -511,6 +511,7 @@ details[open] summary { margin-bottom: 6px; }
       <div class="mbi" data-ref="aba-btn-cotacao" onclick="mbFechar();trocarAba('cotacao')">Orçamentos CC <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-cme-orc" onclick="mbFechar();cmeIr('compras')">Orçamentos CME <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-hig_orc" onclick="mbFechar();trocarAba('hig_orc')">Orçamentos Higiene <span class="mb-badge"></span></div>
+      <div class="mbi" data-ref="aba-btn-adm_orc" onclick="mbFechar();trocarAba('adm_orc')">Orçamentos Administrativo <span class="mb-badge"></span></div>
       <div class="mb-sep"></div>
       <div class="mbi" data-ref="aba-btn-decisao" onclick="mbFechar();trocarAba('decisao')">📦 Pedidos <span class="mb-badge"></span></div>
       <div class="mbi" data-ref="aba-btn-aprovarpedido" onclick="mbFechar();trocarAba('aprovarpedido')">🔏 Aprovar Pedido <span class="mb-badge"></span></div>
@@ -611,6 +612,7 @@ details[open] summary { margin-bottom: 6px; }
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cotacao" onclick="trocarAba('cotacao')">Orçamentos CC</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-cme-orc" onclick="cmeIr('compras')">Orçamentos CME</div>
         <div class="hs-item aba-restrita" style="display:none" id="aba-btn-hig_orc" onclick="trocarAba('hig_orc')">Orçamentos Higiene</div>
+        <div class="hs-item aba-restrita" style="display:none" id="aba-btn-adm_orc" onclick="trocarAba('adm_orc')">Orçamentos Administrativo</div>
       </div>
     </div>
     <div class="hs-item hs-solo aba-restrita" style="display:none" id="aba-btn-decisao" onclick="trocarAba('decisao')"><span class="hs-ico">📦</span> Pedidos</div>
@@ -2095,7 +2097,7 @@ const PERFIS = {
     rot: 'Compras', cor: '#E67E22',
     abas: ['alertas','registro','diversas','remessas','instrumentais','comprar','cotacao','decisao',
            'receber','inventario','historico','ocorrencias','painel',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr']
+           'hig_inv','hig_comp','hig_orc','adm_orc','hig_rel','adm_inv','saida_hc','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr']
   },
   FINANCEIRO: {
     rot: 'Financeiro', cor: '#8E44AD',
@@ -2124,7 +2126,7 @@ const PERFIS = {
     rot: 'Visualização', cor: '#7F8C8D',
     abas: ['painel','alertas','historico','registro','diversas','remessas','instrumentais',
            'comprar','cotacao','decisao','aprovarpedido','receber','inventario','ocorrencias',
-           'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr']
+           'hig_inv','hig_comp','hig_orc','adm_orc','hig_rel','adm_inv','saida_hc','sol_sep','sol_ent','sol_compra','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr']
   }
 };
 
@@ -2221,7 +2223,7 @@ function exigirAssinatura(ato){
 const ABAS_TODAS = ['alertas','painel','registro','diversas','aprovacao','remessas',
                     'instrumentais','comprar','cotacao','decisao','aprovarpedido','receber',
                     'inventario','historico','ocorrencias','usuarios',
-                    'hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc',
+                    'hig_inv','hig_comp','hig_orc','adm_orc','hig_rel','adm_inv','saida_hc',
                     'sol_pedir','sol_sep','sol_ent','sol_compra','departamentos',
                     'man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr'];
 
@@ -5877,7 +5879,7 @@ function trocarAba(aba) {
   if (aba==='saida_hc') { shcCarregar(); }   // v4.142
   if (aba==='man_pag') { manPagAbrir(); }   // v4.151 — custos e lotes na mesma tela
   if (aba==='man_acomp') { setTimeout(manVisNaDemanda, 80); }
-  ['hig_inv','hig_comp','hig_orc','hig_rel','adm_inv','saida_hc','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr'].forEach(function(a){
+  ['hig_inv','hig_comp','hig_orc','adm_orc','hig_rel','adm_inv','saida_hc','departamentos','sol_pedir','sol_sep','sol_ent','sol_compra','man_pedir','man_acomp','man_vis','man_cus','man_fin','man_pag','man_prest','man_equip','man_contr'].forEach(function(a){
     var b=document.getElementById('aba-btn-'+a); if(b) b.classList.toggle('ativa', aba===a);
     var p=document.getElementById('aba-'+a);      if(p) p.style.display = aba===a ? '' : 'none';
   });
@@ -5905,7 +5907,8 @@ function trocarAba(aba) {
   if (aba==='man_contr')  { manContrCarregar(); }   // v4.112
   if (aba==='hig_inv')  { hgInvCarregar(); }
   if (aba==='hig_comp') { hgCompCarregar(); }
-  if (aba==='hig_orc')  { hgOrcCarregar(); }
+  if (aba==='hig_orc')  { hgOrcAbrir('HIGIENE'); }
+  if (aba==='adm_orc')  { hgOrcAbrir('ADMINISTRATIVO'); }   // v4.205 — mesma tela, outra origem
   if (aba==='hig_rel')  { hgRelCarregar(); }
   hsSincronizar();
   if (aba==='ocorrencias'){ ocCarregar(); }
@@ -9797,9 +9800,9 @@ async function deDevolverOrcamento(pid){
     await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','DELETE');
     await sbFetch('pedidos?id=eq.'+pid,'PATCH',{status:'CANCELADO',observacao:((b.pedido.observacao||'')+' | Devolvido ao orçamento').trim()});
     // zera o estado local da janela para recarregar do banco já com os itens reabertos
-    if(orig==='HIGIENE'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
+    if(orig==='HIGIENE'||orig==='ADMINISTRATIVO'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
     else { if(typeof siDeskCotId!=='undefined'){ siDeskCotId=null; siDeskGrupos={}; } }
-    toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar ('+(orig==='HIGIENE'?'Higiene':'CME → Compras')+') para ajustar.','sucesso');
+    toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar ('+(orig==='HIGIENE'?'Higiene':(orig==='ADMINISTRATIVO'?'Administrativo':'CME → Compras'))+') para ajustar.','sucesso');
     deCarregar();
   }catch(e){ toast('Erro ao devolver: '+e.message,'erro'); }
 }
@@ -12504,7 +12507,7 @@ async function apDevolverOrc(pid){
     if(orig==='INSTRUMENTAL' && typeof siSoltarDoPedido==='function') await siSoltarDoPedido(pid);
     await sbFetch('ordens_compra?pedido_id=eq.'+pid+'&situacao=eq.PENDENTE','DELETE');
     await sbFetch('pedidos?id=eq.'+pid,'PATCH',{status:'CANCELADO',observacao:((b.pedido.observacao||'')+' | Devolvido ao orçamento (na aprovação)').trim()});
-    if(orig==='HIGIENE'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
+    if(orig==='HIGIENE'||orig==='ADMINISTRATIVO'){ if(typeof hgOrcCotId!=='undefined'){ hgOrcCotId=null; hgOrcGrupos={}; } }
     else { if(typeof siDeskCotId!=='undefined'){ siDeskCotId=null; siDeskGrupos={}; } }
     toast('Pedido #'+pid+' devolvido ✓ — abra a janela de Orçar para ajustar.','sucesso');
     apCarregar();
@@ -22353,6 +22356,17 @@ async function alIgnorar(id){
   </div>
 </div>
 
+<!-- v4.205 — a mesma tela de orçamento, para o material administrativo.
+     Ela (11/11): "precisamos comprar separado o que é limpeza e o que é escritório".
+     Até aqui o administrativo pulava do "Comprar material" direto para o pedido,
+     com o último valor pago no lugar do preço. Agora tem orçamento antes. -->
+<div id="aba-adm_orc" class="container" style="display:none">
+  <div class="card">
+    <div class="card-titulo">💲 Orçamento do Administrativo — grupo próprio, até 3 fornecedores</div>
+    <div id="adm-orc-box"></div>
+  </div>
+</div>
+
 <div id="aba-hig_rel" class="container" style="display:none">
   <div class="card">
     <div class="card-titulo">📊 Relatório de Higiene</div>
@@ -25361,6 +25375,32 @@ async function hgNovoSalvar(){
 let hgOrcCotId  = null;
 let hgOrcGrupos = {};             // { nome: { forns:[id,id,id], itens:[{material_id,nome,codigo,qtd_kit,qtd,precos[3],escolhido}] } }
 let hgOrcAtivo  = 'Orçamento 1';
+
+// ═══ v4.205 — a MESMA tela orça higiene OU administrativo ═══════════════════
+// Ela (11/11): "precisamos comprar separado o que é limpeza e o que é escritório".
+// Só muda a ORIGEM (quais cotações a tela enxerga e com que origem grava) e a
+// LISTA DE PRODUTOS (a view do estoque daquele mundo). O resto é a mesma engine,
+// para não existirem duas telas de orçamento que se afastam com o tempo.
+let hgOrcOrigem = 'HIGIENE';
+let admOrcDados = [];
+function hgOrcAdm(){ return hgOrcOrigem === 'ADMINISTRATIVO'; }
+function hgOrcMundo(){ return hgOrcAdm() ? 'administrativo' : 'higiene'; }
+function hgOrcBox(){ return document.getElementById(hgOrcAdm() ? 'adm-orc-box' : 'hg-orc-box'); }
+function hgOrcFonte(){ return hgOrcAdm() ? admOrcDados : hgDados; }
+// trocar de aba começa um orçamento do zero: o estado é um só, então ele é
+// recarregado do banco com a origem nova e a caixa da outra aba fica limpa
+// (ids repetidos nas duas caixas fariam o getElementById pegar a errada).
+async function hgOrcAbrir(origem){
+  if(origem !== hgOrcOrigem){
+    hgOrcOrigem = origem;
+    hgOrcCotId  = null;
+    hgOrcGrupos = {};
+    hgOrcAtivo  = 'Orçamento 1';
+  }
+  const outra = document.getElementById(hgOrcAdm() ? 'hg-orc-box' : 'adm-orc-box');
+  if(outra) outra.innerHTML = '';
+  await hgOrcCarregar();
+}
 const HG_BTN  = 'border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:#fff;background:var(--azul-medio)';
 const HG_BTNV = HG_BTN+';background:var(--verde)';
 const HG_BTNX = 'border:1px solid var(--vermelho);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte);color:var(--vermelho);background:#FDEDEC';
@@ -25399,14 +25439,20 @@ function hgOrcTotalItens(){ return Object.keys(hgOrcGrupos).reduce(function(s,g)
 function hgOrcTemItem(mid){ return Object.keys(hgOrcGrupos).some(function(g){ return hgOrcGrupos[g].itens.some(function(i){return i.material_id===mid;}); }); }
 
 async function hgOrcCarregar(){
-  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  const box=hgOrcBox(); if(!box) return;
   const ok = await origemPronta();
-  if(!ok){ box.innerHTML='<div class="hg-nota">Para orçar higiene aqui, o banco precisa do script <b>54_orcamento_por_janela.sql</b>. Rode-o no Supabase e recarregue a página — até lá nada muda no restante do app.</div>'; return; }
-  if(!hgDados.length) await hgCarregarDados();
+  if(!ok){ box.innerHTML='<div class="hg-nota">Para orçar '+hgOrcMundo()+' aqui, o banco precisa do script <b>54_orcamento_por_janela.sql</b>. Rode-o no Supabase e recarregue a página — até lá nada muda no restante do app.</div>'; return; }
+  if(hgOrcAdm()){
+    if(!admOrcDados.length){
+      try{ admOrcDados=(await sbFetch('vw_administrativo_inventario?select=*&order=material.asc'))||[]; }
+      catch(e){ admOrcDados=[]; toast('Erro ao carregar o estoque administrativo: '+(e.message||e),'erro'); }
+    }
+  }
+  else if(!hgDados.length) await hgCarregarDados();
   if(!coFornecedores.length){ try{ coFornecedores=(await sbFetch('fornecedores?select=id,nome&order=nome.asc&limit=2000'))||[]; }catch(e){} }
   if(hgOrcCotId===null && !hgOrcTotalItens()){
     try{
-      const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.HIGIENE&order=id.desc&limit=1'))||[];
+      const ab=(await sbFetch('cotacoes?select=id,fornecedores_grupo&status=eq.aberta&origem=eq.'+hgOrcOrigem+'&order=id.desc&limit=1'))||[];
       if(ab.length){
         hgOrcCotId=ab[0].id;
         const fg=ab[0].fornecedores_grupo||{};
@@ -25418,7 +25464,7 @@ async function hgOrcCarregar(){
         its.forEach(function(it){
           const g=it.grupo||'Orçamento 1';
           if(!hgOrcGrupos[g]) hgOrcGrupos[g]={forns:[null,null,null],itens:[]};
-          const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+          const ref=hgOrcFonte().find(function(r){return r.material_id===it.material_id;})||{};
           const linha={ material_id:it.material_id, nome:it.material_nome, codigo:ref.codigo||null,
                         qtd_kit:ref.qtd_kit||null, qtd:Number(it.qtd_desejada)||1, precos:[null,null,null], marcas:[null,null,null], escolhido:null };
           (it.cotacao_opcoes||[]).forEach(function(o){
@@ -25510,7 +25556,7 @@ function hgOrcImprimirSolicitacao(){
 }
 
 function hgOrcRender(){
-  const box=document.getElementById('hg-orc-box'); if(!box) return;
+  const box=hgOrcBox(); if(!box) return;
   const G=hgOrcG();
   { // v4.28 — histórico (último fornecedor + data) dos itens do orçamento
     const hpF=[]; Object.keys(hgOrcGrupos).forEach(function(g2){ hgOrcGrupos[g2].itens.forEach(function(it){ if(it.material_id && hpCache['m'+it.material_id]===undefined) hpF.push(it.material_id); }); });
@@ -25550,12 +25596,12 @@ function hgOrcRender(){
   h+='<div style="overflow-x:auto"><table class="hg-tab"><thead><tr><th>Produto</th><th class="hg-num">Caixas</th>';
   for(let k=0;k<3;k++){ if(k>0 && !G.forns[k]) continue; h+='<th class="hg-num">'+(G.forns[k]?hgEsc(hgOrcFornNome(G.forns[k])):('Fornecedor '+(k+1)))+' (R$/cx)</th>'; }
   h+='<th>Escolha</th><th title="só os marcados viram pedido no Fechar">🛒</th><th></th></tr></thead><tbody>';
-  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — envie itens pela aba Compras (checkbox) ou pela busca acima.</td></tr>';
+  if(!G.itens.length) h+='<tr><td colspan="8" style="text-align:center;color:var(--cinza-4);padding:18px">Grupo vazio — '+(hgOrcAdm()?'use a busca acima para trazer o produto.':'envie itens pela aba Compras (checkbox) ou pela busca acima.')+'</td></tr>';
   G.itens.forEach(function(it,i){
     it.marcas = it.marcas || [null,null,null];
     let menor=null; it.precos.forEach(function(p,k){ if(G.forns[k]&&p!=null&&p>0&&(menor===null||p<it.precos[menor])) menor=k; });
     // v4.20c — referência para comparar: último valor pago (preço da CAIXA, da NF mais recente)
-    const ref=hgDados.find(function(r){return r.material_id===it.material_id;})||{};
+    const ref=hgOrcFonte().find(function(r){return r.material_id===it.material_id;})||{};
     const ult=(ref.valor_compra!=null&&Number(ref.valor_compra)>0)?Number(ref.valor_compra):null;
     h+='<tr><td class="hg-prod">'+hgEsc(it.nome)+'<span class="hg-sub">'+(it.qtd_kit>1?(it.qtd_kit+' un/caixa · '):'')
       +'saldo <b>'+(ref.saldo!=null?hgN(ref.saldo):'—')+'</b> · '
@@ -25591,7 +25637,7 @@ function hgOrcRender(){
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center">'
     +'<button style="'+HG_BTN+'" onclick="hgOrcSalvar(false)">💾 Salvar orçamento</button>'
     +'<button style="'+HG_BTNV+'" onclick="hgOrcFechar()">🔒 Fechar o grupo "'+hgEsc(hgOrcAtivo)+'" → pedidos</button>'
-    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de higiene #'+hgOrcCotId+' · '+hgOrcTotalItens()+' item(ns) em '+Object.keys(hgOrcGrupos).length+' grupo(s)</span>'):'')
+    +(hgOrcCotId?('<span style="font-size:12px;color:var(--cinza-4)">cotação de '+hgOrcMundo()+' #'+hgOrcCotId+' · '+hgOrcTotalItens()+' item(ns) em '+Object.keys(hgOrcGrupos).length+' grupo(s)</span>'):'')
     +'</div>';
   box.innerHTML=h;
 }
@@ -25601,7 +25647,7 @@ function hgOrcBuscar(){
   if(!inp||!res) return;
   const termo=hgOrcNorm(inp.value.trim());
   if(!termo){ res.innerHTML=''; return; }
-  const m=hgDados.filter(function(r){
+  const m=hgOrcFonte().filter(function(r){
     if(hgOrcTemItem(r.material_id)) return false;
     return hgOrcNorm(r.material+' '+(r.codigo||'')).indexOf(termo)>=0;
   }).slice(0,12);
@@ -25609,10 +25655,10 @@ function hgOrcBuscar(){
     return '<div onclick="hgOrcAddId('+r.material_id+')" style="padding:9px 12px;border-bottom:1px solid var(--cinza-2);cursor:pointer;display:flex;justify-content:space-between;gap:10px">'
       +'<span style="font-weight:600">'+hgEsc(r.material)+'</span>'
       +'<span style="font-size:11px;color:var(--cinza-4);white-space:nowrap">'+(r.codigo?hgEsc(r.codigo)+' · ':'')+'saldo '+hgN(r.saldo)+'</span></div>';
-  }).join('') || '<div style="padding:10px 12px;font-size:12px;color:var(--cinza-4)">Nenhum produto de higiene com esse trecho no nome.</div>';
+  }).join('') || '<div style="padding:10px 12px;font-size:12px;color:var(--cinza-4)">Nenhum produto '+(hgOrcAdm()?'do administrativo':'de higiene')+' com esse trecho no nome.</div>';
 }
 function hgOrcAddId(mid){
-  const r=hgDados.find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
+  const r=hgOrcFonte().find(function(x){return x.material_id===mid;}); if(!r||hgOrcTemItem(mid)) return;
   const mCad=(r.marca||'').trim()||null, pCad=(hgPrecoCaixa(r)>0?hgPrecoCaixa(r):null);   // v4.99 — caixa, não pacote
   hgOrcG().itens.push({ material_id:mid, nome:r.material, codigo:r.codigo||null, qtd_kit:r.qtd_kit||null,
     qtd:Number(r.sugestao_caixas)||1, precos:[pCad,null,null], marcas:[mCad,mCad,mCad], escolhido:null });
@@ -25662,14 +25708,14 @@ async function hgOrcSalvar(sil){
         hgOrcCotId=null;
       }catch(e){ toast('Erro ao encerrar o orçamento vazio: '+e.message,'erro'); return false; }
     }
-    if(!sil){ toast('Orçamento de higiene sem itens — encerrado.',''); hgOrcRender(); }
+    if(!sil){ toast('Orçamento de '+hgOrcMundo()+' sem itens — encerrado.',''); hgOrcRender(); }
     return true;
   }
   try{
     const fg={};
     Object.keys(hgOrcGrupos).forEach(function(g){ fg[g]=hgOrcGrupos[g].forns.filter(Boolean); });
     if(hgOrcCotId===null){
-      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:(SESSAO?SESSAO.nome:'')||'',fornecedores_grupo:fg,origem:'HIGIENE'});
+      const c=await sbFetch('cotacoes','POST',{status:'aberta',criado_por:(SESSAO?SESSAO.nome:'')||'',fornecedores_grupo:fg,origem:hgOrcOrigem});
       if(!c||!c.length) throw new Error('não retornou a cotação criada');
       hgOrcCotId=c[0].id;
     } else {
@@ -25716,7 +25762,7 @@ async function hgOrcFechar(){
       it.just=j.trim();
     } else it.just=null;
   }
-  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de higiene.';
+  let msg='Fechar o grupo "'+gnome+'"?\n\n'+prontos.length+' item(ns) viram pedido(s) por fornecedor — SÓ de '+hgOrcMundo()+'.';
   if(semEsc.length) msg+='\n\n⚠ Sem escolha (ficam no orçamento): '+semEsc.join(', ');
   if(!confirm(msg)) return;
   try{
@@ -25727,16 +25773,16 @@ async function hgOrcFechar(){
     for(const fidStr of Object.keys(porForn)){
       const fid=Number(fidStr);
       let pedidoId=null;
-      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.HIGIENE&limit=1');
+      const exist=await sbFetch('pedidos?select=id&fornecedor_id=eq.'+fid+'&status=eq.EM_MONTAGEM&origem=eq.'+hgOrcOrigem+'&limit=1');
       if(exist&&exist.length) pedidoId=exist[0].id;
       else{
         const p=await sbFetch('pedidos','POST',{ fornecedor_id:fid, status:'EM_MONTAGEM', cotacao_id:hgOrcCotId,
-          origem:'HIGIENE', observacao:'Higiene — grupo '+gnome });
+          origem:hgOrcOrigem, observacao:(hgOrcAdm()?'Administrativo':'Higiene')+' — grupo '+gnome });
         pedidoId=p&&p[0]&&p[0].id;
       }
       for(const it of porForn[fidStr]){
         await sbFetch('ordens_compra','POST',{ material_id:it.material_id, item_nome:it.nome, fornecedor_id:fid, fornecedor_compra_id:fid,
-          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:'HIGIENE',
+          status:'COMPRAR', situacao:'PENDENTE', aprovado_pedido:false, pedido_id:pedidoId, origem:hgOrcOrigem,
           qtd_a_comprar:it.qtd, qtd_comprada:it.qtd, valor_unitario:it.precos[it.escolhido],
           marca_escolhida:(it.marcas&&it.marcas[it.escolhido])||null,
           // v4.99 — ela: "tem muita observação abaixo das linhas, isso suja o pedido".
