@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.202 · a nota mostra o nome que o fornecedor usa e o preço que ele cobra</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.203 · linha do tempo do aparelho e registro do backup que cobre o lugar</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -26559,6 +26559,7 @@ const MAN_MAX=50*1024*1024;
 let manSols=[], manDeps=[], manPrest=[], manPrestEd=null, manPrestBusca='', manContr=[], manContrItens=[], manContrEd=null, manContrTmpArq=null;
 let manCustos=[], manCustoDem=[], manVisitas=[], manVisItens=[], manLotes=[], manAcion=[], manRetir=[];
 let manEquip=[], manDemEquip=[], manEquipEd=null, manEquipBusca='', manEquipTipo='';   // v4.178 — aparelhos
+let manSubst=[];   // v4.203 (SQL 131) — quem cobriu quem enquanto o aparelho estava fora   // v4.178 — aparelhos
 let manCCGrupo='TODOS';   // v4.182 — qual pacote de pagamento está à vista na conta corrente
 let manCusForm=false, manCusDems=[];   // v4.189 — o formulário de custo só aparece quando se pede
 let manSemTabela=false, manAlertaN=0, manFiltro='ABERTAS', manFiltroCus='PENDENTES', manUsoKb=null;
@@ -26668,6 +26669,8 @@ async function manDadosCarregar(){
        manAcion=ac||[]; manRetir=rt||[]; }catch(e){ manAcion=[]; manRetir=[]; }
   try{ const [eq,de]=await Promise.all([sbFetch('manut_equipamentos?select=*&order=local.asc,nome.asc&limit=3000'),sbFetch('manut_demanda_equipamentos?select=*&limit=20000')]);   // v4.178 (SQL 115)
        manEquip=eq||[]; manDemEquip=de||[]; }catch(e){ manEquip=[]; manDemEquip=[]; }   // sem o SQL 115 o módulo segue sem aparelhos
+  // v4.203 (SQL 131) — sem a tabela a tela roda igual, só sem os eventos de backup
+  try{ manSubst=(await sbFetch('manut_substituicoes?select=*&order=id.asc&limit=5000'))||[]; }catch(e){ manSubst=[]; }   // sem o SQL 115 o módulo segue sem aparelhos
 }
 // v4.126 — prestadores envolvidos na demanda: acionados para orçar, quem visitou e quem tem custo
 function manEnvolvidos(sid){ const ids=new Set();
@@ -27265,19 +27268,103 @@ function manRetirBloco(s,pode){
     +'<label class="man-rot">Retirado em <input id="mr-data" type="date" value="'+manIsoDia()+'"></label><label class="man-rot">Volta prevista <input id="mr-prev" type="date"></label>'
     +'<label class="man-rot" style="grid-column:1/-1">Observação <input id="mr-obs" placeholder="ex.: nº de série, acessórios que foram junto"></label></div>'
     +'<div class="man-linha" style="margin-top:0">'+B('o p','📦 Registrar retirada','manRetirar()')+'</div></details>';
+  h+=manBackupBloco(s,pode);
   return h;
+}
+
+// ═══ v4.203 — QUEM COBRIU ENQUANTO O APARELHO ESTAVA FORA ═══════════════════
+// Ela, 11/11/2026: "Quando reportarem que parou de funcionar, o Lucas vai enviar
+// para manutenção ou comprar uma nova. Enquanto isso, uma impressora é colocada
+// como backup, precisamos desse registro".
+// Nas duas perguntas ela escolheu as saídas abertas: o backup tanto pode ser uma
+// RESERVA guardada quanto uma REMANEJADA de outra sala, e a que quebrou tanto
+// pode ser baixada quanto virar reserva. Por isso o registro é um só e genérico —
+// "um aparelho assume o lugar de outro por um período" — e o desfecho é escolhido
+// na hora, na situação do aparelho.
+function manSubstDaDemanda(sid){ return (manSubst||[]).filter(x=>x.solicitacao_id===sid); }
+function manBackupBloco(s,pode){
+  const B=(c,r,fn,t)=>'<button class="man-b '+c+'" onclick="'+fn+'"'+(t?' title="'+t+'"':'')+'>'+r+'</button>';
+  const eqs=manEquipDaDemanda(s.id);
+  if(!eqs.length) return '';   // sem aparelho ligado não há lugar a ser coberto
+  const lista=manSubstDaDemanda(s.id);
+  let h='<div style="margin-top:10px;border-top:1px dashed var(--cinza-2);padding-top:8px">'
+   +'<div class="man-rot" style="margin-bottom:4px">🔄 Backup no lugar</div>';
+  h+=lista.length?lista.map(x=>{
+      const quem=x.substituto_id?manEquipNome(x.substituto_id):'— a sala ficou sem —';
+      return '<div class="man-orc"><b style="flex:1">'+manEsc(quem)
+        +'<span class="man-sub">cobrindo '+manEsc(manEquipNome(x.equipamento_id))+(x.local?' · '+manEsc(x.local):'')
+        +' · desde '+manDt(x.inicio)+(x.fim?' até '+manDt(x.fim):'')+(x.motivo?' · '+manEsc(x.motivo):'')+'</span></b>'
+        +(x.fim?'<span class="man-tag man-t-ok">encerrado</span>'
+               :'<span class="man-tag man-t-par">cobrindo há '+manDias(x.inicio+'T12:00')+' d</span>'+(pode?' '+B('g p','↩ Encerrar','manBackupEncerrar('+x.id+')'):''))
+        +'</div>'; }).join(''):'<span class="man-sub">Nenhum backup registrado nesta demanda.</span>';
+  if(pode){
+    const alvo=eqs[0];
+    const cand=(manEquip||[]).filter(e=>e.id!==alvo.id && e.ativo!==false && (e.situacao||'EM_USO')!=='BAIXADO' && e.tipo===alvo.tipo)
+      .sort((a,b)=>((b.situacao==='RESERVA')-(a.situacao==='RESERVA'))||String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR',{numeric:true}));
+    h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--azul)">+ Registrar backup</summary>'
+      +'<div class="man-grade" style="margin-top:6px">'
+      +'<label class="man-rot" style="grid-column:1/-1">Quem assumiu o lugar de '+manEsc(alvo.nome)
+      +' <span class="hg-dica" title="Vale tanto o aparelho de reserva guardado quanto um remanejado de outra sala. Se a sala ficou sem nenhum, deixe a primeira opção: o tempo sem aparelho fica registrado.">?</span>'
+      +'<select id="mbk-sub"><option value="">— a sala ficou sem aparelho —</option>'
+      +cand.map(e=>'<option value="'+e.id+'">'+manEsc(e.nome)+((e.situacao||'EM_USO')==='RESERVA'?' (reserva)':(e.local?' — '+manEsc(e.local):''))+'</option>').join('')
+      +'</select></label>'
+      +'<label class="man-rot">Desde <input id="mbk-ini" type="date" value="'+manIsoDia()+'"></label>'
+      +'<label class="man-rot">Onde <input id="mbk-loc" value="'+manEsc(alvo.local||s.local||'')+'"></label>'
+      +'<label class="man-rot" style="grid-column:1/-1">Motivo <input id="mbk-mot" placeholder="ex.: enquanto a L5190 está em conserto"></label></div>'
+      +'<div class="man-linha" style="margin-top:0">'+B('o p','🔄 Registrar backup','manBackupRegistrar('+alvo.id+')')+'</div></details>';
+  }
+  return h+'</div>';
+}
+async function manBackupRegistrar(eqId){
+  const s=manSols.find(x=>x.id===manAberta.id); if(!s) return;
+  const sub=manGv('mbk-sub'), ini=manGv('mbk-ini')||manIsoDia(), loc=manGv('mbk-loc').trim(), mot=manGv('mbk-mot').trim();
+  const quem=sub?manEquipNome(Number(sub)):'nenhum aparelho (a sala fica sem)';
+  if(!await hogConfirma({titulo:'Registrar o backup?',
+     texto:quem+'\nassume o lugar de '+manEquipNome(eqId)+(loc?'\nem '+loc:'')+'\ndesde '+manDt(ini), ok:'🔄 Registrar'})) return;
+  try{
+    await sbFetch('manut_substituicoes','POST',{solicitacao_id:s.id, equipamento_id:eqId, substituto_id:sub?Number(sub):null,
+      local:loc||null, inicio:ini, motivo:mot||null, registrado_por:manQuem()});
+    await manNota(s.id,'backup no lugar: '+quem+' assumiu o lugar de '+manEquipNome(eqId)+(loc?' em '+loc:'')+' desde '+manDt(ini)+(mot?' · '+mot:''),manAndamento(s.id),null,ini);
+    toast('Backup registrado');
+  }catch(e){ toast('Erro ao registrar o backup: '+(e.message||e),'erro'); }
+  await manFichaReabrir();
+}
+async function manBackupEncerrar(id){
+  const x=(manSubst||[]).find(y=>y.id===id); if(!x) return;
+  const quem=x.substituto_id?manEquipNome(x.substituto_id):'a cobertura';
+  const q=await hogPergunta({titulo:'Encerrar: '+quem,
+    campos:[{id:'d',rot:'Encerrou em',tipo:'data',valor:manIsoDia(),obrigatorio:true}], ok:'↩ Encerrar'});
+  if(!q) return;
+  try{
+    const r=await sbFetch('manut_substituicoes?id=eq.'+id+'&fim=is.null','PATCH',{fim:q.d});
+    if(!r||!r.length) throw new Error('esse backup já tinha sido encerrado');
+    if(x.solicitacao_id) await manNota(x.solicitacao_id,'backup encerrado: '+quem+' deixou de cobrir '+manEquipNome(x.equipamento_id)+' em '+manDt(q.d),null,null,q.d);
+    toast('Backup encerrado');
+  }catch(e){ toast('Erro: '+(e.message||e),'erro'); }
+  await manFichaReabrir();
 }
 async function manRetirar(){ const s=manSols.find(x=>x.id===manAberta.id); const item=manGv('mr-item').trim(), quem=manGv('mr-quem').trim(), d=manGv('mr-data')||manIsoDia(), prev=manGv('mr-prev'), obs=manGv('mr-obs').trim();
   if(!item) return toast('Diga qual item saiu','erro'); if(!quem) return toast('Diga quem retirou','erro');
   const p=manPrest.find(x=>manNorm(x.apelido)===manNorm(quem));
   if(!await hogConfirma({titulo:'Registrar a retirada?', texto:item+'\nLevado por '+quem+' em '+manDt(d)+(prev?' · volta prevista '+manDt(prev):''), ok:'📦 Registrar'})) return;
-  try{ await sbFetch('manut_retiradas','POST',{solicitacao_id:s.id,item,retirado_por:quem,prestador_id:p?p.id:null,retirado_em:d,previsao_volta:prev||null,observacao:obs||null,registrado_por:manQuem()});
+  // v4.203 — se a demanda tem aparelho, a retirada aponta para ele: é isso que faz o
+  // conserto aparecer na linha do tempo DAQUELE aparelho, e não só na da demanda.
+  const eqDem=manEquipDaDemanda(s.id)[0]||null;
+  const corpoRet={solicitacao_id:s.id,item,retirado_por:quem,prestador_id:p?p.id:null,retirado_em:d,previsao_volta:prev||null,observacao:obs||null,registrado_por:manQuem()};
+  if(eqDem) corpoRet.equipamento_id=eqDem.id;
+  try{ try{ await sbFetch('manut_retiradas','POST',corpoRet); }
+       catch(e1){ if(corpoRet.equipamento_id){ delete corpoRet.equipamento_id; await sbFetch('manut_retiradas','POST',corpoRet); } else throw e1; }
+    if(eqDem){ try{ await sbFetch('manut_equipamentos?id=eq.'+eqDem.id,'PATCH',{situacao:'EM_CONSERTO'}); }catch(e){} }
     await manNota(s.id,'item retirado para conserto: '+item+' — levado por '+quem+' em '+manDt(d)+(prev?' · volta prevista '+manDt(prev):'')+(obs?' · '+obs:''),manAndamento(s.id)); toast('Retirada registrada'); }
   catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
 async function manDevolvido(id){ const r=manRetir.find(x=>x.id===id); if(!r) return;
   const q=await hogPergunta({titulo:'Voltou: '+r.item, campos:[{id:'d',rot:'Voltou em',tipo:'data',valor:manIsoDia(),obrigatorio:true},{id:'por',rot:'Recebido por',valor:manQuem(),obrigatorio:true}], ok:'↩ Registrar volta'}); if(!q) return;
   try{ const x=await sbFetch('manut_retiradas?id=eq.'+id+'&devolvido_em=is.null','PATCH',{devolvido_em:q.d,recebido_por:q.por.trim()}); if(!x||!x.length) throw new Error('essa volta já tinha sido registrada');
-    await manNota(r.solicitacao_id,'item voltou do conserto: '+r.item+' em '+manDt(q.d)+' · recebido por '+q.por.trim()); toast('Volta registrada'); }
+    await manNota(r.solicitacao_id,'item voltou do conserto: '+r.item+' em '+manDt(q.d)+' · recebido por '+q.por.trim());
+    // v4.203 — voltou do conserto: o aparelho sai de EM_CONSERTO
+    if(r.equipamento_id){ const ex=manEquipDe(r.equipamento_id);
+      if(ex && ex.situacao==='EM_CONSERTO'){ try{ await sbFetch('manut_equipamentos?id=eq.'+r.equipamento_id,'PATCH',{situacao:'EM_USO'}); }catch(e){} } }
+    toast('Volta registrada'); }
   catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
 
 // ═══ 🔧 VISITAS ═════════════════════════════════════════════════════════════
@@ -27929,7 +28016,7 @@ function manEquipDaDemanda(sid){ return manDemEquip.filter(x=>x.solicitacao_id==
 function manDemandasDoEquip(eid){ const ids=manDemEquip.filter(x=>x.equipamento_id===eid).map(x=>x.solicitacao_id);
   return manSols.filter(s=>ids.includes(s.id)).sort((a,b)=>b.id-a.id); }
 function manEquipUltimo(eid, nat){   // última vez que esse aparelho teve preventiva/corretiva FEITA
-  const d=manDemandasDoEquip(eid).filter(s=>(s.natureza||'CORRETIVA')===nat && s.situacao==='RESOLVIDA' && s.resolvida_em);
+  const d=manDemsDoAparelho(eid).filter(s=>(s.natureza||'CORRETIVA')===nat && s.situacao==='RESOLVIDA' && s.resolvida_em);   // v4.203 — conta também o chamado antigo, ligado pela retirada
   if(!d.length) return null; return d.map(s=>s.resolvida_em).sort().slice(-1)[0]; }
 function manEquipVencida(e){   // preventiva atrasada, só quando a periodicidade está preenchida
   if(!e.preventiva_meses) return null;
@@ -27937,7 +28024,8 @@ function manEquipVencida(e){   // preventiva atrasada, só quando a periodicidad
   const meses=(Date.now()-new Date(base).getTime())/(1000*60*60*24*30.44);
   return meses>e.preventiva_meses ? Math.round(meses-e.preventiva_meses) : null; }
 function manEquipCampoPedido(R){   // v4.178 — o aparelho na hora de abrir a demanda
-  const lista=manEquip.filter(e=>e.ativo!==false && (!R.local || !e.local || manNorm(e.local)===manNorm(R.local)));
+  const lista=manEquip.filter(e=>e.ativo!==false && (e.situacao||'EM_USO')!=='BAIXADO'   // v4.203 — baixado sai da lista
+    && (!R.local || !e.local || manNorm(e.local)===manNorm(R.local)));
   if(!manEquip.length) return '';
   return '<label class="man-rot">Qual aparelho <span class="hg-dica" title="Se o problema é num aparelho cadastrado, escolha aqui: o histórico dele fica junto. Em branco quando não for aparelho (porta, pia, telhado).">?</span>'
    +'<select onchange="manRasc.equip=this.value||null"><option value="">— não é aparelho / não está na lista —</option>'
@@ -27962,9 +28050,15 @@ function manEquipRender(){
      +'<label class="man-rot">Capacidade <input id="mq-cap" value="'+manEsc(e.capacidade||'')+'" placeholder="ex.: 12.000 BTU"></label>'
      +'<label class="man-rot">Nº de série <input id="mq-serie" value="'+manEsc(e.serie||'')+'"></label>'
      +'<label class="man-rot">Patrimônio <input id="mq-patr" value="'+manEsc(e.patrimonio||'')+'"></label>'
-     +'<label class="man-rot">Quem atende <input id="mq-prest" list="man-dl-prest" value="'+manEsc(e.prestador_id?manPrestNome(e.prestador_id):'')+'" placeholder="apelido do prestador"></label>'
+     +'<label class="man-rot">Quem atende <input id="mq-prest" list="man-dl-prest" value="'+manEsc(e.prest_nome!==undefined?e.prest_nome:(e.prestador_id?manPrestNome(e.prestador_id):''))+'" placeholder="apelido do prestador"></label>'
      +'<label class="man-rot">Preventiva a cada (meses) <input id="mq-prev" type="number" min="0" step="1" value="'+(e.preventiva_meses||'')+'" title="em branco = sem controle de prazo"></label>'
      +'<label class="man-rot">Instalado em <input id="mq-inst" type="date" value="'+(e.instalado_em||'')+'"></label>'
+     // v4.203 — o desfecho do chamado: voltou a trabalhar, ficou de reserva ou saiu de circulação
+     +'<label class="man-rot">Situação <span class="hg-dica" title="em uso = está trabalhando na sala · reserva = guardado, é o próximo backup · em conserto = está fora, com o prestador · baixado = saiu de circulação (o histórico fica, mas ele não aparece mais para abrir chamado)">?</span>'
+     +'<select id="mq-sit" onchange="manEquipSitMuda(this.value)">'
+     +Object.keys(MAN_EQ_SIT).map(k=>'<option value="'+k+'"'+((e.situacao||'EM_USO')===k?' selected':'')+'>'+MAN_EQ_SIT[k][1]+'</option>').join('')+'</select></label>'
+     +((e.situacao||'EM_USO')==='BAIXADO'?'<label class="man-rot">Baixado em <input id="mq-bxd" type="date" value="'+(e.baixado_em||manIsoDia())+'"></label>'
+        +'<label class="man-rot" style="grid-column:1/-1">Por que foi baixado <input id="mq-bxm" value="'+manEsc(e.baixa_motivo||'')+'" placeholder="ex.: não compensava consertar, comprada a L3250 no lugar"></label>':'')
      +'<label class="man-rot" style="grid-column:1/-1">Observação <input id="mq-obs" value="'+manEsc(e.observacao||'')+'"></label></div>'
      +'<div class="man-linha" style="margin-top:0">'+B('g p','💾 Salvar','manEquipSalvar()')+B('n p','Cancelar','manEquipEd=null;manEquipRender()')+'</div></div>';
   }
@@ -27981,25 +28075,42 @@ function manEquipRender(){
   if(!lista.length) h+='<tr><td colspan="7" class="sol-vazio">'+(manEquip.length?'Nada com esse filtro.':'Nenhum aparelho cadastrado ainda — comece pelos ar-condicionados.')+'</td></tr>';
   lista.forEach(e=>{
     const prev=manEquipUltimo(e.id,'PREVENTIVA'), corr=manEquipUltimo(e.id,'CORRETIVA'), atraso=manEquipVencida(e);
-    const dems=manDemandasDoEquip(e.id), abertas=dems.filter(s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO').length;
-    h+='<tr'+(e.ativo===false?' style="opacity:.55"':'')+'><td><b>'+manEsc(e.nome)+'</b><span class="man-sub">'+(MAN_EQ_TIPOS[e.tipo]||e.tipo||'')+(e.prestador_id?' · '+manEsc(manPrestNome(e.prestador_id)):'')+'</span></td>'
+    const dems=manDemsDoAparelho(e.id), abertas=dems.filter(s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO').length;   // v4.203
+    h+='<tr'+(e.ativo===false||e.situacao==='BAIXADO'?' style="opacity:.55"':'')+'><td><b>'+manEsc(e.nome)+'</b>'
+     +((e.situacao&&e.situacao!=='EM_USO')?' '+manEquipTagSit(e):'')   // v4.203 — reserva · em conserto · baixado
+     +'<span class="man-sub">'+(MAN_EQ_TIPOS[e.tipo]||e.tipo||'')+(e.prestador_id?' · '+manEsc(manPrestNome(e.prestador_id)):'')+'</span></td>'
      +'<td class="man-ocs">'+manEsc(e.local||'—')+'</td>'
      +'<td class="man-ocm"><span class="man-sub">'+manEsc([e.marca,e.modelo,e.capacidade].filter(Boolean).join(' · ')||'—')+'</span></td>'
      +'<td>'+(prev?manDt(prev):'<span class="man-sub">nunca</span>')+(atraso?'<span class="man-tag man-t-at">⏰ '+atraso+' mês(es) de atraso</span>':(e.preventiva_meses?'<span class="man-sub">a cada '+e.preventiva_meses+' mês(es)</span>':''))+'</td>'
      +'<td>'+(corr?manDt(corr):'<span class="man-sub">nunca</span>')+'</td>'
      +'<td class="man-ocm">'+dems.length+(abertas?'<span class="man-sub">'+abertas+' em aberto</span>':'')+'</td>'
-     +'<td class="man-acoes">'+(dems.length?B('p','📜 Histórico','manEquipHist('+e.id+')'):'')+' '+B('n p','Editar','manEquipEditar('+e.id+')')
+     +'<td class="man-acoes">'+B('p','📜 Linha do tempo','manEquipHist('+e.id+')')+' '+B('n p','Editar','manEquipEditar('+e.id+')')
      +' '+B('n p',e.ativo===false?'Reativar':'Desativar','manEquipAtivo('+e.id+')')+'</td></tr>';
   });
   box.innerHTML=h+'</tbody></table>';
 }
 function manEquipEditar(id){ const e=manEquipDe(id); if(!e) return; manEquipEd=Object.assign({},e); manEquipRender();
   const b=document.getElementById('man-equip-box'); if(b) b.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+// v4.203 — trocar a situação redesenha o formulário (BAIXADO pede data e motivo),
+// então o que já estava digitado é guardado antes, como o manVisColeta faz nas visitas.
+function manEquipSitMuda(v){
+  if(!manEquipEd) return;
+  const g=id=>document.getElementById(id)?manGv(id):undefined, A=(k,id)=>{ const x=g(id); if(x!==undefined) manEquipEd[k]=x; };
+  A('nome','mq-nome'); A('tipo','mq-tipo'); A('local','mq-local'); A('marca','mq-marca'); A('modelo','mq-modelo');
+  A('capacidade','mq-cap'); A('serie','mq-serie'); A('patrimonio','mq-patr'); A('preventiva_meses','mq-prev');
+  A('instalado_em','mq-inst'); A('observacao','mq-obs'); A('baixado_em','mq-bxd'); A('baixa_motivo','mq-bxm');
+  const pn=g('mq-prest'); if(pn!==undefined) manEquipEd.prest_nome=pn;
+  manEquipEd.situacao=v; manEquipRender();
+}
 async function manEquipSalvar(){
   const v={nome:manGv('mq-nome').trim(), tipo:manGv('mq-tipo'), local:manGv('mq-local')||null, marca:manGv('mq-marca').trim()||null,
     modelo:manGv('mq-modelo').trim()||null, capacidade:manGv('mq-cap').trim()||null, serie:manGv('mq-serie').trim()||null,
     patrimonio:manGv('mq-patr').trim()||null, preventiva_meses:Number(manGv('mq-prev'))||null, instalado_em:manGv('mq-inst')||null,
     observacao:manGv('mq-obs').trim()||null};
+  // v4.203 — situação e baixa; data e motivo só fazem sentido em BAIXADO
+  if(document.getElementById('mq-sit')){ v.situacao=manGv('mq-sit')||'EM_USO';
+    v.baixado_em  = v.situacao==='BAIXADO' ? (manGv('mq-bxd')||manIsoDia()) : null;
+    v.baixa_motivo= v.situacao==='BAIXADO' ? (manGv('mq-bxm').trim()||null) : null; }
   if(!v.nome) return toast('Diga como a equipe chama esse aparelho','erro');
   const pn=manGv('mq-prest').trim();
   if(pn){ const p=await manPrestPorNome(pn); if(!p) return; v.prestador_id=p.id; } else v.prestador_id=null;
@@ -28013,17 +28124,86 @@ async function manEquipAtivo(id){ const e=manEquipDe(id); if(!e) return;
   if(!await hogConfirma({titulo:(e.ativo===false?'Reativar ':'Desativar ')+e.nome+'?', texto:'O histórico continua guardado de qualquer jeito.', ok:e.ativo===false?'Reativar':'Desativar'})) return;
   try{ await sbFetch('manut_equipamentos?id=eq.'+id,'PATCH',{ativo:e.ativo===false}); }catch(err){ toast('Erro: '+err.message,'erro'); }
   await manEquipCarregar(); }
+// ═══ v4.203 — A LINHA DO TEMPO DO APARELHO ══════════════════════════════════
+// Ela, 11/11/2026: "como uma linha do tempo seria muito melhor".
+// A jornada da demanda (v4.127) termina quando o chamado fecha. Esta atravessa os
+// chamados e responde o que a tabela antiga não respondia: quantas vezes esta peça
+// quebrou, quantos dias ficou fora, quanto já custou e QUEM COBRIU o lugar dela.
+// Não há dado novo além do SQL 131: demanda, retirada, custo e substituição já
+// estavam no banco — só nunca tinham sido lidos juntos, na ordem do tempo.
+// Demanda deste aparelho pelos DOIS caminhos: a ligação do cadastro
+// (manut_demanda_equipamento) e a retirada que já aponta para ele. O segundo
+// caminho recupera os chamados anteriores a 11/11/2026, abertos quando o cadastro
+// de aparelhos ainda não existia — é o caso da demanda #6 da Epson L5190.
+function manDemsDoAparelho(eid){
+  const ids=new Set(manDemandasDoEquip(eid).map(s=>s.id));
+  (manRetir||[]).forEach(r=>{ if(r.equipamento_id===eid && r.solicitacao_id) ids.add(r.solicitacao_id); });
+  (manSubst||[]).forEach(x=>{ if(x.equipamento_id===eid && x.solicitacao_id) ids.add(x.solicitacao_id); });
+  return manSols.filter(s=>ids.has(s.id)).sort((a,b)=>b.id-a.id);
+}
+function manEquipEventos(e){
+  const ev=[], D=x=>String(x||'').slice(0,10);
+  if(e.instalado_em) ev.push({d:D(e.instalado_em), ic:'📍', tx:'<b>Instalado</b>'+(e.local?' em '+manEsc(e.local):''),
+    q:[e.marca,e.modelo,e.capacidade,e.serie?('série '+e.serie):''].filter(Boolean).join(' · ')});
+  for(const s of manDemsDoAparelho(e.id)){
+    const prev=(s.natureza||'CORRETIVA')==='PREVENTIVA';
+    ev.push({d:D(s.created_at), ic:prev?'🛠️':'🔧', sid:s.id,
+      tx:'<b>'+(prev?'Preventiva pedida':'Parou de funcionar')+'</b> — '+manEsc(s.o_que),
+      q:'demanda #'+s.id+(s.local?' · '+manEsc(s.local):'')+(s.descricao?' · '+manEsc(String(s.descricao).slice(0,120)):'')});
+    if(s.resolvida_em) ev.push({d:D(s.resolvida_em), ic:'✅', sid:s.id, tx:'<b>Resolvida</b>',
+      q:'demanda #'+s.id+(s.sem_cobranca?' · sem cobrança':'')});
+    for(const c of manCustosDe(s.id)) if(c.situacao!=='REPROVADO')
+      ev.push({d:D(c.created_at), ic:'💰', tx:'Custo de <b>'+hgMoeda(c.valor)+'</b>'+(c.situacao==='AGUARDANDO'?' <span class="man-tag man-t-sep">aguardando aprovação</span>':''),
+        q:[(manReceb(c)&&manReceb(c)!=='—')?manEsc(manReceb(c)):'','demanda #'+s.id,c.lote_id?('lote #'+c.lote_id):''].filter(Boolean).join(' · ')});
+  }
+  for(const r of (manRetir||[]).filter(x=>x.equipamento_id===e.id)){
+    ev.push({d:D(r.retirado_em), ic:'📦', fora:true, tx:'<b>Saiu para conserto</b>',
+      q:'levado por '+manEsc(r.retirado_por)+(r.previsao_volta?' · volta prevista '+manDt(r.previsao_volta):'')+(r.observacao?' · '+manEsc(r.observacao):'')});
+    if(r.devolvido_em){ const dd=Math.round((new Date(D(r.devolvido_em)+'T12:00')-new Date(D(r.retirado_em)+'T12:00'))/86400000);
+      ev.push({d:D(r.devolvido_em), ic:'↩️', tx:'<b>Voltou</b> <span class="man-tag man-t-ok">'+dd+' dia(s) fora</span>',
+        q:r.recebido_por?('recebido por '+manEsc(r.recebido_por)):''}); }
+  }
+  for(const x of (manSubst||[]).filter(y=>y.equipamento_id===e.id)){
+    const quem=x.substituto_id?manEquipNome(x.substituto_id):'ninguém — a sala ficou sem aparelho';
+    ev.push({d:D(x.inicio), ic:'🔄', fora:true, tx:'<b>Backup no lugar:</b> '+manEsc(quem),
+      q:[x.motivo,x.local].filter(Boolean).map(manEsc).join(' · ')});
+    if(x.fim) ev.push({d:D(x.fim), ic:'🔄', tx:'Backup <b>devolvido</b> ao lugar de origem', q:''});
+  }
+  for(const x of (manSubst||[]).filter(y=>y.substituto_id===e.id)){
+    ev.push({d:D(x.inicio), ic:'🔄', tx:'<b>Assumiu o lugar de</b> '+manEsc(manEquipNome(x.equipamento_id)), q:x.local?manEsc(x.local):''});
+    if(x.fim) ev.push({d:D(x.fim), ic:'↩️', tx:'Voltou ao uso normal', q:''});
+  }
+  if(e.baixado_em) ev.push({d:D(e.baixado_em), ic:'🚫', tx:'<b>Baixado</b> — saiu de circulação', q:e.baixa_motivo?manEsc(e.baixa_motivo):''});
+  return ev.sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+}
+function manEquipResumo(e){
+  const dems=manDemsDoAparelho(e.id);
+  const corr=dems.filter(s=>(s.natureza||'CORRETIVA')!=='PREVENTIVA').length;
+  const rets=(manRetir||[]).filter(x=>x.equipamento_id===e.id);
+  const fora=r=>r.devolvido_em?Math.round((new Date(String(r.devolvido_em).slice(0,10)+'T12:00')-new Date(String(r.retirado_em).slice(0,10)+'T12:00'))/86400000)
+                              :manDias(String(r.retirado_em).slice(0,10)+'T12:00');
+  const dias=rets.reduce((a,r)=>a+fora(r),0);
+  let gasto=0; for(const s of dems) for(const c of manCustosDe(s.id)) if(c.situacao!=='REPROVADO') gasto+=Number(c.valor)||0;
+  return {corr, dias, gasto, aberta:rets.some(r=>!r.devolvido_em)};
+}
+const MAN_EQ_SIT={ EM_USO:['man-t-ok','em uso'], RESERVA:['man-t-env','reserva'], EM_CONSERTO:['man-t-par','em conserto'], BAIXADO:['man-t-n','baixado'] };
+function manEquipTagSit(e){ const t=MAN_EQ_SIT[e.situacao||'EM_USO']||MAN_EQ_SIT.EM_USO; return '<span class="man-tag '+t[0]+'">'+t[1]+'</span>'; }
 function manEquipHist(id){ const e=manEquipDe(id); if(!e) return;
-  const dems=manDemandasDoEquip(id);
-  const linhas=dems.map(s=>'<tr><td>#'+s.id+'</td><td><b>'+manEsc(s.o_que)+'</b><span class="man-sub">'+manEsc(s.local||'')+'</span></td>'
-    +'<td>'+((s.natureza||'CORRETIVA')==='PREVENTIVA'?'<span class="man-tag man-t-ok">preventiva</span>':'<span class="man-tag man-t-par">corretiva</span>')+'</td>'
-    +'<td>'+manDt(s.created_at)+'</td><td>'+(s.resolvida_em?manDt(s.resolvida_em):'<span class="man-sub">—</span>')+'</td>'
-    +'<td>'+manTagSit(s)+'</td><td><button class="man-b p" onclick="manFecharModalEquip();manFicha('+s.id+')">Abrir</button></td></tr>').join('');
+  const ev=manEquipEventos(e), R=manEquipResumo(e);
+  const linhas=ev.map(x=>'<div class="man-linha" style="align-items:flex-start;gap:10px;padding:8px 6px;margin:0;border-bottom:1px solid var(--cinza-1)'+(x.fora?';background:#fdf6e7':'')+'">'
+    +'<span style="width:80px;flex:0 0 80px;text-align:right"><b style="font-size:13px">'+manDt(x.d)+'</b></span>'
+    +'<span style="width:24px;flex:0 0 24px;text-align:center;font-size:15px">'+x.ic+'</span>'
+    +'<span style="flex:1;min-width:0;font-size:13px">'+x.tx+(x.q?'<span class="man-sub">'+x.q+'</span>':'')
+    +(x.sid?' <button class="man-b p" style="padding:1px 7px;font-size:11px" onclick="manFecharModalEquip();manFicha('+x.sid+')">abrir</button>':'')+'</span></div>').join('');
   const ov=manOv(), md=document.getElementById('man-mdl'); if(!ov||!md) return;
-  md.innerHTML='<div class="man-mh"><b>📜 '+manEsc(e.nome)+'</b><span>'+manEsc([e.local,MAN_EQ_TIPOS[e.tipo],e.marca,e.capacidade].filter(Boolean).join(' · '))+'</span>'
+  md.innerHTML='<div class="man-mh"><b>📜 '+manEsc(e.nome)+'</b><span>'+manEsc([e.local,MAN_EQ_TIPOS[e.tipo],e.marca,e.modelo,e.capacidade,e.serie?('série '+e.serie):''].filter(Boolean).join(' · '))+'</span>'
    +'<button class="fecha" title="fechar" onclick="manFecharModalEquip()">&#10005;</button></div>'
-   +'<div class="man-mb"><div class="man-full"><table class="hg-tab man-tab"><thead><tr><th>#</th><th>O quê</th><th>O que foi</th><th>Pedida</th><th>Pronta</th><th>Situação</th><th></th></tr></thead><tbody>'
-   +(linhas||'<tr><td colspan="7" class="sol-vazio">Nenhuma demanda neste aparelho.</td></tr>')+'</tbody></table></div></div>';
+   +'<div class="man-mb"><div class="man-full">'
+   +'<div class="man-linha" style="margin:0 0 6px">'+manEquipTagSit(e)
+   +'<span class="man-sub" style="flex:1;display:inline">'+R.corr+' chamado(s) corretivo(s) · '+R.dias+' dia(s) fora no total · '
+   +(R.gasto>0?hgMoeda(R.gasto)+' gastos':'sem custo lançado')+(R.aberta?' · <b style="color:var(--laranja)">está fora agora</b>':'')+'</span></div>'
+   +(linhas||'<div class="sol-vazio">Nada registrado neste aparelho ainda.</div>')
+   +'</div></div>';
   ov.classList.add('on'); }
 function manFecharModalEquip(){ manFechar(); }
 
