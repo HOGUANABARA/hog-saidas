@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.203 · linha do tempo do aparelho e registro do backup que cobre o lugar</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.204 · ao fechar a demanda, a tela pergunta o que foi feito do aparelho</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -27104,11 +27104,64 @@ async function manEquipDaDemandaSalvar(sid){
 async function manFichaArquivos(input, fase){ const id=manAberta.id; const fs=[...input.files]; input.value=''; const p=await manPreparar(fs, fase); if(!p.length) return;
   try{ const n=await manSubirVarios(p, id); if(n) await manNota(id,'anexou '+n+' arquivo(s) do '+fase.toLowerCase(),manAndamento(id)); }catch(e){ toast('Erro: '+e.message,'erro'); }
   await manFichaReabrir(); }
+// ═══ v4.204 — O DESFECHO DO APARELHO, NA HORA DE FECHAR ═════════════════════
+// Ela, 11/11/2026, depois de ver a v4.203: "sim, coloque a pergunta no fechar da
+// demanda". Até aqui a situação só mudava na mão, no cadastro — quem fechasse o
+// chamado deixava o aparelho "em conserto" para sempre e o backup cobrindo para
+// sempre. Agora, fechada a demanda de um aparelho, a tela pergunta o que foi
+// feito dele e, se havia backup cobrindo, se o backup já voltou.
+// A pergunta só aparece quando há aparelho na demanda; cancelar não desfaz nada:
+// a demanda continua resolvida e a situação fica como estava.
+function manAparelhosDaDemanda(sid){
+  const ids=new Set(manEquipDaDemanda(sid).map(e=>e.id));
+  (manRetir||[]).forEach(r=>{ if(r.solicitacao_id===sid && r.equipamento_id) ids.add(r.equipamento_id); });
+  (manSubst||[]).forEach(x=>{ if(x.solicitacao_id===sid && x.equipamento_id) ids.add(x.equipamento_id); });
+  return [...ids].map(manEquipDe).filter(Boolean);
+}
+const MAN_DESFECHO=[
+  {v:'EM_USO',  r:'✅ voltou a trabalhar no lugar dele'},
+  {v:'RESERVA', r:'📦 ficou de reserva — guardado, é o próximo backup'},
+  {v:'BAIXADO', r:'🚫 foi baixado — saiu de circulação'},
+  {v:'',        r:'⏳ continua fora — não mexer na situação'}
+];
+async function manDesfechoAparelho(s){
+  const eqs=manAparelhosDaDemanda(s.id); if(!eqs.length) return;
+  for(const e of eqs){
+    const abertos=(manSubst||[]).filter(x=>x.equipamento_id===e.id && !x.fim);
+    const campos=[{id:'d', rot:'O que foi feito do aparelho?', tipo:'lista', opcoes:MAN_DESFECHO,
+      valor:(e.situacao==='EM_CONSERTO'||!e.situacao)?'EM_USO':e.situacao}];
+    if(abertos.length){ const bk=abertos[0].substituto_id?manEquipNome(abertos[0].substituto_id):'a sala sem aparelho';
+      campos.push({id:'bk', tipo:'lista', valor:'1', rot:'E o backup que estava cobrindo?',
+        opcoes:[{v:'1',r:'↩ '+bk+' voltou ao lugar de origem'},{v:'',r:'⏳ '+bk+' segue cobrindo'}]}); }
+    const q=await hogPergunta({titulo:'E o aparelho?',
+      texto:e.nome+'\nDemanda #'+s.id+' fechada. Isto não muda a demanda — só a situação do aparelho.', campos, ok:'Registrar'});
+    if(!q) continue;
+    const hoje=manIsoDia();
+    if(q.d && q.d!==(e.situacao||'EM_USO')){
+      const v={situacao:q.d, baixado_em:null, baixa_motivo:null};
+      if(q.d==='BAIXADO'){ v.baixado_em=hoje;
+        v.baixa_motivo=await manMotivo('Baixar '+e.nome,'Por que saiu de circulação (fica no histórico)')||null; }
+      try{ await sbFetch('manut_equipamentos?id=eq.'+e.id,'PATCH',v); Object.assign(e,v);
+        const rot=(MAN_DESFECHO.find(o=>o.v===q.d)||{r:q.d}).r.replace(/^\S+\s/,'');
+        await manNota(s.id,'aparelho '+e.nome+': '+rot+(v.baixa_motivo?' · '+v.baixa_motivo:''),null,null,hoje);
+      }catch(err){ toast('A situação do '+e.nome+' não salvou: '+(err.message||err),'erro'); }
+    }
+    if(q.bk) for(const x of abertos){
+      const quem=x.substituto_id?manEquipNome(x.substituto_id):'a cobertura';
+      try{ await sbFetch('manut_substituicoes?id=eq.'+x.id+'&fim=is.null','PATCH',{fim:hoje});
+        await manNota(s.id,'backup encerrado: '+quem+' deixou de cobrir '+e.nome+' em '+manDt(hoje),null,null,hoje);
+      }catch(err){ toast('O backup não encerrou: '+(err.message||err),'erro'); }
+    }
+  }
+}
 async function manResolver(sem){ const s=manSols.find(x=>x.id===manAberta.id);
   const pend=manCustosDe(s.id).filter(c=>c.situacao==='AGUARDANDO').length;
   if(!await hogConfirma({titulo:'Marcar #'+s.id+' como RESOLVIDA'+(sem?' SEM COBRANÇA':'')+'?', texto:s.o_que+' · '+s.local+(pend?'\n\n⚠ '+pend+' custo(s) ainda aguardando aprovação — eles continuam na aba Custos.':''), ok:'✅ Resolvida'})) return;
-  try{ await manNota(s.id,'resolvida'+(sem?' sem cobrança':''),{situacao:'RESOLVIDA',sem_cobranca:!!sem,resolvida_em:new Date().toISOString(),resolvida_por:manQuem()},'RESOLVIDA'); toast('✅ Resolvida'); }
-  catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
+  let ok=false;
+  try{ await manNota(s.id,'resolvida'+(sem?' sem cobrança':''),{situacao:'RESOLVIDA',sem_cobranca:!!sem,resolvida_em:new Date().toISOString(),resolvida_por:manQuem()},'RESOLVIDA'); toast('✅ Resolvida'); ok=true; }
+  catch(e){ toast('Erro: '+e.message,'erro'); }
+  if(ok) await manDesfechoAparelho(s);   // v4.204 — e o aparelho, como ficou?
+  await manFichaReabrir(); }
 async function manCancelar(){ const s=manSols.find(x=>x.id===manAberta.id); const m=await manMotivo('Cancelar #'+s.id+' ('+s.o_que+')','Motivo do cancelamento (fica no histórico)'); if(!m) return;
   try{ await manNota(s.id,'cancelada: '+m,{situacao:'CANCELADA'},'CANCELADA'); toast('Cancelada'); }catch(e){ toast('Erro: '+e.message,'erro'); } await manFichaReabrir(); }
 async function manSalvarContrato(){ const s=manSols.find(x=>x.id===manAberta.id); const cid=Number(manGv('man-x-contr'))||null, iid=Number(manGv('man-x-citem'))||null;
@@ -27164,6 +27217,7 @@ async function manFichaVisitaSalvar(){
     if(p && !s.prestador_id) campos.prestador_id=p.id;
     await manNota(s.id,'visita de '+quem+' em '+manDt(data)+': '+(feito||'—')+(res?' (resolveu)':' (falta terminar)')+(!res&&volta?' · volta combinada para '+manDt(volta):'')+(fotos.length?' · '+fotos.length+' foto(s)':''),campos,campos.situacao);
     manFichaAcao=null; manFichaFotos=[]; toast('Visita registrada');
+    if(res) await manDesfechoAparelho(s);   // v4.204 — a visita resolveu: e o aparelho?
   }catch(e){ toast('Erro: '+e.message,'erro'); }
   await manFichaReabrir(); }
 function manFichaCustoBloco(s){
@@ -27432,6 +27486,9 @@ async function manVisSalvar(){
     }
     manVisFotos={}; manPreDem=null; manVisSel=[]; manVisCab={};
   },'Visita registrada em '+itens.length+' demanda(s)');
+  // v4.204 — fechou demanda de aparelho também por aqui: a pergunta do desfecho vem
+  // depois do manExec, para o diálogo não brigar com a tela de "gravando".
+  for(const x of itens) if(x.res) await manDesfechoAparelho(x.s);
 }
 
 // ═══ 💰 CUSTOS ══════════════════════════════════════════════════════════════
