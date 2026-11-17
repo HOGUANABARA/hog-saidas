@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.207 · a lista de aparelhos sai no papel com o local e o suprimento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.208 · o insumo padrão de cada aparelho aparece na listagem</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -28271,6 +28271,68 @@ function manEquipVencida(e){   // preventiva atrasada, só quando a periodicidad
   const u=manEquipUltimo(e.id,'PREVENTIVA'); const base=u||e.instalado_em||e.created_at; if(!base) return null;
   const meses=(Date.now()-new Date(base).getTime())/(1000*60*60*24*30.44);
   return meses>e.preventiva_meses ? Math.round(meses-e.preventiva_meses) : null; }
+// ═══ v4.208 — O INSUMO PADRÃO DE CADA APARELHO ═════════════════════════════
+// Ela, 17/11/2026: "cada impressora tem um insumo padrão, preciso que esteja na
+// listagem" + "já passei essa informação, está nos materiais de escritório".
+// E está mesmo — em DOIS lugares que se completam, e por isso nada precisa ser
+// digitado de novo nem virar coluna nova:
+//   1. o MODELO entre parênteses no nome do toner
+//      — "TONER SAMSUNG MLT-D111 (M2020/M2070)", "TONER HP CE285A 85A (LASERJET P1102W)";
+//   2. nas tintas, o modelo está no nome do KIT — "KIT TINTA EPSON 544 4 CORES
+//      (L3250/L5190)" — e os refis por cor HERDAM pela família (544, 664), já que
+//      o kit foi desmembrado em 07/10 e dois refis ficaram sem o modelo no texto.
+// A ligação é por PREFIXO: o cadastro diz a família "M2070" e a impressora é
+// "M2070W" ou "M2070FW". Nada aqui grava: é leitura do que já existe.
+let manInsumos=[];      // [{id,nome,min,saldo,mods}]
+let manInsumoFam={};    // '544' -> ['L3250','L5190']
+
+function manNormMod(x){ return String(x||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function manModelosDoTexto(txt){
+  const out=[], re=/\(([^)]*)\)/g; let m;
+  while((m=re.exec(String(txt||'')))){
+    m[1].split(/[\/,;]/).forEach(p=>{ const k=manNormMod(p);
+      if(k.length>=4 && /^[A-Z]{0,12}\d{3,5}[A-Z]{0,3}$/.test(k)) out.push(k); });
+  }
+  return [...new Set(out)];
+}
+function manFamiliaTinta(nome){ const m=String(nome||'').toUpperCase().match(/EPSON\s*T?(\d{3})/); return m?m[1]:''; }
+
+async function manInsumosCarregar(){
+  try{
+    const mats=(await sbFetch('materiais?select=id,nome,descricao_nf,classe_compra,estoque_minimo,ativo&classe_compra=in.(ADM_EXPEDIENTE,ADM_IMPRESSOS)&limit=800'))||[];
+    let sd={};
+    try{ for(const r of ((await sbFetch('vw_administrativo_inventario?select=material_id,saldo&limit=800'))||[])) sd[r.material_id]=Number(r.saldo)||0; }catch(e){}
+    // o KIT (mesmo inativo) é quem diz a quais impressoras a cor serve
+    manInsumoFam={};
+    for(const m of mats){
+      const fam=manFamiliaTinta(m.nome), mods=manModelosDoTexto(m.nome+' '+(m.descricao_nf||''));
+      if(fam && mods.length) manInsumoFam[fam]=[...new Set((manInsumoFam[fam]||[]).concat(mods))];
+    }
+    manInsumos=mats.filter(m=>m.ativo!==false).map(m=>{
+      let mods=manModelosDoTexto(m.nome+' '+(m.descricao_nf||''));
+      const fam=manFamiliaTinta(m.nome);
+      if(!mods.length && fam && manInsumoFam[fam]) mods=manInsumoFam[fam];
+      return { id:m.id, nome:m.nome, min:Number(m.estoque_minimo)||0, saldo:sd[m.id]||0, mods };
+    }).filter(m=>m.mods.length);
+  }catch(e){ manInsumos=[]; manInsumoFam={}; }
+}
+function manInsumosDoAparelho(e){
+  const mod=manNormMod(e.modelo||''); if(mod.length<4) return [];
+  return (manInsumos||[]).filter(x=>x.mods.some(k=>mod.indexOf(k)===0 || k.indexOf(mod)===0))
+    .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+}
+function manInsumoCurto(n){ return String(n||'').replace(/\s*\([^)]*\)\s*$/,''); }
+function manInsumoCelula(e){
+  const is=manInsumosDoAparelho(e);
+  if(!is.length) return '<span class="man-sub">—</span>';
+  return is.map(x=>{
+    const falta=x.saldo<=0, baixo=!falta && x.min>0 && x.saldo<x.min;
+    return '<div style="font-size:11.5px;line-height:1.45'
+      +(falta?';color:var(--vermelho);font-weight:700':(baixo?';color:var(--laranja)':''))+'">'
+      +manEsc(manInsumoCurto(x.nome))+' <b>'+x.saldo+'</b>'+(falta?' · sem estoque':(baixo?' · abaixo do mínimo':''))+'</div>';
+  }).join('');
+}
+
 // ═══ v4.207 — A LISTA DE APARELHOS NO PAPEL ════════════════════════════════
 // Ela, 17/11/2026: "preciso da impressão da lista das impressoras com o local e o
 // suprimento de cada uma". O papel sai do CADASTRO, não de uma planilha à parte:
@@ -28301,28 +28363,17 @@ async function manEquipImprimir(){
   const lista=manEquipLista();
   if(!lista.length) return toast('Nada na lista para imprimir','erro');
   const soImp = manEquipTipo==='IMPRESSORA';
-  // saldo dos insumos — só vale a pena buscar quando há insumo na lista
-  const ids=[...new Set(lista.reduce((a,e)=>a.concat(manEquipInsumoIds(e)),[]))];
-  const mp={};
-  if(ids.length){
-    try{
-      const mats=(await sbFetch('materiais?select=id,nome,estoque_minimo&id=in.('+ids.join(',')+')&limit=200'))||[];
-      for(const m of mats) mp[m.id]={nome:m.nome, min:Number(m.estoque_minimo)||0, saldo:0};
-      const gid=await getEstoqueGeralId();
-      const est=(await sbFetch('estoque?select=material_id,saldo&local_id=eq.'+gid+'&material_id=in.('+ids.join(',')+')&limit=200'))||[];
-      for(const r of est) if(mp[r.material_id]) mp[r.material_id].saldo=Number(r.saldo)||0;
-    }catch(err){ toast('Não consegui ler o saldo dos suprimentos: '+(err.message||err),'erro'); }
-  }
+  if(!(manInsumos||[]).length) await manInsumosCarregar();   // v4.208 — o papel usa o mesmo de-para da tela
   const supr = e => {
-    const is=manEquipInsumoIds(e); if(!is.length) return '<span style="color:#999">—</span>';
-    const rot=manEquipInsumoNome(e);
-    const linhas=is.map(id=>{ const m=mp[id]; if(!m) return '';
+    const is=manInsumosDoAparelho(e);
+    if(!is.length) return '<span style="color:#999">—</span>';
+    const rot=manEquipInsumoNome(e);   // o rótulo que ela escreveu na observação, quando existe
+    const linhas=is.map(m=>{
       const falta=m.saldo<=0, baixo=!falta && m.min>0 && m.saldo<m.min;
-      const curto=String(m.nome).replace(/\s*\(.*?\)\s*$/,'');
-      return '<div'+(falta?' class="falta"':(baixo?' class="baixo"':''))+'>'+manEsc(curto)
+      return '<div'+(falta?' class="falta"':(baixo?' class="baixo"':''))+'>'+manEsc(manInsumoCurto(m.nome))
         +' <b>'+m.saldo+'</b>'+(falta?' — SEM ESTOQUE':(baixo?' — abaixo do mínimo ('+m.min+')':''))+'</div>';
-    }).filter(Boolean).join('');
-    return (rot?'<b>'+manEsc(rot)+'</b>':'')+(linhas?'<div class="sup">'+linhas+'</div>':'');
+    }).join('');
+    return (rot?'<b>'+manEsc(rot)+'</b>':'')+'<div class="sup">'+linhas+'</div>';
   };
   const d=new Date();
   const dt=d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -28368,6 +28419,7 @@ function manEquipCampoPedido(R){   // v4.178 — o aparelho na hora de abrir a d
 async function manEquipCarregar(){ const box=document.getElementById('man-equip-box'); if(!box) return;
   box.innerHTML='<div style="padding:14px;color:var(--cinza-4);font-size:13px">Carregando…</div>';
   try{ await manRecarregar(); }catch(e){}
+  await manInsumosCarregar();   // v4.208 — o insumo padrão vem do cadastro de materiais
   manEquipRender(); }
 function manEquipRender(){
   const box=document.getElementById('man-equip-box'); if(!box) return;
@@ -28402,8 +28454,8 @@ function manEquipRender(){
    +Object.keys(MAN_EQ_TIPOS).map(k=>'<option value="'+k+'"'+(manEquipTipo===k?' selected':'')+'>'+MAN_EQ_TIPOS[k]+'</option>').join('')+'</select>'
    +B('p','🖨 Imprimir lista','manEquipImprimir()','Imprime o que está na tela, com onde fica e o suprimento de cada um')+'</div>';
   const lista=manEquipLista();
-  h+='<table class="hg-tab man-tab" style="margin-top:8px"><thead><tr><th>Aparelho</th><th class="man-ocs">Onde</th><th class="man-ocm">Dados</th><th>Última preventiva</th><th>Última corretiva</th><th class="man-ocm">Chamados</th><th></th></tr></thead><tbody>';
-  if(!lista.length) h+='<tr><td colspan="7" class="sol-vazio">'+(manEquip.length?'Nada com esse filtro.':'Nenhum aparelho cadastrado ainda — comece pelos ar-condicionados.')+'</td></tr>';
+  h+='<table class="hg-tab man-tab" style="margin-top:8px"><thead><tr><th>Aparelho</th><th class="man-ocs">Onde</th><th class="man-ocm">Dados</th><th>Insumo padrão</th><th>Última preventiva</th><th>Última corretiva</th><th class="man-ocm">Chamados</th><th></th></tr></thead><tbody>';
+  if(!lista.length) h+='<tr><td colspan="8" class="sol-vazio">'+(manEquip.length?'Nada com esse filtro.':'Nenhum aparelho cadastrado ainda — comece pelos ar-condicionados.')+'</td></tr>';
   lista.forEach(e=>{
     const prev=manEquipUltimo(e.id,'PREVENTIVA'), corr=manEquipUltimo(e.id,'CORRETIVA'), atraso=manEquipVencida(e);
     const dems=manDemsDoAparelho(e.id), abertas=dems.filter(s=>s.situacao==='ABERTA'||s.situacao==='ANDAMENTO').length;   // v4.203
@@ -28412,6 +28464,7 @@ function manEquipRender(){
      +'<span class="man-sub">'+(MAN_EQ_TIPOS[e.tipo]||e.tipo||'')+(e.prestador_id?' · '+manEsc(manPrestNome(e.prestador_id)):'')+'</span></td>'
      +'<td class="man-ocs">'+manEsc(e.local||'—')+'</td>'
      +'<td class="man-ocm"><span class="man-sub">'+manEsc([e.marca,e.modelo,e.capacidade].filter(Boolean).join(' · ')||'—')+'</span></td>'
+     +'<td>'+manInsumoCelula(e)+'</td>'   // v4.208 — o que essa máquina consome, e quanto tem hoje
      +'<td>'+(prev?manDt(prev):'<span class="man-sub">nunca</span>')+(atraso?'<span class="man-tag man-t-at">⏰ '+atraso+' mês(es) de atraso</span>':(e.preventiva_meses?'<span class="man-sub">a cada '+e.preventiva_meses+' mês(es)</span>':''))+'</td>'
      +'<td>'+(corr?manDt(corr):'<span class="man-sub">nunca</span>')+'</td>'
      +'<td class="man-ocm">'+dems.length+(abertas?'<span class="man-sub">'+abertas+' em aberto</span>':'')+'</td>'
