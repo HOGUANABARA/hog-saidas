@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.205 · o material administrativo agora tem orçamento antes do pedido</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.206 · relatório de conferência do DML na aba Inventário CC</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -1856,6 +1856,21 @@ details[open] summary { margin-bottom: 6px; }
       <button onclick="ivCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔄 Atualizar</button>
     </div>
     <div id="iv-painel"><div style="text-align:center;padding:20px;color:var(--cinza-4)">Carregando…</div></div>
+  </div>
+
+  <!-- ═══ v4.206 — CONFERÊNCIA DO DML ═══
+       O DML tem DUAS contas: a contagem do inventário (a foto) e o livro de
+       guardar/retirar (o que andou depois). O relatório põe as duas lado a lado
+       e mostra se fecham. -->
+  <div class="inv-card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--azul);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--cinza-2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>🗄️ Conferência do DML — a contagem contra o livro</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="dmlConfCarregar()" style="background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🔍 Emitir relatório</button>
+        <button id="dml-conf-imp" onclick="dmlConfImprimir()" style="display:none;background:var(--azul);color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fonte)">🖨 Imprimir</button>
+      </span>
+    </div>
+    <div id="dml-conf"><div style="font-size:12px;color:var(--cinza-4)">Clique em <b>Emitir relatório</b> para conferir o DML: parte da última contagem fechada, soma o que o livro andou depois e compara com o saldo de hoje.</div></div>
   </div>
 
   <!-- INVENTÁRIO POR LOCAL -->
@@ -22807,6 +22822,136 @@ let dmlBusca = '';
 let dmlAberto = null;    // {mid, sentido} da linha expandida
 
 function dmlN(v){ return Number(v||0).toLocaleString('pt-BR'); }
+
+// ═══ v4.206 — RELATÓRIO DE CONFERÊNCIA DO DML ═══════════════════════════════
+// O DML sempre teve DUAS contas, e era isso que obrigava a acertar o livro à mão
+// depois de cada inventário: a CONTAGEM (a foto do local, tirada no inventário)
+// e o LIVRO de guardar/retirar (o que andou desde então). A conferência é uma
+// conta só: contagem + o que andou depois = saldo do livro hoje. O que não fecha
+// é o que precisa de olho.
+// ⚠️ O corte não é por data, é pelo MOVIMENTO DE ACERTO que a confirmação do
+// inventário grava (v4.155): ele nasce no dia seguinte à contagem e, por data,
+// seria contado como "movimento depois" — foi o que fez o soro de 250 ml
+// aparecer com 20 de diferença na primeira medição.
+let dmlConf = null;   // {inv, data, linhas:[], ok, difs}
+
+async function dmlConfCarregar(){
+  const box = document.getElementById('dml-conf'); if(!box) return;
+  const btn = document.getElementById('dml-conf-imp'); if(btn) btn.style.display='none';
+  box.innerHTML = '<div style="font-size:12px;color:var(--cinza-4)">Conferindo o DML…</div>';
+  try{
+    const locais = (await sbFetch('locais?select=id,nome&limit=100')) || [];
+    const dml = locais.find(l=>String(l.nome||'').trim().toUpperCase()==='DML');
+    if(!dml) throw new Error('não existe o local DML no cadastro');
+
+    // a última contagem FECHADA que contou o DML
+    const invs = (await sbFetch('inventarios?select=id,data_contagem,status&status=eq.fechado&order=data_contagem.desc&limit=24')) || [];
+    let inv=null, contado={};
+    for(const v of invs){
+      const its = (await sbFetch('inventario_itens?select=material_id,qtd_contada&inventario_id=eq.'+v.id+'&local_id=eq.'+dml.id+'&limit=2000')) || [];
+      if(its.length){ inv=v; contado={}; for(const it of its) contado[it.material_id]=(contado[it.material_id]||0)+(Number(it.qtd_contada)||0); break; }
+    }
+    if(!inv) throw new Error('nenhuma contagem fechada incluiu o DML — o relatório precisa de uma foto para partir');
+
+    const movs = (await sbFetch('dml_movimentos?select=id,material_id,qtd,sentido,observacao,criado_em&order=id.asc&limit=5000')) || [];
+    let corte = 0;
+    for(const m of movs) if(String(m.observacao||'').indexOf('Inventário #'+inv.id+' de ')>=0) corte = Math.max(corte, m.id);
+    const depois = corte
+      ? movs.filter(m=>m.id>corte)
+      : movs.filter(m=>String(m.criado_em||'').slice(0,10) > String(inv.data_contagem||'').slice(0,10));
+    const andou = {};
+    for(const m of depois){ const q=Number(m.qtd)||0; andou[m.material_id]=(andou[m.material_id]||0)+(m.sentido==='GUARDAR'?q:-q); }
+
+    const sal = (await sbFetch('vw_dml_saldo?select=material_id,saldo_dml&limit=2000')) || [];
+    const livro = {}; for(const r of sal) livro[r.material_id]=Number(r.saldo_dml)||0;
+
+    const ids = [...new Set([].concat(Object.keys(contado), Object.keys(andou), Object.keys(livro)).map(Number))];
+    const mats = (await sbFetch('materiais?select=id,nome,unidade_medida,ultimo_valor_pago&limit=3000')) || [];
+    const mp = {}; for(const m of mats) mp[m.id]=m;
+
+    const linhas = ids.map(id=>{
+      const c=contado[id]||0, a=andou[id]||0, l=livro[id]||0, e=c+a;
+      const m=mp[id]||{};
+      return { id, nome:m.nome||('material #'+id), un:m.unidade_medida||'', uvp:Number(m.ultimo_valor_pago)||0,
+               contado:c, andou:a, esperado:e, livro:l, dif:l-e, movs:depois.filter(x=>x.material_id===id).length };
+    }).filter(x=>x.contado||x.andou||x.livro)
+      .sort((a,b)=> Math.abs(b.dif)-Math.abs(a.dif) || String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+
+    dmlConf = { inv, dml, linhas, corte,
+                difs: linhas.filter(x=>Math.abs(x.dif)>0.0001),
+                nMovs: depois.length,
+                emitido: new Date() };
+    dmlConfRender();
+    if(btn) btn.style.display='';
+  }catch(e){
+    box.innerHTML = '<div style="font-size:12px;color:var(--vermelho)">Não consegui conferir: '+String(e.message||e)+'</div>';
+  }
+}
+
+function dmlConfRender(){
+  const box = document.getElementById('dml-conf'); if(!box || !dmlConf) return;
+  const C = dmlConf, difs = C.difs, ok = difs.length===0;
+  const vlr = difs.reduce((s,x)=>s+Math.abs(x.dif)*x.uvp, 0);
+  const linha = x => '<tr'+(Math.abs(x.dif)>0.0001?' style="background:#FDEDEC"':'')+'>'
+    +'<td style="text-align:left">'+rmEsc(x.nome)+(x.un?'<span style="color:var(--cinza-4);font-size:11px"> · '+rmEsc(x.un)+'</span>':'')+'</td>'
+    +'<td>'+dmlN(x.contado)+'</td>'
+    +'<td'+(x.andou?'':' style="color:var(--cinza-4)"')+'>'+(x.andou>0?'+':'')+dmlN(x.andou)+(x.movs?'<span style="color:var(--cinza-4);font-size:10.5px"> ('+x.movs+')</span>':'')+'</td>'
+    +'<td>'+dmlN(x.esperado)+'</td>'
+    +'<td><b>'+dmlN(x.livro)+'</b></td>'
+    +'<td>'+(Math.abs(x.dif)>0.0001
+        ? '<b style="color:var(--vermelho)">'+(x.dif>0?'+':'')+dmlN(x.dif)+'</b>'
+        : '<span style="color:var(--verde)">✔</span>')+'</td></tr>';
+
+  box.innerHTML =
+    '<div style="border:1.5px solid '+(ok?'#A9DFBF':'#F5B7B1')+';background:'+(ok?'#EAF7EE':'#FDEDEC')+';border-radius:8px;padding:11px 14px;margin-bottom:12px;font-size:12.5px">'
+    + (ok ? '<b style="color:var(--verde)">✅ O DML confere.</b> As '+C.linhas.length+' linhas fecham: a contagem de '
+            +ivData(C.inv.data_contagem)+' mais os '+C.nMovs+' movimento(s) do livro depois dela dão exatamente o saldo de hoje.'
+          : '<b style="color:var(--vermelho)">⚠ '+difs.length+' item(ns) não fecham</b> — '+hgMoeda(vlr)+' em jogo. '
+            +'O resto das '+C.linhas.length+' linhas confere.')
+    + '<div style="font-size:11px;color:var(--cinza-4);margin-top:5px">Parte da contagem <b>#'+C.inv.id+' de '+ivData(C.inv.data_contagem)
+    + '</b> (a última fechada que contou o DML) e soma o que o livro andou depois dela.</div></div>'
+    + (ok?'':'<div style="font-size:11.5px;color:var(--cinza-5);margin-bottom:8px">Diferença = o que o livro diz hoje menos o que deveria dizer. '
+        +'<b>Positiva</b> = o livro tem peça que a contagem não viu (guardar lançado a mais, ou retirada não lançada). '
+        +'<b>Negativa</b> = saiu do livro sem ter entrado.</div>')
+    + '<div style="overflow-x:auto"><table class="hg-tab" style="width:100%;font-size:12px;text-align:center">'
+    + '<thead><tr><th style="text-align:left">Item</th><th>Contado '+ivData(C.inv.data_contagem)+'</th><th>Andou depois</th>'
+    + '<th>Esperado</th><th>Livro hoje</th><th>Diferença</th></tr></thead><tbody>'
+    + C.linhas.map(linha).join('')
+    + '</tbody></table></div>';
+}
+
+function dmlConfImprimir(){
+  const C = dmlConf; if(!C) return toast('Emita o relatório primeiro','erro');
+  const ok = C.difs.length===0;
+  const vlr = C.difs.reduce((s,x)=>s+Math.abs(x.dif)*x.uvp, 0);
+  const dt = C.emitido.toLocaleDateString('pt-BR')+' '+C.emitido.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const linha = (x,ix) => '<tr><td class="n">'+(ix+1)+'</td><td>'+rmEsc(x.nome)+'</td>'
+    +'<td class="q">'+dmlN(x.contado)+'</td><td class="q">'+(x.andou>0?'+':'')+dmlN(x.andou)+'</td>'
+    +'<td class="q">'+dmlN(x.esperado)+'</td><td class="q">'+dmlN(x.livro)+'</td>'
+    +'<td class="q">'+(Math.abs(x.dif)>0.0001?((x.dif>0?'+':'')+dmlN(x.dif)):'✓')+'</td><td class="c">☐</td></tr>';
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conferência do DML</title>'
+    + rmCssImpressao()
+    + '<style>td{text-align:left}td.q{text-align:center;font-size:13px;font-weight:400;color:#222;width:62px}'
+    + 'td.q b{font-size:13px}tr.ruim td{background:#FDEDEC}tr.ruim td.q:last-of-type{font-weight:bold;color:#C0392B}'
+    + '.veredito{border:1.5px solid #ccc;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:12px}</style></head><body>'
+    + '<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+    + '<div class="sub">Centro Cirúrgico · Conferência do DML — a contagem contra o livro</div></div>'
+    + '<div class="num">EMITIDO EM<b>'+rmEsc(dt.split(' ')[0])+'</b>'+rmEsc(dt.split(' ')[1])+'</div></div>'
+    + '<div class="veredito">'
+    + (ok ? '<b>O DML confere.</b> As '+C.linhas.length+' linhas fecham: a contagem de '+ivData(C.inv.data_contagem)
+            +' mais os '+C.nMovs+' movimento(s) do livro depois dela dão exatamente o saldo de hoje.'
+          : '<b>'+C.difs.length+' item(ns) não fecham</b> — '+hgMoeda(vlr)+' em jogo; as outras '
+            +(C.linhas.length-C.difs.length)+' linhas conferem.')
+    + '<br><span style="color:#666;font-size:11px">Base: contagem #'+C.inv.id+' de '+ivData(C.inv.data_contagem)
+    + ' (última fechada com o DML) + '+C.nMovs+' movimento(s) do livro registrados depois dela.</span></div>'
+    + '<table style="width:100%"><thead><tr><th class="n">#</th><th>Item</th><th class="q">Contado</th>'
+    + '<th class="q">Andou</th><th class="q">Esperado</th><th class="q">Livro</th><th class="q">Dif.</th><th class="c">Conf.</th></tr></thead><tbody>'
+    + C.linhas.map((x,ix)=>linha(x,ix).replace('<tr>', Math.abs(x.dif)>0.0001?'<tr class="ruim">':'<tr>')).join('')
+    + '</tbody></table>'
+    + '<div class="ass"><div>Conferido por — nome e data</div><div>Coordenação do CC — nome e data</div></div>'
+    + '<div class="rodape">Emitido pelo HOG Saídas em '+rmEsc(dt)+'. A coluna <b>Andou</b> é a soma dos movimentos de guardar e retirar do livro do DML depois da contagem.</div>'
+    + '</body></html>');
+}
 function dmlArsenal(mid){ return (dmlSaldoTotal[mid]||0) - (dmlNoDml[mid]||0); }
 
 let dmlMarcas = {};   // v4.53 — material_id -> [marcas registradas no grupo]
