@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.206 · relatório de conferência do DML na aba Inventário CC</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.207 · a lista de aparelhos sai no papel com o local e o suprimento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -28271,6 +28271,91 @@ function manEquipVencida(e){   // preventiva atrasada, só quando a periodicidad
   const u=manEquipUltimo(e.id,'PREVENTIVA'); const base=u||e.instalado_em||e.created_at; if(!base) return null;
   const meses=(Date.now()-new Date(base).getTime())/(1000*60*60*24*30.44);
   return meses>e.preventiva_meses ? Math.round(meses-e.preventiva_meses) : null; }
+// ═══ v4.207 — A LISTA DE APARELHOS NO PAPEL ════════════════════════════════
+// Ela, 17/11/2026: "preciso da impressão da lista das impressoras com o local e o
+// suprimento de cada uma". O papel sai do CADASTRO, não de uma planilha à parte:
+// imprime exatamente o que está na tela, com o filtro que estiver aplicado.
+// O SUPRIMENTO mora na observação do aparelho (SQL 129, 11/11) em texto livre —
+// "no estoque: material 370" para toner, "refis 479 preto · 458 ciano · …" para
+// tinta. Daí saem os ids, e o saldo de cada um é lido na hora: é esse número que
+// faz a lista servir para comprar, e não só para conferir.
+function manEquipLista(){
+  const q=manNorm(manEquipBusca||'');
+  return manEquip.filter(e=>(!manEquipTipo||e.tipo===manEquipTipo)
+    && (!q||manNorm([e.nome,e.local,e.marca,e.modelo,e.capacidade,e.serie,e.patrimonio].filter(Boolean).join(' ')).includes(q)))
+    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR',{numeric:true}));   // v4.179 — R1, R2… R18
+}
+// ids dos insumos escritos na observação do aparelho
+function manEquipInsumoIds(e){
+  const o=String(e.observacao||''), ids=[];
+  let m, re1=/material\s+(\d+)/gi;          while((m=re1.exec(o))) ids.push(Number(m[1]));
+  let re2=/(\d+)\s+(preto|ciano|magenta|amarelo)/gi; while((m=re2.exec(o))) ids.push(Number(m[1]));
+  return [...new Set(ids)];
+}
+// o nome do insumo como ela escreveu: "Insumo: Tinta Epson 664 (4 cores)"
+function manEquipInsumoNome(e){
+  const m=String(e.observacao||'').match(/Insumo:\s*([^—\n]+)/i);
+  return m ? m[1].trim() : '';
+}
+async function manEquipImprimir(){
+  const lista=manEquipLista();
+  if(!lista.length) return toast('Nada na lista para imprimir','erro');
+  const soImp = manEquipTipo==='IMPRESSORA';
+  // saldo dos insumos — só vale a pena buscar quando há insumo na lista
+  const ids=[...new Set(lista.reduce((a,e)=>a.concat(manEquipInsumoIds(e)),[]))];
+  const mp={};
+  if(ids.length){
+    try{
+      const mats=(await sbFetch('materiais?select=id,nome,estoque_minimo&id=in.('+ids.join(',')+')&limit=200'))||[];
+      for(const m of mats) mp[m.id]={nome:m.nome, min:Number(m.estoque_minimo)||0, saldo:0};
+      const gid=await getEstoqueGeralId();
+      const est=(await sbFetch('estoque?select=material_id,saldo&local_id=eq.'+gid+'&material_id=in.('+ids.join(',')+')&limit=200'))||[];
+      for(const r of est) if(mp[r.material_id]) mp[r.material_id].saldo=Number(r.saldo)||0;
+    }catch(err){ toast('Não consegui ler o saldo dos suprimentos: '+(err.message||err),'erro'); }
+  }
+  const supr = e => {
+    const is=manEquipInsumoIds(e); if(!is.length) return '<span style="color:#999">—</span>';
+    const rot=manEquipInsumoNome(e);
+    const linhas=is.map(id=>{ const m=mp[id]; if(!m) return '';
+      const falta=m.saldo<=0, baixo=!falta && m.min>0 && m.saldo<m.min;
+      const curto=String(m.nome).replace(/\s*\(.*?\)\s*$/,'');
+      return '<div'+(falta?' class="falta"':(baixo?' class="baixo"':''))+'>'+manEsc(curto)
+        +' <b>'+m.saldo+'</b>'+(falta?' — SEM ESTOQUE':(baixo?' — abaixo do mínimo ('+m.min+')':''))+'</div>';
+    }).filter(Boolean).join('');
+    return (rot?'<b>'+manEsc(rot)+'</b>':'')+(linhas?'<div class="sup">'+linhas+'</div>':'');
+  };
+  const d=new Date();
+  const dt=d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const semSerie=lista.filter(e=>!e.serie).length;
+  const titulo=soImp?'Relação de impressoras':'Relação de aparelhos';
+  const linhas=lista.map((e,ix)=>'<tr><td class="n">'+(ix+1)+'</td>'
+    +'<td class="loc">'+manEsc(e.local||'—')+'</td>'
+    +'<td><b>'+manEsc([e.marca,e.modelo].filter(Boolean).join(' ')||e.nome)+'</b>'
+      +(soImp?'':'<div class="sub2">'+manEsc(MAN_EQ_TIPOS[e.tipo]||e.tipo||'')+'</div>')
+      +((e.situacao&&e.situacao!=='EM_USO')?'<div class="sub2">'+manEsc((MAN_EQ_SIT[e.situacao]||[,e.situacao])[1])+'</div>':'')+'</td>'
+    +'<td>'+supr(e)+'</td>'
+    +'<td class="ser">'+manEsc(e.serie||'')+'</td>'
+    +'<td class="c">☐</td></tr>').join('');
+  hogImprimir('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+titulo+'</title>'
+    + rmCssImpressao()
+    + '<style>td{text-align:left;vertical-align:top}td.loc{font-weight:bold;white-space:nowrap}'
+    + 'td.ser{width:92px}.sub2{font-size:10px;color:#777}'
+    + '.sup{font-size:10.5px;color:#444;margin-top:2px}.sup div{line-height:1.5}'
+    + '.sup .falta{color:#C0392B;font-weight:bold}.sup .baixo{color:#B9770E}'
+    + '.aviso{border:1px solid #ccc;border-left:3px solid #B9770E;background:#FEF9E7;border-radius:4px;padding:8px 11px;margin-bottom:12px;font-size:11.5px}</style></head><body>'
+    + '<div class="topo"><div><h1>Hospital dos Olhos Guanabara</h1>'
+    + '<div class="sub">Centro Cirúrgico · Manutenção · '+titulo+'</div></div>'
+    + '<div class="num">EMITIDO EM<b>'+manEsc(dt.split(" ")[0])+'</b>'+manEsc(dt.split(" ")[1])+'</div></div>'
+    + '<div class="aviso"><b>'+lista.length+' aparelho(s)</b> em '+[...new Set(lista.map(e=>e.local||"—"))].length+' ambiente(s).'
+    + ' O saldo do suprimento é o do Estoque Geral no momento da emissão.'
+    + (semSerie?' <b>'+semSerie+'</b> ainda sem número de série — a coluna fica em branco para anotar.':'')+'</div>'
+    + '<table style="width:100%"><thead><tr><th class="n">#</th><th>Ambiente</th><th>Aparelho</th>'
+    + '<th>Suprimento que usa · saldo hoje</th><th>Nº de série</th><th class="c">Conf.</th></tr></thead><tbody>'
+    + linhas + '</tbody></table>'
+    + '<div class="ass"><div>Conferido por — nome e data</div><div>Coordenação do CC — nome e data</div></div>'
+    + '<div class="rodape">Emitido pelo HOG Saídas em '+manEsc(dt)+', a partir do cadastro de aparelhos da Manutenção.</div>'
+    + '</body></html>');
+}
 function manEquipCampoPedido(R){   // v4.178 — o aparelho na hora de abrir a demanda
   const lista=manEquip.filter(e=>e.ativo!==false && (e.situacao||'EM_USO')!=='BAIXADO'   // v4.203 — baixado sai da lista
     && (!R.local || !e.local || manNorm(e.local)===manNorm(R.local)));
@@ -28314,11 +28399,9 @@ function manEquipRender(){
    +B('o p','➕ Novo aparelho','manEquipEd={tipo:"AR_CONDICIONADO"};manEquipRender()')
    +'<input placeholder="buscar por nome, sala, marca…" value="'+manEsc(manEquipBusca)+'" oninput="manEquipBusca=this.value;manEquipRender()" style="max-width:260px">'
    +'<select onchange="manEquipTipo=this.value;manEquipRender()"><option value="">todos os tipos</option>'
-   +Object.keys(MAN_EQ_TIPOS).map(k=>'<option value="'+k+'"'+(manEquipTipo===k?' selected':'')+'>'+MAN_EQ_TIPOS[k]+'</option>').join('')+'</select></div>';
-  const q=manNorm(manEquipBusca||'');
-  const lista=manEquip.filter(e=>(!manEquipTipo||e.tipo===manEquipTipo)
-    && (!q||manNorm([e.nome,e.local,e.marca,e.modelo,e.capacidade,e.serie,e.patrimonio].filter(Boolean).join(' ')).includes(q)))
-    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR',{numeric:true}));   // v4.179 — R1, R2… R18
+   +Object.keys(MAN_EQ_TIPOS).map(k=>'<option value="'+k+'"'+(manEquipTipo===k?' selected':'')+'>'+MAN_EQ_TIPOS[k]+'</option>').join('')+'</select>'
+   +B('p','🖨 Imprimir lista','manEquipImprimir()','Imprime o que está na tela, com onde fica e o suprimento de cada um')+'</div>';
+  const lista=manEquipLista();
   h+='<table class="hg-tab man-tab" style="margin-top:8px"><thead><tr><th>Aparelho</th><th class="man-ocs">Onde</th><th class="man-ocm">Dados</th><th>Última preventiva</th><th>Última corretiva</th><th class="man-ocm">Chamados</th><th></th></tr></thead><tbody>';
   if(!lista.length) h+='<tr><td colspan="7" class="sol-vazio">'+(manEquip.length?'Nada com esse filtro.':'Nenhum aparelho cadastrado ainda — comece pelos ar-condicionados.')+'</td></tr>';
   lista.forEach(e=>{
