@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.211 · o botão de tirar do orçamento só conta pedido em andamento</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.212 · a busca por fornecedor mostra o nome do item desativado</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -9152,9 +9152,27 @@ async function fvBuscar(){
 
     // 4) monta as linhas
     const porId={}; for(const r of ccDados) porId[r.material_id]=r;
+    // ═══ v4.212 — ITEM SEM NOME NA BUSCA POR FORNECEDOR ═══════════════════════
+    // Ela, 19/11, com o print da CRISTÁLIA: uma linha dizia só "#200 zerado".
+    // A lista de compras vem da `vw_compras_classes`, que traz **só material
+    // ATIVO** — então todo item já comprado do fornecedor que foi DESATIVADO caía
+    // aqui sem nome, com saldo 0 e a etiqueta "zerado", e dava para marcar e
+    // mandar para o orçamento. Medido: no sistema inteiro são 3, todos inativos
+    // de propósito — 200 NARCAN (trocado pela NALOXONA, id 199), 365 e 369 (kits
+    // de tinta desmembrados em refis por cor). Agora o nome vem do cadastro e a
+    // linha diz que o item está fora de uso, sem caixinha para marcar.
+    const fvFora = {};
+    const semFicha = ids.filter(id=>!porId[id]);
+    if(semFicha.length){
+      try{
+        const ms = (await sbFetch(`materiais?select=id,nome,ativo&id=in.(${semFicha.join(',')})&limit=200`))||[];
+        for(const m of ms) fvFora[m.id]=m;
+      }catch(e){}
+    }
     fvItens = ids.map(id=>{
-      const r=porId[id]||{}; const c=consumo[id]||{ant:0,atual:0};
-      return { material_id:id, nome:r.material||('#'+id), saldo:Number(r.saldo)||0,
+      const r=porId[id]||{}; const c=consumo[id]||{ant:0,atual:0}; const fx=fvFora[id]||{};
+      return { material_id:id, nome:r.material||fx.nome||('#'+id), saldo:Number(r.saldo)||0,
+        foraDaLista: !porId[id], inativo: !porId[id] && fx.ativo===false,
         minimo:Number(r.estoque_minimo)||0, classe:r.classe_compra||'',
         consAnt:c.ant, consAtual:c.atual, ultima:compras[id].ultima, valor:compras[id].valor,
         emAndamento: (typeof ccAndamento!=='undefined' && ccAndamento[id]) || null,
@@ -9173,6 +9191,9 @@ function fvRender(){
   if(!fvItens.length){ corpo.innerHTML=''; return; }
   const mesAnt=fvMesNome(fvMesAnterior()), mesAtu=fvMesNome(fvMesAtual());
   const chip=it=>{
+    // v4.212 — item desativado no cadastro não é "zerado": está fora de uso
+    if(it.inativo)     return '<span class="co-chip" style="background:var(--cinza-1);color:var(--cinza-4)">⛔ fora de uso — desativado no cadastro</span>';
+    if(it.foraDaLista) return '<span class="co-chip" style="background:var(--cinza-1);color:var(--cinza-4)">⛔ fora da lista de compras</span>';
     if(it.naCotacao) return '<span class="co-chip" style="background:var(--azul-claro);color:var(--azul)">já no orçamento</span>';
     if(it.emAndamento) return `<span class="co-chip" style="background:#EBEAFC;color:#6f42c1">${it.emAndamento}</span>`;
     if(it.saldo<=0) return '<span class="co-chip" style="background:#FDEDEC;color:var(--vermelho)">zerado</span>';
@@ -9203,14 +9224,14 @@ function fvRender(){
       </tr></thead><tbody>
       ${fvItens.map((it,i)=>`<tr>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:center">
-          <input type="checkbox" style="width:15px;height:15px;accent-color:var(--azul-medio)" ${it.naCotacao?'disabled title="já está no orçamento"':''} onchange="fvToggle(${it.material_id},this.checked)"></td>
+          <input type="checkbox" style="width:15px;height:15px;accent-color:var(--azul-medio)" ${it.naCotacao?'disabled title="já está no orçamento"':(it.foraDaLista?'disabled title="item desativado no cadastro — não entra em orçamento"':'')} onchange="fvToggle(${it.material_id},this.checked)"></td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2)"><b>${it.nome}</b> ${chip(it)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.consAnt?Math.round(it.consAnt):'—'}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">${it.consAtual?Math.round(it.consAtual):'—'}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;${it.saldo<=0?'color:var(--vermelho);font-weight:800':''}">${Math.round(it.saldo)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right;${(!it.foraDaLista&&it.saldo<=0)?'color:var(--vermelho);font-weight:800':''}">${it.foraDaLista?'—':Math.round(it.saldo)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);font-size:11px">${fvData(it.ultima)}${it.valor?` · <span style="color:var(--verde)">R$ ${Number(it.valor).toFixed(2).replace('.',',')}</span>`:''}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--cinza-2);text-align:right">
-          <input class="co-nn" type="number" step="any" style="width:74px" id="fv-q-${it.material_id}" value="${it.consAnt?Math.max(1,Math.ceil(it.consAnt*2-it.saldo)):''}" placeholder="qtd"></td>
+          ${it.foraDaLista?'<span style="font-size:11px;color:var(--cinza-4)">—</span>':`<input class="co-nn" type="number" step="any" style="width:74px" id="fv-q-${it.material_id}" value="${it.consAnt?Math.max(1,Math.ceil(it.consAnt*2-it.saldo)):''}" placeholder="qtd">`}</td>
       </tr>`).join('')}
     </tbody></table></div>
     <div style="font-size:11px;color:var(--cinza-4);margin-top:8px">Ordenado por urgência (menor cobertura primeiro). A quantidade sugerida cobre ~2 meses do consumo do mês fechado — ajuste à vontade antes de enviar.</div>`;
