@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.214 · cada pedido do Receber NF abre e fecha</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.215 · a compra passou a olhar o consumo real, não a planilha</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -6243,6 +6243,24 @@ function ccPrioridade(r){
     if(venc60>0) return 'ATENCAO';
     if(min>0 && disp < min*1.2) return 'ATENCAO';
   }
+  // ═══ v4.215 — PISO DO MÍNIMO PARA QUEM NÃO TEM CONSUMO MEDIDO ═══════════
+  // Até a v4.214 a régua por saldo/mínimo existia só para a classe CRITICO.
+  // Quem não tinha consumo recorrente e não era crítico caía em 'OK' sempre —
+  // mesmo zerado. Isso passava batido porque a média vinha da planilha mar–jul
+  // e quase todo item tinha algum número ali. Com o SQL 148, a média passou a
+  // ser medida nos lançamentos dos últimos 90 dias: item usado de vez em quando
+  // marca 0 e sai da régua de consumo — CORRETO, é o caso do AZUL BRILHANTE.
+  // Mas sem este piso o BLOOD STOP (saldo 0, mínimo 30), que hoje é URGENTE,
+  // ficaria calado. MEDIDO em 19/11: 19 itens abaixo do mínimo estavam sem
+  // nenhuma vigilância, 12 deles zerados — inclusive o SWAB ÁLCOOL
+  // ISOPROPÍLICO, com saldo −11. O mínimo é a decisão dela; se foi definido,
+  // vale como chão, com ou sem consumo medido.
+  if(min > 0 && disp < min){
+    if(vencido || disp <= 0) return 'URGENTE';
+    if(disp <= min*0.5) return 'URGENTE';
+    return 'COMPRAR';
+  }
+  if(min > 0 && disp < min*1.2) return 'ATENCAO';
   return 'OK';
 }
 function ccPrioChip(r){
@@ -6292,6 +6310,15 @@ function ccGatilho(r){
       return { compra:true, motivo, sugestao:Math.max(0, Math.ceil(min*2 - disp)), chip: saldo<=min*0.5?'cc-verm':'cc-ama' };
     }
     return { compra:false };
+  }
+  // v4.215 — o mesmo piso da ccPrioridade, para o item entrar na lista de
+  // compra com motivo e sugestão (repõe para 2× o mínimo, como no CRITICO).
+  if(min > 0 && disp < min){
+    const motivo = venc60 > 0
+      ? `${acN0(saldo)}−${acN0(venc60)} vencendo = ${acN0(disp)} < mín ${acN0(min)}`
+      : `saldo ${acN0(saldo)} < mín ${acN0(min)} · sem consumo lançado nos últimos 90 dias`;
+    return { compra:true, motivo, sugestao:Math.max(0, Math.ceil(min*2 - disp)),
+             chip: disp<=min*0.5?'cc-verm':'cc-ama' };
   }
   return { compra:false };
 }
@@ -6661,7 +6688,7 @@ function ccTabela(classe, rows, mostrarTodos){
   }
 
   // RECORRENTE — cobertura em DIAS
-  return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num">Consumo/mês</th><th class="num">Cobertura (dias)</th><th class="num">Sugerido (2m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
+  return `<table><thead><tr><th></th><th>Item</th><th class="num">Saldo</th><th class="num" title="Média medida nos lançamentos: saídas dos últimos 90 dias dividido por 3. Ajuste de inventário não entra na conta. Item sem saída lançada marca 0 e passa a ser vigiado só pelo estoque mínimo.">Consumo/mês</th><th class="num">Cobertura (dias)</th><th class="num">Sugerido (2m)</th>${FONTES_TH}<th>Últ. compra</th></tr></thead><tbody>` +
     visiveis.map(r=>{
       const gt=g(r);
       return `<tr data-mid="${r.material_id}" draggable="true" ondragstart="ccDragStart(event,${r.material_id})" ondragover="ccDragOver(event)" ondrop="ccDrop(event,${r.material_id})" ondragend="ccDragEnd()">${ccChk(r)}<td><div class="ac-item">${r.material}${ccPrioChip(r)}${ccPisoChip(r)}</div>${ccTagClasse(r)}${ccEtapa(r)}</td>
