@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.212 · a busca por fornecedor mostra o nome do item desativado</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.213 · orçamento que virou pedido não volta como cartão vazio</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7262,6 +7262,27 @@ let coGruposCarregados = [];
 // recorrente é o orçamento vazio ficar voltando após eu removê-lo". A v4.193 fez a
 // exclusão chegar ao banco, mas não impediu o salvamento seguinte de reescrever.
 let coGruposExcluidos = new Set();
+// ═══ v4.213 — ORÇAMENTO VAZIO QUE VOLTA SEMPRE ══════════════════════════════
+// Ela, 19/11: "já excluí várias vezes o orçamento vazio e ele volta" (o
+// "Vision Line" da cotação #32).
+// MEDIDO: o grupo NÃO está vazio no banco — tem 1 item, o SONDA DACRIO, com
+// `fechado = true` e `pedido_id = 134`. Ele fechou em pedido hoje de manhã.
+// `coAbrir` carrega só `fechado=is.false`, então o item não aparece; mas a
+// CHAVE do grupo continua em `cotacoes.fornecedores_grupo`, e o laço do
+// `coRender` cria um cartão para toda chave do cabeçalho. Resultado: cartão
+// vazio, para sempre. São QUATRO assim na #32 hoje — Eye Pharma, OPHTHALMOS,
+// Ophthamos e Vision Line: todos com 100% dos itens já em pedido.
+// POR QUE EXCLUIR NÃO RESOLVIA: `coFecharGrupo` tirava o grupo só da memória
+// da janela (v4.25c) e NUNCA do cabeçalho no banco; e o `coExcluirGrupo`, que
+// tira do banco, disputava com a gravação automática de 1,5 s — ela lê o
+// cabeçalho ANTES da exclusão e grava DEPOIS, devolvendo a chave. É por isso
+// que a data de nascimento do grupo continuava sendo a de 18/11: o que voltava
+// era a cópia velha.
+// CONSERTO EM TRÊS PONTOS: (a) grupo cujos itens já viraram pedido não vira
+// cartão e é limpo do cabeçalho ao abrir a cotação; (b) fechar o grupo tira a
+// chave do banco na hora; (c) nenhuma gravação desta janela — nem a do
+// cabeçalho, nem a das datas — reescreve grupo excluído ou encerrado.
+let coGruposEncerrados = new Set();   // grupo com item, e NENHUM item aberto
 // v4.173 — ids de linha que ESTA janela carregou ou gravou. Só eles podem ser
 // apagados pelo salvar; linha que apareceu depois (SQL, outra aba) sobrevive.
 let coIdsConhecidos = new Set();
@@ -7344,6 +7365,10 @@ async function coSalvarCabecalho(){
     fg = Object.assign({}, atual);
     if(coOrcFoco) fg[coOrcFoco] = coFornGrupo[coOrcFoco] || [];
     else for(const g of coGruposDaTela()) fg[g] = coFornGrupo[g] || [];
+    // v4.213 — e o que foi excluído ou já virou pedido sai, mesmo tendo vindo do
+    // banco: é esta linha que encerra a corrida entre o excluir e o autosave.
+    for(const g of coGruposExcluidos) delete fg[g];
+    for(const g of coGruposEncerrados) delete fg[g];
   }catch(e){ fg = coFornGrupo; }
   await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ fornecedores_grupo: fg });
 }
@@ -7399,6 +7424,7 @@ function coNovoGrupo(){
   if(!nome||!nome.trim()) return;
   coGrupoAtual = nome.trim(); if(!coFornGrupo[coGrupoAtual]) coFornGrupo[coGrupoAtual]=[];
   coGruposExcluidos.delete(coGrupoAtual);   // v4.199 — criar de novo com o mesmo nome desfaz a exclusão
+  coGruposEncerrados.delete(coGrupoAtual);  // v4.213 — nome reaproveitado volta a ser orçamento vivo
   coGrupoCriado[coGrupoAtual] = new Date().toISOString(); coSalvarGruposCriado();   // v4.140
   coGrupoAberto = coGrupoAtual; try{ localStorage.setItem('hog_orc_aberto', coGrupoAberto); }catch(e){}   // v4.116 — o novo já abre
   coAtualizaLabelGrupo(); coRender();
@@ -7411,6 +7437,7 @@ function coRenomearGrupo(g){
   coItens.forEach(it=>{ if((it.grupo||'Orçamento 1')===g) it.grupo=n; });
   if(coFornGrupo[g]){ coFornGrupo[n]=coFornGrupo[g]; delete coFornGrupo[g]; }
   coGruposExcluidos.delete(n);   // v4.199 — renomear para um nome excluído antes o traz de volta
+  coGruposEncerrados.delete(n);  // v4.213
   if(coGrupoCriado[g]){ coGrupoCriado[n]=coGrupoCriado[g]; delete coGrupoCriado[g]; coSalvarGruposCriado(); }   // v4.140
   if(coGrupoAtual===g) coGrupoAtual=n;
   coRender();
@@ -7490,6 +7517,26 @@ async function coAbrir(id){
   // v4.172 — o que ESTA janela carregou é o alcance da faxina do salvar
   coGruposCarregados = [...new Set((its||[]).map(it => it.grupo || 'Orçamento 1'))];
   coIdsConhecidos = new Set((its||[]).map(it => it.id).filter(Boolean));   // v4.173
+  // v4.213 — quais grupos já terminaram: têm item na cotação e NENHUM aberto.
+  // Grupo recém-criado (nenhum item ainda) NÃO entra aqui — ele precisa aparecer.
+  coGruposEncerrados = new Set();
+  try{
+    const todos = (await sbFetch(`cotacao_itens?select=grupo,fechado,pedido_id&cotacao_id=eq.${id}&limit=3000`))||[];
+    const comItem = new Set(), abertos = new Set();
+    for(const it of todos){
+      const g = it.grupo || 'Orçamento 1';
+      comItem.add(g);
+      if(!it.fechado && it.pedido_id == null) abertos.add(g);
+    }
+    for(const g of comItem) if(!abertos.has(g)) coGruposEncerrados.add(g);
+    // os que ainda estão no cabeçalho saem de lá de uma vez — é o que faz o
+    // cartão vazio parar de voltar sem ela precisar excluir nada
+    const sujos = Object.keys(coFornGrupo).filter(g => coGruposEncerrados.has(g));
+    if(sujos.length){
+      for(const g of sujos){ delete coFornGrupo[g]; if(coGrupoCriado) delete coGrupoCriado[g]; }
+      coTirarGrupoDoCabecalho(sujos);
+    }
+  }catch(e){ coGruposEncerrados = new Set(); }
   coAutoTxt = ''; coUltimoSalvo = null;   // v4.77 — baseline é definida logo abaixo, depois de montar coItens
   coItens = (its||[]).map(it=>({
     id: it.id, material_id: it.material_id, material_nome: it.material_nome,
@@ -7575,7 +7622,39 @@ async function coGruposSondar(){
 }
 async function coSalvarGruposCriado(){
   if(!coGruposCol || !coCotacaoId) return;
-  try{ await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ grupos_criado_em: coGrupoCriado }); }catch(e){}
+  // v4.213 — MESCLA com o banco. Gravar o objeto inteiro fazia uma janela antiga
+  // devolver a data de um grupo apagado em outra — e com a data velha, que foi a
+  // pista de que o zumbi era cópia antiga, não grupo novo.
+  try{
+    const cab = await sbFetch('cotacoes?select=grupos_criado_em&id=eq.'+coCotacaoId+'&limit=1');
+    const gc = Object.assign({}, (cab && cab[0] && cab[0].grupos_criado_em) || {}, coGrupoCriado);
+    for(const g of coGruposExcluidos) delete gc[g];
+    for(const g of coGruposEncerrados) delete gc[g];
+    await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',{ grupos_criado_em: gc });
+  }catch(e){}
+}
+
+// v4.213 — tira do CABEÇALHO (no banco) grupos que não existem mais como
+// orçamento aberto. Lê e regrava mesclando, para não derrubar grupo montado por
+// outra janela. Usada ao abrir a cotação e ao fechar um grupo em pedido.
+async function coTirarGrupoDoCabecalho(gs){
+  if(!coCotacaoId || !gs || !gs.length) return;
+  try{
+    const cab = await sbFetch('cotacoes?select=fornecedores_grupo,grupos_criado_em&id=eq.'+coCotacaoId+'&limit=1');
+    if(!cab || !cab[0]) return;
+    const patch = {};
+    const fg = Object.assign({}, cab[0].fornecedores_grupo || {});
+    let mexeu = false;
+    for(const g of gs) if(g in fg){ delete fg[g]; mexeu = true; }
+    if(mexeu) patch.fornecedores_grupo = fg;
+    if('grupos_criado_em' in cab[0]){
+      const gc = Object.assign({}, cab[0].grupos_criado_em || {});
+      let m2 = false;
+      for(const g of gs) if(g in gc){ delete gc[g]; m2 = true; }
+      if(m2){ patch.grupos_criado_em = gc; coGrupoCriado = gc; }
+    }
+    if(Object.keys(patch).length) await sbFetch('cotacoes?id=eq.'+coCotacaoId,'PATCH',patch);
+  }catch(e){ console.warn('limpar grupo encerrado do cabeçalho:', e); }
 }
 async function coPuxarAlerta(){
   try{
@@ -7665,6 +7744,7 @@ function coMoverItem(i, destino){
     destino=nome.trim();
     if(!coFornGrupo[destino]) coFornGrupo[destino]=[];
     coGruposExcluidos.delete(destino);   // v4.199
+    coGruposEncerrados.delete(destino);  // v4.213 — item movido para cá: o grupo voltou a ter item aberto
   }
   coItens[i].grupo = destino;
   coRender();
@@ -8418,7 +8498,11 @@ function coRender(){
   const avisoFoco = coFocoBanner();
   const ordem=[]; const porGrupo={};
   coItens.forEach((it,i)=>{ const g=it.grupo||'Orçamento 1'; if(!porGrupo[g]){porGrupo[g]=[];ordem.push(g);} porGrupo[g].push(i); });
-  for(const g of Object.keys(coFornGrupo)) if(!ordem.includes(g)){ ordem.push(g); porGrupo[g]=[]; }
+  // v4.213 — chave de cabeçalho de grupo que já virou pedido NÃO vira cartão vazio
+  for(const g of Object.keys(coFornGrupo)) if(!ordem.includes(g)){
+    if(coGruposEncerrados.has(g)) continue;
+    ordem.push(g); porGrupo[g]=[];
+  }
   // v4.70 — grupo sem fornecedor mas com ofertas gravadas (cotações antigas, juntadas ou vindas do rascunho):
   // os fornecedores das ofertas entram no grupo, senão as ofertas ficam escondidas
   for(const g of ordem){ coFornGrupo[g]=coFornGrupo[g]||[];
@@ -8984,6 +9068,12 @@ async function coFecharGrupo(g){
     // v4.25c — grupo que esvaziou no fechamento SAI da tela (não fica o título preso)
     if(!coItens.some(it=>(it.grupo||'Orçamento 1')===g)){
       delete coFornGrupo[g];
+      // v4.213 — e sai do CABEÇALHO no banco também. Antes saía só da memória da
+      // janela: no recarregar seguinte a chave voltava e virava o cartão vazio
+      // que ela apagava toda semana.
+      coGruposEncerrados.add(g);
+      if(coGrupoCriado) delete coGrupoCriado[g];
+      coTirarGrupoDoCabecalho([g]);
       if(coGrupoAtual===g) coGrupoAtual = coGruposDistintos()[0]||'Orçamento 1';
       coAtualizaLabelGrupo();
     }
@@ -25362,7 +25452,7 @@ async function hgCompCarregar(){
   // então o que já estava marcado continua marcado.
   let h='<div class="hg-nota">A sugestão é <b>repor o que foi consumido</b>: '+per+', menos o que sobrou no estoque. '
        +'Marque os itens e use <b>Enviar p/ Orçar</b> — cada lista abre o seu próprio orçamento.</div>'
-       +'<div class="hg-filtros" style="margin-bottom:10px"><input type="text" id="hg-comp-busca" placeholder="🔍 Procurar produto para comprar (ex.: copo, álcool, papel)" oninput="hgCompFiltrar()" style="flex:1;min-width:240px">'
+       +'<div class="hg-filtros" style="margin-bottom:10px"><input type="text" id="hg-comp-busca" placeholder="🔍 Procurar produto para comprar (ex.: copo, áll, papel)" oninput="hgCompFiltrar()" style="flex:1;min-width:240px">'
        +'<label style="font-size:12px;color:var(--cinza-4);font-weight:600;display:flex;align-items:center;gap:5px" title="esconde o que já tem de sobra e o que já está em orçamento ou pedido"><input type="checkbox" id="hg-comp-sofalta" onchange="hgCompFiltrar()"> só o que falta comprar</label>'
        +'<span id="hg-comp-achou" style="font-size:12px;color:var(--cinza-4)"></span></div>';
 
