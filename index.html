@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.209 · o kit de vitrectomia 23G entra no bloco do óxido de etileno</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.210 · o texto do orçamento que vai ao fornecedor ficou curto</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7846,8 +7846,9 @@ function coTextoGrupo(g, fid){
     const obsP = (it.obs_produto||'').trim();   // v4.116 — a obs. do produto vai para o fornecedor
     return `• ${it.qtd_desejada?it.qtd_desejada+'x ':''}${desc}${obsP?' — '+obsP:''}`;
   }).join('\n');
-  const rodada = /^or[çc]amento/i.test(g) ? g : ('Orçamento — '+g);
-  return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nO Hospital dos Olhos Guanabara precisa de orçamento para os itens abaixo (${rodada}). Pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
+  // v4.210 — ela, 19/11: "reduza o texto". Saíram o nome da empresa e o número do
+  // orçamento, que só interessam a nós: o fornecedor já sabe quem está pedindo.
+  return { forn, n: itens.length, texto:`Olá, ${forn}! Tudo bem?\nEstamos precisando de alguns itens, pode me enviar preço, condição de pagamento e prazo de entrega, por favor?\n\n${linhas}\n\nObrigada!` };
 }
 // ── v4.14g · O TEXTO DO WHATSAPP ACOMPANHA O ORÇAMENTO ──────────────────────
 // Antes todos os textos iam para um `#co-textos` único, no TOPO da página —
