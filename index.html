@@ -467,7 +467,7 @@ details[open] summary { margin-bottom: 6px; }
 <header>
   <div>
     <h1>🏥 HOG — Centro Cirúrgico</h1>
-    <div class="sub">Registro de Saídas de Materiais — v4.210 · o texto do orçamento que vai ao fornecedor ficou curto</div>
+    <div class="sub">Registro de Saídas de Materiais — v4.211 · o botão de tirar do orçamento só conta pedido em andamento</div>
   </div>
   <div class="badge-perfil" id="badge-usuario" onclick="menuUsuario()" style="cursor:pointer" title="Trocar senha ou sair">👤 —</div>
 </header>
@@ -7217,6 +7217,22 @@ function ccTirarIncluido(materialId){
 // ═══ ABA COTAÇÃO v3.2 — grupos neutros arrastáveis · até 3 fornecedores/grupo ═══
 let coCotacaoId = null;
 let coJaComprado = {};   // material_id -> {pedido, status, temNf} — itens desta cotação que já viraram compra
+// ═══ v4.211 — UMA RÉGUA SÓ PARA "JÁ VIROU PEDIDO" ═══════════════════════════
+// Ela, 19/11, apontando o botão: "tem uma mensagem que não deveria estar aí".
+// O botão dizia "🧹 Tirar os 6 que já viraram pedido" — e os 6 estavam todos em
+// pedidos CONCLUÍDOS. Medido na #32: dos 111 vínculos item↔pedido, **nenhum**
+// está vivo. Tirar esses itens é tirar da cotação justamente o que precisa ser
+// comprado de novo.
+// É o defeito de 04/11 (13 itens apagados em dois salvamentos) sobrevivendo: a
+// v4.198 consertou SÓ a gravação, criando o `coEmPedidoVivo` como const local
+// dentro do salvar. O botão, o contador e as etiquetas continuaram na régua
+// larga do `coJaComprado`, que guarda TODO pedido não cancelado — CONCLUÍDO
+// inclusive. Agora a régua é esta, e é a única.
+const CO_PED_VIVO = ['EM_MONTAGEM','AGUARDANDO_APROVACAO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'];
+function coEmPedidoVivo(it){ const j = coJaComprado[it && it.material_id];
+                             return !!(j && CO_PED_VIVO.includes(j.status)); }
+function coPedidoVivoDe(mid){ const j = coJaComprado[mid];
+                              return (j && CO_PED_VIVO.includes(j.status)) ? j : null; }
 let coItens = [];
 let coFornecedores = [];
 // v4.19 — o banco ganhou a coluna "origem" (SQL 54)? Verificação PREGUIÇOSA:
@@ -7730,10 +7746,13 @@ async function coCarregarJaComprados(cotId){
   }catch(e){}
 }
 function coLimparJaComprados(){
-  const alvos=coItens.filter(it=>coJaComprado[it.material_id]);
-  if(!alvos.length){ toast('Nenhum item da cotação já virou pedido.',''); return; }
-  if(!confirm(`Tirar da cotação ${alvos.length} item(ns) que já viraram pedido?\n\n${alvos.slice(0,8).map(it=>'• '+it.material_nome+' → Pedido #'+coJaComprado[it.material_id].pedido).join('\n')}${alvos.length>8?`\n• +${alvos.length-8}`:''}`)) return;
-  coItens=coItens.filter(it=>!coJaComprado[it.material_id]);
+  // v4.211 — só sai o que está em pedido VIVO. Pedido CONCLUÍDO quer dizer que a
+  // compra terminou e o item volta a precisar ser comprado — tirá-lo da cotação
+  // é o erro de 04/11.
+  const alvos=coItens.filter(coEmPedidoVivo);
+  if(!alvos.length){ toast('Nenhum item desta cotação está em pedido em andamento.',''); return; }
+  if(!confirm(`Tirar da cotação ${alvos.length} item(ns) que estão em pedido em andamento?\n\n${alvos.slice(0,8).map(it=>'• '+it.material_nome+' → Pedido #'+coJaComprado[it.material_id].pedido).join('\n')}${alvos.length>8?`\n• +${alvos.length-8}`:''}`)) return;
+  coItens=coItens.filter(it=>!coEmPedidoVivo(it));
   coRender();
   coSalvar(true);
   toast(`${alvos.length} item(ns) já comprados saíram da cotação ✓`,'sucesso');
@@ -8295,7 +8314,8 @@ function coLinhasItem(i, it){
   const hist = (hp!==undefined) ? semTag(hpLinha('m'+it.material_id))
     : (it.uc_valor!=null ? ('última compra '+coMoney(it.uc_valor)+'/un'+(it.uc_data?' em '+String(it.uc_data).slice(0,10).split('-').reverse().join('/'):'')) : 'sem histórico de compra');
   const dicaTxt = [it.consumo?('consumo/mês '+Math.round(it.consumo)):'', it.forn_conhecidos?('fornecedores: '+it.forn_conhecidos):'', it.marcas_conhecidas?('marcas: '+it.marcas_conhecidas):''].filter(Boolean).join(' · ') || 'sem consumo, fornecedores ou marcas registrados';
-  const ja = coJaComprado[it.material_id] ? `<span class="co-ja">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}</span>` : '';
+  const jv = coPedidoVivoDe(it.material_id);   // v4.211 — pedido CONCLUÍDO não avisa: o item volta a ser comprado
+  const ja = jv ? `<span class="co-ja">⚠ em andamento no Pedido #${jv.pedido}</span>` : '';
   const cab = `<tr class="co-mat card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}">
     <td colspan="8"><div class="co-mat-l">
       <span class="co-inome" title="arraste para outro grupo">⠿ ${it.material_nome}</span>${ja}
@@ -8353,7 +8373,7 @@ function coCardItem(i, it){
     : '<div style="font-size:12px;color:var(--cinza-4);padding:8px">Adicione fornecedores ao grupo (acima) para abrir os cartões de orçamento.</div>';
   return `<div class="co-item card-item-cot" draggable="true" data-idx="${i}" id="co-item-${i}" style="cursor:grab">
     <div class="co-ihead">
-      <div><div class="co-inome">⠿ ${it.material_nome}${coJaComprado[it.material_id]?`<span style="font-size:10px;font-weight:700;background:#FDF2E9;color:#D35400;border:1px solid #EDBB99;padding:2px 8px;border-radius:10px;margin-left:8px">⚠ já virou o Pedido #${coJaComprado[it.material_id].pedido}${coJaComprado[it.material_id].temNf?' · NF dada':''}</span>`:''}</div><div class="co-imeta">${info.join(' · ')}</div></div>
+      <div><div class="co-inome">⠿ ${it.material_nome}${coEmPedidoVivo(it)?`<span style="font-size:10px;font-weight:700;background:#FDF2E9;color:#D35400;border:1px solid #EDBB99;padding:2px 8px;border-radius:10px;margin-left:8px">⚠ em andamento no Pedido #${coJaComprado[it.material_id].pedido}${coJaComprado[it.material_id].temNf?' · NF dada':''}</span>`:''}</div><div class="co-imeta">${info.join(' · ')}</div></div>
       <div class="co-iqtd">Qtd a orçar <input class="co-nn" type="number" step="any" value="${it.qtd_desejada??''}" oninput="coSetItem(${i},'qtd_desejada',this.value)">
         <select class="co-selgrupo" title="mover este item para outro orçamento" onchange="coMoverItem(${i}, this.value)">
           ${coGruposDistintos().map(x=>`<option value="${x.replace(/"/g,'&quot;')}" ${x===g?'selected':''}>📁 ${x}</option>`).join('')}
@@ -8451,9 +8471,9 @@ function coRender(){
   corpo.innerHTML=html;
   coItens.forEach((it,i)=>coAtualizaUnit(i));
   coDnD();
-  const nJa=coItens.filter(it=>coJaComprado[it.material_id]).length;
+  const nJa=coItens.filter(coEmPedidoVivo).length;   // v4.211 — só pedido VIVO
   const btnL=document.getElementById('co-btn-limpar');
-  if(btnL){ btnL.style.display = nJa?'':'none'; btnL.textContent = `🧹 Tirar os ${nJa} que já viraram pedido`; }
+  if(btnL){ btnL.style.display = nJa?'':'none'; btnL.textContent = `🧹 Tirar os ${nJa} em pedido em andamento`; }
 }
 // ═══ v4.116 — ORÇAMENTO NO MODELO DO CARTÃO DE PEDIDO ═════════════════════════
 // Ela, 21/09: "a tela de orçamento ficaria melhor neste modelo (o do pedido); ainda está muito poluído.
@@ -8554,7 +8574,8 @@ function coItemNovo(i, it, fids){
     : (uv==null && !uf) ? '🧾 <span style="color:var(--cinza-4)">sem compra registrada</span>'
     : '🧾 última compra <b>'+(uv!=null?coMoney(uv)+'/un':'—')+'</b>'+(uf?' · '+q(uf):'')+(ud?' · '+coDataCheia(ud):'');
   const conhec=[it.marcas_conhecidas?'🏷️ '+q(it.marcas_conhecidas):'', it.forn_conhecidos?'🏪 '+q(it.forn_conhecidos):''].filter(Boolean).join(' · ');
-  const ja = coJaComprado[it.material_id] ? ' <span class="co-ja">⚠ já virou o Pedido #'+coJaComprado[it.material_id].pedido+'</span>' : '';
+  const jaV = coPedidoVivoDe(it.material_id);   // v4.211
+  const ja = jaV ? ' <span class="co-ja">⚠ em andamento no Pedido #'+jaV.pedido+'</span>' : '';
   const ops = fids.length ? fids : [null];
   const nLin = fids.length ? fids.length + fids.filter(fid=>coCondAbertas.has(i+'-'+fid)).length : 1;
   const mat = '<td class="coN-mat" rowspan="'+nLin+'" id="co-item-'+i+'">'
@@ -8770,7 +8791,8 @@ async function coSalvar(silencioso){
     // gerou pedidos CONCLUIDOS (o #67 da Belive, de 22/09, levou luva 7.0, 7.5 e
     // ringer): com a régua larga da v4.175 esses itens sumiriam da tela no
     // primeiro salvamento, justamente os que precisam ser comprados de novo.
-    const CO_PED_VIVO = ['EM_MONTAGEM','AGUARDANDO_APROVACAO','AGUARDANDO_ENTREGA','EM_CONFERENCIA'];
+    // v4.211 — CO_PED_VIVO e coEmPedidoVivo subiram para o topo do módulo: o
+    // botão, o contador e as etiquetas usam a MESMA régua que esta gravação.
     // v4.198 — A RÉGUA DA REMOÇÃO É A MESMA DO AVISO. A v4.176 corrigiu o `jaPedido`
     // para olhar só o pedido VIVO, mas a linha de baixo ficou com a régua larga da
     // v4.175 (qualquer pedido não cancelado) — e `coJaComprado` guarda TODO pedido
@@ -8782,8 +8804,6 @@ async function coSalvar(silencioso){
     // na #32; os 13 apagados têm pelo menos um, e todos CONCLUIDOS, nenhum vivo.
     // Justamente os que precisam ser comprados de novo — que é o que o comentário
     // da v4.176 já dizia que não podia acontecer.
-    const coEmPedidoVivo = it => { const j = coJaComprado[it.material_id];
-                                   return !!(j && CO_PED_VIVO.includes(j.status)); };
     const jaPedido = coItens.filter(coEmPedidoVivo);
     if(jaPedido.length){
       coItens = coItens.filter(it => !coEmPedidoVivo(it));
